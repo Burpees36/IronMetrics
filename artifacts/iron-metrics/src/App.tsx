@@ -8,6 +8,7 @@ import NotFound from "@/pages/not-found";
 
 import { GymProvider, useGym } from "@/store/GymContext";
 import { AppLayout } from "@/components/layout/AppLayout";
+import { LandingPage } from "@/pages/LandingPage";
 import { Login } from "@/pages/Login";
 import { GymSelect } from "@/pages/GymSelect";
 import { Dashboard } from "@/pages/Dashboard";
@@ -69,11 +70,15 @@ function Router() {
       
       {/* Protected Routes */}
       <Route path="/">
-        <ProtectedRoute component={() => {
-           const [, setLoc] = useLocation();
-           React.useEffect(() => setLoc("/dashboard"), []);
-           return null;
-        }} />
+        {isAuthenticated ? (
+          <ProtectedRoute component={() => {
+             const [, setLoc] = useLocation();
+             React.useEffect(() => setLoc("/dashboard"), []);
+             return null;
+          }} />
+        ) : (
+          <LandingPage />
+        )}
       </Route>
       <Route path="/dashboard" component={() => <ProtectedRoute component={Dashboard} />} />
       <Route path="/intelligence" component={() => <ProtectedRoute component={Intelligence} />} />
