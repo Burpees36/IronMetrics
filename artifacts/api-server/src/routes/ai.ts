@@ -37,7 +37,8 @@ router.post("/gyms/:gymId/ai/generate-outreach", async (req, res): Promise<void>
   const parsed = GenerateMemberOutreachBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
 
-  const [member] = await db.select().from(membersTable).where(eq(membersTable.id, parsed.data.memberId));
+  const { and } = await import("drizzle-orm");
+  const [member] = await db.select().from(membersTable).where(and(eq(membersTable.id, parsed.data.memberId), eq(membersTable.gymId, gymId)));
   if (!member) { res.status(404).json({ error: "Member not found" }); return; }
 
   const templates: Record<string, { subject: string; content: string }> = {
@@ -85,33 +86,44 @@ router.post("/gyms/:gymId/ai/generate-brief", async (req, res): Promise<void> =>
   const gymId = parseGymId(req.params);
   if (!gymId) { res.status(400).json({ error: "Invalid gym ID" }); return; }
 
+  const { count } = await import("drizzle-orm");
+  const { eq, and, sql } = await import("drizzle-orm");
+  const { subscriptionsTable, leadsTable } = await import("@workspace/db");
+
+  const [activeCount] = await db.select({ count: count() }).from(membersTable).where(and(eq(membersTable.gymId, gymId), eq(membersTable.status, "active")));
+  const [cancelledCount] = await db.select({ count: count() }).from(membersTable).where(and(eq(membersTable.gymId, gymId), eq(membersTable.status, "cancelled")));
+  const [holdCount] = await db.select({ count: count() }).from(membersTable).where(and(eq(membersTable.gymId, gymId), eq(membersTable.status, "hold")));
+  const [leadCount] = await db.select({ count: count() }).from(leadsTable).where(eq(leadsTable.gymId, gymId));
+  const subs = await db.select().from(subscriptionsTable).where(and(eq(subscriptionsTable.gymId, gymId), eq(subscriptionsTable.status, "active")));
+  const mrr = subs.reduce((sum, s) => sum + parseFloat(s.amount), 0);
+  const failedSubs = await db.select().from(subscriptionsTable).where(and(eq(subscriptionsTable.gymId, gymId), eq(subscriptionsTable.status, "past_due")));
+  const atRiskMembers = await db.select({ count: count() }).from(membersTable).where(
+    and(eq(membersTable.gymId, gymId), eq(membersTable.status, "active"),
+      sql`(${membersTable.riskTier} = 'critical' OR ${membersTable.riskTier} = 'high')`)
+  );
+
+  const active = activeCount?.count ?? 0;
+  const atRisk = atRiskMembers[0]?.count ?? 0;
+  const leads = leadCount?.count ?? 0;
+
   const briefContent = `## Weekly Owner Brief
 
-### What Changed
-- **3 new members** joined this week, bringing active count to 127
-- **2 members** moved to at-risk status based on attendance patterns
-- **Revenue** is tracking 3% above last month's pace
+### Current Snapshot
+- **${active} active members** (${cancelledCount?.count ?? 0} cancelled, ${holdCount?.count ?? 0} on hold)
+- **MRR: $${mrr.toLocaleString()}** from ${subs.length} subscriptions
+- **${leads} leads** in pipeline
+- **${atRisk} at-risk members** flagged for intervention
 
 ### Biggest Risks
-- Member retention in the 60-90 day cohort is below benchmark (72% vs 80% target)
-- 4 members have failed payments pending recovery
-- Tuesday/Thursday 5PM classes consistently at 95%+ capacity
-
-### Biggest Wins
-- Morning class attendance up 12% month-over-month
-- Lead conversion rate improved to 34% (from 28% last month)
-- Zero cancellations from members with 6+ month tenure
-
-### Where Money Is Leaking
-- $720 in failed payments awaiting recovery
-- 8 members on holds longer than 30 days (potential churn)
-- Drop-in revenue down 15% - consider promotional pricing
+- ${atRisk} member${atRisk !== 1 ? 's' : ''} showing elevated churn risk signals
+- ${failedSubs.length} subscription${failedSubs.length !== 1 ? 's' : ''} with payment issues
+- Members on hold may represent potential churn if not re-engaged
 
 ### What To Do Next
-1. **Urgent**: Contact top 3 at-risk members this week
-2. **This Week**: Follow up on failed payments
-3. **This Month**: Review capacity and consider adding a Thursday 5:30PM class
-4. **Strategic**: Launch referral program targeting satisfied long-tenure members
+1. **Urgent**: Review and contact ${atRisk} at-risk member${atRisk !== 1 ? 's' : ''} this week
+2. **This Week**: Follow up on ${failedSubs.length} failed payment${failedSubs.length !== 1 ? 's' : ''}
+3. **This Week**: Engage ${leads} open lead${leads !== 1 ? 's' : ''} in pipeline
+4. **Strategic**: Review member engagement patterns and class capacity
 
 [AI-Generated Brief - Based on current gym data]`;
 
@@ -122,7 +134,7 @@ router.post("/gyms/:gymId/ai/generate-brief", async (req, res): Promise<void> =>
     subject: "Weekly Owner Brief",
     confidence: "0.90",
     isAiGenerated: true,
-    contextSummary: "Weekly strategic overview generated from current gym metrics",
+    contextSummary: `Weekly overview: ${active} active members, $${mrr} MRR, ${atRisk} at-risk`,
   }).returning();
 
   res.json({

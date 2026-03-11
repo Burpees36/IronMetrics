@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useGym } from "@/store/GymContext";
-import { useListAiTasks, useGenerateOwnerBrief, useGenerateMemberOutreach } from "@workspace/api-client-react";
+import { useListAiTasks, useGenerateOwnerBrief, useGenerateMemberOutreach, useGetDashboardStats } from "@workspace/api-client-react";
 import { motion } from "framer-motion";
 import { Bot, Sparkles, Send, CheckCircle2, Clock, Loader2, FileText, ChevronRight } from "lucide-react";
 
@@ -8,7 +8,11 @@ export function AiOperator() {
   const { activeGymId } = useGym();
   const [isGeneratingBrief, setIsGeneratingBrief] = useState(false);
   
-  const { data: tasks, isLoading } = useListAiTasks(activeGymId as number, {
+  const { data: tasks, isLoading: tasksLoading } = useListAiTasks(activeGymId as number, {
+    query: { enabled: !!activeGymId }
+  });
+
+  const { data: stats } = useGetDashboardStats(activeGymId as number, {
     query: { enabled: !!activeGymId }
   });
 
@@ -18,6 +22,20 @@ export function AiOperator() {
       onSettled: () => setIsGeneratingBrief(false),
     }
   });
+
+  const taskCount = tasks?.length ?? 0;
+  const activeMembers = stats?.activeMembers ?? 0;
+  const atRiskMembers = stats?.atRiskMembers ?? 0;
+  const outreachTasks = tasks?.filter((t: any) => t.type === 'outreach').length ?? 0;
+  const otherTasks = taskCount - outreachTasks;
+
+  if (!activeGymId) {
+    return (
+      <div className="h-full flex items-center justify-center">
+        <p className="text-muted-foreground">Select a gym to continue.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 h-full flex flex-col">
@@ -42,28 +60,29 @@ export function AiOperator() {
         </button>
       </header>
 
-      {/* Intro Banner */}
       <div className="bg-gradient-to-r from-primary/10 via-background to-background border border-primary/20 rounded-2xl p-6 relative overflow-hidden shrink-0">
         <div className="relative z-10 max-w-2xl">
           <h2 className="text-xl font-bold text-foreground mb-2">Automated Retention Workflows Active</h2>
           <p className="text-muted-foreground text-sm leading-relaxed">
-            The Intelligence Engine is currently monitoring 127 members. It has drafted 4 personalized outreach messages for at-risk members and identified 2 revenue expansion opportunities. Review and approve tasks below.
+            The Intelligence Engine is currently monitoring <strong className="text-foreground">{activeMembers} active members</strong>.
+            {atRiskMembers > 0 && <> It has flagged <strong className="text-foreground">{atRiskMembers} at-risk member{atRiskMembers !== 1 ? 's' : ''}</strong> for intervention.</>}
+            {taskCount > 0 && <> There {taskCount === 1 ? 'is' : 'are'} <strong className="text-foreground">{taskCount} pending task{taskCount !== 1 ? 's' : ''}</strong> awaiting your review.</>}
+            {taskCount === 0 && <> All AI-generated tasks have been reviewed.</>}
           </p>
         </div>
         <Bot className="absolute -right-4 -bottom-4 h-32 w-32 text-primary/10" />
       </div>
 
-      {/* Task List */}
       <div className="flex-1 bg-card border border-border rounded-2xl shadow-sm overflow-hidden flex flex-col">
         <div className="p-4 border-b border-border bg-muted/30 flex justify-between items-center shrink-0">
           <h3 className="font-semibold text-foreground">Pending Approvals</h3>
-          <span className="px-2 py-1 bg-primary/20 text-primary rounded text-xs font-bold">4 Tasks</span>
+          <span className="px-2 py-1 bg-primary/20 text-primary rounded text-xs font-bold">{taskCount} Task{taskCount !== 1 ? 's' : ''}</span>
         </div>
         
         <div className="flex-1 overflow-y-auto p-4 custom-scrollbar space-y-4">
-          {isLoading ? (
+          {tasksLoading ? (
              <div className="flex justify-center py-12"><Loader2 className="h-8 w-8 text-primary animate-spin" /></div>
-          ) : tasks?.length ? tasks.map((task, i) => (
+          ) : tasks?.length ? tasks.map((task: any, i: number) => (
             <motion.div
               key={task.id}
               initial={{ opacity: 0, y: 10 }}
@@ -81,7 +100,7 @@ export function AiOperator() {
                   <div>
                     <h4 className="font-semibold text-foreground">{task.title}</h4>
                     <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
-                      <Clock className="h-3 w-3" /> Generated today
+                      <Clock className="h-3 w-3" /> {task.createdAt ? new Date(task.createdAt).toLocaleDateString() : 'Recently'}
                     </p>
                   </div>
                 </div>

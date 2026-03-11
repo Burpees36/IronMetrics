@@ -15,6 +15,9 @@ import { Intelligence } from "@/pages/Intelligence";
 import { Members } from "@/pages/Members";
 import { Schedule } from "@/pages/Schedule";
 import { AiOperator } from "@/pages/AiOperator";
+import { Leads } from "@/pages/Leads";
+import { Billing } from "@/pages/Billing";
+import { Workouts } from "@/pages/Workouts";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -77,11 +80,14 @@ function Router() {
       <Route path="/members" component={() => <ProtectedRoute component={Members} />} />
       <Route path="/schedule" component={() => <ProtectedRoute component={Schedule} />} />
       <Route path="/ai-operator" component={() => <ProtectedRoute component={AiOperator} />} />
+      <Route path="/leads" component={() => <ProtectedRoute component={Leads} />} />
+      <Route path="/billing" component={() => <ProtectedRoute component={Billing} />} />
+      <Route path="/workouts" component={() => <ProtectedRoute component={Workouts} />} />
       
       {/* Fallback for unbuilt pages */}
       <Route path="/:rest*">
         {(params) => {
-          if (["leads", "billing", "workouts", "staff", "settings"].includes(params.rest as string)) {
+          if (["staff", "settings"].includes(params.rest as string)) {
              return <ProtectedRoute component={() => (
                <div className="flex h-full items-center justify-center">
                  <div className="text-center">

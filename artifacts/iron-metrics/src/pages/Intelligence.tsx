@@ -2,21 +2,41 @@ import React, { useState } from "react";
 import { useGym } from "@/store/GymContext";
 import { useGetIntelligenceOverview } from "@workspace/api-client-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Loader2, Activity, ShieldAlert, Sparkles, TrendingUp, Zap } from "lucide-react";
+import { Loader2, Activity, ShieldAlert, Sparkles, TrendingUp, Zap, AlertCircle } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
 
 export function Intelligence() {
   const { activeGymId } = useGym();
   const [activeTab, setActiveTab] = useState<"rsi" | "radar" | "interventions">("rsi");
   
-  const { data: intel, isLoading } = useGetIntelligenceOverview(activeGymId as number, {
-    query: { enabled: !!activeGymId }
+  const { data: intel, isLoading, isError, error } = useGetIntelligenceOverview(activeGymId as number, {
+    query: { enabled: !!activeGymId, retry: 2, staleTime: 30000 }
   });
 
-  if (isLoading || !intel) {
+  if (!activeGymId) {
+    return (
+      <div className="h-full flex items-center justify-center">
+        <p className="text-muted-foreground">Select a gym to view intelligence data.</p>
+      </div>
+    );
+  }
+
+  if (isLoading) {
     return (
       <div className="h-full flex items-center justify-center">
         <Loader2 className="h-8 w-8 text-primary animate-spin" />
+      </div>
+    );
+  }
+
+  if (isError || !intel) {
+    return (
+      <div className="h-full flex items-center justify-center">
+        <div className="text-center">
+          <AlertCircle className="h-12 w-12 text-destructive/50 mx-auto mb-4" />
+          <h3 className="text-lg font-semibold text-foreground mb-1">Unable to load intelligence data</h3>
+          <p className="text-sm text-muted-foreground">Please try refreshing the page.</p>
+        </div>
       </div>
     );
   }
@@ -37,7 +57,6 @@ export function Intelligence() {
         </div>
       </header>
 
-      {/* Tabs */}
       <div className="flex items-center gap-2 border-b border-border">
         {(["rsi", "radar", "interventions"] as const).map((tab) => (
           <button
@@ -65,7 +84,6 @@ export function Intelligence() {
           exit={{ opacity: 0, y: -10 }}
           transition={{ duration: 0.2 }}
         >
-          {/* RSI TAB */}
           {activeTab === "rsi" && (
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               <div className="bg-card border border-border rounded-2xl p-8 flex flex-col items-center justify-center text-center shadow-lg relative overflow-hidden">
@@ -93,7 +111,7 @@ export function Intelligence() {
               <div className="lg:col-span-2 bg-card border border-border rounded-2xl p-6 shadow-sm">
                 <h3 className="text-lg font-semibold text-foreground mb-6">Index Composition</h3>
                 <div className="space-y-6">
-                  {rsi.breakdown.map((item, i) => (
+                  {rsi.breakdown.map((item: any, i: number) => (
                     <div key={i}>
                       <div className="flex justify-between text-sm mb-2">
                         <span className="font-medium text-foreground">{item.metric}</span>
@@ -113,7 +131,6 @@ export function Intelligence() {
             </div>
           )}
 
-          {/* RISK RADAR TAB */}
           {activeTab === "radar" && (
             <div className="bg-card border border-border rounded-2xl shadow-sm overflow-hidden">
               <div className="p-6 border-b border-border flex justify-between items-center">
@@ -122,60 +139,67 @@ export function Intelligence() {
                   <p className="text-sm text-muted-foreground">Members with high probability of churn.</p>
                 </div>
                 <div className="bg-destructive/10 text-destructive px-4 py-2 rounded-lg font-bold text-lg">
-                  ${topRisks.reduce((acc, r) => acc + r.revenueAtRisk, 0).toLocaleString()} at risk
+                  ${topRisks.reduce((acc: number, r: any) => acc + r.revenueAtRisk, 0).toLocaleString()} at risk
                 </div>
               </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm text-left">
-                  <thead className="text-xs text-muted-foreground uppercase bg-muted/50 border-b border-border">
-                    <tr>
-                      <th className="px-6 py-4 font-medium">Member</th>
-                      <th className="px-6 py-4 font-medium">Risk Score</th>
-                      <th className="px-6 py-4 font-medium">Tier</th>
-                      <th className="px-6 py-4 font-medium">Rev at Risk</th>
-                      <th className="px-6 py-4 font-medium">Signals</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border">
-                    {topRisks.map((risk) => (
-                      <tr key={risk.memberId} className="hover:bg-white/5 transition-colors">
-                        <td className="px-6 py-4 font-medium text-foreground">{risk.memberName}</td>
-                        <td className="px-6 py-4">
-                          <div className="flex items-center gap-2">
-                            <div className="w-16 h-2 bg-muted rounded-full overflow-hidden">
-                              <div className="h-full bg-destructive" style={{width: `${risk.riskScore}%`}} />
-                            </div>
-                            <span className="font-mono text-xs">{risk.riskScore}</span>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4">
-                          <span className={`px-2.5 py-1 rounded-full text-xs font-semibold uppercase ${
-                            risk.riskTier === 'critical' ? 'bg-red-500/20 text-red-500' :
-                            risk.riskTier === 'high' ? 'bg-orange-500/20 text-orange-500' :
-                            'bg-yellow-500/20 text-yellow-500'
-                          }`}>{risk.riskTier}</span>
-                        </td>
-                        <td className="px-6 py-4 font-medium text-foreground">${risk.revenueAtRisk}</td>
-                        <td className="px-6 py-4">
-                          <div className="flex flex-wrap gap-1">
-                            {risk.signals.slice(0, 2).map((sig, i) => (
-                              <span key={i} className="px-2 py-0.5 bg-muted rounded text-[10px] text-muted-foreground">{sig}</span>
-                            ))}
-                            {risk.signals.length > 2 && <span className="px-2 py-0.5 text-[10px] text-muted-foreground">+{risk.signals.length - 2}</span>}
-                          </div>
-                        </td>
+              {topRisks.length > 0 ? (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm text-left">
+                    <thead className="text-xs text-muted-foreground uppercase bg-muted/50 border-b border-border">
+                      <tr>
+                        <th className="px-6 py-4 font-medium">Member</th>
+                        <th className="px-6 py-4 font-medium">Risk Score</th>
+                        <th className="px-6 py-4 font-medium">Tier</th>
+                        <th className="px-6 py-4 font-medium">Rev at Risk</th>
+                        <th className="px-6 py-4 font-medium">Signals</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody className="divide-y divide-border">
+                      {topRisks.map((risk: any) => (
+                        <tr key={risk.memberId} className="hover:bg-white/5 transition-colors">
+                          <td className="px-6 py-4 font-medium text-foreground">{risk.memberName}</td>
+                          <td className="px-6 py-4">
+                            <div className="flex items-center gap-2">
+                              <div className="w-16 h-2 bg-muted rounded-full overflow-hidden">
+                                <div className="h-full bg-destructive" style={{width: `${risk.riskScore}%`}} />
+                              </div>
+                              <span className="font-mono text-xs">{risk.riskScore}</span>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4">
+                            <span className={`px-2.5 py-1 rounded-full text-xs font-semibold uppercase ${
+                              risk.riskTier === 'critical' ? 'bg-red-500/20 text-red-500' :
+                              risk.riskTier === 'high' ? 'bg-orange-500/20 text-orange-500' :
+                              'bg-yellow-500/20 text-yellow-500'
+                            }`}>{risk.riskTier}</span>
+                          </td>
+                          <td className="px-6 py-4 font-medium text-foreground">${risk.revenueAtRisk}</td>
+                          <td className="px-6 py-4">
+                            <div className="flex flex-wrap gap-1">
+                              {risk.signals.slice(0, 2).map((sig: string, i: number) => (
+                                <span key={i} className="px-2 py-0.5 bg-muted rounded text-[10px] text-muted-foreground">{sig}</span>
+                              ))}
+                              {risk.signals.length > 2 && <span className="px-2 py-0.5 text-[10px] text-muted-foreground">+{risk.signals.length - 2}</span>}
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="p-12 text-center">
+                  <ShieldAlert className="h-12 w-12 text-emerald-500/50 mx-auto mb-4" />
+                  <h3 className="text-lg font-semibold text-foreground">No High-Risk Members</h3>
+                  <p className="text-muted-foreground text-sm mt-1">All members are within healthy engagement levels.</p>
+                </div>
+              )}
             </div>
           )}
 
-          {/* INTERVENTIONS TAB */}
           {activeTab === "interventions" && (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {topInterventions.map((inv, i) => (
+              {topInterventions.length > 0 ? topInterventions.map((inv: any, i: number) => (
                 <motion.div 
                   key={inv.id}
                   initial={{ opacity: 0, scale: 0.95 }}
@@ -197,7 +221,7 @@ export function Intelligence() {
                   <p className="text-sm text-muted-foreground mb-6 flex-1">{inv.description}</p>
                   
                   <div className="space-y-2 mb-6">
-                    {inv.actions.map((action, j) => (
+                    {inv.actions.map((action: string, j: number) => (
                       <div key={j} className="flex items-start gap-2 text-sm text-foreground/80">
                         <Zap className="h-4 w-4 text-primary shrink-0 mt-0.5" />
                         <span>{action}</span>
@@ -209,7 +233,11 @@ export function Intelligence() {
                     Execute Intervention
                   </button>
                 </motion.div>
-              ))}
+              )) : (
+                <div className="col-span-full text-center py-12">
+                  <p className="text-muted-foreground">No interventions recommended at this time.</p>
+                </div>
+              )}
             </div>
           )}
         </motion.div>

@@ -38,7 +38,7 @@
 │   │   ├── src/middlewares/  # Auth middleware
 │   │   └── src/lib/         # Auth session management
 │   └── iron-metrics/        # React + Vite frontend (previewPath: /)
-│       ├── src/pages/       # Dashboard, Intelligence, Members, Schedule, etc.
+│       ├── src/pages/       # All pages (Dashboard, Intelligence, Members, Schedule, Leads, Billing, Workouts, AiOperator)
 │       ├── src/components/  # UI components (shadcn/ui + custom)
 │       └── src/store/       # GymContext for active gym state
 ├── lib/
@@ -55,7 +55,7 @@
 All tables in `lib/db/src/schema/`:
 - **gyms** — Multi-tenant gym workspaces
 - **gym_staff** — Staff/coaches per gym with roles
-- **members** — Full member CRM with risk scoring
+- **members** — Full member CRM with risk scoring (risk_tier, risk_score, attendance_count_30d)
 - **member_notes** — Notes on members by staff
 - **timeline_events** — Member lifecycle events
 - **leads** — Lead pipeline (new → contacted → trial → negotiating → converted/lost)
@@ -73,6 +73,32 @@ All tables in `lib/db/src/schema/`:
 - **ai_tasks** — AI operator task queue
 - **ai_generated_content** — AI-drafted outreach, briefs
 
+## Seeded Demo Data (Source of Truth)
+
+- **Members**: 20 (17 active, 2 cancelled, 1 hold)
+- **MRR**: $2,470 (from 17 active subscriptions)
+- **Leads**: 8
+- **Classes**: 50
+- **Attendance**: 350 records
+- **Staff**: 5
+- **Plans**: 4 (Unlimited, 3x/Week, Open Gym, Drop-In)
+- **Products**: 6
+- **Workouts**: 4
+- **AI Tasks**: 2
+- **Announcements**: 3, Documents: 3
+
+## Frontend Pages
+
+All pages with real API data (no hardcoded values):
+1. **Dashboard** — KPI grid (active members, MRR, weekly attendance, at-risk count), revenue chart, member status breakdown
+2. **Intelligence Hub** — RSI score gauge, risk radar table, intervention cards (all computed from DB)
+3. **Members** — Searchable member directory with status, risk tier, membership type
+4. **Schedule** — Weekly class calendar with enrollment/capacity
+5. **Leads** — Pipeline with stage badges, search, counts by stage
+6. **Billing** — MRR/ARR cards, plan table with member counts, subscription list
+7. **Workouts** — WOD cards with movements, type badges, result counts
+8. **AI Operator** — Real task list from DB, dynamic member/risk counts from dashboard API
+
 ## API Routes
 
 All mounted at `/api` prefix:
@@ -89,7 +115,7 @@ All mounted at `/api` prefix:
 - Workouts: `/api/gyms/:gymId/workouts` + results
 - Communications: `/api/gyms/:gymId/announcements`
 - Documents: `/api/gyms/:gymId/documents`
-- Intelligence: RSI score, risk radar, interventions, cohorts, revenue forecast
+- Intelligence: RSI score, risk radar, interventions, cohorts, revenue forecast, overview
 - AI: Tasks, outreach generation, owner brief generation
 - Reports: Dashboard stats, membership, revenue, attendance reports
 
@@ -101,6 +127,9 @@ All mounted at `/api` prefix:
 - **Gym context**: Frontend uses `GymContext` to track `activeGymId`; stored in localStorage
 - **Auto-linking**: First login auto-links user to seeded gym as owner
 - **Vite proxy**: Frontend proxies `/api` requests to Express on port 8080
+- **Tenant isolation**: All member-linked mutations verify `memberId + gymId` match to prevent cross-gym IDOR
+- **No hardcoded metrics**: All dashboard/intelligence/AI operator values are computed from actual DB queries
+- **Loading states**: All pages handle three states: no gym selected, loading, error/empty
 
 ## Running
 

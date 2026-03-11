@@ -63,7 +63,7 @@ router.post("/gyms/:gymId/workouts/:workoutId/results", async (req, res): Promis
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
 
   const { membersTable } = await import("@workspace/db");
-  const [member] = await db.select().from(membersTable).where(eq(membersTable.id, parsed.data.memberId));
+  const [member] = await db.select().from(membersTable).where(and(eq(membersTable.id, parsed.data.memberId), eq(membersTable.gymId, gymId)));
   if (!member) { res.status(404).json({ error: "Member not found" }); return; }
 
   const [result] = await db.insert(workoutResultsTable).values({

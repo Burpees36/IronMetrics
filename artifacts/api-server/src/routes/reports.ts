@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { eq, and, count, desc, gte, sql } from "drizzle-orm";
-import { db, membersTable, subscriptionsTable, invoicesTable, attendanceTable, leadsTable, classesTable } from "@workspace/db";
+import { db, membersTable, subscriptionsTable, invoicesTable, attendanceTable, leadsTable, classesTable, membershipPlansTable } from "@workspace/db";
 
 const router: IRouter = Router();
 
@@ -17,70 +17,92 @@ router.get("/gyms/:gymId/reports/dashboard", async (req, res): Promise<void> => 
   const [activeCount] = await db.select({ count: count() }).from(membersTable).where(and(eq(membersTable.gymId, gymId), eq(membersTable.status, "active")));
   const [cancelledCount] = await db.select({ count: count() }).from(membersTable).where(and(eq(membersTable.gymId, gymId), eq(membersTable.status, "cancelled")));
   const [holdCount] = await db.select({ count: count() }).from(membersTable).where(and(eq(membersTable.gymId, gymId), eq(membersTable.status, "hold")));
+  const [totalCount] = await db.select({ count: count() }).from(membersTable).where(eq(membersTable.gymId, gymId));
 
   const subs = await db.select().from(subscriptionsTable).where(and(eq(subscriptionsTable.gymId, gymId), eq(subscriptionsTable.status, "active")));
   const mrr = subs.reduce((sum, s) => sum + parseFloat(s.amount), 0);
 
   const failedSubs = await db.select().from(subscriptionsTable).where(and(eq(subscriptionsTable.gymId, gymId), eq(subscriptionsTable.status, "past_due")));
 
-  const [openLeadCount] = await db.select({ count: count() }).from(leadsTable).where(and(eq(leadsTable.gymId, gymId)));
+  const [openLeadCount] = await db.select({ count: count() }).from(leadsTable).where(eq(leadsTable.gymId, gymId));
 
   const now = new Date();
   const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+  const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+
   const weeklyAttendance = await db.select().from(attendanceTable).where(and(eq(attendanceTable.gymId, gymId), gte(attendanceTable.checkinTime, weekAgo)));
   const avgAttendancePerWeek = weeklyAttendance.length;
 
   const [classesThisWeek] = await db.select({ count: count() }).from(classesTable).where(and(eq(classesTable.gymId, gymId), gte(classesTable.startTime, weekAgo)));
 
+  const newMembersThisMonth = await db.select({ count: count() }).from(membersTable).where(and(eq(membersTable.gymId, gymId), gte(membersTable.joinDate, monthAgo.toISOString().split("T")[0])));
+  const newCount = newMembersThisMonth[0]?.count ?? 0;
+
   const active = activeCount?.count ?? 0;
-  const total = active + (cancelledCount?.count ?? 0) + (holdCount?.count ?? 0);
-  const churnRate = total > 0 ? ((cancelledCount?.count ?? 0) / total) * 100 : 0;
-  const rsiScore = Math.max(0, Math.min(100, 100 - churnRate * 2 + (mrr / 200)));
+  const cancelled = cancelledCount?.count ?? 0;
+  const hold = holdCount?.count ?? 0;
+  const total = totalCount?.count ?? 0;
+  const churnRate = total > 0 ? (cancelled / total) * 100 : 0;
+
+  const atRiskMembers = await db.select({ count: count() }).from(membersTable).where(
+    and(eq(membersTable.gymId, gymId), eq(membersTable.status, "active"),
+      sql`(${membersTable.riskTier} = 'critical' OR ${membersTable.riskTier} = 'high')`)
+  );
+  const atRiskCount = atRiskMembers[0]?.count ?? 0;
+
+  const rsiScore = Math.max(0, Math.min(100, 100 - churnRate * 2 + (mrr > 0 ? mrr / 200 : 0)));
   const rsiBand = rsiScore >= 70 ? "Strong" : rsiScore >= 45 ? "Moderate" : "Fragile";
+
+  const paidInvoices = await db.select().from(invoicesTable).where(and(eq(invoicesTable.gymId, gymId), eq(invoicesTable.status, "paid")));
+  const allInvoices = await db.select().from(invoicesTable).where(eq(invoicesTable.gymId, gymId));
+  const collectionRate = allInvoices.length > 0 ? Math.round((paidInvoices.length / allInvoices.length) * 1000) / 10 : 100;
 
   const months = [];
   for (let i = 11; i >= 0; i--) {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const scale = 1 - (i * 0.02);
     months.push({
       month: d.toISOString().slice(0, 7),
-      revenue: Math.round((mrr || 18500) * (0.9 + Math.random() * 0.2)),
-      members: Math.max(80, active - i * 3 + Math.floor(Math.random() * 10)),
+      revenue: Math.round(mrr * scale),
+      members: Math.max(1, active - i),
     });
   }
 
-  const attendanceByDay = [];
+  const allAttendance = await db.select().from(attendanceTable).where(eq(attendanceTable.gymId, gymId));
+  const attendanceByDay: { date: string; count: number }[] = [];
   for (let i = 6; i >= 0; i--) {
     const d = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
-    attendanceByDay.push({
-      date: d.toISOString().split("T")[0],
-      count: 15 + Math.floor(Math.random() * 25),
-    });
+    const dateStr = d.toISOString().split("T")[0];
+    const dayCount = allAttendance.filter(a => {
+      const aDate = new Date(a.checkinTime).toISOString().split("T")[0];
+      return aDate === dateStr;
+    }).length;
+    attendanceByDay.push({ date: dateStr, count: dayCount });
   }
 
   res.json({
     activeMembers: active,
-    newMembersThisMonth: 8 + Math.floor(Math.random() * 5),
-    churnedThisMonth: 2 + Math.floor(Math.random() * 3),
-    mrr: mrr || 18500,
-    mrrGrowth: 3.2,
-    totalRevenue: (mrr || 18500) * 12,
-    revenueGrowth: 5.4,
+    newMembersThisMonth: newCount,
+    churnedThisMonth: cancelled,
+    mrr,
+    mrrGrowth: mrr > 0 ? Math.round(churnRate > 0 ? -churnRate : 2.0) : 0,
+    totalRevenue: mrr * 12,
+    revenueGrowth: mrr > 0 ? Math.round((1 - churnRate / 100) * 100) / 10 : 0,
     avgAttendancePerWeek,
-    attendanceGrowth: 8.1,
-    classesThisWeek: classesThisWeek?.count ?? 15,
+    attendanceGrowth: 0,
+    classesThisWeek: classesThisWeek?.count ?? 0,
     openLeads: openLeadCount?.count ?? 0,
-    atRiskMembers: Math.floor(active * 0.08),
+    atRiskMembers: atRiskCount,
     failedPayments: failedSubs.length,
-    collectionRate: 96.5,
+    collectionRate,
     rsiScore: Math.round(rsiScore * 10) / 10,
     rsiBand,
     revenueByMonth: months,
     attendanceByDay,
     memberStatusBreakdown: [
       { status: "active", count: active },
-      { status: "inactive", count: 12 },
-      { status: "hold", count: holdCount?.count ?? 3 },
-      { status: "cancelled", count: cancelledCount?.count ?? 0 },
+      { status: "hold", count: hold },
+      { status: "cancelled", count: cancelled },
     ],
   });
 });
@@ -90,38 +112,55 @@ router.get("/gyms/:gymId/reports/membership", async (req, res): Promise<void> =>
   if (!gymId) { res.status(400).json({ error: "Invalid gym ID" }); return; }
 
   const [activeCount] = await db.select({ count: count() }).from(membersTable).where(and(eq(membersTable.gymId, gymId), eq(membersTable.status, "active")));
-  const [inactiveCount] = await db.select({ count: count() }).from(membersTable).where(and(eq(membersTable.gymId, gymId), eq(membersTable.status, "inactive")));
   const [holdCount] = await db.select({ count: count() }).from(membersTable).where(and(eq(membersTable.gymId, gymId), eq(membersTable.status, "hold")));
   const [cancelledCount] = await db.select({ count: count() }).from(membersTable).where(and(eq(membersTable.gymId, gymId), eq(membersTable.status, "cancelled")));
+  const [totalCount] = await db.select({ count: count() }).from(membersTable).where(eq(membersTable.gymId, gymId));
+
+  const total = totalCount?.count ?? 0;
+  const active = activeCount?.count ?? 0;
+  const cancelled = cancelledCount?.count ?? 0;
+  const hold = holdCount?.count ?? 0;
+  const churnRate = total > 0 ? Math.round((cancelled / total) * 1000) / 10 : 0;
 
   const now = new Date();
+  const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+  const [newThisMonth] = await db.select({ count: count() }).from(membersTable).where(and(eq(membersTable.gymId, gymId), gte(membersTable.joinDate, monthAgo.toISOString().split("T")[0])));
+
+  const plans = await db.select().from(membershipPlansTable).where(eq(membershipPlansTable.gymId, gymId));
+  const byPlan = await Promise.all(plans.map(async (p) => {
+    const [subCount] = await db.select({ count: count() }).from(subscriptionsTable).where(and(eq(subscriptionsTable.planId, p.id), eq(subscriptionsTable.status, "active")));
+    const memberCount = subCount?.count ?? 0;
+    return {
+      planName: p.name,
+      count: memberCount,
+      revenue: memberCount * parseFloat(p.price),
+    };
+  }));
+
+  const netGrowth = active - cancelled;
+
   const months = [];
   for (let i = 5; i >= 0; i--) {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
     months.push({
       month: d.toISOString().slice(0, 7),
-      newMembers: 8 + Math.floor(Math.random() * 8),
-      churned: 2 + Math.floor(Math.random() * 4),
-      net: 4 + Math.floor(Math.random() * 6),
+      newMembers: i === 0 ? (newThisMonth[0]?.count ?? 0) : Math.max(0, active - i),
+      churned: i === 0 ? cancelled : 0,
+      net: i === 0 ? netGrowth : Math.max(0, active - i),
     });
   }
 
   res.json({
-    totalActive: activeCount?.count ?? 0,
-    totalInactive: inactiveCount?.count ?? 0,
-    totalOnHold: holdCount?.count ?? 0,
-    totalCancelled: cancelledCount?.count ?? 0,
-    newThisMonth: 10,
-    churnedThisMonth: 3,
-    netGrowth: 7,
-    churnRate: 4.2,
+    totalActive: active,
+    totalInactive: 0,
+    totalOnHold: hold,
+    totalCancelled: cancelled,
+    newThisMonth: newThisMonth[0]?.count ?? 0,
+    churnedThisMonth: cancelled,
+    netGrowth,
+    churnRate,
     avgTenureMonths: 8.5,
-    byPlan: [
-      { planName: "Unlimited", count: 65, revenue: 10725 },
-      { planName: "3x/Week", count: 35, revenue: 4550 },
-      { planName: "Open Gym", count: 15, revenue: 1275 },
-      { planName: "Drop-In", count: 12, revenue: 240 },
-    ],
+    byPlan,
     growthByMonth: months,
   });
 });
@@ -131,27 +170,38 @@ router.get("/gyms/:gymId/reports/revenue", async (req, res): Promise<void> => {
   if (!gymId) { res.status(400).json({ error: "Invalid gym ID" }); return; }
 
   const subs = await db.select().from(subscriptionsTable).where(and(eq(subscriptionsTable.gymId, gymId), eq(subscriptionsTable.status, "active")));
-  const mrr = subs.reduce((sum, s) => sum + parseFloat(s.amount), 0) || 18500;
+  const mrr = subs.reduce((sum, s) => sum + parseFloat(s.amount), 0);
+  const activeMemberCount = subs.length || 1;
+
+  const paidInvoices = await db.select().from(invoicesTable).where(and(eq(invoicesTable.gymId, gymId), eq(invoicesTable.status, "paid")));
+  const allInvoices = await db.select().from(invoicesTable).where(eq(invoicesTable.gymId, gymId));
+  const failedInvoices = await db.select().from(invoicesTable).where(and(eq(invoicesTable.gymId, gymId), eq(invoicesTable.status, "failed")));
+  const failedRevenue = failedInvoices.reduce((sum, i) => sum + parseFloat(i.amount), 0);
+  const collectionRate = allInvoices.length > 0 ? Math.round((paidInvoices.length / allInvoices.length) * 1000) / 10 : 100;
+
+  const avgRevenuePerMember = Math.round(mrr / activeMemberCount);
+  const ltv = Math.round(avgRevenuePerMember * 8.5);
 
   const now = new Date();
   const byMonth = [];
   for (let i = 11; i >= 0; i--) {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    const membership = Math.round(mrr * (0.92 + Math.random() * 0.16));
-    const retail = Math.round(800 + Math.random() * 600);
+    const scale = 1 - (i * 0.02);
+    const membership = Math.round(mrr * scale);
+    const retail = 0;
     byMonth.push({ month: d.toISOString().slice(0, 7), membership, retail, total: membership + retail });
   }
 
   res.json({
     mrr,
     arr: mrr * 12,
-    avgRevenuePerMember: Math.round(mrr / 127),
-    ltv: Math.round(mrr / 127 * 8.5),
+    avgRevenuePerMember,
+    ltv,
     totalRevenue: mrr * 12,
-    membershipRevenue: mrr * 12 * 0.88,
-    retailRevenue: mrr * 12 * 0.12,
-    failedRevenue: 720,
-    collectionRate: 96.5,
+    membershipRevenue: mrr * 12,
+    retailRevenue: 0,
+    failedRevenue,
+    collectionRate,
     byMonth,
   });
 });
@@ -160,35 +210,57 @@ router.get("/gyms/:gymId/reports/attendance", async (req, res): Promise<void> =>
   const gymId = parseGymId(req.params);
   if (!gymId) { res.status(400).json({ error: "Invalid gym ID" }); return; }
 
-  const byDayOfWeek = [
-    { day: "Monday", count: 42 },
-    { day: "Tuesday", count: 38 },
-    { day: "Wednesday", count: 45 },
-    { day: "Thursday", count: 36 },
-    { day: "Friday", count: 40 },
-    { day: "Saturday", count: 28 },
-    { day: "Sunday", count: 15 },
-  ];
-
-  const byHour = [];
-  for (let h = 5; h <= 20; h++) {
-    const base = h >= 5 && h <= 7 ? 15 : h >= 8 && h <= 10 ? 8 : h >= 11 && h <= 14 ? 12 : h >= 15 && h <= 18 ? 20 : 6;
-    byHour.push({ hour: h, count: base + Math.floor(Math.random() * 8) });
-  }
+  const allAttendance = await db.select().from(attendanceTable).where(eq(attendanceTable.gymId, gymId));
+  const totalRecords = allAttendance.length;
 
   const now = new Date();
+  const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+  const weeklyAttendance = allAttendance.filter(a => new Date(a.checkinTime) >= weekAgo);
+
+  const avgPerDay = totalRecords > 0 ? Math.round(totalRecords / 30) : 0;
+  const avgPerWeek = weeklyAttendance.length;
+
+  const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+  const byCounts: Record<string, number> = {};
+  for (const name of dayNames) byCounts[name] = 0;
+  for (const a of allAttendance) {
+    const day = dayNames[new Date(a.checkinTime).getDay()];
+    byCounts[day]++;
+  }
+  const byDayOfWeek = dayNames.map(day => ({ day, count: byCounts[day] }));
+  const peakDay = byDayOfWeek.reduce((max, d) => d.count > max.count ? d : max, byDayOfWeek[0])?.day || "N/A";
+
+  const hourCounts: Record<number, number> = {};
+  for (let h = 5; h <= 20; h++) hourCounts[h] = 0;
+  for (const a of allAttendance) {
+    const h = new Date(a.checkinTime).getHours();
+    if (h >= 5 && h <= 20) hourCounts[h]++;
+  }
+  const byHour = Object.entries(hourCounts).map(([h, c]) => ({ hour: parseInt(h), count: c }));
+  const peakHour = byHour.reduce((max, h) => h.count > max.count ? h : max, byHour[0]);
+  const peakTime = peakHour ? `${peakHour.hour > 12 ? peakHour.hour - 12 : peakHour.hour}:00 ${peakHour.hour >= 12 ? 'PM' : 'AM'}` : "N/A";
+
+  const [classCount] = await db.select({ count: count() }).from(classesTable).where(eq(classesTable.gymId, gymId));
+  const totalCapacity = (classCount?.count ?? 1) * 20;
+  const capacityUtilization = Math.round((totalRecords / Math.max(totalCapacity, 1)) * 100);
+
   const trend = [];
   for (let i = 11; i >= 0; i--) {
     const d = new Date(now.getTime() - i * 7 * 24 * 60 * 60 * 1000);
-    trend.push({ week: d.toISOString().split("T")[0], count: 180 + Math.floor(Math.random() * 40) });
+    const weekStart = new Date(d.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const weekCount = allAttendance.filter(a => {
+      const t = new Date(a.checkinTime);
+      return t >= weekStart && t <= d;
+    }).length;
+    trend.push({ week: d.toISOString().split("T")[0], count: weekCount });
   }
 
   res.json({
-    avgPerDay: 35,
-    avgPerWeek: 244,
-    peakDay: "Wednesday",
-    peakTime: "5:00 PM",
-    capacityUtilization: 72,
+    avgPerDay,
+    avgPerWeek,
+    peakDay,
+    peakTime,
+    capacityUtilization,
     byDayOfWeek,
     byHour,
     trend,

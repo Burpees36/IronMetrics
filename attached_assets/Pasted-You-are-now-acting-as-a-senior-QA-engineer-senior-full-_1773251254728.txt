@@ -1,0 +1,335 @@
+You are now acting as a senior QA engineer + senior full-stack debugging engineer for the Iron Metrics application.
+
+The app is visually impressive, but it is NOT yet production-ready. Your task is to audit, test, diagnose, and fix the platform so that:
+1. all pages load correctly,
+2. all routes are wired correctly,
+3. all API endpoints return valid data,
+4. seeded/demo metrics are internally consistent across the entire application,
+5. loading states do not hang forever,
+6. frontend widgets match backend/source-of-truth counts,
+7. AI operator summary numbers are derived from real data instead of hardcoded or stale mock values,
+8. reports/intelligence pages are using the same calculation definitions everywhere.
+
+Do not just tell me what is wrong. IMPLEMENT the testing infrastructure, run the checks, fix the issues, and give me a final audit summary.
+
+==================================================
+PRIMARY PROBLEMS TO SOLVE
+==================================================
+
+Known issues already observed:
+- some pages do not load
+- some frontend routes are not set up correctly
+- Intelligence page loads indefinitely
+- metrics are inconsistent across pages
+- demo data says 17 members in one place, while AI Operator says 127 members
+- AI Operator says it generated 4 tasks, but only 2 actually exist
+- likely some pages are showing mock values, stale cache values, or different query logic than the dashboard
+
+Your mission is to systematically detect and eliminate these inconsistencies.
+
+==================================================
+WHAT TO BUILD
+==================================================
+
+Create a complete verification and debugging layer for the app with:
+
+A. Automated backend data integrity checks
+B. Automated API smoke tests
+C. Automated frontend route/page load checks
+D. Automated metric consistency tests
+E. Seed-data validation tests
+F. Loading-state / hanging-request diagnostics
+G. AI Operator data consistency tests
+H. Cross-page metric reconciliation tests
+I. Final audit report output
+
+==================================================
+PHASE 1 — DISCOVER THE CURRENT ARCHITECTURE
+==================================================
+
+First inspect the project and identify:
+- frontend framework and router setup
+- backend routing structure
+- auth middleware
+- seeded demo data source
+- where dashboard metrics are computed
+- where intelligence metrics are computed
+- where AI Operator gets its summary values
+- whether values are hardcoded anywhere in frontend components
+- whether React Query hooks have incorrect keys, staleTime, retry loops, or bad loading handling
+- whether some pages are mounted without corresponding routes
+- whether some routes exist but are not reachable from navigation
+- whether some pages call endpoints that do not exist or return malformed JSON
+
+==================================================
+PHASE 2 — ADD TESTING INFRASTRUCTURE
+==================================================
+
+Implement a real automated test harness.
+
+Add:
+1. API smoke tests
+2. database consistency tests
+3. metrics reconciliation tests
+4. frontend route/page smoke tests
+5. end-to-end tests for core workflows
+
+Use the best tooling for the current stack:
+- Vitest or Jest for unit/integration tests
+- Supertest for API tests if applicable
+- Playwright for end-to-end route/page loading tests
+- optional lightweight seed validation script if easier for DB-level audits
+
+==================================================
+PHASE 3 — DATABASE / SEED VALIDATION
+==================================================
+
+Create tests/scripts that verify demo seed accuracy.
+
+Validate at minimum:
+- member count
+- active member count
+- inactive member count
+- lead count
+- class count
+- attendance count
+- staff/user count
+- plan count
+- subscription count
+- generated AI tasks count
+- announcements count
+- workouts count
+- products count
+
+Then verify relationship integrity:
+- every member belongs to a valid gym
+- every lead belongs to a valid gym
+- every class belongs to a valid gym
+- every attendance row references an existing class and member
+- every subscription references valid member + plan
+- every AI task references a valid gym and, if applicable, a valid member/lead
+- no orphaned rows
+- no impossible counts caused by duplicate joins
+
+Create one script that prints a “source of truth” summary for the seeded gym:
+- total members
+- active members
+- inactive members
+- leads
+- classes
+- attendance records
+- staff
+- subscriptions
+- AI tasks
+- products
+- workouts
+
+That summary should become the baseline the UI must match.
+
+==================================================
+PHASE 4 — API SMOKE TESTING
+==================================================
+
+Build automated API tests for all major domains.
+
+Test that each important endpoint:
+- returns 200/401/403 appropriately
+- does not hang
+- returns valid JSON
+- returns the correct shape
+- returns data scoped to the logged-in gym
+- does not return empty arrays when seeded data exists
+- does not return contradictory summary counts
+
+At minimum test:
+- auth/session/current user
+- gym summary/dashboard stats
+- members list
+- member detail
+- leads list
+- classes list
+- attendance summary
+- billing summary
+- workouts list
+- AI operator summary
+- AI task list
+- intelligence summary
+- risk radar
+- cohort analysis
+- revenue forecast
+- reports endpoints
+
+Add timeout detection so failed endpoints are clearly reported.
+
+==================================================
+PHASE 5 — FRONTEND ROUTE + PAGE LOAD TESTS
+==================================================
+
+Implement route-level smoke tests with Playwright.
+
+Test that the following pages:
+- load without crashing
+- do not remain in a loading spinner forever
+- do not show blank screens
+- do not show uncaught errors in console
+- render expected seeded data counts or core widgets
+
+At minimum test:
+- login page
+- dashboard
+- members
+- leads
+- schedule
+- intelligence
+- AI operator
+- reports
+- settings or any visible navigation pages
+
+Also verify:
+- every nav item points to a valid route
+- every defined page component has a router entry if intended to be accessible
+- no route mismatch between sidebar links and actual router paths
+- protected routes redirect correctly for unauthenticated users
+- authenticated users can access the demo gym after auto-linking
+
+==================================================
+PHASE 6 — METRIC CONSISTENCY ENGINE
+==================================================
+
+This is critical.
+
+Find every place the app displays counts/metrics such as:
+- total members
+- active members
+- leads
+- AI tasks generated
+- classes this week
+- revenue totals
+- risk counts
+- cohort totals
+- attendance summaries
+- plan counts
+- staff counts
+
+Create a single source-of-truth strategy so these values are calculated consistently.
+
+Requirements:
+- no hardcoded demo metrics in UI
+- no fake AI operator summaries
+- no duplicated business logic with conflicting definitions
+- shared calculation utilities where appropriate
+- consistent filtering rules across all pages
+- active member definition must be identical everywhere
+- task count must come from actual tasks table or same backend source
+- intelligence counts must reconcile to real underlying data
+
+Implement automated consistency tests such as:
+- dashboard member count === members page summary count === AI operator tracked members count (if same concept)
+- AI operator task summary === actual task list count
+- active member count used in intelligence === active member count used in dashboard
+- lead count on dashboard === lead count on leads page
+- attendance total on dashboard === attendance summary endpoint
+- any “tracked members” metric must clearly define what it means; if it differs from active members, rename it in UI to avoid misleading users
+
+If numbers represent different concepts, rename the labels so they are no longer misleading.
+
+==================================================
+PHASE 7 — FIX INDEFINITE LOADING / QUERY BUGS
+==================================================
+
+Investigate the Intelligence page endless loading issue.
+
+Check for:
+- frontend query waiting on endpoint that never resolves
+- endpoint throwing but error swallowed
+- React Query retry loop
+- bad auth state dependency
+- missing response return
+- unresolved Promise
+- route middleware deadlock
+- malformed query params
+- circular fetch dependency
+- charts waiting on undefined data shape
+- component blocking on multiple queries where one never settles
+
+Fix the problem fully.
+
+Add:
+- proper loading states
+- proper empty states
+- proper error states
+- sane query retry settings
+- timeout handling where appropriate
+- console/network diagnostics if needed during development
+
+==================================================
+PHASE 8 — E2E CORE USER JOURNEY TESTS
+==================================================
+
+Add end-to-end tests for a few real flows:
+1. login -> access platform -> dashboard loads
+2. navigate to members page -> list renders
+3. navigate to leads page -> list renders
+4. navigate to intelligence page -> renders real data and completes loading
+5. navigate to AI operator -> summary and tasks match
+6. open a member detail if applicable
+7. create or simulate one action if there is a safe seeded workflow to test
+
+==================================================
+PHASE 9 — FINAL AUDIT OUTPUT
+==================================================
+
+After implementing and fixing, produce a final QA report that includes:
+
+1. Pages fixed
+2. Broken routes fixed
+3. Endpoints fixed
+4. Hardcoded metrics removed
+5. Inconsistent definitions unified
+6. Seed issues fixed
+7. Hanging queries fixed
+8. Test files added
+9. Commands to run all tests
+10. Remaining risks if any
+
+Also create a developer-friendly script section in package.json for:
+- test
+- test:api
+- test:e2e
+- test:metrics
+- test:seed
+- audit:demo-data
+
+==================================================
+IMPLEMENTATION REQUIREMENTS
+==================================================
+
+Do all of the following in code:
+- add the necessary test files
+- add helper utilities for shared metric calculations
+- fix any broken routes
+- fix any hanging page logic
+- remove or replace hardcoded summary values
+- wire AI operator counts to real backend data
+- ensure demo metrics are consistent across dashboard, intelligence, and AI Operator
+- update labels if two metrics are actually measuring different concepts
+- produce a concise final report of what was changed
+
+==================================================
+IMPORTANT RULES
+==================================================
+
+- Do not stop at identifying issues; fix them
+- Do not leave fake values in place
+- Do not let any critical page remain on an infinite spinner
+- Do not allow the same metric label to mean different things on different pages
+- Prefer source-of-truth backend calculations over frontend-derived approximations
+- If a metric is derived differently on two pages, centralize the logic
+- If the seeded demo data itself is inconsistent, fix the seed data and the dependent tests
+- Keep the UI premium and unchanged visually unless labels or states must be corrected for clarity
+
+Start now by:
+1. auditing all routes/pages/endpoints,
+2. building the test harness,
+3. fixing inconsistencies,
+4. then returning a final implementation summary with exact files changed and test commands.

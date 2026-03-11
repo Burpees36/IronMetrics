@@ -15,10 +15,26 @@ export function Dashboard() {
     query: { enabled: !!activeGymId }
   });
 
-  if (isLoading || !stats) {
+  if (!activeGymId) {
+    return (
+      <div className="h-full flex items-center justify-center">
+        <p className="text-muted-foreground">Select a gym to view your dashboard.</p>
+      </div>
+    );
+  }
+
+  if (isLoading) {
     return (
       <div className="h-full flex items-center justify-center">
         <Loader2 className="h-8 w-8 text-primary animate-spin" />
+      </div>
+    );
+  }
+
+  if (!stats) {
+    return (
+      <div className="h-full flex items-center justify-center">
+        <p className="text-muted-foreground">Unable to load dashboard data.</p>
       </div>
     );
   }
