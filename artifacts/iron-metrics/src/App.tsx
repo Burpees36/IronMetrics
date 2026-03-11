@@ -1,0 +1,109 @@
+import React from "react";
+import { Switch, Route, Router as WouterRouter, useLocation } from "wouter";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { Toaster } from "@/components/ui/toaster";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import { useAuth } from "@workspace/replit-auth-web";
+import NotFound from "@/pages/not-found";
+
+import { GymProvider } from "@/store/GymContext";
+import { AppLayout } from "@/components/layout/AppLayout";
+import { Login } from "@/pages/Login";
+import { GymSelect } from "@/pages/GymSelect";
+import { Dashboard } from "@/pages/Dashboard";
+import { Intelligence } from "@/pages/Intelligence";
+import { Members } from "@/pages/Members";
+import { Schedule } from "@/pages/Schedule";
+import { AiOperator } from "@/pages/AiOperator";
+
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: 1,
+      refetchOnWindowFocus: false,
+    },
+  },
+});
+
+function ProtectedRoute({ component: Component }: { component: React.ElementType }) {
+  const { isAuthenticated, isLoading } = useAuth();
+  const [location, setLocation] = useLocation();
+
+  React.useEffect(() => {
+    if (!isLoading && !isAuthenticated) {
+      setLocation("/login");
+    }
+  }, [isLoading, isAuthenticated, setLocation]);
+
+  if (isLoading) return null;
+  if (!isAuthenticated) return null;
+
+  return (
+    <AppLayout>
+      <Component />
+    </AppLayout>
+  );
+}
+
+function Router() {
+  const { isAuthenticated, isLoading } = useAuth();
+
+  if (isLoading) {
+    return <div className="min-h-screen bg-background" />;
+  }
+
+  return (
+    <Switch>
+      <Route path="/login" component={Login} />
+      <Route path="/select-gym" component={GymSelect} />
+      
+      {/* Protected Routes */}
+      <Route path="/">
+        <ProtectedRoute component={() => {
+           const [, setLoc] = useLocation();
+           React.useEffect(() => setLoc("/dashboard"), []);
+           return null;
+        }} />
+      </Route>
+      <Route path="/dashboard" component={() => <ProtectedRoute component={Dashboard} />} />
+      <Route path="/intelligence" component={() => <ProtectedRoute component={Intelligence} />} />
+      <Route path="/members" component={() => <ProtectedRoute component={Members} />} />
+      <Route path="/schedule" component={() => <ProtectedRoute component={Schedule} />} />
+      <Route path="/ai-operator" component={() => <ProtectedRoute component={AiOperator} />} />
+      
+      {/* Fallback for unbuilt pages */}
+      <Route path="/:rest*">
+        {(params) => {
+          if (["leads", "billing", "workouts", "staff", "settings"].includes(params.rest as string)) {
+             return <ProtectedRoute component={() => (
+               <div className="flex h-full items-center justify-center">
+                 <div className="text-center">
+                   <h2 className="text-2xl font-bold mb-2 capitalize">{params.rest}</h2>
+                   <p className="text-muted-foreground">This module is under construction.</p>
+                 </div>
+               </div>
+             )} />
+          }
+          return <NotFound />;
+        }}
+      </Route>
+    </Switch>
+  );
+}
+
+function App() {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <GymProvider>
+        <TooltipProvider>
+          <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+            <Router />
+          </WouterRouter>
+          <Toaster />
+        </TooltipProvider>
+      </GymProvider>
+    </QueryClientProvider>
+  );
+}
+
+export default App;

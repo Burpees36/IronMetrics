@@ -1,0 +1,20 @@
+packages:
+  "framer-motion": "For premium page transitions, card entry animations, and interactive micro-interactions"
+  "recharts": "For displaying beautiful, responsive charts in the dashboard and intelligence hub"
+  "date-fns": "For elegant date formatting in scheduling, timelines, and attendance features"
+  "@hello-pangea/dnd": "For the drag-and-drop Leads CRM Kanban board"
+  "clsx": "For conditional class name joining"
+  "tailwind-merge": "For merging tailwind classes safely"
+
+images:
+  - path: "artifacts/iron-metrics/public/images/auth-bg.png"
+    description: "Abstract dark luxury background with subtle gold and amber geometric light leaks, representing premium iron and fitness"
+    aspect_ratio: "16:9"
+  - path: "artifacts/iron-metrics/public/images/gym-placeholder.png"
+    description: "Dark moody empty warehouse gym with beautiful cinematic lighting, premium fitness atmosphere"
+    aspect_ratio: "16:9"
+
+notes:
+  - App uses Replit Auth (@workspace/replit-auth-web) for authentication
+  - OpenAPI hooks are imported directly from @workspace/api-client-react
+  - Force dark theme by setting the default variables in :root to dark values

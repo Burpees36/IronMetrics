@@ -1,22 +1,51 @@
 openapi: 3.1.0
 info:
-  # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: Iron Metrics Gym Management Platform API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: auth
+    description: Authentication operations
+  - name: gyms
+    description: Gym and organization management
+  - name: members
+    description: Member management
+  - name: leads
+    description: Lead and CRM management
+  - name: staff
+    description: Staff management
+  - name: classes
+    description: Class scheduling
+  - name: attendance
+    description: Attendance tracking
+  - name: billing
+    description: Billing and subscriptions
+  - name: retail
+    description: Retail and POS
+  - name: workouts
+    description: Workout tracking
+  - name: communications
+    description: Member communications
+  - name: documents
+    description: Documents and waivers
+  - name: intelligence
+    description: Iron Metrics intelligence engine
+  - name: ai-operator
+    description: AI operator tools
+  - name: reporting
+    description: Reports and dashboards
+
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,6 +53,1403 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  # AUTH
+  /auth/user:
+    get:
+      operationId: getCurrentUser
+      tags: [auth]
+      summary: Get current authenticated user
+      responses:
+        "200":
+          description: Current user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthUser"
+        "401":
+          description: Not authenticated
+
+  # GYMS
+  /gyms:
+    get:
+      operationId: listGyms
+      tags: [gyms]
+      summary: List all gyms accessible to current user
+      responses:
+        "200":
+          description: List of gyms
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Gym"
+    post:
+      operationId: createGym
+      tags: [gyms]
+      summary: Create a new gym
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateGymBody"
+      responses:
+        "201":
+          description: Created gym
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Gym"
+
+  /gyms/{gymId}:
+    get:
+      operationId: getGym
+      tags: [gyms]
+      summary: Get gym details
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Gym details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Gym"
+        "404":
+          description: Not found
+    patch:
+      operationId: updateGym
+      tags: [gyms]
+      summary: Update gym details
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateGymBody"
+      responses:
+        "200":
+          description: Updated gym
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Gym"
+
+  # MEMBERS
+  /gyms/{gymId}/members:
+    get:
+      operationId: listMembers
+      tags: [members]
+      summary: List gym members
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: status
+          in: query
+          schema:
+            type: string
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+        - name: offset
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of members
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MemberListResponse"
+    post:
+      operationId: createMember
+      tags: [members]
+      summary: Create a new member
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateMemberBody"
+      responses:
+        "201":
+          description: Created member
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Member"
+
+  /gyms/{gymId}/members/{memberId}:
+    get:
+      operationId: getMember
+      tags: [members]
+      summary: Get member details
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: memberId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Member details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MemberDetail"
+        "404":
+          description: Not found
+    patch:
+      operationId: updateMember
+      tags: [members]
+      summary: Update member details
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: memberId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateMemberBody"
+      responses:
+        "200":
+          description: Updated member
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Member"
+
+  /gyms/{gymId}/members/{memberId}/notes:
+    post:
+      operationId: addMemberNote
+      tags: [members]
+      summary: Add note to member record
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: memberId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateMemberNoteBody"
+      responses:
+        "201":
+          description: Note added
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MemberNote"
+
+  /gyms/{gymId}/members/{memberId}/timeline:
+    get:
+      operationId: getMemberTimeline
+      tags: [members]
+      summary: Get member activity timeline
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: memberId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Member timeline events
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TimelineEvent"
+
+  # LEADS / CRM
+  /gyms/{gymId}/leads:
+    get:
+      operationId: listLeads
+      tags: [leads]
+      summary: List leads
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: stage
+          in: query
+          schema:
+            type: string
+        - name: search
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of leads
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Lead"
+    post:
+      operationId: createLead
+      tags: [leads]
+      summary: Create a new lead
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateLeadBody"
+      responses:
+        "201":
+          description: Created lead
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Lead"
+
+  /gyms/{gymId}/leads/{leadId}:
+    get:
+      operationId: getLead
+      tags: [leads]
+      summary: Get lead details
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: leadId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Lead details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Lead"
+    patch:
+      operationId: updateLead
+      tags: [leads]
+      summary: Update lead
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: leadId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateLeadBody"
+      responses:
+        "200":
+          description: Updated lead
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Lead"
+
+  /gyms/{gymId}/leads/{leadId}/convert:
+    post:
+      operationId: convertLeadToMember
+      tags: [leads]
+      summary: Convert lead to paying member
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: leadId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Conversion result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Member"
+
+  # STAFF
+  /gyms/{gymId}/staff:
+    get:
+      operationId: listStaff
+      tags: [staff]
+      summary: List gym staff
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of staff
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/StaffMember"
+    post:
+      operationId: inviteStaff
+      tags: [staff]
+      summary: Invite a staff member
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InviteStaffBody"
+      responses:
+        "201":
+          description: Staff invited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StaffMember"
+
+  /gyms/{gymId}/staff/{staffId}:
+    patch:
+      operationId: updateStaff
+      tags: [staff]
+      summary: Update staff member
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: staffId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateStaffBody"
+      responses:
+        "200":
+          description: Updated staff
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StaffMember"
+    delete:
+      operationId: removeStaff
+      tags: [staff]
+      summary: Remove staff access
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: staffId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Staff removed
+
+  # CLASSES
+  /gyms/{gymId}/classes:
+    get:
+      operationId: listClasses
+      tags: [classes]
+      summary: List scheduled classes
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: startDate
+          in: query
+          schema:
+            type: string
+        - name: endDate
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of classes
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/GymClass"
+    post:
+      operationId: createClass
+      tags: [classes]
+      summary: Create a class
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateClassBody"
+      responses:
+        "201":
+          description: Created class
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GymClass"
+
+  /gyms/{gymId}/classes/{classId}:
+    get:
+      operationId: getClass
+      tags: [classes]
+      summary: Get class details with roster
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: classId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Class with roster
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GymClassDetail"
+    patch:
+      operationId: updateClass
+      tags: [classes]
+      summary: Update class
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: classId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateClassBody"
+      responses:
+        "200":
+          description: Updated class
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GymClass"
+    delete:
+      operationId: deleteClass
+      tags: [classes]
+      summary: Delete class
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: classId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /gyms/{gymId}/classes/{classId}/checkin:
+    post:
+      operationId: checkInToClass
+      tags: [attendance]
+      summary: Check in member to class
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: classId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CheckInBody"
+      responses:
+        "201":
+          description: Checked in
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Attendance"
+
+  # ATTENDANCE
+  /gyms/{gymId}/attendance:
+    get:
+      operationId: listAttendance
+      tags: [attendance]
+      summary: List attendance records
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: memberId
+          in: query
+          schema:
+            type: integer
+        - name: startDate
+          in: query
+          schema:
+            type: string
+        - name: endDate
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Attendance records
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Attendance"
+
+  # BILLING
+  /gyms/{gymId}/plans:
+    get:
+      operationId: listMembershipPlans
+      tags: [billing]
+      summary: List membership plans
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Plans
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/MembershipPlan"
+    post:
+      operationId: createMembershipPlan
+      tags: [billing]
+      summary: Create membership plan
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateMembershipPlanBody"
+      responses:
+        "201":
+          description: Created plan
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MembershipPlan"
+
+  /gyms/{gymId}/subscriptions:
+    get:
+      operationId: listSubscriptions
+      tags: [billing]
+      summary: List member subscriptions
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: status
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Subscriptions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Subscription"
+    post:
+      operationId: createSubscription
+      tags: [billing]
+      summary: Create subscription for member
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSubscriptionBody"
+      responses:
+        "201":
+          description: Created subscription
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Subscription"
+
+  /gyms/{gymId}/subscriptions/{subscriptionId}:
+    patch:
+      operationId: updateSubscription
+      tags: [billing]
+      summary: Update subscription (hold, cancel, resume)
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: subscriptionId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateSubscriptionBody"
+      responses:
+        "200":
+          description: Updated subscription
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Subscription"
+
+  /gyms/{gymId}/invoices:
+    get:
+      operationId: listInvoices
+      tags: [billing]
+      summary: List invoices
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: memberId
+          in: query
+          schema:
+            type: integer
+        - name: status
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Invoices
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Invoice"
+
+  # RETAIL / POS
+  /gyms/{gymId}/products:
+    get:
+      operationId: listProducts
+      tags: [retail]
+      summary: List retail products
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Products
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Product"
+    post:
+      operationId: createProduct
+      tags: [retail]
+      summary: Create product
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateProductBody"
+      responses:
+        "201":
+          description: Created product
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Product"
+
+  /gyms/{gymId}/sales:
+    get:
+      operationId: listSales
+      tags: [retail]
+      summary: List retail sales
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Sales
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Sale"
+    post:
+      operationId: createSale
+      tags: [retail]
+      summary: Create sale / checkout
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSaleBody"
+      responses:
+        "201":
+          description: Sale completed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Sale"
+
+  # WORKOUTS
+  /gyms/{gymId}/workouts:
+    get:
+      operationId: listWorkouts
+      tags: [workouts]
+      summary: List posted workouts
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: startDate
+          in: query
+          schema:
+            type: string
+        - name: endDate
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Workouts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Workout"
+    post:
+      operationId: createWorkout
+      tags: [workouts]
+      summary: Post a workout
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateWorkoutBody"
+      responses:
+        "201":
+          description: Created workout
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Workout"
+
+  /gyms/{gymId}/workouts/{workoutId}/results:
+    get:
+      operationId: listWorkoutResults
+      tags: [workouts]
+      summary: List workout results (whiteboard)
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: workoutId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Results
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/WorkoutResult"
+    post:
+      operationId: logWorkoutResult
+      tags: [workouts]
+      summary: Log member workout result
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: workoutId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateWorkoutResultBody"
+      responses:
+        "201":
+          description: Result logged
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkoutResult"
+
+  # COMMUNICATIONS
+  /gyms/{gymId}/announcements:
+    get:
+      operationId: listAnnouncements
+      tags: [communications]
+      summary: List announcements
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Announcements
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Announcement"
+    post:
+      operationId: createAnnouncement
+      tags: [communications]
+      summary: Create announcement
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateAnnouncementBody"
+      responses:
+        "201":
+          description: Created announcement
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Announcement"
+
+  # INTELLIGENCE
+  /gyms/{gymId}/intelligence/overview:
+    get:
+      operationId: getIntelligenceOverview
+      tags: [intelligence]
+      summary: Get full intelligence overview (RSI, risks, interventions)
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Intelligence overview
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IntelligenceOverview"
+
+  /gyms/{gymId}/intelligence/rsi:
+    get:
+      operationId: getRetentionStabilityIndex
+      tags: [intelligence]
+      summary: Get Retention Stability Index
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: RSI data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RetentionStabilityIndex"
+
+  /gyms/{gymId}/intelligence/risk-radar:
+    get:
+      operationId: getMemberRiskRadar
+      tags: [intelligence]
+      summary: Get member risk radar data
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Risk radar data
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/MemberRiskProfile"
+
+  /gyms/{gymId}/intelligence/interventions:
+    get:
+      operationId: getInterventions
+      tags: [intelligence]
+      summary: Get ranked interventions
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Interventions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Intervention"
+
+  /gyms/{gymId}/intelligence/cohorts:
+    get:
+      operationId: getCohortAnalysis
+      tags: [intelligence]
+      summary: Get cohort analysis
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Cohort data
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CohortData"
+
+  /gyms/{gymId}/intelligence/revenue-forecast:
+    get:
+      operationId: getRevenueForecast
+      tags: [intelligence]
+      summary: Get revenue scenario forecast
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Revenue forecast scenarios
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RevenueForecast"
+
+  # AI OPERATOR
+  /gyms/{gymId}/ai/generate-outreach:
+    post:
+      operationId: generateMemberOutreach
+      tags: [ai-operator]
+      summary: Generate AI outreach draft for at-risk member
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GenerateOutreachBody"
+      responses:
+        "200":
+          description: Generated outreach
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AiGeneratedContent"
+
+  /gyms/{gymId}/ai/generate-brief:
+    post:
+      operationId: generateOwnerBrief
+      tags: [ai-operator]
+      summary: Generate AI owner strategic brief
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Owner brief
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AiGeneratedContent"
+
+  /gyms/{gymId}/ai/tasks:
+    get:
+      operationId: listAiTasks
+      tags: [ai-operator]
+      summary: List AI generated tasks
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: AI tasks
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AiTask"
+    post:
+      operationId: createAiTask
+      tags: [ai-operator]
+      summary: Create and log AI task
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateAiTaskBody"
+      responses:
+        "201":
+          description: AI task created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AiTask"
+
+  # REPORTING
+  /gyms/{gymId}/reports/dashboard:
+    get:
+      operationId: getDashboardStats
+      tags: [reporting]
+      summary: Get owner dashboard key metrics
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Dashboard stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardStats"
+
+  /gyms/{gymId}/reports/membership:
+    get:
+      operationId: getMembershipReport
+      tags: [reporting]
+      summary: Get membership summary report
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Membership report
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MembershipReport"
+
+  /gyms/{gymId}/reports/revenue:
+    get:
+      operationId: getRevenueReport
+      tags: [reporting]
+      summary: Get revenue summary report
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Revenue report
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RevenueReport"
+
+  /gyms/{gymId}/reports/attendance:
+    get:
+      operationId: getAttendanceReport
+      tags: [reporting]
+      summary: Get attendance trends report
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Attendance report
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AttendanceReport"
+
+  # DOCUMENTS
+  /gyms/{gymId}/documents:
+    get:
+      operationId: listDocuments
+      tags: [documents]
+      summary: List gym documents and waivers
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Documents
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/GymDocument"
+    post:
+      operationId: createDocument
+      tags: [documents]
+      summary: Create document or waiver
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateDocumentBody"
+      responses:
+        "201":
+          description: Document created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GymDocument"
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +1460,1744 @@ components:
       required:
         - status
 
+    AuthUser:
+      type: object
+      properties:
+        id:
+          type: string
+        email:
+          type: ["string", "null"]
+        firstName:
+          type: ["string", "null"]
+        lastName:
+          type: ["string", "null"]
+        profileImageUrl:
+          type: ["string", "null"]
+        isAuthenticated:
+          type: boolean
+      required:
+        - id
+        - isAuthenticated
+
+    Gym:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        slug:
+          type: string
+        email:
+          type: ["string", "null"]
+        phone:
+          type: ["string", "null"]
+        address:
+          type: ["string", "null"]
+        city:
+          type: ["string", "null"]
+        state:
+          type: ["string", "null"]
+        zip:
+          type: ["string", "null"]
+        timezone:
+          type: string
+        logoUrl:
+          type: ["string", "null"]
+        website:
+          type: ["string", "null"]
+        memberCount:
+          type: integer
+        activeCount:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - name
+        - slug
+        - timezone
+        - memberCount
+        - activeCount
+        - createdAt
+
+    CreateGymBody:
+      type: object
+      properties:
+        name:
+          type: string
+        timezone:
+          type: string
+        email:
+          type: ["string", "null"]
+        phone:
+          type: ["string", "null"]
+        address:
+          type: ["string", "null"]
+        city:
+          type: ["string", "null"]
+        state:
+          type: ["string", "null"]
+        zip:
+          type: ["string", "null"]
+      required:
+        - name
+        - timezone
+
+    UpdateGymBody:
+      type: object
+      properties:
+        name:
+          type: string
+        email:
+          type: ["string", "null"]
+        phone:
+          type: ["string", "null"]
+        address:
+          type: ["string", "null"]
+        city:
+          type: ["string", "null"]
+        state:
+          type: ["string", "null"]
+        zip:
+          type: ["string", "null"]
+        timezone:
+          type: string
+        logoUrl:
+          type: ["string", "null"]
+        website:
+          type: ["string", "null"]
+
+    Member:
+      type: object
+      properties:
+        id:
+          type: integer
+        gymId:
+          type: integer
+        firstName:
+          type: string
+        lastName:
+          type: string
+        email:
+          type: string
+        phone:
+          type: ["string", "null"]
+        status:
+          type: string
+          enum: [active, inactive, hold, cancelled, prospect]
+        membershipType:
+          type: ["string", "null"]
+        joinDate:
+          type: ["string", "null"]
+          format: date
+        birthDate:
+          type: ["string", "null"]
+          format: date
+        profileImageUrl:
+          type: ["string", "null"]
+        tags:
+          type: array
+          items:
+            type: string
+        riskScore:
+          type: ["number", "null"]
+        riskTier:
+          type: ["string", "null"]
+        lastVisitDate:
+          type: ["string", "null"]
+          format: date-time
+        attendanceCount30d:
+          type: ["integer", "null"]
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - gymId
+        - firstName
+        - lastName
+        - email
+        - status
+        - tags
+        - createdAt
+
+    MemberDetail:
+      allOf:
+        - $ref: "#/components/schemas/Member"
+        - type: object
+          properties:
+            emergencyContactName:
+              type: ["string", "null"]
+            emergencyContactPhone:
+              type: ["string", "null"]
+            address:
+              type: ["string", "null"]
+            city:
+              type: ["string", "null"]
+            state:
+              type: ["string", "null"]
+            notes:
+              type: array
+              items:
+                $ref: "#/components/schemas/MemberNote"
+            activeSubscription:
+              $ref: "#/components/schemas/Subscription"
+            recentAttendance:
+              type: array
+              items:
+                $ref: "#/components/schemas/Attendance"
+            waiverSigned:
+              type: boolean
+          required:
+            - notes
+            - waiverSigned
+
+    MemberListResponse:
+      type: object
+      properties:
+        members:
+          type: array
+          items:
+            $ref: "#/components/schemas/Member"
+        total:
+          type: integer
+        limit:
+          type: integer
+        offset:
+          type: integer
+      required:
+        - members
+        - total
+        - limit
+        - offset
+
+    CreateMemberBody:
+      type: object
+      properties:
+        firstName:
+          type: string
+        lastName:
+          type: string
+        email:
+          type: string
+        phone:
+          type: ["string", "null"]
+        birthDate:
+          type: ["string", "null"]
+        address:
+          type: ["string", "null"]
+        emergencyContactName:
+          type: ["string", "null"]
+        emergencyContactPhone:
+          type: ["string", "null"]
+        tags:
+          type: array
+          items:
+            type: string
+      required:
+        - firstName
+        - lastName
+        - email
+
+    UpdateMemberBody:
+      type: object
+      properties:
+        firstName:
+          type: string
+        lastName:
+          type: string
+        email:
+          type: string
+        phone:
+          type: ["string", "null"]
+        status:
+          type: string
+          enum: [active, inactive, hold, cancelled, prospect]
+        birthDate:
+          type: ["string", "null"]
+        address:
+          type: ["string", "null"]
+        emergencyContactName:
+          type: ["string", "null"]
+        emergencyContactPhone:
+          type: ["string", "null"]
+        tags:
+          type: array
+          items:
+            type: string
+        membershipType:
+          type: ["string", "null"]
+
+    MemberNote:
+      type: object
+      properties:
+        id:
+          type: integer
+        memberId:
+          type: integer
+        content:
+          type: string
+        authorName:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - memberId
+        - content
+        - authorName
+        - createdAt
+
+    CreateMemberNoteBody:
+      type: object
+      properties:
+        content:
+          type: string
+      required:
+        - content
+
+    TimelineEvent:
+      type: object
+      properties:
+        id:
+          type: integer
+        type:
+          type: string
+        title:
+          type: string
+        description:
+          type: ["string", "null"]
+        date:
+          type: string
+          format: date-time
+        metadata:
+          type: object
+      required:
+        - id
+        - type
+        - title
+        - date
+
+    Lead:
+      type: object
+      properties:
+        id:
+          type: integer
+        gymId:
+          type: integer
+        firstName:
+          type: string
+        lastName:
+          type: string
+        email:
+          type: string
+        phone:
+          type: ["string", "null"]
+        stage:
+          type: string
+          enum: [new, contacted, scheduled, trial, converted, lost]
+        source:
+          type: ["string", "null"]
+        assignedToId:
+          type: ["integer", "null"]
+        lastContactDate:
+          type: ["string", "null"]
+          format: date-time
+        nextFollowUpDate:
+          type: ["string", "null"]
+          format: date
+        notes:
+          type: ["string", "null"]
+        isStale:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - gymId
+        - firstName
+        - lastName
+        - email
+        - stage
+        - isStale
+        - createdAt
+
+    CreateLeadBody:
+      type: object
+      properties:
+        firstName:
+          type: string
+        lastName:
+          type: string
+        email:
+          type: string
+        phone:
+          type: ["string", "null"]
+        source:
+          type: ["string", "null"]
+        notes:
+          type: ["string", "null"]
+      required:
+        - firstName
+        - lastName
+        - email
+
+    UpdateLeadBody:
+      type: object
+      properties:
+        stage:
+          type: string
+          enum: [new, contacted, scheduled, trial, converted, lost]
+        assignedToId:
+          type: ["integer", "null"]
+        nextFollowUpDate:
+          type: ["string", "null"]
+        notes:
+          type: ["string", "null"]
+        source:
+          type: ["string", "null"]
+
+    StaffMember:
+      type: object
+      properties:
+        id:
+          type: integer
+        gymId:
+          type: integer
+        userId:
+          type: string
+        firstName:
+          type: string
+        lastName:
+          type: string
+        email:
+          type: string
+        role:
+          type: string
+          enum: [gym_owner, admin, coach, front_desk, analyst]
+        specialties:
+          type: array
+          items:
+            type: string
+        isActive:
+          type: boolean
+        joinDate:
+          type: ["string", "null"]
+          format: date
+        classCount30d:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - gymId
+        - userId
+        - firstName
+        - lastName
+        - email
+        - role
+        - specialties
+        - isActive
+        - classCount30d
+        - createdAt
+
+    InviteStaffBody:
+      type: object
+      properties:
+        email:
+          type: string
+        firstName:
+          type: string
+        lastName:
+          type: string
+        role:
+          type: string
+          enum: [admin, coach, front_desk, analyst]
+      required:
+        - email
+        - firstName
+        - lastName
+        - role
+
+    UpdateStaffBody:
+      type: object
+      properties:
+        role:
+          type: string
+          enum: [gym_owner, admin, coach, front_desk, analyst]
+        isActive:
+          type: boolean
+        specialties:
+          type: array
+          items:
+            type: string
+
+    GymClass:
+      type: object
+      properties:
+        id:
+          type: integer
+        gymId:
+          type: integer
+        name:
+          type: string
+        description:
+          type: ["string", "null"]
+        coachId:
+          type: ["integer", "null"]
+        coachName:
+          type: ["string", "null"]
+        startTime:
+          type: string
+          format: date-time
+        endTime:
+          type: string
+          format: date-time
+        capacity:
+          type: integer
+        enrolled:
+          type: integer
+        type:
+          type: string
+          enum: [regular, personal_training, intro, specialty, open_gym]
+        status:
+          type: string
+          enum: [scheduled, in_progress, completed, cancelled]
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - gymId
+        - name
+        - startTime
+        - endTime
+        - capacity
+        - enrolled
+        - type
+        - status
+        - createdAt
+
+    GymClassDetail:
+      allOf:
+        - $ref: "#/components/schemas/GymClass"
+        - type: object
+          properties:
+            roster:
+              type: array
+              items:
+                $ref: "#/components/schemas/Attendance"
+          required:
+            - roster
+
+    CreateClassBody:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: ["string", "null"]
+        coachId:
+          type: ["integer", "null"]
+        startTime:
+          type: string
+          format: date-time
+        endTime:
+          type: string
+          format: date-time
+        capacity:
+          type: integer
+        type:
+          type: string
+          enum: [regular, personal_training, intro, specialty, open_gym]
+        isRecurring:
+          type: boolean
+        recurringDays:
+          type: array
+          items:
+            type: integer
+      required:
+        - name
+        - startTime
+        - endTime
+        - capacity
+        - type
+
+    UpdateClassBody:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: ["string", "null"]
+        coachId:
+          type: ["integer", "null"]
+        startTime:
+          type: string
+          format: date-time
+        endTime:
+          type: string
+          format: date-time
+        capacity:
+          type: integer
+        status:
+          type: string
+          enum: [scheduled, in_progress, completed, cancelled]
+
+    CheckInBody:
+      type: object
+      properties:
+        memberId:
+          type: integer
+        status:
+          type: string
+          enum: [present, late_cancel, no_show]
+      required:
+        - memberId
+
+    Attendance:
+      type: object
+      properties:
+        id:
+          type: integer
+        memberId:
+          type: integer
+        memberName:
+          type: string
+        classId:
+          type: ["integer", "null"]
+        className:
+          type: ["string", "null"]
+        gymId:
+          type: integer
+        checkinTime:
+          type: string
+          format: date-time
+        status:
+          type: string
+          enum: [present, late_cancel, no_show]
+      required:
+        - id
+        - memberId
+        - memberName
+        - gymId
+        - checkinTime
+        - status
+
+    MembershipPlan:
+      type: object
+      properties:
+        id:
+          type: integer
+        gymId:
+          type: integer
+        name:
+          type: string
+        description:
+          type: ["string", "null"]
+        price:
+          type: number
+        billingInterval:
+          type: string
+          enum: [monthly, quarterly, annual, one_time]
+        sessionsPerMonth:
+          type: ["integer", "null"]
+        isActive:
+          type: boolean
+        memberCount:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - gymId
+        - name
+        - price
+        - billingInterval
+        - isActive
+        - memberCount
+        - createdAt
+
+    CreateMembershipPlanBody:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: ["string", "null"]
+        price:
+          type: number
+        billingInterval:
+          type: string
+          enum: [monthly, quarterly, annual, one_time]
+        sessionsPerMonth:
+          type: ["integer", "null"]
+      required:
+        - name
+        - price
+        - billingInterval
+
+    Subscription:
+      type: object
+      properties:
+        id:
+          type: integer
+        gymId:
+          type: integer
+        memberId:
+          type: integer
+        memberName:
+          type: string
+        planId:
+          type: integer
+        planName:
+          type: string
+        status:
+          type: string
+          enum: [active, paused, cancelled, past_due, trial]
+        currentPeriodStart:
+          type: ["string", "null"]
+          format: date
+        currentPeriodEnd:
+          type: ["string", "null"]
+          format: date
+        amount:
+          type: number
+        failedPayments:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - gymId
+        - memberId
+        - memberName
+        - planId
+        - planName
+        - status
+        - amount
+        - failedPayments
+        - createdAt
+
+    CreateSubscriptionBody:
+      type: object
+      properties:
+        memberId:
+          type: integer
+        planId:
+          type: integer
+        startDate:
+          type: ["string", "null"]
+          format: date
+      required:
+        - memberId
+        - planId
+
+    UpdateSubscriptionBody:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [active, paused, cancelled]
+        pauseUntil:
+          type: ["string", "null"]
+          format: date
+
+    Invoice:
+      type: object
+      properties:
+        id:
+          type: integer
+        gymId:
+          type: integer
+        memberId:
+          type: integer
+        memberName:
+          type: string
+        amount:
+          type: number
+        status:
+          type: string
+          enum: [paid, unpaid, failed, refunded, void]
+        dueDate:
+          type: ["string", "null"]
+          format: date
+        paidAt:
+          type: ["string", "null"]
+          format: date-time
+        description:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - gymId
+        - memberId
+        - memberName
+        - amount
+        - status
+        - createdAt
+
+    Product:
+      type: object
+      properties:
+        id:
+          type: integer
+        gymId:
+          type: integer
+        name:
+          type: string
+        description:
+          type: ["string", "null"]
+        price:
+          type: number
+        category:
+          type: ["string", "null"]
+        stockQuantity:
+          type: ["integer", "null"]
+        isActive:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - gymId
+        - name
+        - price
+        - isActive
+        - createdAt
+
+    CreateProductBody:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: ["string", "null"]
+        price:
+          type: number
+        category:
+          type: ["string", "null"]
+        stockQuantity:
+          type: ["integer", "null"]
+      required:
+        - name
+        - price
+
+    Sale:
+      type: object
+      properties:
+        id:
+          type: integer
+        gymId:
+          type: integer
+        memberId:
+          type: ["integer", "null"]
+        memberName:
+          type: ["string", "null"]
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/SaleItem"
+        subtotal:
+          type: number
+        tax:
+          type: number
+        total:
+          type: number
+        paymentMethod:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - gymId
+        - items
+        - subtotal
+        - tax
+        - total
+        - paymentMethod
+        - createdAt
+
+    SaleItem:
+      type: object
+      properties:
+        productId:
+          type: integer
+        productName:
+          type: string
+        quantity:
+          type: integer
+        price:
+          type: number
+      required:
+        - productId
+        - productName
+        - quantity
+        - price
+
+    CreateSaleBody:
+      type: object
+      properties:
+        memberId:
+          type: ["integer", "null"]
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              productId:
+                type: integer
+              quantity:
+                type: integer
+            required:
+              - productId
+              - quantity
+        paymentMethod:
+          type: string
+      required:
+        - items
+        - paymentMethod
+
+    Workout:
+      type: object
+      properties:
+        id:
+          type: integer
+        gymId:
+          type: integer
+        title:
+          type: string
+        description:
+          type: ["string", "null"]
+        workoutDate:
+          type: string
+          format: date
+        type:
+          type: string
+        movements:
+          type: array
+          items:
+            type: string
+        resultCount:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - gymId
+        - title
+        - workoutDate
+        - type
+        - movements
+        - resultCount
+        - createdAt
+
+    CreateWorkoutBody:
+      type: object
+      properties:
+        title:
+          type: string
+        description:
+          type: ["string", "null"]
+        workoutDate:
+          type: string
+          format: date
+        type:
+          type: string
+        movements:
+          type: array
+          items:
+            type: string
+      required:
+        - title
+        - workoutDate
+        - type
+
+    WorkoutResult:
+      type: object
+      properties:
+        id:
+          type: integer
+        workoutId:
+          type: integer
+        memberId:
+          type: integer
+        memberName:
+          type: string
+        result:
+          type: string
+        notes:
+          type: ["string", "null"]
+        isRx:
+          type: boolean
+        isPr:
+          type: boolean
+        rank:
+          type: ["integer", "null"]
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - workoutId
+        - memberId
+        - memberName
+        - result
+        - isRx
+        - isPr
+        - createdAt
+
+    CreateWorkoutResultBody:
+      type: object
+      properties:
+        memberId:
+          type: integer
+        result:
+          type: string
+        notes:
+          type: ["string", "null"]
+        isRx:
+          type: boolean
+        isPr:
+          type: boolean
+      required:
+        - memberId
+        - result
+
+    Announcement:
+      type: object
+      properties:
+        id:
+          type: integer
+        gymId:
+          type: integer
+        title:
+          type: string
+        content:
+          type: string
+        authorName:
+          type: string
+        audience:
+          type: string
+          enum: [all, members, staff, coaches]
+        isPinned:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - gymId
+        - title
+        - content
+        - authorName
+        - audience
+        - isPinned
+        - createdAt
+
+    CreateAnnouncementBody:
+      type: object
+      properties:
+        title:
+          type: string
+        content:
+          type: string
+        audience:
+          type: string
+          enum: [all, members, staff, coaches]
+        isPinned:
+          type: boolean
+      required:
+        - title
+        - content
+        - audience
+
+    GymDocument:
+      type: object
+      properties:
+        id:
+          type: integer
+        gymId:
+          type: integer
+        name:
+          type: string
+        type:
+          type: string
+          enum: [waiver, policy, agreement, form]
+        content:
+          type: ["string", "null"]
+        version:
+          type: integer
+        isRequired:
+          type: boolean
+        signedCount:
+          type: integer
+        totalMembers:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - gymId
+        - name
+        - type
+        - version
+        - isRequired
+        - signedCount
+        - totalMembers
+        - createdAt
+
+    CreateDocumentBody:
+      type: object
+      properties:
+        name:
+          type: string
+        type:
+          type: string
+          enum: [waiver, policy, agreement, form]
+        content:
+          type: ["string", "null"]
+        isRequired:
+          type: boolean
+      required:
+        - name
+        - type
+
+    IntelligenceOverview:
+      type: object
+      properties:
+        gymId:
+          type: integer
+        rsi:
+          $ref: "#/components/schemas/RetentionStabilityIndex"
+        topRisks:
+          type: array
+          items:
+            $ref: "#/components/schemas/MemberRiskProfile"
+        topInterventions:
+          type: array
+          items:
+            $ref: "#/components/schemas/Intervention"
+        revenueForecast:
+          $ref: "#/components/schemas/RevenueForecast"
+        generatedAt:
+          type: string
+          format: date-time
+      required:
+        - gymId
+        - rsi
+        - topRisks
+        - topInterventions
+        - revenueForecast
+        - generatedAt
+
+    RetentionStabilityIndex:
+      type: object
+      properties:
+        score:
+          type: number
+        band:
+          type: string
+          enum: [Strong, Moderate, Fragile]
+        trend30d:
+          type: number
+        trend90d:
+          type: number
+        components:
+          type: object
+          properties:
+            churnRate:
+              type: number
+            avgRevPerMember:
+              type: number
+            netMemberGrowth:
+              type: number
+            avgTenure:
+              type: number
+          required:
+            - churnRate
+            - avgRevPerMember
+            - netMemberGrowth
+            - avgTenure
+        breakdown:
+          type: array
+          items:
+            type: object
+            properties:
+              metric:
+                type: string
+              value:
+                type: number
+              normalized:
+                type: number
+              weight:
+                type: number
+              contribution:
+                type: number
+            required:
+              - metric
+              - value
+              - normalized
+              - weight
+              - contribution
+        insight:
+          type: string
+      required:
+        - score
+        - band
+        - trend30d
+        - trend90d
+        - components
+        - breakdown
+        - insight
+
+    MemberRiskProfile:
+      type: object
+      properties:
+        memberId:
+          type: integer
+        memberName:
+          type: string
+        email:
+          type: string
+        riskScore:
+          type: number
+        riskTier:
+          type: string
+          enum: [critical, high, moderate, low, healthy]
+        revenueAtRisk:
+          type: number
+        daysSinceLastVisit:
+          type: ["integer", "null"]
+        attendanceDecay:
+          type: number
+        billingIssues:
+          type: boolean
+        tenure:
+          type: integer
+        signals:
+          type: array
+          items:
+            type: string
+        membershipType:
+          type: ["string", "null"]
+        monthlyValue:
+          type: ["number", "null"]
+      required:
+        - memberId
+        - memberName
+        - email
+        - riskScore
+        - riskTier
+        - revenueAtRisk
+        - attendanceDecay
+        - billingIssues
+        - tenure
+        - signals
+
+    Intervention:
+      type: object
+      properties:
+        id:
+          type: string
+        category:
+          type: string
+          enum: [onboarding, retention, billing, leads, pricing, coaching, campaign]
+        title:
+          type: string
+        description:
+          type: string
+        impact:
+          type: string
+          enum: [high, medium, low]
+        urgency:
+          type: string
+          enum: [immediate, this_week, this_month]
+        score:
+          type: number
+        expectedRevenue:
+          type: ["number", "null"]
+        affectedMembers:
+          type: ["integer", "null"]
+        actions:
+          type: array
+          items:
+            type: string
+        status:
+          type: string
+          enum: [pending, in_progress, completed, dismissed]
+      required:
+        - id
+        - category
+        - title
+        - description
+        - impact
+        - urgency
+        - score
+        - actions
+        - status
+
+    CohortData:
+      type: object
+      properties:
+        cohortMonth:
+          type: string
+        startingMembers:
+          type: integer
+        retained30d:
+          type: integer
+        retained60d:
+          type: integer
+        retained90d:
+          type: integer
+        retained180d:
+          type: integer
+        retained365d:
+          type: integer
+        retentionRate30d:
+          type: number
+        retentionRate90d:
+          type: number
+        retentionRate365d:
+          type: number
+        avgRevenue:
+          type: number
+      required:
+        - cohortMonth
+        - startingMembers
+        - retained30d
+        - retained60d
+        - retained90d
+        - retained180d
+        - retained365d
+        - retentionRate30d
+        - retentionRate90d
+        - retentionRate365d
+        - avgRevenue
+
+    RevenueForecast:
+      type: object
+      properties:
+        currentMrr:
+          type: number
+        expectedMrr3m:
+          type: number
+        upsideMrr3m:
+          type: number
+        downsideMrr3m:
+          type: number
+        expectedMrr6m:
+          type: number
+        upsideMrr6m:
+          type: number
+        downsideMrr6m:
+          type: number
+        expectedMrr12m:
+          type: number
+        upsideMrr12m:
+          type: number
+        downsideMrr12m:
+          type: number
+        assumptions:
+          type: array
+          items:
+            type: string
+      required:
+        - currentMrr
+        - expectedMrr3m
+        - upsideMrr3m
+        - downsideMrr3m
+        - expectedMrr6m
+        - upsideMrr6m
+        - downsideMrr6m
+        - expectedMrr12m
+        - upsideMrr12m
+        - downsideMrr12m
+        - assumptions
+
+    AiGeneratedContent:
+      type: object
+      properties:
+        id:
+          type: integer
+        type:
+          type: string
+        content:
+          type: string
+        subject:
+          type: ["string", "null"]
+        confidence:
+          type: number
+        isAiGenerated:
+          type: boolean
+        contextSummary:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - type
+        - content
+        - confidence
+        - isAiGenerated
+        - createdAt
+
+    GenerateOutreachBody:
+      type: object
+      properties:
+        memberId:
+          type: integer
+        outreachType:
+          type: string
+          enum: [at_risk, win_back, celebration, onboarding, billing]
+      required:
+        - memberId
+        - outreachType
+
+    AiTask:
+      type: object
+      properties:
+        id:
+          type: integer
+        gymId:
+          type: integer
+        type:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+        priority:
+          type: string
+          enum: [high, medium, low]
+        status:
+          type: string
+          enum: [pending, approved, sent, completed, dismissed]
+        targetId:
+          type: ["integer", "null"]
+        targetType:
+          type: ["string", "null"]
+        aiContent:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - gymId
+        - type
+        - title
+        - description
+        - priority
+        - status
+        - createdAt
+
+    CreateAiTaskBody:
+      type: object
+      properties:
+        type:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+        priority:
+          type: string
+          enum: [high, medium, low]
+        targetId:
+          type: ["integer", "null"]
+        targetType:
+          type: ["string", "null"]
+        aiContent:
+          type: ["string", "null"]
+      required:
+        - type
+        - title
+        - description
+        - priority
+
+    DashboardStats:
+      type: object
+      properties:
+        activeMembers:
+          type: integer
+        newMembersThisMonth:
+          type: integer
+        churnedThisMonth:
+          type: integer
+        mrr:
+          type: number
+        mrrGrowth:
+          type: number
+        totalRevenue:
+          type: number
+        revenueGrowth:
+          type: number
+        avgAttendancePerWeek:
+          type: number
+        attendanceGrowth:
+          type: number
+        classesThisWeek:
+          type: integer
+        openLeads:
+          type: integer
+        atRiskMembers:
+          type: integer
+        failedPayments:
+          type: integer
+        collectionRate:
+          type: number
+        rsiScore:
+          type: number
+        rsiBand:
+          type: string
+        revenueByMonth:
+          type: array
+          items:
+            type: object
+            properties:
+              month:
+                type: string
+              revenue:
+                type: number
+              members:
+                type: integer
+            required:
+              - month
+              - revenue
+              - members
+        attendanceByDay:
+          type: array
+          items:
+            type: object
+            properties:
+              date:
+                type: string
+              count:
+                type: integer
+            required:
+              - date
+              - count
+        memberStatusBreakdown:
+          type: array
+          items:
+            type: object
+            properties:
+              status:
+                type: string
+              count:
+                type: integer
+            required:
+              - status
+              - count
+      required:
+        - activeMembers
+        - newMembersThisMonth
+        - churnedThisMonth
+        - mrr
+        - mrrGrowth
+        - totalRevenue
+        - revenueGrowth
+        - avgAttendancePerWeek
+        - attendanceGrowth
+        - classesThisWeek
+        - openLeads
+        - atRiskMembers
+        - failedPayments
+        - collectionRate
+        - rsiScore
+        - rsiBand
+        - revenueByMonth
+        - attendanceByDay
+        - memberStatusBreakdown
+
+    MembershipReport:
+      type: object
+      properties:
+        totalActive:
+          type: integer
+        totalInactive:
+          type: integer
+        totalOnHold:
+          type: integer
+        totalCancelled:
+          type: integer
+        newThisMonth:
+          type: integer
+        churnedThisMonth:
+          type: integer
+        netGrowth:
+          type: integer
+        churnRate:
+          type: number
+        avgTenureMonths:
+          type: number
+        byPlan:
+          type: array
+          items:
+            type: object
+            properties:
+              planName:
+                type: string
+              count:
+                type: integer
+              revenue:
+                type: number
+            required:
+              - planName
+              - count
+              - revenue
+        growthByMonth:
+          type: array
+          items:
+            type: object
+            properties:
+              month:
+                type: string
+              newMembers:
+                type: integer
+              churned:
+                type: integer
+              net:
+                type: integer
+            required:
+              - month
+              - newMembers
+              - churned
+              - net
+      required:
+        - totalActive
+        - totalInactive
+        - totalOnHold
+        - totalCancelled
+        - newThisMonth
+        - churnedThisMonth
+        - netGrowth
+        - churnRate
+        - avgTenureMonths
+        - byPlan
+        - growthByMonth
+
+    RevenueReport:
+      type: object
+      properties:
+        mrr:
+          type: number
+        arr:
+          type: number
+        avgRevenuePerMember:
+          type: number
+        ltv:
+          type: number
+        totalRevenue:
+          type: number
+        membershipRevenue:
+          type: number
+        retailRevenue:
+          type: number
+        failedRevenue:
+          type: number
+        collectionRate:
+          type: number
+        byMonth:
+          type: array
+          items:
+            type: object
+            properties:
+              month:
+                type: string
+              membership:
+                type: number
+              retail:
+                type: number
+              total:
+                type: number
+            required:
+              - month
+              - membership
+              - retail
+              - total
+      required:
+        - mrr
+        - arr
+        - avgRevenuePerMember
+        - ltv
+        - totalRevenue
+        - membershipRevenue
+        - retailRevenue
+        - failedRevenue
+        - collectionRate
+        - byMonth
+
+    AttendanceReport:
+      type: object
+      properties:
+        avgPerDay:
+          type: number
+        avgPerWeek:
+          type: number
+        peakDay:
+          type: string
+        peakTime:
+          type: string
+        capacityUtilization:
+          type: number
+        byDayOfWeek:
+          type: array
+          items:
+            type: object
+            properties:
+              day:
+                type: string
+              count:
+                type: integer
+            required:
+              - day
+              - count
+        byHour:
+          type: array
+          items:
+            type: object
+            properties:
+              hour:
+                type: integer
+              count:
+                type: integer
+            required:
+              - hour
+              - count
+        trend:
+          type: array
+          items:
+            type: object
+            properties:
+              week:
+                type: string
+              count:
+                type: integer
+            required:
+              - week
+              - count
+      required:
+        - avgPerDay
+        - avgPerWeek
+        - peakDay
+        - peakTime
+        - capacityUtilization
+        - byDayOfWeek
+        - byHour
+        - trend
