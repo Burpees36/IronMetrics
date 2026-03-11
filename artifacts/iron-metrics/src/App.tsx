@@ -19,6 +19,7 @@ import { AiOperator } from "@/pages/AiOperator";
 import { Leads } from "@/pages/Leads";
 import { Billing } from "@/pages/Billing";
 import { Workouts } from "@/pages/Workouts";
+import { Resources } from "@/pages/Resources";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -88,6 +89,7 @@ function Router() {
       <Route path="/leads" component={() => <ProtectedRoute component={Leads} />} />
       <Route path="/billing" component={() => <ProtectedRoute component={Billing} />} />
       <Route path="/workouts" component={() => <ProtectedRoute component={Workouts} />} />
+      <Route path="/resources" component={() => <ProtectedRoute component={Resources} />} />
       
       {/* Fallback for unbuilt pages */}
       <Route path="/:rest*">

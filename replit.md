@@ -72,6 +72,17 @@ All tables in `lib/db/src/schema/`:
 - **documents** — Waivers, agreements, consent forms
 - **ai_tasks** — AI operator task queue
 - **ai_generated_content** — AI-drafted outreach, briefs
+- **recommendation_cards** — Strategic recommendation cards with checklists per gym/period
+- **checklist_item_completions** — Checked/unchecked state for recommendation checklist items
+- **recommendation_learning_stats** — Learning loop stats (expected impact, confidence, sample size)
+- **recommendation_learning_events** — Individual learning events per recommendation execution
+- **outcome_snapshots** — Periodic snapshots of gym metrics for learning comparison
+- **owner_additional_actions** — Owner-logged actions classified against recommendation types
+- **knowledge_sources** — Knowledge base sources (YouTube channels, etc.)
+- **knowledge_documents** — Individual documents within a knowledge source
+- **knowledge_chunks** — Chunked content from documents with taxonomy tags
+- **knowledge_ingest_jobs** — Tracks ingestion job progress
+- **recommendation_chunk_audit** — Audit trail linking recommendations to knowledge chunks used
 
 ## Seeded Demo Data (Source of Truth)
 
@@ -91,13 +102,14 @@ All tables in `lib/db/src/schema/`:
 
 All pages with real API data (no hardcoded values):
 1. **Dashboard** — KPI grid (active members, MRR, weekly attendance, at-risk count), revenue chart, member status breakdown
-2. **Intelligence Hub** — RSI score gauge, risk radar table, intervention cards (all computed from DB)
+2. **Intelligence Hub** — RSI score gauge, risk radar table, intervention cards + recommendation execution tracker with interactive checklists
 3. **Members** — Searchable member directory with status, risk tier, membership type
 4. **Schedule** — Weekly class calendar with enrollment/capacity
 5. **Leads** — Pipeline with stage badges, search, counts by stage
 6. **Billing** — MRR/ARR cards, plan table with member counts, subscription list
 7. **Workouts** — WOD cards with movements, type badges, result counts
 8. **AI Operator** — Real task list from DB, dynamic member/risk counts from dashboard API
+9. **Resources** — Operational playbooks for gym owners (onboarding, nutrition challenges, referral systems, community events, coaching development, goal reviews, social proof, local partnerships) with expandable phases and detailed execution steps
 
 ## API Routes
 
@@ -116,6 +128,8 @@ All mounted at `/api` prefix:
 - Communications: `/api/gyms/:gymId/announcements`
 - Documents: `/api/gyms/:gymId/documents`
 - Intelligence: RSI score, risk radar, interventions, cohorts, revenue forecast, overview
+- Recommendations: Execution state, checklist toggle, owner actions (CRUD)
+- Knowledge: Sources CRUD, documents, chunks, search, taxonomy, stats, ingest jobs, audit trail
 - AI: Tasks, outreach generation, owner brief generation
 - Reports: Dashboard stats, membership, revenue, attendance reports
 

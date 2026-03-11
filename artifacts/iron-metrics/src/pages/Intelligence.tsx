@@ -1,10 +1,45 @@
 import React, { useState } from "react";
 import { useGym } from "@/store/GymContext";
 import { useGetIntelligenceOverview } from "@workspace/api-client-react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
-import { Loader2, Activity, ShieldAlert, Sparkles, TrendingUp, Zap, AlertCircle } from "lucide-react";
+import { Loader2, Activity, ShieldAlert, Sparkles, TrendingUp, Zap, AlertCircle, CheckCircle2, Circle } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
 import { useIsMobile } from "@/hooks/use-mobile";
+
+const BASE_URL = import.meta.env.BASE_URL || "/";
+const API_BASE = `${BASE_URL}api`.replace(/\/+/g, "/");
+
+function useRecommendationExecution(gymId: number | null) {
+  return useQuery({
+    queryKey: ["recommendations", gymId],
+    queryFn: async () => {
+      const res = await fetch(`${API_BASE}/gyms/${gymId}/recommendations/execution`, { credentials: "include" });
+      if (!res.ok) return { cards: [], periodStart: "" };
+      return res.json();
+    },
+    enabled: !!gymId,
+    staleTime: 30000,
+  });
+}
+
+function useToggleChecklist() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ gymId, recommendationId, itemId, checked }: { gymId: number; recommendationId: number; itemId: string; checked: boolean }) => {
+      const res = await fetch(`${API_BASE}/gyms/${gymId}/recommendations/${recommendationId}/checklist/${itemId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ checked }),
+      });
+      return res.json();
+    },
+    onSuccess: (_data, vars) => {
+      queryClient.invalidateQueries({ queryKey: ["recommendations", vars.gymId] });
+    },
+  });
+}
 
 export function Intelligence() {
   const { activeGymId } = useGym();
@@ -14,6 +49,9 @@ export function Intelligence() {
   const { data: intel, isLoading, isError, error } = useGetIntelligenceOverview(activeGymId as number, {
     query: { enabled: !!activeGymId, retry: 2, staleTime: 30000 }
   });
+
+  const { data: recData } = useRecommendationExecution(activeGymId);
+  const toggleChecklist = useToggleChecklist();
 
   if (!activeGymId) {
     return (
@@ -232,44 +270,119 @@ export function Intelligence() {
           )}
 
           {activeTab === "interventions" && (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
-              {topInterventions.length > 0 ? topInterventions.map((inv: any, i: number) => (
-                <motion.div 
-                  key={inv.id}
-                  initial={{ opacity: 0, scale: 0.95 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  transition={{ delay: i * 0.1 }}
-                  className="bg-card border border-border rounded-2xl p-4 md:p-6 hover:border-primary/40 transition-colors shadow-sm flex flex-col"
-                >
-                  <div className="flex justify-between items-start mb-3 md:mb-4">
-                    <span className="px-3 py-1 bg-primary/10 text-primary text-xs font-bold rounded-full uppercase tracking-wide">
-                      {inv.category}
-                    </span>
-                    <span className={`text-xs font-bold px-2 py-1 rounded bg-muted ${
-                      inv.urgency === 'immediate' ? 'text-destructive' : 'text-foreground'
-                    }`}>
-                      {inv.urgency.replace('_', ' ').toUpperCase()}
-                    </span>
+            <div className="space-y-8">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
+                {topInterventions.length > 0 ? topInterventions.map((inv: any, i: number) => (
+                  <motion.div 
+                    key={inv.id}
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ delay: i * 0.1 }}
+                    className="bg-card border border-border rounded-2xl p-4 md:p-6 hover:border-primary/40 transition-colors shadow-sm flex flex-col"
+                  >
+                    <div className="flex justify-between items-start mb-3 md:mb-4">
+                      <span className="px-3 py-1 bg-primary/10 text-primary text-xs font-bold rounded-full uppercase tracking-wide">
+                        {inv.category}
+                      </span>
+                      <span className={`text-xs font-bold px-2 py-1 rounded bg-muted ${
+                        inv.urgency === 'immediate' ? 'text-destructive' : 'text-foreground'
+                      }`}>
+                        {inv.urgency.replace('_', ' ').toUpperCase()}
+                      </span>
+                    </div>
+                    <h3 className="text-lg md:text-xl font-bold text-foreground mb-2">{inv.title}</h3>
+                    <p className="text-xs md:text-sm text-muted-foreground mb-4 md:mb-6 flex-1">{inv.description}</p>
+                    
+                    <div className="space-y-2 mb-4 md:mb-6">
+                      {inv.actions.map((action: string, j: number) => (
+                        <div key={j} className="flex items-start gap-2 text-xs md:text-sm text-foreground/80">
+                          <Zap className="h-4 w-4 text-primary shrink-0 mt-0.5" />
+                          <span>{action}</span>
+                        </div>
+                      ))}
+                    </div>
+
+                    <button className="w-full py-3 bg-white/5 hover:bg-white/10 text-foreground font-medium rounded-xl transition-colors border border-white/10 min-h-[44px]">
+                      Execute Intervention
+                    </button>
+                  </motion.div>
+                )) : (
+                  <div className="col-span-full text-center py-12">
+                    <p className="text-muted-foreground">No interventions recommended at this time.</p>
                   </div>
-                  <h3 className="text-lg md:text-xl font-bold text-foreground mb-2">{inv.title}</h3>
-                  <p className="text-xs md:text-sm text-muted-foreground mb-4 md:mb-6 flex-1">{inv.description}</p>
-                  
-                  <div className="space-y-2 mb-4 md:mb-6">
-                    {inv.actions.map((action: string, j: number) => (
-                      <div key={j} className="flex items-start gap-2 text-xs md:text-sm text-foreground/80">
-                        <Zap className="h-4 w-4 text-primary shrink-0 mt-0.5" />
-                        <span>{action}</span>
+                )}
+              </div>
+
+              {recData?.cards && recData.cards.length > 0 && (
+                <div>
+                  <h3 className="text-lg font-semibold text-foreground mb-4">Recommendation Execution Tracker</h3>
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    {recData.cards.map((card: any) => (
+                      <div key={card.id} className="bg-card border border-border rounded-2xl p-5 shadow-sm">
+                        <div className="flex items-center justify-between mb-3">
+                          <div>
+                            <span className="px-2 py-0.5 rounded bg-primary/10 text-primary text-[10px] font-bold uppercase tracking-wide">
+                              {card.recommendationType}
+                            </span>
+                            <h4 className="text-sm font-semibold text-foreground mt-1.5">{card.headline}</h4>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-2xl font-bold text-foreground">
+                              {Math.round(card.executionStrength * 100)}%
+                            </div>
+                            <div className="text-[10px] text-muted-foreground uppercase">Execution</div>
+                          </div>
+                        </div>
+
+                        <div className="w-full h-2 bg-muted rounded-full overflow-hidden mb-3">
+                          <motion.div
+                            initial={{ width: 0 }}
+                            animate={{ width: `${card.executionStrength * 100}%` }}
+                            transition={{ duration: 0.5 }}
+                            className={`h-full rounded-full ${
+                              card.executionStrength >= card.executionStrengthThreshold
+                                ? "bg-emerald-500"
+                                : card.executionStrength > 0
+                                ? "bg-yellow-500"
+                                : "bg-muted-foreground/30"
+                            }`}
+                          />
+                        </div>
+
+                        <div className="space-y-1.5">
+                          {card.checklist.map((item: any) => (
+                            <button
+                              key={item.itemId}
+                              onClick={() => {
+                                if (!activeGymId) return;
+                                toggleChecklist.mutate({
+                                  gymId: activeGymId,
+                                  recommendationId: card.id,
+                                  itemId: item.itemId,
+                                  checked: !item.checked,
+                                });
+                              }}
+                              className="w-full flex items-start gap-2 text-left py-1 px-1 rounded hover:bg-white/5 transition-colors group"
+                            >
+                              {item.checked ? (
+                                <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0 mt-0.5" />
+                              ) : (
+                                <Circle className="h-4 w-4 text-muted-foreground group-hover:text-primary shrink-0 mt-0.5" />
+                              )}
+                              <span className={`text-xs ${item.checked ? "text-muted-foreground line-through" : "text-foreground/80"}`}>
+                                {item.text}
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+
+                        <div className="mt-3 pt-3 border-t border-border/50 flex items-center justify-between text-[10px] text-muted-foreground">
+                          <span>{card.checkedItems}/{card.totalItems} completed</span>
+                          <span>Period: {card.periodStart}</span>
+                        </div>
                       </div>
                     ))}
                   </div>
-
-                  <button className="w-full py-3 bg-white/5 hover:bg-white/10 text-foreground font-medium rounded-xl transition-colors border border-white/10 min-h-[44px]">
-                    Execute Intervention
-                  </button>
-                </motion.div>
-              )) : (
-                <div className="col-span-full text-center py-12">
-                  <p className="text-muted-foreground">No interventions recommended at this time.</p>
                 </div>
               )}
             </div>

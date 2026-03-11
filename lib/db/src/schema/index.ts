@@ -10,3 +10,5 @@ export * from "./workouts";
 export * from "./communications";
 export * from "./documents";
 export * from "./ai";
+export * from "./recommendations";
+export * from "./knowledge";

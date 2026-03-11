@@ -16,6 +16,8 @@ import documentsRouter from "./documents";
 import intelligenceRouter from "./intelligence";
 import aiRouter from "./ai";
 import reportsRouter from "./reports";
+import recommendationsRouter from "./recommendations";
+import knowledgeRouter from "./knowledge";
 
 const router: IRouter = Router();
 
@@ -37,5 +39,7 @@ router.use(reportsRouter);
 router.use(documentsRouter);
 router.use(intelligenceRouter);
 router.use(aiRouter);
+router.use(recommendationsRouter);
+router.use(knowledgeRouter);
 
 export default router;

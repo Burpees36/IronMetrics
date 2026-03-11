@@ -3,7 +3,8 @@ import { Link, useLocation } from "wouter";
 import { useAuth } from "@workspace/replit-auth-web";
 import { 
   Dumbbell, LayoutDashboard, BrainCircuit, Users, CalendarDays, 
-  Target, CreditCard, Activity, Bot, LogOut, Loader2, Menu, X
+  Target, CreditCard, Activity, Bot, LogOut, Loader2, Menu, X, BookOpen,
+  ShoppingBag, MessagesSquare, FileText, BarChart3, Settings
 } from "lucide-react";
 import { useGym } from "@/store/GymContext";
 import { useGetGym } from "@workspace/api-client-react";
@@ -25,6 +26,7 @@ const NAV_ITEMS = [
   { name: "Billing", href: "/billing", icon: CreditCard },
   { name: "Workouts", href: "/workouts", icon: Activity },
   { name: "AI Operator", href: "/ai-operator", icon: Bot },
+  { name: "Resources", href: "/resources", icon: BookOpen },
 ];
 
 const BOTTOM_NAV_ITEMS = [
