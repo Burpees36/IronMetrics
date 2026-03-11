@@ -20,6 +20,10 @@ export const gymsTable = pgTable("gyms", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });
 
+export const insertGymSchema = createInsertSchema(gymsTable).omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertGym = z.infer<typeof insertGymSchema>;
+export type Gym = typeof gymsTable.$inferSelect;
+
 export const gymStaffTable = pgTable("gym_staff", {
   id: serial("id").primaryKey(),
   gymId: integer("gym_id").notNull().references(() => gymsTable.id),
@@ -31,15 +35,9 @@ export const gymStaffTable = pgTable("gym_staff", {
   specialties: text("specialties").array().notNull().default([]),
   isActive: boolean("is_active").notNull().default(true),
   joinDate: text("join_date"),
-  classCount30d: integer("class_count_30d").notNull().default(0),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });
 
-export const insertGymSchema = createInsertSchema(gymsTable).omit({ id: true, createdAt: true, updatedAt: true });
-export const insertGymStaffSchema = createInsertSchema(gymStaffTable).omit({ id: true, createdAt: true, updatedAt: true });
-
-export type InsertGym = z.infer<typeof insertGymSchema>;
-export type Gym = typeof gymsTable.$inferSelect;
+export const insertGymStaffSchema = createInsertSchema(gymStaffTable).omit({ id: true, createdAt: true });
 export type InsertGymStaff = z.infer<typeof insertGymStaffSchema>;
 export type GymStaff = typeof gymStaffTable.$inferSelect;

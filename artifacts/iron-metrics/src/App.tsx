@@ -6,7 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { useAuth } from "@workspace/replit-auth-web";
 import NotFound from "@/pages/not-found";
 
-import { GymProvider } from "@/store/GymContext";
+import { GymProvider, useGym } from "@/store/GymContext";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Login } from "@/pages/Login";
 import { GymSelect } from "@/pages/GymSelect";
@@ -27,6 +27,7 @@ const queryClient = new QueryClient({
 
 function ProtectedRoute({ component: Component }: { component: React.ElementType }) {
   const { isAuthenticated, isLoading } = useAuth();
+  const { activeGymId } = useGym();
   const [location, setLocation] = useLocation();
 
   React.useEffect(() => {
@@ -34,6 +35,12 @@ function ProtectedRoute({ component: Component }: { component: React.ElementType
       setLocation("/login");
     }
   }, [isLoading, isAuthenticated, setLocation]);
+
+  React.useEffect(() => {
+    if (!isLoading && isAuthenticated && !activeGymId && location !== "/select-gym") {
+      setLocation("/select-gym");
+    }
+  }, [isLoading, isAuthenticated, activeGymId, location, setLocation]);
 
   if (isLoading) return null;
   if (!isAuthenticated) return null;

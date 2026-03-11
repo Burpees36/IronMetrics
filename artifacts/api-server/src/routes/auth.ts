@@ -1,11 +1,32 @@
 import * as oidc from "openid-client";
 import { Router, type IRouter, type Request, type Response } from "express";
-import {
-  GetCurrentAuthUserResponse,
-  ExchangeMobileAuthorizationCodeBody,
-  ExchangeMobileAuthorizationCodeResponse,
-  LogoutMobileSessionResponse,
-} from "@workspace/api-zod";
+import { z } from "zod/v4";
+
+const GetCurrentAuthUserResponse = z.object({
+  user: z.object({
+    id: z.string(),
+    email: z.string().nullable(),
+    firstName: z.string().nullable(),
+    lastName: z.string().nullable(),
+    profileImageUrl: z.string().nullable(),
+  }).nullable(),
+});
+
+const ExchangeMobileAuthorizationCodeBody = z.object({
+  code: z.string(),
+  code_verifier: z.string(),
+  redirect_uri: z.string(),
+  state: z.string(),
+  nonce: z.string().nullable().optional(),
+});
+
+const ExchangeMobileAuthorizationCodeResponse = z.object({
+  token: z.string(),
+});
+
+const LogoutMobileSessionResponse = z.object({
+  success: z.boolean(),
+});
 import { db, usersTable } from "@workspace/db";
 import {
   clearSession,
