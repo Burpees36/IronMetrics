@@ -47,49 +47,48 @@ export function Dashboard() {
   ];
 
   return (
-    <div className="space-y-8 pb-10">
-      <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div className="space-y-6 md:space-y-8 pb-10">
+      <header className="flex flex-col md:flex-row md:items-center justify-between gap-3 md:gap-4">
         <div>
-          <h1 className="text-3xl font-display font-bold text-foreground">Overview</h1>
-          <p className="text-muted-foreground mt-1">Here's what's happening at your gym today.</p>
+          <h1 className="text-2xl md:text-3xl font-display font-bold text-foreground">Overview</h1>
+          <p className="text-sm md:text-base text-muted-foreground mt-1">Here's what's happening at your gym today.</p>
         </div>
         
         <div className="flex items-center gap-4">
           <Link href="/intelligence">
-            <div className="flex items-center gap-2 px-4 py-2 bg-primary/10 text-primary rounded-lg font-medium hover:bg-primary/20 transition-colors cursor-pointer border border-primary/20">
+            <div className="flex items-center gap-2 px-3 md:px-4 py-2 bg-primary/10 text-primary rounded-lg font-medium hover:bg-primary/20 transition-colors cursor-pointer border border-primary/20 text-sm">
               <BrainCircuit className="h-4 w-4" />
-              <span>RSI Score: {stats.rsiScore.toFixed(1)} ({stats.rsiBand})</span>
+              <span>RSI: {stats.rsiScore.toFixed(1)} ({stats.rsiBand})</span>
             </div>
           </Link>
         </div>
       </header>
 
-      {/* KPI Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-6">
         {kpis.map((kpi, i) => (
           <motion.div
             key={kpi.title}
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: i * 0.1 }}
-            className="bg-card border border-border p-6 rounded-2xl shadow-sm relative overflow-hidden group"
+            className="bg-card border border-border p-4 md:p-6 rounded-2xl shadow-sm relative overflow-hidden group"
           >
-            <div className="absolute top-0 right-0 p-6 opacity-10 group-hover:opacity-20 transition-opacity">
-              <kpi.icon className="h-16 w-16" />
+            <div className="absolute top-0 right-0 p-4 md:p-6 opacity-10 group-hover:opacity-20 transition-opacity">
+              <kpi.icon className="h-10 md:h-16 w-10 md:w-16" />
             </div>
             <div className="relative z-10">
-              <p className="text-sm font-medium text-muted-foreground mb-1">{kpi.title}</p>
-              <h3 className="text-3xl font-display font-bold text-foreground mb-4">{kpi.value}</h3>
+              <p className="text-xs md:text-sm font-medium text-muted-foreground mb-1 truncate">{kpi.title}</p>
+              <h3 className="text-xl md:text-3xl font-display font-bold text-foreground mb-2 md:mb-4">{kpi.value}</h3>
               
               {kpi.change !== undefined && (
-                <div className="flex items-center gap-1.5 text-sm">
+                <div className="flex items-center gap-1 md:gap-1.5 text-xs md:text-sm">
                   <span className={`flex items-center font-medium ${
                     kpi.isNegative ? "text-destructive" : (kpi.change >= 0 ? "text-emerald-500" : "text-destructive")
                   }`}>
-                    {kpi.change >= 0 ? <ArrowUpRight className="h-4 w-4" /> : <ArrowDownRight className="h-4 w-4" />}
+                    {kpi.change >= 0 ? <ArrowUpRight className="h-3 w-3 md:h-4 md:w-4" /> : <ArrowDownRight className="h-3 w-3 md:h-4 md:w-4" />}
                     {Math.abs(kpi.change)}
                   </span>
-                  <span className="text-muted-foreground">{kpi.suffix}</span>
+                  <span className="text-muted-foreground hidden sm:inline">{kpi.suffix}</span>
                 </div>
               )}
             </div>
@@ -97,14 +96,13 @@ export function Dashboard() {
         ))}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Revenue Chart */}
-        <div className="lg:col-span-2 bg-card border border-border rounded-2xl p-6 shadow-sm">
-          <div className="mb-6">
-            <h3 className="text-lg font-semibold text-foreground">Revenue Trend</h3>
-            <p className="text-sm text-muted-foreground">Monthly MRR and growth over time</p>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">
+        <div className="lg:col-span-2 bg-card border border-border rounded-2xl p-4 md:p-6 shadow-sm">
+          <div className="mb-4 md:mb-6">
+            <h3 className="text-base md:text-lg font-semibold text-foreground">Revenue Trend</h3>
+            <p className="text-xs md:text-sm text-muted-foreground">Monthly MRR and growth over time</p>
           </div>
-          <div className="h-[300px] w-full">
+          <div className="h-[220px] md:h-[300px] w-full">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={stats.revenueByMonth} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                 <defs>
@@ -113,8 +111,8 @@ export function Dashboard() {
                     <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0}/>
                   </linearGradient>
                 </defs>
-                <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{fill: 'hsl(var(--muted-foreground))', fontSize: 12}} dy={10} />
-                <YAxis axisLine={false} tickLine={false} tick={{fill: 'hsl(var(--muted-foreground))', fontSize: 12}} tickFormatter={(val) => `$${val/1000}k`} />
+                <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{fill: 'hsl(var(--muted-foreground))', fontSize: 11}} dy={10} />
+                <YAxis axisLine={false} tickLine={false} tick={{fill: 'hsl(var(--muted-foreground))', fontSize: 11}} tickFormatter={(val) => `$${val/1000}k`} />
                 <RechartsTooltip 
                   contentStyle={{ backgroundColor: 'hsl(var(--card))', borderColor: 'hsl(var(--border))', borderRadius: '8px', color: 'hsl(var(--foreground))' }}
                   itemStyle={{ color: 'hsl(var(--primary))' }}
@@ -125,17 +123,16 @@ export function Dashboard() {
           </div>
         </div>
 
-        {/* Member Status Breakdown */}
-        <div className="bg-card border border-border rounded-2xl p-6 shadow-sm flex flex-col">
-          <div className="mb-6">
-            <h3 className="text-lg font-semibold text-foreground">Member Status</h3>
-            <p className="text-sm text-muted-foreground">Current base distribution</p>
+        <div className="bg-card border border-border rounded-2xl p-4 md:p-6 shadow-sm flex flex-col">
+          <div className="mb-4 md:mb-6">
+            <h3 className="text-base md:text-lg font-semibold text-foreground">Member Status</h3>
+            <p className="text-xs md:text-sm text-muted-foreground">Current base distribution</p>
           </div>
-          <div className="flex-1 min-h-[250px]">
+          <div className="flex-1 min-h-[200px] md:min-h-[250px]">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={stats.memberStatusBreakdown} layout="vertical" margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
                 <XAxis type="number" hide />
-                <YAxis dataKey="status" type="category" axisLine={false} tickLine={false} tick={{fill: 'hsl(var(--foreground))', fontSize: 13}} width={80} />
+                <YAxis dataKey="status" type="category" axisLine={false} tickLine={false} tick={{fill: 'hsl(var(--foreground))', fontSize: 12}} width={70} />
                 <RechartsTooltip cursor={{fill: 'transparent'}} contentStyle={{ backgroundColor: 'hsl(var(--card))', borderColor: 'hsl(var(--border))', borderRadius: '8px', color: 'hsl(var(--foreground))' }} />
                 <Bar dataKey="count" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} barSize={24} />
               </BarChart>
@@ -144,23 +141,22 @@ export function Dashboard() {
         </div>
       </div>
       
-      {/* Quick Actions / Ops Alert */}
       {stats.atRiskMembers > 0 && (
         <motion.div 
           initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
-          className="bg-gradient-to-r from-destructive/10 to-background border border-destructive/20 rounded-2xl p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
+          className="bg-gradient-to-r from-destructive/10 to-background border border-destructive/20 rounded-2xl p-4 md:p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
         >
           <div>
-            <h3 className="text-lg font-semibold text-foreground flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5 text-destructive" />
+            <h3 className="text-base md:text-lg font-semibold text-foreground flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-destructive shrink-0" />
               Action Required: High Risk Members
             </h3>
-            <p className="text-muted-foreground mt-1 text-sm">
+            <p className="text-muted-foreground mt-1 text-xs md:text-sm">
               You have {stats.atRiskMembers} members flagged by the Intelligence Engine as high risk of churning this month.
             </p>
           </div>
           <Link href="/intelligence">
-            <button className="px-5 py-2.5 bg-destructive/20 text-destructive hover:bg-destructive text-white rounded-lg font-medium transition-colors whitespace-nowrap">
+            <button className="w-full sm:w-auto px-5 py-2.5 bg-destructive/20 text-destructive hover:bg-destructive hover:text-white rounded-lg font-medium transition-colors whitespace-nowrap min-h-[44px]">
               View Risk Radar
             </button>
           </Link>

@@ -141,6 +141,15 @@
   @apply bg-muted-foreground;
 }
 
+/* Hide scrollbar utility */
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
 /* Glassmorphism utilities */
 .glass-panel {
   @apply bg-card/60 backdrop-blur-xl border border-white/5 shadow-2xl shadow-black/40;
