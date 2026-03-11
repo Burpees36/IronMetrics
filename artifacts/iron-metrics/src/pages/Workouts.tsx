@@ -1,14 +1,33 @@
-import React from "react";
+import React, { useState } from "react";
 import { useGym } from "@/store/GymContext";
-import { useListWorkouts } from "@workspace/api-client-react";
+import { useListWorkouts, useCreateWorkout, getListWorkoutsQueryKey } from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { useToast } from "@/hooks/use-toast";
 import { motion } from "framer-motion";
 import { Loader2, Activity, Clock, Users, Dumbbell, Plus } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 export function Workouts() {
   const { activeGymId } = useGym();
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
 
-  const { data: workouts, isLoading } = useListWorkouts(activeGymId as number, {
+  const { data: workouts, isLoading } = useListWorkouts(activeGymId as number, undefined, {
     query: { enabled: !!activeGymId }
+  });
+
+  const createWorkoutMutation = useCreateWorkout();
+
+  const [createOpen, setCreateOpen] = useState(false);
+  const [form, setForm] = useState({
+    title: "",
+    type: "amrap",
+    description: "",
+    movements: "",
+    workoutDate: new Date().toISOString().split("T")[0],
   });
 
   if (!activeGymId) {
@@ -27,6 +46,34 @@ export function Workouts() {
     );
   }
 
+  const handleCreate = () => {
+    if (!form.title) return;
+    const movements = form.movements.split(",").map(m => m.trim()).filter(Boolean);
+    createWorkoutMutation.mutate(
+      {
+        gymId: activeGymId,
+        data: {
+          title: form.title,
+          type: form.type,
+          description: form.description || undefined,
+          movements: movements.length > 0 ? movements : undefined,
+          workoutDate: form.workoutDate,
+        }
+      },
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: getListWorkoutsQueryKey(activeGymId) });
+          toast({ title: "Workout created", description: `${form.title} has been added.` });
+          setCreateOpen(false);
+          setForm({ title: "", type: "amrap", description: "", movements: "", workoutDate: new Date().toISOString().split("T")[0] });
+        },
+        onError: () => {
+          toast({ title: "Error", description: "Failed to create workout." });
+        }
+      }
+    );
+  };
+
   return (
     <div className="space-y-6 pb-10">
       <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -39,7 +86,10 @@ export function Workouts() {
           </div>
           <p className="text-muted-foreground mt-1">Today's whiteboard and workout programming.</p>
         </div>
-        <button className="flex items-center gap-2 px-4 py-2.5 bg-primary text-primary-foreground hover:bg-primary/90 rounded-xl font-medium transition-colors shadow-lg shadow-primary/20">
+        <button
+          onClick={() => setCreateOpen(true)}
+          className="flex items-center gap-2 px-4 py-2.5 bg-primary text-primary-foreground hover:bg-primary/90 rounded-xl font-medium transition-colors shadow-lg shadow-primary/20"
+        >
           <Plus className="h-5 w-5" />
           <span>New Workout</span>
         </button>
@@ -56,7 +106,7 @@ export function Workouts() {
           >
             <div className="flex justify-between items-start mb-4">
               <div>
-                <h3 className="text-xl font-bold text-foreground">{workout.name}</h3>
+                <h3 className="text-xl font-bold text-foreground">{workout.title}</h3>
                 <p className="text-sm text-muted-foreground capitalize mt-0.5">{workout.type} • {workout.difficulty || "All Levels"}</p>
               </div>
               <span className={`px-2.5 py-1 rounded-full text-xs font-semibold uppercase ${
@@ -102,6 +152,65 @@ export function Workouts() {
           </div>
         )}
       </div>
+
+      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>New Workout</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label>Name *</Label>
+              <Input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="Workout name" />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Type</Label>
+                <Select value={form.type} onValueChange={(v) => setForm({ ...form, type: v })}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="amrap">AMRAP</SelectItem>
+                    <SelectItem value="for_time">For Time</SelectItem>
+                    <SelectItem value="emom">EMOM</SelectItem>
+                    <SelectItem value="strength">Strength</SelectItem>
+                    <SelectItem value="custom">Custom</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Date</Label>
+                <Input type="date" value={form.workoutDate} onChange={(e) => setForm({ ...form, workoutDate: e.target.value })} />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Description</Label>
+              <textarea
+                value={form.description}
+                onChange={(e) => setForm({ ...form, description: e.target.value })}
+                placeholder="Workout description..."
+                className="flex min-h-[80px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Movements (comma-separated)</Label>
+              <Input value={form.movements} onChange={(e) => setForm({ ...form, movements: e.target.value })} placeholder="e.g. Deadlifts, Pull-ups, Box Jumps" />
+            </div>
+          </div>
+          <DialogFooter>
+            <button onClick={() => setCreateOpen(false)} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors">Cancel</button>
+            <button
+              onClick={handleCreate}
+              disabled={createWorkoutMutation.isPending || !form.title}
+              className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground hover:bg-primary/90 rounded-lg font-medium transition-colors disabled:opacity-50"
+            >
+              {createWorkoutMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+              Create Workout
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -1,11 +1,23 @@
-import React from "react";
+import React, { useState } from "react";
 import { useGym } from "@/store/GymContext";
-import { useListMembershipPlans, useListSubscriptions } from "@workspace/api-client-react";
+import {
+  useListMembershipPlans, useListSubscriptions, useListMembers,
+  useCreateMembershipPlan, useCreateSubscription,
+  getListMembershipPlansQueryKey, getListSubscriptionsQueryKey
+} from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { useToast } from "@/hooks/use-toast";
 import { motion } from "framer-motion";
-import { Loader2, CreditCard, DollarSign, Users, TrendingUp } from "lucide-react";
+import { Loader2, CreditCard, DollarSign, Users, TrendingUp, Plus } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 export function Billing() {
   const { activeGymId } = useGym();
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
 
   const { data: plans, isLoading: plansLoading } = useListMembershipPlans(activeGymId as number, {
     query: { enabled: !!activeGymId }
@@ -14,6 +26,19 @@ export function Billing() {
   const { data: subscriptions, isLoading: subsLoading } = useListSubscriptions(activeGymId as number, {}, {
     query: { enabled: !!activeGymId }
   });
+
+  const { data: membersData } = useListMembers(activeGymId as number, {}, {
+    query: { enabled: !!activeGymId }
+  });
+
+  const createPlanMutation = useCreateMembershipPlan();
+  const createSubMutation = useCreateSubscription();
+
+  const [planOpen, setPlanOpen] = useState(false);
+  const [planForm, setPlanForm] = useState({ name: "", price: "", billingInterval: "monthly" });
+
+  const [subOpen, setSubOpen] = useState(false);
+  const [subForm, setSubForm] = useState({ memberId: "", planId: "" });
 
   if (!activeGymId) {
     return (
@@ -36,6 +61,58 @@ export function Billing() {
       </div>
     );
   }
+
+  const members = (membersData as any)?.members ?? membersData ?? [];
+
+  const handleCreatePlan = () => {
+    if (!planForm.name || !planForm.price) return;
+    createPlanMutation.mutate(
+      {
+        gymId: activeGymId,
+        data: {
+          name: planForm.name,
+          price: parseFloat(planForm.price),
+          billingInterval: planForm.billingInterval as any,
+        }
+      },
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: getListMembershipPlansQueryKey(activeGymId) });
+          toast({ title: "Plan created", description: `${planForm.name} has been added.` });
+          setPlanOpen(false);
+          setPlanForm({ name: "", price: "", billingInterval: "monthly" });
+        },
+        onError: () => {
+          toast({ title: "Error", description: "Failed to create plan." });
+        }
+      }
+    );
+  };
+
+  const handleCreateSub = () => {
+    if (!subForm.memberId || !subForm.planId) return;
+    createSubMutation.mutate(
+      {
+        gymId: activeGymId,
+        data: {
+          memberId: parseInt(subForm.memberId),
+          planId: parseInt(subForm.planId),
+        }
+      },
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: getListSubscriptionsQueryKey(activeGymId) });
+          queryClient.invalidateQueries({ queryKey: getListMembershipPlansQueryKey(activeGymId) });
+          toast({ title: "Subscription created", description: "New subscription has been added." });
+          setSubOpen(false);
+          setSubForm({ memberId: "", planId: "" });
+        },
+        onError: () => {
+          toast({ title: "Error", description: "Failed to create subscription." });
+        }
+      }
+    );
+  };
 
   return (
     <div className="space-y-6 pb-10">
@@ -79,9 +156,18 @@ export function Billing() {
       </div>
 
       <div className="bg-card border border-border rounded-2xl shadow-sm overflow-hidden">
-        <div className="p-6 border-b border-border">
-          <h3 className="text-lg font-semibold text-foreground">Membership Plans</h3>
-          <p className="text-sm text-muted-foreground">Active plans and member counts.</p>
+        <div className="p-6 border-b border-border flex justify-between items-center">
+          <div>
+            <h3 className="text-lg font-semibold text-foreground">Membership Plans</h3>
+            <p className="text-sm text-muted-foreground">Active plans and member counts.</p>
+          </div>
+          <button
+            onClick={() => setPlanOpen(true)}
+            className="flex items-center gap-2 px-4 py-2.5 bg-primary text-primary-foreground hover:bg-primary/90 rounded-xl font-medium transition-colors shadow-lg shadow-primary/20"
+          >
+            <Plus className="h-5 w-5" />
+            <span>New Plan</span>
+          </button>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm text-left">
@@ -123,8 +209,15 @@ export function Billing() {
       </div>
 
       <div className="bg-card border border-border rounded-2xl shadow-sm overflow-hidden">
-        <div className="p-6 border-b border-border">
+        <div className="p-6 border-b border-border flex justify-between items-center">
           <h3 className="text-lg font-semibold text-foreground">Recent Subscriptions</h3>
+          <button
+            onClick={() => setSubOpen(true)}
+            className="flex items-center gap-2 px-4 py-2.5 bg-primary text-primary-foreground hover:bg-primary/90 rounded-xl font-medium transition-colors shadow-lg shadow-primary/20"
+          >
+            <Plus className="h-5 w-5" />
+            <span>New Subscription</span>
+          </button>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm text-left">
@@ -163,6 +256,97 @@ export function Billing() {
           </table>
         </div>
       </div>
+
+      <Dialog open={planOpen} onOpenChange={setPlanOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>New Membership Plan</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label>Plan Name *</Label>
+              <Input value={planForm.name} onChange={(e) => setPlanForm({ ...planForm, name: e.target.value })} placeholder="e.g. Premium Monthly" />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Price *</Label>
+                <Input type="number" step="0.01" value={planForm.price} onChange={(e) => setPlanForm({ ...planForm, price: e.target.value })} placeholder="99.00" />
+              </div>
+              <div className="space-y-2">
+                <Label>Billing Interval</Label>
+                <Select value={planForm.billingInterval} onValueChange={(v) => setPlanForm({ ...planForm, billingInterval: v })}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="monthly">Monthly</SelectItem>
+                    <SelectItem value="quarterly">Quarterly</SelectItem>
+                    <SelectItem value="annual">Annual</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <button onClick={() => setPlanOpen(false)} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors">Cancel</button>
+            <button
+              onClick={handleCreatePlan}
+              disabled={createPlanMutation.isPending || !planForm.name || !planForm.price}
+              className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground hover:bg-primary/90 rounded-lg font-medium transition-colors disabled:opacity-50"
+            >
+              {createPlanMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+              Create Plan
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={subOpen} onOpenChange={setSubOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>New Subscription</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label>Member *</Label>
+              <Select value={subForm.memberId} onValueChange={(v) => setSubForm({ ...subForm, memberId: v })}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a member" />
+                </SelectTrigger>
+                <SelectContent>
+                  {(Array.isArray(members) ? members : []).map((m: any) => (
+                    <SelectItem key={m.id} value={String(m.id)}>{m.firstName} {m.lastName}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Plan *</Label>
+              <Select value={subForm.planId} onValueChange={(v) => setSubForm({ ...subForm, planId: v })}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a plan" />
+                </SelectTrigger>
+                <SelectContent>
+                  {(plans ?? []).map((p: any) => (
+                    <SelectItem key={p.id} value={String(p.id)}>{p.name} — ${p.price}/{p.interval || "mo"}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <button onClick={() => setSubOpen(false)} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors">Cancel</button>
+            <button
+              onClick={handleCreateSub}
+              disabled={createSubMutation.isPending || !subForm.memberId || !subForm.planId}
+              className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground hover:bg-primary/90 rounded-lg font-medium transition-colors disabled:opacity-50"
+            >
+              {createSubMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+              Create Subscription
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

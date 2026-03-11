@@ -20,6 +20,8 @@ import { Leads } from "@/pages/Leads";
 import { Billing } from "@/pages/Billing";
 import { Workouts } from "@/pages/Workouts";
 import { Resources } from "@/pages/Resources";
+import { MemberDetail } from "@/pages/MemberDetail";
+import { Settings } from "@/pages/Settings";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -83,6 +85,7 @@ function Router() {
       </Route>
       <Route path="/dashboard" component={() => <ProtectedRoute component={Dashboard} />} />
       <Route path="/intelligence" component={() => <ProtectedRoute component={Intelligence} />} />
+      <Route path="/members/:memberId" component={() => <ProtectedRoute component={MemberDetail} />} />
       <Route path="/members" component={() => <ProtectedRoute component={Members} />} />
       <Route path="/schedule" component={() => <ProtectedRoute component={Schedule} />} />
       <Route path="/ai-operator" component={() => <ProtectedRoute component={AiOperator} />} />
@@ -90,22 +93,10 @@ function Router() {
       <Route path="/billing" component={() => <ProtectedRoute component={Billing} />} />
       <Route path="/workouts" component={() => <ProtectedRoute component={Workouts} />} />
       <Route path="/resources" component={() => <ProtectedRoute component={Resources} />} />
+      <Route path="/settings" component={() => <ProtectedRoute component={Settings} />} />
       
-      {/* Fallback for unbuilt pages */}
       <Route path="/:rest*">
-        {(params) => {
-          if (["staff", "settings"].includes(params.rest as string)) {
-             return <ProtectedRoute component={() => (
-               <div className="flex h-full items-center justify-center">
-                 <div className="text-center">
-                   <h2 className="text-2xl font-bold mb-2 capitalize">{params.rest}</h2>
-                   <p className="text-muted-foreground">This module is under construction.</p>
-                 </div>
-               </div>
-             )} />
-          }
-          return <NotFound />;
-        }}
+        {() => <NotFound />}
       </Route>
     </Switch>
   );

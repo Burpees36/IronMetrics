@@ -1,19 +1,142 @@
-import React from "react";
+import React, { useState } from "react";
 import { useGym } from "@/store/GymContext";
-import { useListClasses } from "@workspace/api-client-react";
+import { useListClasses, useCreateClass, useGetClass, useDeleteClass, useCheckInToClass, useListMembers, getListClassesQueryKey, getGetClassQueryKey } from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { useToast } from "@/hooks/use-toast";
 import { format, startOfWeek, addDays } from "date-fns";
 import { motion } from "framer-motion";
-import { Loader2, Plus, Clock, Users } from "lucide-react";
+import { Loader2, Plus, Clock, Users, Trash2, Search, UserCheck, X } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogAction, AlertDialogCancel } from "@/components/ui/alert-dialog";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
 
 export function Schedule() {
   const { activeGymId } = useGym();
-  
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
   const { data: classes, isLoading } = useListClasses(activeGymId as number, {}, {
     query: { enabled: !!activeGymId }
   });
 
   const weekStart = startOfWeek(new Date(), { weekStartsOn: 1 });
   const days = Array.from({ length: 7 }).map((_, i) => addDays(weekStart, i));
+
+  const [createOpen, setCreateOpen] = useState(false);
+  const [detailClassId, setDetailClassId] = useState<number | null>(null);
+  const [deleteClassId, setDeleteClassId] = useState<number | null>(null);
+  const [checkinClassId, setCheckinClassId] = useState<number | null>(null);
+  const [memberSearch, setMemberSearch] = useState("");
+
+  const [formData, setFormData] = useState({
+    name: "",
+    startTime: "",
+    endTime: "",
+    capacity: "",
+    coachName: "",
+    description: "",
+    type: "regular" as string,
+  });
+
+  const createClassMutation = useCreateClass();
+  const deleteClassMutation = useDeleteClass();
+  const checkInMutation = useCheckInToClass();
+
+  const { data: classDetail, isLoading: detailLoading } = useGetClass(
+    activeGymId as number,
+    detailClassId as number,
+    { query: { enabled: !!activeGymId && !!detailClassId } }
+  );
+
+  const { data: membersData } = useListMembers(
+    activeGymId as number,
+    { search: memberSearch || undefined, limit: 20 },
+    { query: { enabled: !!activeGymId && !!checkinClassId } }
+  );
+  const members = membersData?.members ?? (Array.isArray(membersData) ? membersData : []);
+
+  function resetForm() {
+    setFormData({ name: "", startTime: "", endTime: "", capacity: "", coachName: "", description: "", type: "regular" });
+  }
+
+  function handleCreateClass(e: React.FormEvent) {
+    e.preventDefault();
+    if (!activeGymId) return;
+
+    const startDate = new Date(formData.startTime);
+    const endDate = new Date(formData.endTime);
+
+    createClassMutation.mutate(
+      {
+        gymId: activeGymId,
+        data: {
+          name: formData.name,
+          startTime: startDate.toISOString(),
+          endTime: endDate.toISOString(),
+          capacity: parseInt(formData.capacity, 10),
+          type: formData.type as any,
+          description: formData.description || null,
+          coachId: null,
+        },
+      },
+      {
+        onSuccess: () => {
+          toast({ title: "Class Created", description: `${formData.name} has been scheduled.` });
+          queryClient.invalidateQueries({ queryKey: getListClassesQueryKey(activeGymId) });
+          setCreateOpen(false);
+          resetForm();
+        },
+        onError: () => {
+          toast({ title: "Error", description: "Failed to create class." });
+        },
+      }
+    );
+  }
+
+  function handleDeleteClass() {
+    if (!activeGymId || !deleteClassId) return;
+
+    deleteClassMutation.mutate(
+      { gymId: activeGymId, classId: deleteClassId },
+      {
+        onSuccess: () => {
+          toast({ title: "Class Deleted", description: "The class has been removed." });
+          queryClient.invalidateQueries({ queryKey: getListClassesQueryKey(activeGymId) });
+          setDeleteClassId(null);
+          if (detailClassId === deleteClassId) setDetailClassId(null);
+        },
+        onError: () => {
+          toast({ title: "Error", description: "Failed to delete class." });
+        },
+      }
+    );
+  }
+
+  function handleCheckIn(memberId: number) {
+    if (!activeGymId || !checkinClassId) return;
+
+    checkInMutation.mutate(
+      { gymId: activeGymId, classId: checkinClassId, data: { memberId, status: "present" } },
+      {
+        onSuccess: () => {
+          toast({ title: "Checked In", description: "Member has been checked in." });
+          queryClient.invalidateQueries({ queryKey: getListClassesQueryKey(activeGymId) });
+          if (detailClassId) {
+            queryClient.invalidateQueries({ queryKey: getGetClassQueryKey(activeGymId, detailClassId) });
+          }
+          setCheckinClassId(null);
+          setMemberSearch("");
+        },
+        onError: () => {
+          toast({ title: "Error", description: "Failed to check in member." });
+        },
+      }
+    );
+  }
 
   return (
     <div className="space-y-4 md:space-y-6 h-full flex flex-col">
@@ -22,7 +145,10 @@ export function Schedule() {
           <h1 className="text-2xl md:text-3xl font-display font-bold text-foreground">Schedule</h1>
           <p className="text-sm md:text-base text-muted-foreground mt-1">Manage classes and attendance.</p>
         </div>
-        <button className="flex items-center justify-center gap-2 px-4 py-2.5 bg-primary text-primary-foreground hover:bg-primary/90 rounded-xl font-medium transition-colors shadow-lg shadow-primary/20 min-h-[44px] w-full sm:w-auto">
+        <button
+          onClick={() => setCreateOpen(true)}
+          className="flex items-center justify-center gap-2 px-4 py-2.5 bg-primary text-primary-foreground hover:bg-primary/90 rounded-xl font-medium transition-colors shadow-lg shadow-primary/20 min-h-[44px] w-full sm:w-auto"
+        >
           <Plus className="h-5 w-5" />
           <span>New Class</span>
         </button>
@@ -51,11 +177,12 @@ export function Schedule() {
         ) : (
           <div className="space-y-3 md:space-y-4">
             {classes?.length ? classes.map((cls, i) => (
-              <motion.div 
+              <motion.div
                 key={cls.id}
                 initial={{ opacity: 0, x: -10 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: i * 0.05 }}
+                onClick={() => setDetailClassId(cls.id)}
                 className="flex flex-col gap-3 p-4 rounded-xl border border-border hover:border-primary/50 hover:bg-white/5 transition-all cursor-pointer group"
               >
                 <div className="flex items-start justify-between gap-3">
@@ -80,8 +207,17 @@ export function Schedule() {
                         </div>
                       )}
                     </div>
-                    <button className="px-4 py-2 bg-secondary hover:bg-secondary/80 text-secondary-foreground rounded-lg text-sm font-medium transition-colors min-h-[44px]">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setCheckinClassId(cls.id); }}
+                      className="px-4 py-2 bg-secondary hover:bg-secondary/80 text-secondary-foreground rounded-lg text-sm font-medium transition-colors min-h-[44px]"
+                    >
                       Check In
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setDeleteClassId(cls.id); }}
+                      className="p-2 text-muted-foreground hover:text-destructive transition-colors rounded-lg hover:bg-destructive/10"
+                    >
+                      <Trash2 className="h-4 w-4" />
                     </button>
                   </div>
                 </div>
@@ -94,6 +230,207 @@ export function Schedule() {
           </div>
         )}
       </div>
+
+      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Create New Class</DialogTitle>
+            <DialogDescription>Schedule a new class for your gym.</DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleCreateClass} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="class-name">Name *</Label>
+              <Input id="class-name" value={formData.name} onChange={(e) => setFormData(p => ({ ...p, name: e.target.value }))} required />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="class-type">Type</Label>
+              <Select value={formData.type} onValueChange={(v) => setFormData(p => ({ ...p, type: v }))}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="regular">Regular</SelectItem>
+                  <SelectItem value="personal_training">Personal Training</SelectItem>
+                  <SelectItem value="intro">Intro</SelectItem>
+                  <SelectItem value="specialty">Specialty</SelectItem>
+                  <SelectItem value="open_gym">Open Gym</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label htmlFor="start-time">Start Time *</Label>
+                <Input id="start-time" type="datetime-local" value={formData.startTime} onChange={(e) => setFormData(p => ({ ...p, startTime: e.target.value }))} required />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="end-time">End Time *</Label>
+                <Input id="end-time" type="datetime-local" value={formData.endTime} onChange={(e) => setFormData(p => ({ ...p, endTime: e.target.value }))} required />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label htmlFor="capacity">Capacity *</Label>
+                <Input id="capacity" type="number" min="1" value={formData.capacity} onChange={(e) => setFormData(p => ({ ...p, capacity: e.target.value }))} required />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="coach-name">Coach Name</Label>
+                <Input id="coach-name" value={formData.coachName} onChange={(e) => setFormData(p => ({ ...p, coachName: e.target.value }))} />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="class-desc">Description</Label>
+              <Input id="class-desc" value={formData.description} onChange={(e) => setFormData(p => ({ ...p, description: e.target.value }))} />
+            </div>
+            <DialogFooter>
+              <button type="button" onClick={() => setCreateOpen(false)} className="px-4 py-2 rounded-lg border border-border text-muted-foreground hover:bg-secondary transition-colors">
+                Cancel
+              </button>
+              <button type="submit" disabled={createClassMutation.isPending} className="px-4 py-2 bg-primary text-primary-foreground rounded-lg font-medium hover:bg-primary/90 transition-colors disabled:opacity-50">
+                {createClassMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Create Class"}
+              </button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Sheet open={!!detailClassId} onOpenChange={(open) => { if (!open) setDetailClassId(null); }}>
+        <SheetContent className="overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle>{classDetail?.name || "Class Details"}</SheetTitle>
+            <SheetDescription>View class information and roster.</SheetDescription>
+          </SheetHeader>
+          {detailLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="h-6 w-6 text-primary animate-spin" />
+            </div>
+          ) : classDetail ? (
+            <div className="mt-6 space-y-6">
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <Badge variant="outline">{classDetail.type}</Badge>
+                  <Badge variant={classDetail.status === "scheduled" ? "default" : "secondary"}>{classDetail.status}</Badge>
+                </div>
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div>
+                    <span className="text-muted-foreground">Start</span>
+                    <p className="font-medium">{format(new Date(classDetail.startTime), 'MMM d, h:mm a')}</p>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">End</span>
+                    <p className="font-medium">{format(new Date(classDetail.endTime), 'MMM d, h:mm a')}</p>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Coach</span>
+                    <p className="font-medium">{classDetail.coachName || "TBD"}</p>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Capacity</span>
+                    <p className="font-medium">{classDetail.enrolled} / {classDetail.capacity}</p>
+                  </div>
+                </div>
+                {classDetail.description && (
+                  <p className="text-sm text-muted-foreground">{classDetail.description}</p>
+                )}
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="font-semibold text-foreground">Roster</h3>
+                  <button
+                    onClick={() => { setCheckinClassId(classDetail.id); }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors"
+                  >
+                    <UserCheck className="h-3.5 w-3.5" />
+                    Check In
+                  </button>
+                </div>
+                {classDetail.roster?.length ? (
+                  <div className="space-y-2">
+                    {classDetail.roster.map((att) => (
+                      <div key={att.id} className="flex items-center justify-between p-3 rounded-lg border border-border bg-background">
+                        <span className="text-sm font-medium">{att.memberName}</span>
+                        <Badge variant={att.status === "present" ? "default" : "secondary"} className="text-xs">{att.status}</Badge>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground text-center py-6">No members checked in yet.</p>
+                )}
+              </div>
+
+              <div className="pt-2 border-t border-border">
+                <button
+                  onClick={() => { setDeleteClassId(classDetail.id); }}
+                  className="flex items-center gap-2 px-4 py-2 text-destructive hover:bg-destructive/10 rounded-lg text-sm font-medium transition-colors w-full justify-center"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  Delete Class
+                </button>
+              </div>
+            </div>
+          ) : null}
+        </SheetContent>
+      </Sheet>
+
+      <AlertDialog open={!!deleteClassId} onOpenChange={(open) => { if (!open) setDeleteClassId(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Class</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this class? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteClass}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleteClassMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <Dialog open={!!checkinClassId} onOpenChange={(open) => { if (!open) { setCheckinClassId(null); setMemberSearch(""); } }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Check In Member</DialogTitle>
+            <DialogDescription>Search and select a member to check in.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search members..."
+                value={memberSearch}
+                onChange={(e) => setMemberSearch(e.target.value)}
+                className="pl-9"
+              />
+            </div>
+            <div className="max-h-64 overflow-y-auto space-y-1">
+              {members.length ? members.map((member: any) => (
+                <button
+                  key={member.id}
+                  onClick={() => handleCheckIn(member.id)}
+                  disabled={checkInMutation.isPending}
+                  className="flex items-center justify-between w-full p-3 rounded-lg border border-border hover:border-primary/50 hover:bg-white/5 transition-all text-left"
+                >
+                  <div>
+                    <p className="text-sm font-medium">{member.firstName} {member.lastName}</p>
+                    <p className="text-xs text-muted-foreground">{member.email}</p>
+                  </div>
+                  <UserCheck className="h-4 w-4 text-muted-foreground" />
+                </button>
+              )) : (
+                <p className="text-sm text-muted-foreground text-center py-6">
+                  {memberSearch ? "No members found." : "Type to search members."}
+                </p>
+              )}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

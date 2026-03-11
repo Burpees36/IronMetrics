@@ -27,6 +27,7 @@ const NAV_ITEMS = [
   { name: "Workouts", href: "/workouts", icon: Activity },
   { name: "AI Operator", href: "/ai-operator", icon: Bot },
   { name: "Resources", href: "/resources", icon: BookOpen },
+  { name: "Settings", href: "/settings", icon: Settings },
 ];
 
 const BOTTOM_NAV_ITEMS = [

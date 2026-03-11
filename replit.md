@@ -38,12 +38,12 @@
 │   │   ├── src/middlewares/  # Auth middleware
 │   │   └── src/lib/         # Auth session management
 │   └── iron-metrics/        # React + Vite frontend (previewPath: /)
-│       ├── src/pages/       # All pages (Dashboard, Intelligence, Members, Schedule, Leads, Billing, Workouts, AiOperator)
+│       ├── src/pages/       # All pages (Dashboard, Intelligence, Members, MemberDetail, Schedule, Leads, Billing, Workouts, AiOperator, Settings, Resources)
 │       ├── src/components/  # UI components (shadcn/ui + custom)
 │       └── src/store/       # GymContext for active gym state
 ├── lib/
 │   ├── api-spec/            # OpenAPI 3.1 spec + Orval codegen config
-│   ├── api-client-react/    # Generated React Query hooks
+│   ├── api-client-react/    # Generated React Query hooks (queries + mutations)
 │   ├── api-zod/             # Generated Zod schemas from OpenAPI
 │   ├── db/                  # Drizzle ORM schema + DB connection + seed
 │   └── replit-auth-web/     # useAuth() hook for Replit Auth
@@ -66,7 +66,7 @@ All tables in `lib/db/src/schema/`:
 - **invoices** — Billing invoices
 - **products** — Retail inventory
 - **sales** — POS transactions (items stored as JSON)
-- **workouts** — WOD/strength/hero workouts
+- **workouts** — WOD/strength/hero workouts (field is `title`, NOT `name`)
 - **workout_results** — Member results with Rx/PR tracking
 - **announcements** — Gym communications
 - **documents** — Waivers, agreements, consent forms
@@ -100,16 +100,35 @@ All tables in `lib/db/src/schema/`:
 
 ## Frontend Pages
 
-All pages with real API data (no hardcoded values):
+All pages with real API data (no hardcoded values), fully interactive:
 1. **Dashboard** — KPI grid (active members, MRR, weekly attendance, at-risk count), revenue chart, member status breakdown
 2. **Intelligence Hub** — RSI score gauge, risk radar table, intervention cards + recommendation execution tracker with interactive checklists
-3. **Members** — Searchable member directory with status, risk tier, membership type
-4. **Schedule** — Weekly class calendar with enrollment/capacity
-5. **Leads** — Pipeline with stage badges, search, counts by stage
-6. **Billing** — MRR/ARR cards, plan table with member counts, subscription list
-7. **Workouts** — WOD cards with movements, type badges, result counts
-8. **AI Operator** — Real task list from DB, dynamic member/risk counts from dashboard API
-9. **Resources** — Operational playbooks for gym owners (onboarding, nutrition challenges, referral systems, community events, coaching development, goal reviews, social proof, local partnerships) with expandable phases and detailed execution steps
+3. **Members** — Searchable member directory with status/risk filters, Add Member dialog, row actions (view profile, edit, add note, change status), clickable rows to member detail
+4. **Member Detail** — Full profile page with tabs (Overview, Notes, Timeline), edit dialog, status management (hold/cancel/reactivate), add notes, attendance history, subscription info
+5. **Schedule** — Weekly class calendar with create class dialog, class detail sheet with roster, check-in flow (member search + check-in), delete class with confirmation
+6. **Leads** — Pipeline with create/edit lead dialogs, stage filter badges, move stage, convert to member, mark as lost
+7. **Billing** — MRR/ARR cards, plan table with create plan dialog, subscription list with create subscription dialog
+8. **Workouts** — WOD cards with create workout dialog (title, type, movements, date)
+9. **AI Operator** — Real task list from DB, dynamic member/risk counts from dashboard API
+10. **Settings** — General gym info, staff management table with invite staff dialog
+11. **Resources** — Operational playbooks for gym owners with expandable phases
+
+## Generated API Hooks (Mutations)
+
+All available mutation hooks from `@workspace/api-client-react`:
+- `useCreateMember`, `useUpdateMember`, `useAddMemberNote`
+- `useCreateLead`, `useUpdateLead`, `useConvertLeadToMember`
+- `useCreateClass`, `useUpdateClass`, `useDeleteClass`, `useCheckInToClass`
+- `useCreateMembershipPlan`, `useCreateSubscription`, `useUpdateSubscription`
+- `useCreateWorkout`, `useLogWorkoutResult`
+- `useInviteStaff`, `useUpdateStaff`, `useRemoveStaff`
+- `useCreateGym`, `useUpdateGym`
+- `useCreateProduct`, `useCreateSale`
+- `useCreateAnnouncement`, `useCreateDocument`
+- `useGenerateMemberOutreach`, `useGenerateOwnerBrief`, `useCreateAiTask`
+
+All mutations accept `{ gymId: number; data: BodyType<...> }` as mutate args.
+Use `getListMembersQueryKey(gymId)` etc. for cache invalidation.
 
 ## API Routes
 
@@ -144,6 +163,8 @@ All mounted at `/api` prefix:
 - **Tenant isolation**: All member-linked mutations verify `memberId + gymId` match to prevent cross-gym IDOR
 - **No hardcoded metrics**: All dashboard/intelligence/AI operator values are computed from actual DB queries
 - **Loading states**: All pages handle three states: no gym selected, loading, error/empty
+- **Routing**: wouter with base path `import.meta.env.BASE_URL`; use relative paths in Links/navigate (e.g., `/members/${id}` not `${BASE_URL}members/${id}`)
+- **Subscription amounts**: Backend returns parsed decimal dollars (not cents) — do NOT divide by 100
 
 ## Running
 
