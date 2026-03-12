@@ -806,6 +806,8 @@ export interface CreateWorkoutBody {
 export interface WorkoutResult {
   id: number;
   workoutId: number;
+  /** @nullable */
+  programmingSectionId?: number | null;
   memberId: number;
   memberName: string;
   result: string;
@@ -825,6 +827,159 @@ export interface CreateWorkoutResultBody {
   notes?: string | null;
   isRx?: boolean;
   isPr?: boolean;
+}
+
+export interface SuccessResponse {
+  success: boolean;
+}
+
+export type ProgrammingDayStatus =
+  (typeof ProgrammingDayStatus)[keyof typeof ProgrammingDayStatus];
+
+export const ProgrammingDayStatus = {
+  draft: "draft",
+  published: "published",
+  archived: "archived",
+} as const;
+
+export type SectionType = (typeof SectionType)[keyof typeof SectionType];
+
+export const SectionType = {
+  warmup: "warmup",
+  strength: "strength",
+  conditioning: "conditioning",
+  skill: "skill",
+  cooldown: "cooldown",
+  wod: "wod",
+  accessory: "accessory",
+  custom: "custom",
+} as const;
+
+export interface ProgrammingSection {
+  id: number;
+  dayId: number;
+  orderIndex: number;
+  sectionType: SectionType;
+  title: string;
+  /** @nullable */
+  instructions?: string | null;
+  /** @nullable */
+  duration?: string | null;
+  /** @nullable */
+  timeCap?: string | null;
+  /** @nullable */
+  intendedStimulus?: string | null;
+  movements: string[];
+  /** @nullable */
+  scalingNotes?: string | null;
+  /** @nullable */
+  coachNotes?: string | null;
+  /** @nullable */
+  memberNotes?: string | null;
+  resultTrackingEnabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ProgrammingDay {
+  id: number;
+  gymId: number;
+  date: string;
+  title: string;
+  status: ProgrammingDayStatus;
+  /** @nullable */
+  publicNotes?: string | null;
+  /** @nullable */
+  coachNotes?: string | null;
+  /** @nullable */
+  track?: string | null;
+  /** @nullable */
+  createdBy?: string | null;
+  /** @nullable */
+  updatedBy?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type ProgrammingDayWithSections = ProgrammingDay & {
+  sections: ProgrammingSection[];
+};
+
+export interface CreateProgrammingSectionBody {
+  orderIndex?: number;
+  sectionType?: SectionType;
+  title: string;
+  /** @nullable */
+  instructions?: string | null;
+  /** @nullable */
+  duration?: string | null;
+  /** @nullable */
+  timeCap?: string | null;
+  /** @nullable */
+  intendedStimulus?: string | null;
+  movements?: string[];
+  /** @nullable */
+  scalingNotes?: string | null;
+  /** @nullable */
+  coachNotes?: string | null;
+  /** @nullable */
+  memberNotes?: string | null;
+  resultTrackingEnabled?: boolean;
+}
+
+export interface CreateProgrammingDayBody {
+  date: string;
+  title: string;
+  status?: ProgrammingDayStatus;
+  /** @nullable */
+  publicNotes?: string | null;
+  /** @nullable */
+  coachNotes?: string | null;
+  /** @nullable */
+  track?: string | null;
+  sections?: CreateProgrammingSectionBody[];
+}
+
+export interface UpdateProgrammingDayBody {
+  date?: string;
+  title?: string;
+  status?: ProgrammingDayStatus;
+  /** @nullable */
+  publicNotes?: string | null;
+  /** @nullable */
+  coachNotes?: string | null;
+  /** @nullable */
+  track?: string | null;
+}
+
+export interface DuplicateProgrammingDayBody {
+  date: string;
+}
+
+export interface UpdateProgrammingSectionBody {
+  orderIndex?: number;
+  sectionType?: SectionType;
+  title?: string;
+  /** @nullable */
+  instructions?: string | null;
+  /** @nullable */
+  duration?: string | null;
+  /** @nullable */
+  timeCap?: string | null;
+  /** @nullable */
+  intendedStimulus?: string | null;
+  movements?: string[];
+  /** @nullable */
+  scalingNotes?: string | null;
+  /** @nullable */
+  coachNotes?: string | null;
+  /** @nullable */
+  memberNotes?: string | null;
+  resultTrackingEnabled?: boolean;
+}
+
+export interface ReorderSectionsBody {
+  sectionIds: number[];
 }
 
 export type AnnouncementAudience =
@@ -1387,3 +1542,18 @@ export type ListWorkoutsParams = {
   startDate?: string;
   endDate?: string;
 };
+
+export type ListProgrammingDaysParams = {
+  startDate?: string;
+  endDate?: string;
+  status?: ListProgrammingDaysStatus;
+};
+
+export type ListProgrammingDaysStatus =
+  (typeof ListProgrammingDaysStatus)[keyof typeof ListProgrammingDaysStatus];
+
+export const ListProgrammingDaysStatus = {
+  draft: "draft",
+  published: "published",
+  archived: "archived",
+} as const;

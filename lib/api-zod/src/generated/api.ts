@@ -1467,6 +1467,7 @@ export const ListWorkoutResultsParams = zod.object({
 export const ListWorkoutResultsResponseItem = zod.object({
   id: zod.number(),
   workoutId: zod.number(),
+  programmingSectionId: zod.number().nullish(),
   memberId: zod.number(),
   memberName: zod.string(),
   result: zod.string(),
@@ -1489,6 +1490,516 @@ export const LogWorkoutResultParams = zod.object({
 });
 
 export const LogWorkoutResultBody = zod.object({
+  memberId: zod.number(),
+  result: zod.string(),
+  notes: zod.string().nullish(),
+  isRx: zod.boolean().optional(),
+  isPr: zod.boolean().optional(),
+});
+
+/**
+ * @summary List programming days
+ */
+export const ListProgrammingDaysParams = zod.object({
+  gymId: zod.coerce.number(),
+});
+
+export const ListProgrammingDaysQueryParams = zod.object({
+  startDate: zod.date().optional(),
+  endDate: zod.date().optional(),
+  status: zod.enum(["draft", "published", "archived"]).optional(),
+});
+
+export const ListProgrammingDaysResponseItem = zod
+  .object({
+    id: zod.number(),
+    gymId: zod.number(),
+    date: zod.date(),
+    title: zod.string(),
+    status: zod.enum(["draft", "published", "archived"]),
+    publicNotes: zod.string().nullish(),
+    coachNotes: zod.string().nullish(),
+    track: zod.string().nullish(),
+    createdBy: zod.string().nullish(),
+    updatedBy: zod.string().nullish(),
+    createdAt: zod.date(),
+    updatedAt: zod.date(),
+  })
+  .and(
+    zod.object({
+      sections: zod.array(
+        zod.object({
+          id: zod.number(),
+          dayId: zod.number(),
+          orderIndex: zod.number(),
+          sectionType: zod.enum([
+            "warmup",
+            "strength",
+            "conditioning",
+            "skill",
+            "cooldown",
+            "wod",
+            "accessory",
+            "custom",
+          ]),
+          title: zod.string(),
+          instructions: zod.string().nullish(),
+          duration: zod.string().nullish(),
+          timeCap: zod.string().nullish(),
+          intendedStimulus: zod.string().nullish(),
+          movements: zod.array(zod.string()),
+          scalingNotes: zod.string().nullish(),
+          coachNotes: zod.string().nullish(),
+          memberNotes: zod.string().nullish(),
+          resultTrackingEnabled: zod.boolean(),
+          createdAt: zod.date(),
+          updatedAt: zod.date(),
+        }),
+      ),
+    }),
+  );
+export const ListProgrammingDaysResponse = zod.array(
+  ListProgrammingDaysResponseItem,
+);
+
+/**
+ * @summary Create a programming day
+ */
+export const CreateProgrammingDayParams = zod.object({
+  gymId: zod.coerce.number(),
+});
+
+export const CreateProgrammingDayBody = zod.object({
+  date: zod.date(),
+  title: zod.string(),
+  status: zod.enum(["draft", "published", "archived"]).optional(),
+  publicNotes: zod.string().nullish(),
+  coachNotes: zod.string().nullish(),
+  track: zod.string().nullish(),
+  sections: zod
+    .array(
+      zod.object({
+        orderIndex: zod.number().optional(),
+        sectionType: zod
+          .enum([
+            "warmup",
+            "strength",
+            "conditioning",
+            "skill",
+            "cooldown",
+            "wod",
+            "accessory",
+            "custom",
+          ])
+          .optional(),
+        title: zod.string(),
+        instructions: zod.string().nullish(),
+        duration: zod.string().nullish(),
+        timeCap: zod.string().nullish(),
+        intendedStimulus: zod.string().nullish(),
+        movements: zod.array(zod.string()).optional(),
+        scalingNotes: zod.string().nullish(),
+        coachNotes: zod.string().nullish(),
+        memberNotes: zod.string().nullish(),
+        resultTrackingEnabled: zod.boolean().optional(),
+      }),
+    )
+    .optional(),
+});
+
+/**
+ * @summary Get a programming day with all sections
+ */
+export const GetProgrammingDayParams = zod.object({
+  gymId: zod.coerce.number(),
+  dayId: zod.coerce.number(),
+});
+
+export const GetProgrammingDayResponse = zod
+  .object({
+    id: zod.number(),
+    gymId: zod.number(),
+    date: zod.date(),
+    title: zod.string(),
+    status: zod.enum(["draft", "published", "archived"]),
+    publicNotes: zod.string().nullish(),
+    coachNotes: zod.string().nullish(),
+    track: zod.string().nullish(),
+    createdBy: zod.string().nullish(),
+    updatedBy: zod.string().nullish(),
+    createdAt: zod.date(),
+    updatedAt: zod.date(),
+  })
+  .and(
+    zod.object({
+      sections: zod.array(
+        zod.object({
+          id: zod.number(),
+          dayId: zod.number(),
+          orderIndex: zod.number(),
+          sectionType: zod.enum([
+            "warmup",
+            "strength",
+            "conditioning",
+            "skill",
+            "cooldown",
+            "wod",
+            "accessory",
+            "custom",
+          ]),
+          title: zod.string(),
+          instructions: zod.string().nullish(),
+          duration: zod.string().nullish(),
+          timeCap: zod.string().nullish(),
+          intendedStimulus: zod.string().nullish(),
+          movements: zod.array(zod.string()),
+          scalingNotes: zod.string().nullish(),
+          coachNotes: zod.string().nullish(),
+          memberNotes: zod.string().nullish(),
+          resultTrackingEnabled: zod.boolean(),
+          createdAt: zod.date(),
+          updatedAt: zod.date(),
+        }),
+      ),
+    }),
+  );
+
+/**
+ * @summary Update a programming day
+ */
+export const UpdateProgrammingDayParams = zod.object({
+  gymId: zod.coerce.number(),
+  dayId: zod.coerce.number(),
+});
+
+export const UpdateProgrammingDayBody = zod.object({
+  date: zod.date().optional(),
+  title: zod.string().optional(),
+  status: zod.enum(["draft", "published", "archived"]).optional(),
+  publicNotes: zod.string().nullish(),
+  coachNotes: zod.string().nullish(),
+  track: zod.string().nullish(),
+});
+
+export const UpdateProgrammingDayResponse = zod
+  .object({
+    id: zod.number(),
+    gymId: zod.number(),
+    date: zod.date(),
+    title: zod.string(),
+    status: zod.enum(["draft", "published", "archived"]),
+    publicNotes: zod.string().nullish(),
+    coachNotes: zod.string().nullish(),
+    track: zod.string().nullish(),
+    createdBy: zod.string().nullish(),
+    updatedBy: zod.string().nullish(),
+    createdAt: zod.date(),
+    updatedAt: zod.date(),
+  })
+  .and(
+    zod.object({
+      sections: zod.array(
+        zod.object({
+          id: zod.number(),
+          dayId: zod.number(),
+          orderIndex: zod.number(),
+          sectionType: zod.enum([
+            "warmup",
+            "strength",
+            "conditioning",
+            "skill",
+            "cooldown",
+            "wod",
+            "accessory",
+            "custom",
+          ]),
+          title: zod.string(),
+          instructions: zod.string().nullish(),
+          duration: zod.string().nullish(),
+          timeCap: zod.string().nullish(),
+          intendedStimulus: zod.string().nullish(),
+          movements: zod.array(zod.string()),
+          scalingNotes: zod.string().nullish(),
+          coachNotes: zod.string().nullish(),
+          memberNotes: zod.string().nullish(),
+          resultTrackingEnabled: zod.boolean(),
+          createdAt: zod.date(),
+          updatedAt: zod.date(),
+        }),
+      ),
+    }),
+  );
+
+/**
+ * @summary Archive a programming day
+ */
+export const DeleteProgrammingDayParams = zod.object({
+  gymId: zod.coerce.number(),
+  dayId: zod.coerce.number(),
+});
+
+export const DeleteProgrammingDayResponse = zod.object({
+  success: zod.boolean(),
+});
+
+/**
+ * @summary Toggle publish/unpublish status of a programming day
+ */
+export const ToggleProgrammingDayPublishParams = zod.object({
+  gymId: zod.coerce.number(),
+  dayId: zod.coerce.number(),
+});
+
+export const ToggleProgrammingDayPublishResponse = zod
+  .object({
+    id: zod.number(),
+    gymId: zod.number(),
+    date: zod.date(),
+    title: zod.string(),
+    status: zod.enum(["draft", "published", "archived"]),
+    publicNotes: zod.string().nullish(),
+    coachNotes: zod.string().nullish(),
+    track: zod.string().nullish(),
+    createdBy: zod.string().nullish(),
+    updatedBy: zod.string().nullish(),
+    createdAt: zod.date(),
+    updatedAt: zod.date(),
+  })
+  .and(
+    zod.object({
+      sections: zod.array(
+        zod.object({
+          id: zod.number(),
+          dayId: zod.number(),
+          orderIndex: zod.number(),
+          sectionType: zod.enum([
+            "warmup",
+            "strength",
+            "conditioning",
+            "skill",
+            "cooldown",
+            "wod",
+            "accessory",
+            "custom",
+          ]),
+          title: zod.string(),
+          instructions: zod.string().nullish(),
+          duration: zod.string().nullish(),
+          timeCap: zod.string().nullish(),
+          intendedStimulus: zod.string().nullish(),
+          movements: zod.array(zod.string()),
+          scalingNotes: zod.string().nullish(),
+          coachNotes: zod.string().nullish(),
+          memberNotes: zod.string().nullish(),
+          resultTrackingEnabled: zod.boolean(),
+          createdAt: zod.date(),
+          updatedAt: zod.date(),
+        }),
+      ),
+    }),
+  );
+
+/**
+ * @summary Duplicate a programming day to a new date
+ */
+export const DuplicateProgrammingDayParams = zod.object({
+  gymId: zod.coerce.number(),
+  dayId: zod.coerce.number(),
+});
+
+export const DuplicateProgrammingDayBody = zod.object({
+  date: zod.date(),
+});
+
+/**
+ * @summary Add a section to a programming day
+ */
+export const AddProgrammingSectionParams = zod.object({
+  gymId: zod.coerce.number(),
+  dayId: zod.coerce.number(),
+});
+
+export const AddProgrammingSectionBody = zod.object({
+  orderIndex: zod.number().optional(),
+  sectionType: zod
+    .enum([
+      "warmup",
+      "strength",
+      "conditioning",
+      "skill",
+      "cooldown",
+      "wod",
+      "accessory",
+      "custom",
+    ])
+    .optional(),
+  title: zod.string(),
+  instructions: zod.string().nullish(),
+  duration: zod.string().nullish(),
+  timeCap: zod.string().nullish(),
+  intendedStimulus: zod.string().nullish(),
+  movements: zod.array(zod.string()).optional(),
+  scalingNotes: zod.string().nullish(),
+  coachNotes: zod.string().nullish(),
+  memberNotes: zod.string().nullish(),
+  resultTrackingEnabled: zod.boolean().optional(),
+});
+
+/**
+ * @summary Update a programming section
+ */
+export const UpdateProgrammingSectionParams = zod.object({
+  gymId: zod.coerce.number(),
+  dayId: zod.coerce.number(),
+  sectionId: zod.coerce.number(),
+});
+
+export const UpdateProgrammingSectionBody = zod.object({
+  orderIndex: zod.number().optional(),
+  sectionType: zod
+    .enum([
+      "warmup",
+      "strength",
+      "conditioning",
+      "skill",
+      "cooldown",
+      "wod",
+      "accessory",
+      "custom",
+    ])
+    .optional(),
+  title: zod.string().optional(),
+  instructions: zod.string().nullish(),
+  duration: zod.string().nullish(),
+  timeCap: zod.string().nullish(),
+  intendedStimulus: zod.string().nullish(),
+  movements: zod.array(zod.string()).optional(),
+  scalingNotes: zod.string().nullish(),
+  coachNotes: zod.string().nullish(),
+  memberNotes: zod.string().nullish(),
+  resultTrackingEnabled: zod.boolean().optional(),
+});
+
+export const UpdateProgrammingSectionResponse = zod.object({
+  id: zod.number(),
+  dayId: zod.number(),
+  orderIndex: zod.number(),
+  sectionType: zod.enum([
+    "warmup",
+    "strength",
+    "conditioning",
+    "skill",
+    "cooldown",
+    "wod",
+    "accessory",
+    "custom",
+  ]),
+  title: zod.string(),
+  instructions: zod.string().nullish(),
+  duration: zod.string().nullish(),
+  timeCap: zod.string().nullish(),
+  intendedStimulus: zod.string().nullish(),
+  movements: zod.array(zod.string()),
+  scalingNotes: zod.string().nullish(),
+  coachNotes: zod.string().nullish(),
+  memberNotes: zod.string().nullish(),
+  resultTrackingEnabled: zod.boolean(),
+  createdAt: zod.date(),
+  updatedAt: zod.date(),
+});
+
+/**
+ * @summary Remove a section from a programming day
+ */
+export const DeleteProgrammingSectionParams = zod.object({
+  gymId: zod.coerce.number(),
+  dayId: zod.coerce.number(),
+  sectionId: zod.coerce.number(),
+});
+
+export const DeleteProgrammingSectionResponse = zod.object({
+  success: zod.boolean(),
+});
+
+/**
+ * @summary Reorder sections within a programming day
+ */
+export const ReorderProgrammingSectionsParams = zod.object({
+  gymId: zod.coerce.number(),
+  dayId: zod.coerce.number(),
+});
+
+export const ReorderProgrammingSectionsBody = zod.object({
+  sectionIds: zod.array(zod.number()),
+});
+
+export const ReorderProgrammingSectionsResponseItem = zod.object({
+  id: zod.number(),
+  dayId: zod.number(),
+  orderIndex: zod.number(),
+  sectionType: zod.enum([
+    "warmup",
+    "strength",
+    "conditioning",
+    "skill",
+    "cooldown",
+    "wod",
+    "accessory",
+    "custom",
+  ]),
+  title: zod.string(),
+  instructions: zod.string().nullish(),
+  duration: zod.string().nullish(),
+  timeCap: zod.string().nullish(),
+  intendedStimulus: zod.string().nullish(),
+  movements: zod.array(zod.string()),
+  scalingNotes: zod.string().nullish(),
+  coachNotes: zod.string().nullish(),
+  memberNotes: zod.string().nullish(),
+  resultTrackingEnabled: zod.boolean(),
+  createdAt: zod.date(),
+  updatedAt: zod.date(),
+});
+export const ReorderProgrammingSectionsResponse = zod.array(
+  ReorderProgrammingSectionsResponseItem,
+);
+
+/**
+ * @summary List results for a programming section
+ */
+export const ListSectionResultsParams = zod.object({
+  gymId: zod.coerce.number(),
+  dayId: zod.coerce.number(),
+  sectionId: zod.coerce.number(),
+});
+
+export const ListSectionResultsResponseItem = zod.object({
+  id: zod.number(),
+  workoutId: zod.number(),
+  programmingSectionId: zod.number().nullish(),
+  memberId: zod.number(),
+  memberName: zod.string(),
+  result: zod.string(),
+  notes: zod.string().nullish(),
+  isRx: zod.boolean(),
+  isPr: zod.boolean(),
+  rank: zod.number().nullish(),
+  createdAt: zod.date(),
+});
+export const ListSectionResultsResponse = zod.array(
+  ListSectionResultsResponseItem,
+);
+
+/**
+ * @summary Log a result for a programming section
+ */
+export const LogSectionResultParams = zod.object({
+  gymId: zod.coerce.number(),
+  dayId: zod.coerce.number(),
+  sectionId: zod.coerce.number(),
+});
+
+export const LogSectionResultBody = zod.object({
   memberId: zod.number(),
   result: zod.string(),
   notes: zod.string().nullish(),

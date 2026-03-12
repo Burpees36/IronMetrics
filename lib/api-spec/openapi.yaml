@@ -29,6 +29,8 @@ tags:
     description: Retail and POS
   - name: workouts
     description: Workout tracking
+  - name: programming
+    description: Daily programming management
   - name: communications
     description: Member communications
   - name: documents
@@ -1462,6 +1464,384 @@ paths:
           schema:
             type: integer
         - name: workoutId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateWorkoutResultBody"
+      responses:
+        "201":
+          description: Result logged
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkoutResult"
+
+  # PROGRAMMING
+  /gyms/{gymId}/programming:
+    get:
+      operationId: listProgrammingDays
+      tags: [programming]
+      summary: List programming days
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: startDate
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: endDate
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [draft, published, archived]
+      responses:
+        "200":
+          description: List of programming days with sections
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ProgrammingDayWithSections"
+    post:
+      operationId: createProgrammingDay
+      tags: [programming]
+      summary: Create a programming day
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateProgrammingDayBody"
+      responses:
+        "201":
+          description: Created programming day
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProgrammingDayWithSections"
+
+  /gyms/{gymId}/programming/{dayId}:
+    get:
+      operationId: getProgrammingDay
+      tags: [programming]
+      summary: Get a programming day with all sections
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: dayId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Programming day with sections
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProgrammingDayWithSections"
+        "404":
+          description: Not found
+    patch:
+      operationId: updateProgrammingDay
+      tags: [programming]
+      summary: Update a programming day
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: dayId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateProgrammingDayBody"
+      responses:
+        "200":
+          description: Updated programming day
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProgrammingDayWithSections"
+    delete:
+      operationId: deleteProgrammingDay
+      tags: [programming]
+      summary: Archive a programming day
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: dayId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Day archived
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /gyms/{gymId}/programming/{dayId}/publish:
+    post:
+      operationId: toggleProgrammingDayPublish
+      tags: [programming]
+      summary: Toggle publish/unpublish status of a programming day
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: dayId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Updated programming day
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProgrammingDayWithSections"
+
+  /gyms/{gymId}/programming/{dayId}/duplicate:
+    post:
+      operationId: duplicateProgrammingDay
+      tags: [programming]
+      summary: Duplicate a programming day to a new date
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: dayId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DuplicateProgrammingDayBody"
+      responses:
+        "201":
+          description: Duplicated programming day
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProgrammingDayWithSections"
+
+  /gyms/{gymId}/programming/{dayId}/sections:
+    post:
+      operationId: addProgrammingSection
+      tags: [programming]
+      summary: Add a section to a programming day
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: dayId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateProgrammingSectionBody"
+      responses:
+        "201":
+          description: Created section
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProgrammingSection"
+
+  /gyms/{gymId}/programming/{dayId}/sections/{sectionId}:
+    patch:
+      operationId: updateProgrammingSection
+      tags: [programming]
+      summary: Update a programming section
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: dayId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: sectionId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateProgrammingSectionBody"
+      responses:
+        "200":
+          description: Updated section
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProgrammingSection"
+    delete:
+      operationId: deleteProgrammingSection
+      tags: [programming]
+      summary: Remove a section from a programming day
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: dayId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: sectionId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Section removed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /gyms/{gymId}/programming/{dayId}/sections/reorder:
+    put:
+      operationId: reorderProgrammingSections
+      tags: [programming]
+      summary: Reorder sections within a programming day
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: dayId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReorderSectionsBody"
+      responses:
+        "200":
+          description: Reordered sections
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ProgrammingSection"
+
+  /gyms/{gymId}/programming/{dayId}/sections/{sectionId}/results:
+    get:
+      operationId: listSectionResults
+      tags: [programming]
+      summary: List results for a programming section
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: dayId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: sectionId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Section results
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/WorkoutResult"
+    post:
+      operationId: logSectionResult
+      tags: [programming]
+      summary: Log a result for a programming section
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: dayId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: sectionId
           in: path
           required: true
           schema:
@@ -3102,6 +3482,8 @@ components:
           type: integer
         workoutId:
           type: integer
+        programmingSectionId:
+          type: ["integer", "null"]
         memberId:
           type: integer
         memberName:
@@ -3145,6 +3527,245 @@ components:
       required:
         - memberId
         - result
+
+    SuccessResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+      required:
+        - success
+
+    ProgrammingDayStatus:
+      type: string
+      enum: [draft, published, archived]
+
+    SectionType:
+      type: string
+      enum: [warmup, strength, conditioning, skill, cooldown, wod, accessory, custom]
+
+    ProgrammingSection:
+      type: object
+      properties:
+        id:
+          type: integer
+        dayId:
+          type: integer
+        orderIndex:
+          type: integer
+        sectionType:
+          $ref: "#/components/schemas/SectionType"
+        title:
+          type: string
+        instructions:
+          type: ["string", "null"]
+        duration:
+          type: ["string", "null"]
+        timeCap:
+          type: ["string", "null"]
+        intendedStimulus:
+          type: ["string", "null"]
+        movements:
+          type: array
+          items:
+            type: string
+        scalingNotes:
+          type: ["string", "null"]
+        coachNotes:
+          type: ["string", "null"]
+        memberNotes:
+          type: ["string", "null"]
+        resultTrackingEnabled:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - dayId
+        - orderIndex
+        - sectionType
+        - title
+        - movements
+        - resultTrackingEnabled
+        - createdAt
+        - updatedAt
+
+    ProgrammingDay:
+      type: object
+      properties:
+        id:
+          type: integer
+        gymId:
+          type: integer
+        date:
+          type: string
+          format: date
+        title:
+          type: string
+        status:
+          $ref: "#/components/schemas/ProgrammingDayStatus"
+        publicNotes:
+          type: ["string", "null"]
+        coachNotes:
+          type: ["string", "null"]
+        track:
+          type: ["string", "null"]
+        createdBy:
+          type: ["string", "null"]
+        updatedBy:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - gymId
+        - date
+        - title
+        - status
+        - createdAt
+        - updatedAt
+
+    ProgrammingDayWithSections:
+      allOf:
+        - $ref: "#/components/schemas/ProgrammingDay"
+        - type: object
+          properties:
+            sections:
+              type: array
+              items:
+                $ref: "#/components/schemas/ProgrammingSection"
+          required:
+            - sections
+
+    CreateProgrammingDayBody:
+      type: object
+      properties:
+        date:
+          type: string
+          format: date
+        title:
+          type: string
+        status:
+          $ref: "#/components/schemas/ProgrammingDayStatus"
+        publicNotes:
+          type: ["string", "null"]
+        coachNotes:
+          type: ["string", "null"]
+        track:
+          type: ["string", "null"]
+        sections:
+          type: array
+          items:
+            $ref: "#/components/schemas/CreateProgrammingSectionBody"
+      required:
+        - date
+        - title
+
+    UpdateProgrammingDayBody:
+      type: object
+      properties:
+        date:
+          type: string
+          format: date
+        title:
+          type: string
+        status:
+          $ref: "#/components/schemas/ProgrammingDayStatus"
+        publicNotes:
+          type: ["string", "null"]
+        coachNotes:
+          type: ["string", "null"]
+        track:
+          type: ["string", "null"]
+
+    DuplicateProgrammingDayBody:
+      type: object
+      properties:
+        date:
+          type: string
+          format: date
+      required:
+        - date
+
+    CreateProgrammingSectionBody:
+      type: object
+      properties:
+        orderIndex:
+          type: integer
+        sectionType:
+          $ref: "#/components/schemas/SectionType"
+        title:
+          type: string
+        instructions:
+          type: ["string", "null"]
+        duration:
+          type: ["string", "null"]
+        timeCap:
+          type: ["string", "null"]
+        intendedStimulus:
+          type: ["string", "null"]
+        movements:
+          type: array
+          items:
+            type: string
+        scalingNotes:
+          type: ["string", "null"]
+        coachNotes:
+          type: ["string", "null"]
+        memberNotes:
+          type: ["string", "null"]
+        resultTrackingEnabled:
+          type: boolean
+      required:
+        - title
+
+    UpdateProgrammingSectionBody:
+      type: object
+      properties:
+        orderIndex:
+          type: integer
+        sectionType:
+          $ref: "#/components/schemas/SectionType"
+        title:
+          type: string
+        instructions:
+          type: ["string", "null"]
+        duration:
+          type: ["string", "null"]
+        timeCap:
+          type: ["string", "null"]
+        intendedStimulus:
+          type: ["string", "null"]
+        movements:
+          type: array
+          items:
+            type: string
+        scalingNotes:
+          type: ["string", "null"]
+        coachNotes:
+          type: ["string", "null"]
+        memberNotes:
+          type: ["string", "null"]
+        resultTrackingEnabled:
+          type: boolean
+
+    ReorderSectionsBody:
+      type: object
+      properties:
+        sectionIds:
+          type: array
+          items:
+            type: integer
+      required:
+        - sectionIds
 
     Announcement:
       type: object

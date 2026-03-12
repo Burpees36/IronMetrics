@@ -39,6 +39,8 @@ import type {
   CreateMembershipPlanBody,
   CreateOneTimeChargeBody,
   CreateProductBody,
+  CreateProgrammingDayBody,
+  CreateProgrammingSectionBody,
   CreateSaleBody,
   CreateSetupIntent200,
   CreateStripeSubscriptionBody,
@@ -46,6 +48,7 @@ import type {
   CreateWorkoutBody,
   CreateWorkoutResultBody,
   DashboardStats,
+  DuplicateProgrammingDayBody,
   EmailStatusResponse,
   GenerateAiTasksResponse,
   GenerateOutreachBody,
@@ -68,6 +71,7 @@ import type {
   ListLeadsParams,
   ListMembersParams,
   ListPaymentMethods200Item,
+  ListProgrammingDaysParams,
   ListSubscriptionsParams,
   ListWorkoutsParams,
   Member,
@@ -79,8 +83,11 @@ import type {
   MembershipReport,
   PaymentRecord,
   Product,
+  ProgrammingDayWithSections,
+  ProgrammingSection,
   RefundPaymentBody,
   RefundRecord,
+  ReorderSectionsBody,
   RetentionStabilityIndex,
   RevenueForecast,
   RevenueReport,
@@ -88,12 +95,15 @@ import type {
   SendEmailResponse,
   StaffMember,
   Subscription,
+  SuccessResponse,
   TimelineEvent,
   UpdateAiTaskBody,
   UpdateClassBody,
   UpdateGymBody,
   UpdateLeadBody,
   UpdateMemberBody,
+  UpdateProgrammingDayBody,
+  UpdateProgrammingSectionBody,
   UpdateStaffBody,
   UpdateSubscriptionBody,
   Workout,
@@ -5291,6 +5301,1350 @@ export const useLogWorkoutResult = <
   TContext
 > => {
   return useMutation(getLogWorkoutResultMutationOptions(options));
+};
+
+/**
+ * @summary List programming days
+ */
+export const getListProgrammingDaysUrl = (
+  gymId: number,
+  params?: ListProgrammingDaysParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/gyms/${gymId}/programming?${stringifiedParams}`
+    : `/api/gyms/${gymId}/programming`;
+};
+
+export const listProgrammingDays = async (
+  gymId: number,
+  params?: ListProgrammingDaysParams,
+  options?: RequestInit,
+): Promise<ProgrammingDayWithSections[]> => {
+  return customFetch<ProgrammingDayWithSections[]>(
+    getListProgrammingDaysUrl(gymId, params),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getListProgrammingDaysQueryKey = (
+  gymId: number,
+  params?: ListProgrammingDaysParams,
+) => {
+  return [
+    `/api/gyms/${gymId}/programming`,
+    ...(params ? [params] : []),
+  ] as const;
+};
+
+export const getListProgrammingDaysQueryOptions = <
+  TData = Awaited<ReturnType<typeof listProgrammingDays>>,
+  TError = ErrorType<unknown>,
+>(
+  gymId: number,
+  params?: ListProgrammingDaysParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listProgrammingDays>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListProgrammingDaysQueryKey(gymId, params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listProgrammingDays>>
+  > = ({ signal }) =>
+    listProgrammingDays(gymId, params, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!gymId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof listProgrammingDays>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListProgrammingDaysQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listProgrammingDays>>
+>;
+export type ListProgrammingDaysQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List programming days
+ */
+
+export function useListProgrammingDays<
+  TData = Awaited<ReturnType<typeof listProgrammingDays>>,
+  TError = ErrorType<unknown>,
+>(
+  gymId: number,
+  params?: ListProgrammingDaysParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listProgrammingDays>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListProgrammingDaysQueryOptions(
+    gymId,
+    params,
+    options,
+  );
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Create a programming day
+ */
+export const getCreateProgrammingDayUrl = (gymId: number) => {
+  return `/api/gyms/${gymId}/programming`;
+};
+
+export const createProgrammingDay = async (
+  gymId: number,
+  createProgrammingDayBody: CreateProgrammingDayBody,
+  options?: RequestInit,
+): Promise<ProgrammingDayWithSections> => {
+  return customFetch<ProgrammingDayWithSections>(
+    getCreateProgrammingDayUrl(gymId),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(createProgrammingDayBody),
+    },
+  );
+};
+
+export const getCreateProgrammingDayMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createProgrammingDay>>,
+    TError,
+    { gymId: number; data: BodyType<CreateProgrammingDayBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createProgrammingDay>>,
+  TError,
+  { gymId: number; data: BodyType<CreateProgrammingDayBody> },
+  TContext
+> => {
+  const mutationKey = ["createProgrammingDay"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createProgrammingDay>>,
+    { gymId: number; data: BodyType<CreateProgrammingDayBody> }
+  > = (props) => {
+    const { gymId, data } = props ?? {};
+
+    return createProgrammingDay(gymId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateProgrammingDayMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createProgrammingDay>>
+>;
+export type CreateProgrammingDayMutationBody =
+  BodyType<CreateProgrammingDayBody>;
+export type CreateProgrammingDayMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Create a programming day
+ */
+export const useCreateProgrammingDay = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createProgrammingDay>>,
+    TError,
+    { gymId: number; data: BodyType<CreateProgrammingDayBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createProgrammingDay>>,
+  TError,
+  { gymId: number; data: BodyType<CreateProgrammingDayBody> },
+  TContext
+> => {
+  return useMutation(getCreateProgrammingDayMutationOptions(options));
+};
+
+/**
+ * @summary Get a programming day with all sections
+ */
+export const getGetProgrammingDayUrl = (gymId: number, dayId: number) => {
+  return `/api/gyms/${gymId}/programming/${dayId}`;
+};
+
+export const getProgrammingDay = async (
+  gymId: number,
+  dayId: number,
+  options?: RequestInit,
+): Promise<ProgrammingDayWithSections> => {
+  return customFetch<ProgrammingDayWithSections>(
+    getGetProgrammingDayUrl(gymId, dayId),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetProgrammingDayQueryKey = (gymId: number, dayId: number) => {
+  return [`/api/gyms/${gymId}/programming/${dayId}`] as const;
+};
+
+export const getGetProgrammingDayQueryOptions = <
+  TData = Awaited<ReturnType<typeof getProgrammingDay>>,
+  TError = ErrorType<void>,
+>(
+  gymId: number,
+  dayId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getProgrammingDay>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetProgrammingDayQueryKey(gymId, dayId);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getProgrammingDay>>
+  > = ({ signal }) =>
+    getProgrammingDay(gymId, dayId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!(gymId && dayId),
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getProgrammingDay>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetProgrammingDayQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getProgrammingDay>>
+>;
+export type GetProgrammingDayQueryError = ErrorType<void>;
+
+/**
+ * @summary Get a programming day with all sections
+ */
+
+export function useGetProgrammingDay<
+  TData = Awaited<ReturnType<typeof getProgrammingDay>>,
+  TError = ErrorType<void>,
+>(
+  gymId: number,
+  dayId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getProgrammingDay>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetProgrammingDayQueryOptions(gymId, dayId, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Update a programming day
+ */
+export const getUpdateProgrammingDayUrl = (gymId: number, dayId: number) => {
+  return `/api/gyms/${gymId}/programming/${dayId}`;
+};
+
+export const updateProgrammingDay = async (
+  gymId: number,
+  dayId: number,
+  updateProgrammingDayBody: UpdateProgrammingDayBody,
+  options?: RequestInit,
+): Promise<ProgrammingDayWithSections> => {
+  return customFetch<ProgrammingDayWithSections>(
+    getUpdateProgrammingDayUrl(gymId, dayId),
+    {
+      ...options,
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(updateProgrammingDayBody),
+    },
+  );
+};
+
+export const getUpdateProgrammingDayMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateProgrammingDay>>,
+    TError,
+    { gymId: number; dayId: number; data: BodyType<UpdateProgrammingDayBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateProgrammingDay>>,
+  TError,
+  { gymId: number; dayId: number; data: BodyType<UpdateProgrammingDayBody> },
+  TContext
+> => {
+  const mutationKey = ["updateProgrammingDay"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateProgrammingDay>>,
+    { gymId: number; dayId: number; data: BodyType<UpdateProgrammingDayBody> }
+  > = (props) => {
+    const { gymId, dayId, data } = props ?? {};
+
+    return updateProgrammingDay(gymId, dayId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateProgrammingDayMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateProgrammingDay>>
+>;
+export type UpdateProgrammingDayMutationBody =
+  BodyType<UpdateProgrammingDayBody>;
+export type UpdateProgrammingDayMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Update a programming day
+ */
+export const useUpdateProgrammingDay = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateProgrammingDay>>,
+    TError,
+    { gymId: number; dayId: number; data: BodyType<UpdateProgrammingDayBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateProgrammingDay>>,
+  TError,
+  { gymId: number; dayId: number; data: BodyType<UpdateProgrammingDayBody> },
+  TContext
+> => {
+  return useMutation(getUpdateProgrammingDayMutationOptions(options));
+};
+
+/**
+ * @summary Archive a programming day
+ */
+export const getDeleteProgrammingDayUrl = (gymId: number, dayId: number) => {
+  return `/api/gyms/${gymId}/programming/${dayId}`;
+};
+
+export const deleteProgrammingDay = async (
+  gymId: number,
+  dayId: number,
+  options?: RequestInit,
+): Promise<SuccessResponse> => {
+  return customFetch<SuccessResponse>(
+    getDeleteProgrammingDayUrl(gymId, dayId),
+    {
+      ...options,
+      method: "DELETE",
+    },
+  );
+};
+
+export const getDeleteProgrammingDayMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteProgrammingDay>>,
+    TError,
+    { gymId: number; dayId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteProgrammingDay>>,
+  TError,
+  { gymId: number; dayId: number },
+  TContext
+> => {
+  const mutationKey = ["deleteProgrammingDay"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteProgrammingDay>>,
+    { gymId: number; dayId: number }
+  > = (props) => {
+    const { gymId, dayId } = props ?? {};
+
+    return deleteProgrammingDay(gymId, dayId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteProgrammingDayMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteProgrammingDay>>
+>;
+
+export type DeleteProgrammingDayMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Archive a programming day
+ */
+export const useDeleteProgrammingDay = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteProgrammingDay>>,
+    TError,
+    { gymId: number; dayId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof deleteProgrammingDay>>,
+  TError,
+  { gymId: number; dayId: number },
+  TContext
+> => {
+  return useMutation(getDeleteProgrammingDayMutationOptions(options));
+};
+
+/**
+ * @summary Toggle publish/unpublish status of a programming day
+ */
+export const getToggleProgrammingDayPublishUrl = (
+  gymId: number,
+  dayId: number,
+) => {
+  return `/api/gyms/${gymId}/programming/${dayId}/publish`;
+};
+
+export const toggleProgrammingDayPublish = async (
+  gymId: number,
+  dayId: number,
+  options?: RequestInit,
+): Promise<ProgrammingDayWithSections> => {
+  return customFetch<ProgrammingDayWithSections>(
+    getToggleProgrammingDayPublishUrl(gymId, dayId),
+    {
+      ...options,
+      method: "POST",
+    },
+  );
+};
+
+export const getToggleProgrammingDayPublishMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof toggleProgrammingDayPublish>>,
+    TError,
+    { gymId: number; dayId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof toggleProgrammingDayPublish>>,
+  TError,
+  { gymId: number; dayId: number },
+  TContext
+> => {
+  const mutationKey = ["toggleProgrammingDayPublish"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof toggleProgrammingDayPublish>>,
+    { gymId: number; dayId: number }
+  > = (props) => {
+    const { gymId, dayId } = props ?? {};
+
+    return toggleProgrammingDayPublish(gymId, dayId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ToggleProgrammingDayPublishMutationResult = NonNullable<
+  Awaited<ReturnType<typeof toggleProgrammingDayPublish>>
+>;
+
+export type ToggleProgrammingDayPublishMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Toggle publish/unpublish status of a programming day
+ */
+export const useToggleProgrammingDayPublish = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof toggleProgrammingDayPublish>>,
+    TError,
+    { gymId: number; dayId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof toggleProgrammingDayPublish>>,
+  TError,
+  { gymId: number; dayId: number },
+  TContext
+> => {
+  return useMutation(getToggleProgrammingDayPublishMutationOptions(options));
+};
+
+/**
+ * @summary Duplicate a programming day to a new date
+ */
+export const getDuplicateProgrammingDayUrl = (gymId: number, dayId: number) => {
+  return `/api/gyms/${gymId}/programming/${dayId}/duplicate`;
+};
+
+export const duplicateProgrammingDay = async (
+  gymId: number,
+  dayId: number,
+  duplicateProgrammingDayBody: DuplicateProgrammingDayBody,
+  options?: RequestInit,
+): Promise<ProgrammingDayWithSections> => {
+  return customFetch<ProgrammingDayWithSections>(
+    getDuplicateProgrammingDayUrl(gymId, dayId),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(duplicateProgrammingDayBody),
+    },
+  );
+};
+
+export const getDuplicateProgrammingDayMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof duplicateProgrammingDay>>,
+    TError,
+    {
+      gymId: number;
+      dayId: number;
+      data: BodyType<DuplicateProgrammingDayBody>;
+    },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof duplicateProgrammingDay>>,
+  TError,
+  { gymId: number; dayId: number; data: BodyType<DuplicateProgrammingDayBody> },
+  TContext
+> => {
+  const mutationKey = ["duplicateProgrammingDay"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof duplicateProgrammingDay>>,
+    {
+      gymId: number;
+      dayId: number;
+      data: BodyType<DuplicateProgrammingDayBody>;
+    }
+  > = (props) => {
+    const { gymId, dayId, data } = props ?? {};
+
+    return duplicateProgrammingDay(gymId, dayId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DuplicateProgrammingDayMutationResult = NonNullable<
+  Awaited<ReturnType<typeof duplicateProgrammingDay>>
+>;
+export type DuplicateProgrammingDayMutationBody =
+  BodyType<DuplicateProgrammingDayBody>;
+export type DuplicateProgrammingDayMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Duplicate a programming day to a new date
+ */
+export const useDuplicateProgrammingDay = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof duplicateProgrammingDay>>,
+    TError,
+    {
+      gymId: number;
+      dayId: number;
+      data: BodyType<DuplicateProgrammingDayBody>;
+    },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof duplicateProgrammingDay>>,
+  TError,
+  { gymId: number; dayId: number; data: BodyType<DuplicateProgrammingDayBody> },
+  TContext
+> => {
+  return useMutation(getDuplicateProgrammingDayMutationOptions(options));
+};
+
+/**
+ * @summary Add a section to a programming day
+ */
+export const getAddProgrammingSectionUrl = (gymId: number, dayId: number) => {
+  return `/api/gyms/${gymId}/programming/${dayId}/sections`;
+};
+
+export const addProgrammingSection = async (
+  gymId: number,
+  dayId: number,
+  createProgrammingSectionBody: CreateProgrammingSectionBody,
+  options?: RequestInit,
+): Promise<ProgrammingSection> => {
+  return customFetch<ProgrammingSection>(
+    getAddProgrammingSectionUrl(gymId, dayId),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(createProgrammingSectionBody),
+    },
+  );
+};
+
+export const getAddProgrammingSectionMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof addProgrammingSection>>,
+    TError,
+    {
+      gymId: number;
+      dayId: number;
+      data: BodyType<CreateProgrammingSectionBody>;
+    },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof addProgrammingSection>>,
+  TError,
+  {
+    gymId: number;
+    dayId: number;
+    data: BodyType<CreateProgrammingSectionBody>;
+  },
+  TContext
+> => {
+  const mutationKey = ["addProgrammingSection"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof addProgrammingSection>>,
+    {
+      gymId: number;
+      dayId: number;
+      data: BodyType<CreateProgrammingSectionBody>;
+    }
+  > = (props) => {
+    const { gymId, dayId, data } = props ?? {};
+
+    return addProgrammingSection(gymId, dayId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AddProgrammingSectionMutationResult = NonNullable<
+  Awaited<ReturnType<typeof addProgrammingSection>>
+>;
+export type AddProgrammingSectionMutationBody =
+  BodyType<CreateProgrammingSectionBody>;
+export type AddProgrammingSectionMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Add a section to a programming day
+ */
+export const useAddProgrammingSection = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof addProgrammingSection>>,
+    TError,
+    {
+      gymId: number;
+      dayId: number;
+      data: BodyType<CreateProgrammingSectionBody>;
+    },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof addProgrammingSection>>,
+  TError,
+  {
+    gymId: number;
+    dayId: number;
+    data: BodyType<CreateProgrammingSectionBody>;
+  },
+  TContext
+> => {
+  return useMutation(getAddProgrammingSectionMutationOptions(options));
+};
+
+/**
+ * @summary Update a programming section
+ */
+export const getUpdateProgrammingSectionUrl = (
+  gymId: number,
+  dayId: number,
+  sectionId: number,
+) => {
+  return `/api/gyms/${gymId}/programming/${dayId}/sections/${sectionId}`;
+};
+
+export const updateProgrammingSection = async (
+  gymId: number,
+  dayId: number,
+  sectionId: number,
+  updateProgrammingSectionBody: UpdateProgrammingSectionBody,
+  options?: RequestInit,
+): Promise<ProgrammingSection> => {
+  return customFetch<ProgrammingSection>(
+    getUpdateProgrammingSectionUrl(gymId, dayId, sectionId),
+    {
+      ...options,
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(updateProgrammingSectionBody),
+    },
+  );
+};
+
+export const getUpdateProgrammingSectionMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateProgrammingSection>>,
+    TError,
+    {
+      gymId: number;
+      dayId: number;
+      sectionId: number;
+      data: BodyType<UpdateProgrammingSectionBody>;
+    },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateProgrammingSection>>,
+  TError,
+  {
+    gymId: number;
+    dayId: number;
+    sectionId: number;
+    data: BodyType<UpdateProgrammingSectionBody>;
+  },
+  TContext
+> => {
+  const mutationKey = ["updateProgrammingSection"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateProgrammingSection>>,
+    {
+      gymId: number;
+      dayId: number;
+      sectionId: number;
+      data: BodyType<UpdateProgrammingSectionBody>;
+    }
+  > = (props) => {
+    const { gymId, dayId, sectionId, data } = props ?? {};
+
+    return updateProgrammingSection(
+      gymId,
+      dayId,
+      sectionId,
+      data,
+      requestOptions,
+    );
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateProgrammingSectionMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateProgrammingSection>>
+>;
+export type UpdateProgrammingSectionMutationBody =
+  BodyType<UpdateProgrammingSectionBody>;
+export type UpdateProgrammingSectionMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Update a programming section
+ */
+export const useUpdateProgrammingSection = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateProgrammingSection>>,
+    TError,
+    {
+      gymId: number;
+      dayId: number;
+      sectionId: number;
+      data: BodyType<UpdateProgrammingSectionBody>;
+    },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateProgrammingSection>>,
+  TError,
+  {
+    gymId: number;
+    dayId: number;
+    sectionId: number;
+    data: BodyType<UpdateProgrammingSectionBody>;
+  },
+  TContext
+> => {
+  return useMutation(getUpdateProgrammingSectionMutationOptions(options));
+};
+
+/**
+ * @summary Remove a section from a programming day
+ */
+export const getDeleteProgrammingSectionUrl = (
+  gymId: number,
+  dayId: number,
+  sectionId: number,
+) => {
+  return `/api/gyms/${gymId}/programming/${dayId}/sections/${sectionId}`;
+};
+
+export const deleteProgrammingSection = async (
+  gymId: number,
+  dayId: number,
+  sectionId: number,
+  options?: RequestInit,
+): Promise<SuccessResponse> => {
+  return customFetch<SuccessResponse>(
+    getDeleteProgrammingSectionUrl(gymId, dayId, sectionId),
+    {
+      ...options,
+      method: "DELETE",
+    },
+  );
+};
+
+export const getDeleteProgrammingSectionMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteProgrammingSection>>,
+    TError,
+    { gymId: number; dayId: number; sectionId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteProgrammingSection>>,
+  TError,
+  { gymId: number; dayId: number; sectionId: number },
+  TContext
+> => {
+  const mutationKey = ["deleteProgrammingSection"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteProgrammingSection>>,
+    { gymId: number; dayId: number; sectionId: number }
+  > = (props) => {
+    const { gymId, dayId, sectionId } = props ?? {};
+
+    return deleteProgrammingSection(gymId, dayId, sectionId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteProgrammingSectionMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteProgrammingSection>>
+>;
+
+export type DeleteProgrammingSectionMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Remove a section from a programming day
+ */
+export const useDeleteProgrammingSection = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteProgrammingSection>>,
+    TError,
+    { gymId: number; dayId: number; sectionId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof deleteProgrammingSection>>,
+  TError,
+  { gymId: number; dayId: number; sectionId: number },
+  TContext
+> => {
+  return useMutation(getDeleteProgrammingSectionMutationOptions(options));
+};
+
+/**
+ * @summary Reorder sections within a programming day
+ */
+export const getReorderProgrammingSectionsUrl = (
+  gymId: number,
+  dayId: number,
+) => {
+  return `/api/gyms/${gymId}/programming/${dayId}/sections/reorder`;
+};
+
+export const reorderProgrammingSections = async (
+  gymId: number,
+  dayId: number,
+  reorderSectionsBody: ReorderSectionsBody,
+  options?: RequestInit,
+): Promise<ProgrammingSection[]> => {
+  return customFetch<ProgrammingSection[]>(
+    getReorderProgrammingSectionsUrl(gymId, dayId),
+    {
+      ...options,
+      method: "PUT",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(reorderSectionsBody),
+    },
+  );
+};
+
+export const getReorderProgrammingSectionsMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof reorderProgrammingSections>>,
+    TError,
+    { gymId: number; dayId: number; data: BodyType<ReorderSectionsBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof reorderProgrammingSections>>,
+  TError,
+  { gymId: number; dayId: number; data: BodyType<ReorderSectionsBody> },
+  TContext
+> => {
+  const mutationKey = ["reorderProgrammingSections"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof reorderProgrammingSections>>,
+    { gymId: number; dayId: number; data: BodyType<ReorderSectionsBody> }
+  > = (props) => {
+    const { gymId, dayId, data } = props ?? {};
+
+    return reorderProgrammingSections(gymId, dayId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ReorderProgrammingSectionsMutationResult = NonNullable<
+  Awaited<ReturnType<typeof reorderProgrammingSections>>
+>;
+export type ReorderProgrammingSectionsMutationBody =
+  BodyType<ReorderSectionsBody>;
+export type ReorderProgrammingSectionsMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Reorder sections within a programming day
+ */
+export const useReorderProgrammingSections = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof reorderProgrammingSections>>,
+    TError,
+    { gymId: number; dayId: number; data: BodyType<ReorderSectionsBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof reorderProgrammingSections>>,
+  TError,
+  { gymId: number; dayId: number; data: BodyType<ReorderSectionsBody> },
+  TContext
+> => {
+  return useMutation(getReorderProgrammingSectionsMutationOptions(options));
+};
+
+/**
+ * @summary List results for a programming section
+ */
+export const getListSectionResultsUrl = (
+  gymId: number,
+  dayId: number,
+  sectionId: number,
+) => {
+  return `/api/gyms/${gymId}/programming/${dayId}/sections/${sectionId}/results`;
+};
+
+export const listSectionResults = async (
+  gymId: number,
+  dayId: number,
+  sectionId: number,
+  options?: RequestInit,
+): Promise<WorkoutResult[]> => {
+  return customFetch<WorkoutResult[]>(
+    getListSectionResultsUrl(gymId, dayId, sectionId),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getListSectionResultsQueryKey = (
+  gymId: number,
+  dayId: number,
+  sectionId: number,
+) => {
+  return [
+    `/api/gyms/${gymId}/programming/${dayId}/sections/${sectionId}/results`,
+  ] as const;
+};
+
+export const getListSectionResultsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listSectionResults>>,
+  TError = ErrorType<unknown>,
+>(
+  gymId: number,
+  dayId: number,
+  sectionId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listSectionResults>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ??
+    getListSectionResultsQueryKey(gymId, dayId, sectionId);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listSectionResults>>
+  > = ({ signal }) =>
+    listSectionResults(gymId, dayId, sectionId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!(gymId && dayId && sectionId),
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof listSectionResults>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListSectionResultsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listSectionResults>>
+>;
+export type ListSectionResultsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List results for a programming section
+ */
+
+export function useListSectionResults<
+  TData = Awaited<ReturnType<typeof listSectionResults>>,
+  TError = ErrorType<unknown>,
+>(
+  gymId: number,
+  dayId: number,
+  sectionId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listSectionResults>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListSectionResultsQueryOptions(
+    gymId,
+    dayId,
+    sectionId,
+    options,
+  );
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Log a result for a programming section
+ */
+export const getLogSectionResultUrl = (
+  gymId: number,
+  dayId: number,
+  sectionId: number,
+) => {
+  return `/api/gyms/${gymId}/programming/${dayId}/sections/${sectionId}/results`;
+};
+
+export const logSectionResult = async (
+  gymId: number,
+  dayId: number,
+  sectionId: number,
+  createWorkoutResultBody: CreateWorkoutResultBody,
+  options?: RequestInit,
+): Promise<WorkoutResult> => {
+  return customFetch<WorkoutResult>(
+    getLogSectionResultUrl(gymId, dayId, sectionId),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(createWorkoutResultBody),
+    },
+  );
+};
+
+export const getLogSectionResultMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof logSectionResult>>,
+    TError,
+    {
+      gymId: number;
+      dayId: number;
+      sectionId: number;
+      data: BodyType<CreateWorkoutResultBody>;
+    },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof logSectionResult>>,
+  TError,
+  {
+    gymId: number;
+    dayId: number;
+    sectionId: number;
+    data: BodyType<CreateWorkoutResultBody>;
+  },
+  TContext
+> => {
+  const mutationKey = ["logSectionResult"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof logSectionResult>>,
+    {
+      gymId: number;
+      dayId: number;
+      sectionId: number;
+      data: BodyType<CreateWorkoutResultBody>;
+    }
+  > = (props) => {
+    const { gymId, dayId, sectionId, data } = props ?? {};
+
+    return logSectionResult(gymId, dayId, sectionId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type LogSectionResultMutationResult = NonNullable<
+  Awaited<ReturnType<typeof logSectionResult>>
+>;
+export type LogSectionResultMutationBody = BodyType<CreateWorkoutResultBody>;
+export type LogSectionResultMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Log a result for a programming section
+ */
+export const useLogSectionResult = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof logSectionResult>>,
+    TError,
+    {
+      gymId: number;
+      dayId: number;
+      sectionId: number;
+      data: BodyType<CreateWorkoutResultBody>;
+    },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof logSectionResult>>,
+  TError,
+  {
+    gymId: number;
+    dayId: number;
+    sectionId: number;
+    data: BodyType<CreateWorkoutResultBody>;
+  },
+  TContext
+> => {
+  return useMutation(getLogSectionResultMutationOptions(options));
 };
 
 /**

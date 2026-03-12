@@ -72,8 +72,10 @@ All tables in `lib/db/src/schema/`:
 - **billing_webhook_events** — Webhook event dedup + idempotency (stripeEventId UNIQUE, status, processingError)
 - **products** — Retail inventory
 - **sales** — POS transactions (items stored as JSON)
-- **workouts** — WOD/strength/hero workouts (field is `title`, NOT `name`)
-- **workout_results** — Member results with Rx/PR tracking
+- **workouts** — WOD/strength/hero workouts (field is `title`, NOT `name`) — legacy table, kept for backward compat
+- **workout_results** — Member results with Rx/PR tracking (now supports optional `programming_section_id`)
+- **programming_days** — Daily programming hub (gym_id, date, title, status [draft/published/archived], public_notes, coach_notes, track, created_by, updated_by)
+- **programming_sections** — Ordered sections within a programming day (day_id, order_index, section_type enum, title, instructions, movements, result_tracking_enabled, etc.)
 - **announcements** — Gym communications
 - **documents** — Waivers, agreements, consent forms
 - **ai_tasks** — AI operator task queue

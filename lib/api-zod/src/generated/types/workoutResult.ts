@@ -9,6 +9,8 @@
 export interface WorkoutResult {
   id: number;
   workoutId: number;
+  /** @nullable */
+  programmingSectionId?: number | null;
   memberId: number;
   memberName: string;
   result: string;

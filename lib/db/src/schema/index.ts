@@ -7,6 +7,7 @@ export * from "./attendance";
 export * from "./billing";
 export * from "./retail";
 export * from "./workouts";
+export * from "./programming";
 export * from "./communications";
 export * from "./documents";
 export * from "./ai";

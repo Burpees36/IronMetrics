@@ -3,6 +3,7 @@ import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { gymsTable } from "./gyms";
 import { membersTable } from "./members";
+import { programmingSectionsTable } from "./programming";
 
 export const workoutsTable = pgTable("workouts", {
   id: serial("id").primaryKey(),
@@ -22,6 +23,7 @@ export type Workout = typeof workoutsTable.$inferSelect;
 export const workoutResultsTable = pgTable("workout_results", {
   id: serial("id").primaryKey(),
   workoutId: integer("workout_id").notNull().references(() => workoutsTable.id),
+  programmingSectionId: integer("programming_section_id").references(() => programmingSectionsTable.id),
   memberId: integer("member_id").notNull().references(() => membersTable.id),
   memberName: text("member_name").notNull(),
   gymId: integer("gym_id").notNull().references(() => gymsTable.id),
