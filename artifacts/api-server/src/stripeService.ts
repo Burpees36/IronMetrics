@@ -1,6 +1,13 @@
 import { getUncachableStripeClient } from "./stripeClient";
 import { db, membersTable, subscriptionsTable, membershipPlansTable, invoicesTable, paymentsTable } from "@workspace/db";
 import { eq, and, sql } from "drizzle-orm";
+import { billingAuditLogger, type AuditSource } from "./billingAuditLogger";
+
+interface ActorInfo {
+  userId?: string;
+  name?: string;
+  source?: AuditSource;
+}
 
 export class StripeService {
   async getOrCreateCustomer(memberId: number, gymId: number): Promise<string> {
@@ -53,7 +60,8 @@ export class StripeService {
     memberId: number,
     gymId: number,
     planId: number,
-    paymentMethodId?: string
+    paymentMethodId?: string,
+    actor?: ActorInfo
   ): Promise<any> {
     const customerId = await this.getOrCreateCustomer(memberId, gymId);
     const [plan] = await db.select().from(membershipPlansTable).where(and(eq(membershipPlansTable.id, planId), eq(membershipPlansTable.gymId, gymId)));
@@ -115,13 +123,14 @@ export class StripeService {
     const [member] = await db.select().from(membersTable).where(eq(membersTable.id, memberId));
     const today = new Date().toISOString().split("T")[0];
 
+    const subStatus = subscription.status === "active" ? "active" : "pending";
     const [localSub] = await db.insert(subscriptionsTable).values({
       gymId,
       memberId,
       memberName: `${member.firstName} ${member.lastName}`,
       planId,
       planName: plan.name,
-      status: subscription.status === "active" ? "active" : "pending",
+      status: subStatus,
       amount: plan.price,
       failedPayments: 0,
       stripeSubscriptionId: subscription.id,
@@ -129,7 +138,22 @@ export class StripeService {
       currentPeriodStart: today,
     }).returning();
 
-    await db.update(membersTable).set({ membershipType: plan.name, status: "active" }).where(eq(membersTable.id, memberId));
+    if (subscription.status === "active") {
+      await db.update(membersTable).set({ membershipType: plan.name, status: "active" }).where(eq(membersTable.id, memberId));
+    }
+
+    await billingAuditLogger.log({
+      gymId,
+      memberId,
+      actorUserId: actor?.userId,
+      actorName: actor?.name,
+      action: "subscription.created",
+      entityType: "subscription",
+      entityId: String(localSub.id),
+      amount: parseFloat(plan.price),
+      source: actor?.source || "ui",
+      afterValue: { planName: plan.name, status: subStatus, stripeId: subscription.id },
+    });
 
     return {
       ...localSub,
@@ -139,9 +163,11 @@ export class StripeService {
     };
   }
 
-  async cancelSubscription(subscriptionId: number, gymId: number, cancelAtPeriodEnd: boolean = true, reason?: string): Promise<any> {
+  async cancelSubscription(subscriptionId: number, gymId: number, cancelAtPeriodEnd: boolean = true, reason?: string, actor?: ActorInfo): Promise<any> {
     const [sub] = await db.select().from(subscriptionsTable).where(and(eq(subscriptionsTable.id, subscriptionId), eq(subscriptionsTable.gymId, gymId)));
     if (!sub) throw new Error("Subscription not found");
+
+    if (sub.status === "cancelled") throw new Error("Subscription is already cancelled");
 
     if (sub.stripeSubscriptionId) {
       const stripe = await getUncachableStripeClient();
@@ -155,9 +181,11 @@ export class StripeService {
     }
 
     const newStatus = cancelAtPeriodEnd ? "cancel_at_period_end" : "cancelled";
+    const cancelledAt = cancelAtPeriodEnd ? (sub.cancelledAt || new Date()) : new Date();
+
     const [updated] = await db.update(subscriptionsTable).set({
       status: newStatus,
-      cancelledAt: new Date(),
+      cancelledAt,
       cancelReason: reason || null,
     }).where(eq(subscriptionsTable.id, subscriptionId)).returning();
 
@@ -165,12 +193,29 @@ export class StripeService {
       await db.update(membersTable).set({ status: "cancelled" }).where(eq(membersTable.id, sub.memberId));
     }
 
+    await billingAuditLogger.log({
+      gymId,
+      memberId: sub.memberId,
+      actorUserId: actor?.userId,
+      actorName: actor?.name,
+      action: "subscription.cancelled",
+      entityType: "subscription",
+      entityId: String(subscriptionId),
+      amount: parseFloat(sub.amount),
+      reason,
+      source: actor?.source || "ui",
+      beforeValue: { status: sub.status },
+      afterValue: { status: newStatus, cancelAtPeriodEnd },
+    });
+
     return { ...updated, amount: parseFloat(updated.amount) };
   }
 
-  async pauseSubscription(subscriptionId: number, gymId: number): Promise<any> {
+  async pauseSubscription(subscriptionId: number, gymId: number, actor?: ActorInfo): Promise<any> {
     const [sub] = await db.select().from(subscriptionsTable).where(and(eq(subscriptionsTable.id, subscriptionId), eq(subscriptionsTable.gymId, gymId)));
     if (!sub) throw new Error("Subscription not found");
+
+    if (sub.status !== "active") throw new Error("Only active subscriptions can be paused");
 
     if (sub.stripeSubscriptionId) {
       const stripe = await getUncachableStripeClient();
@@ -182,12 +227,30 @@ export class StripeService {
     const [updated] = await db.update(subscriptionsTable).set({ status: "paused" }).where(eq(subscriptionsTable.id, subscriptionId)).returning();
     await db.update(membersTable).set({ status: "hold" }).where(eq(membersTable.id, sub.memberId));
 
+    await billingAuditLogger.log({
+      gymId,
+      memberId: sub.memberId,
+      actorUserId: actor?.userId,
+      actorName: actor?.name,
+      action: "subscription.paused",
+      entityType: "subscription",
+      entityId: String(subscriptionId),
+      amount: parseFloat(sub.amount),
+      source: actor?.source || "ui",
+      beforeValue: { status: "active" },
+      afterValue: { status: "paused" },
+    });
+
     return { ...updated, amount: parseFloat(updated.amount) };
   }
 
-  async resumeSubscription(subscriptionId: number, gymId: number): Promise<any> {
+  async resumeSubscription(subscriptionId: number, gymId: number, actor?: ActorInfo): Promise<any> {
     const [sub] = await db.select().from(subscriptionsTable).where(and(eq(subscriptionsTable.id, subscriptionId), eq(subscriptionsTable.gymId, gymId)));
     if (!sub) throw new Error("Subscription not found");
+
+    if (sub.status !== "paused" && sub.status !== "cancel_at_period_end") {
+      throw new Error("Subscription cannot be resumed from current status");
+    }
 
     if (sub.stripeSubscriptionId) {
       const stripe = await getUncachableStripeClient();
@@ -197,8 +260,26 @@ export class StripeService {
       });
     }
 
-    const [updated] = await db.update(subscriptionsTable).set({ status: "active" }).where(eq(subscriptionsTable.id, subscriptionId)).returning();
+    const [updated] = await db.update(subscriptionsTable).set({
+      status: "active",
+      cancelledAt: null,
+      cancelReason: null,
+    }).where(eq(subscriptionsTable.id, subscriptionId)).returning();
     await db.update(membersTable).set({ status: "active" }).where(eq(membersTable.id, sub.memberId));
+
+    await billingAuditLogger.log({
+      gymId,
+      memberId: sub.memberId,
+      actorUserId: actor?.userId,
+      actorName: actor?.name,
+      action: "subscription.resumed",
+      entityType: "subscription",
+      entityId: String(subscriptionId),
+      amount: parseFloat(sub.amount),
+      source: actor?.source || "ui",
+      beforeValue: { status: sub.status },
+      afterValue: { status: "active" },
+    });
 
     return { ...updated, amount: parseFloat(updated.amount) };
   }
@@ -208,8 +289,12 @@ export class StripeService {
     gymId: number,
     amount: number,
     description: string,
-    paymentMethodId?: string
+    paymentMethodId?: string,
+    actor?: ActorInfo
   ): Promise<any> {
+    if (amount <= 0) throw new Error("Amount must be positive");
+    if (amount > 10000) throw new Error("Amount exceeds maximum allowed charge");
+
     const customerId = await this.getOrCreateCustomer(memberId, gymId);
     const stripe = await getUncachableStripeClient();
     const [member] = await db.select().from(membersTable).where(eq(membersTable.id, memberId));
@@ -241,6 +326,19 @@ export class StripeService {
       stripePaymentIntentId: paymentIntent.id,
     }).returning();
 
+    await billingAuditLogger.log({
+      gymId,
+      memberId,
+      actorUserId: actor?.userId,
+      actorName: actor?.name,
+      action: "charge.created",
+      entityType: "payment",
+      entityId: String(payment.id),
+      amount,
+      source: actor?.source || "ui",
+      afterValue: { description, status: payment.status, stripeId: paymentIntent.id },
+    });
+
     return {
       ...payment,
       amount: parseFloat(payment.amount),
@@ -249,10 +347,15 @@ export class StripeService {
     };
   }
 
-  async refundPayment(paymentId: number, gymId: number, amount?: number, reason?: string): Promise<any> {
+  async refundPayment(paymentId: number, gymId: number, amount?: number, reason?: string, actor?: ActorInfo): Promise<any> {
     const [payment] = await db.select().from(paymentsTable).where(and(eq(paymentsTable.id, paymentId), eq(paymentsTable.gymId, gymId)));
     if (!payment) throw new Error("Payment not found");
     if (!payment.stripePaymentIntentId) throw new Error("No Stripe payment to refund");
+    if (payment.status !== "succeeded") throw new Error("Can only refund succeeded payments");
+
+    const refundAmount = amount || parseFloat(payment.amount);
+    if (refundAmount <= 0) throw new Error("Refund amount must be positive");
+    if (refundAmount > parseFloat(payment.amount)) throw new Error("Refund amount exceeds payment amount");
 
     const stripe = await getUncachableStripeClient();
     const refund = await stripe.refunds.create({
@@ -268,12 +371,26 @@ export class StripeService {
       gymId,
       memberId: payment.memberId,
       memberName: member ? `${member.firstName} ${member.lastName}` : payment.memberName,
-      amount: String(amount || parseFloat(payment.amount)),
+      amount: String(refundAmount),
       reason: reason || null,
       status: refund.status || "succeeded",
       paymentId,
       stripeRefundId: refund.id,
     }).returning();
+
+    await billingAuditLogger.log({
+      gymId,
+      memberId: payment.memberId,
+      actorUserId: actor?.userId,
+      actorName: actor?.name,
+      action: "refund.issued",
+      entityType: "refund",
+      entityId: String(localRefund.id),
+      amount: refundAmount,
+      reason,
+      source: actor?.source || "ui",
+      afterValue: { stripeRefundId: refund.id, status: refund.status },
+    });
 
     return { ...localRefund, amount: parseFloat(localRefund.amount) };
   }

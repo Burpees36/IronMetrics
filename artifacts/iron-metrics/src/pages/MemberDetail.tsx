@@ -99,10 +99,19 @@ export function MemberDetail() {
     queryClient.invalidateQueries({ queryKey: getListSubscriptionsQueryKey(activeGymId as number) });
   };
 
+  const [pauseSubConfirm, setPauseSubConfirm] = useState<number | null>(null);
+
+  const isBillingMutating = createChargeMutation.isPending || createStripeSubMutation.isPending || cancelSubMutation.isPending || pauseSubMutation.isPending || resumeSubMutation.isPending;
+
   const handleCreateCharge = () => {
     if (!activeGymId || !chargeForm.amount || !chargeForm.description) return;
+    const parsedAmount = parseFloat(chargeForm.amount);
+    if (isNaN(parsedAmount) || parsedAmount <= 0) {
+      toast({ title: "Invalid amount", description: "Please enter a positive dollar amount.", variant: "destructive" });
+      return;
+    }
     createChargeMutation.mutate(
-      { gymId: activeGymId, memberId, data: { amount: parseFloat(chargeForm.amount), description: chargeForm.description } },
+      { gymId: activeGymId, memberId, data: { amount: parsedAmount, description: chargeForm.description } },
       {
         onSuccess: () => {
           toast({ title: "Charge created", description: `$${chargeForm.amount} charge applied.` });
@@ -110,7 +119,7 @@ export function MemberDetail() {
           setChargeForm({ amount: "", description: "" });
           invalidateBilling();
         },
-        onError: () => toast({ title: "Error", description: "Failed to create charge." }),
+        onError: (err: any) => toast({ title: "Failed to create charge", description: err?.response?.data?.error || err?.message || "An unexpected error occurred.", variant: "destructive" }),
       }
     );
   };
@@ -126,7 +135,7 @@ export function MemberDetail() {
           setSubPlanId("");
           invalidateBilling();
         },
-        onError: () => toast({ title: "Error", description: "Failed to create subscription." }),
+        onError: (err: any) => toast({ title: "Failed to create subscription", description: err?.response?.data?.error || err?.message || "An unexpected error occurred.", variant: "destructive" }),
       }
     );
   };
@@ -142,16 +151,23 @@ export function MemberDetail() {
           setCancelReason("");
           invalidateBilling();
         },
-        onError: () => toast({ title: "Error", description: "Failed to cancel subscription." }),
+        onError: (err: any) => toast({ title: "Failed to cancel subscription", description: err?.response?.data?.error || err?.message || "An unexpected error occurred.", variant: "destructive" }),
       }
     );
   };
 
   const handlePauseMemberSub = (subId: number) => {
-    if (!activeGymId) return;
+    setPauseSubConfirm(subId);
+  };
+
+  const confirmPauseMemberSub = () => {
+    if (!activeGymId || pauseSubConfirm === null) return;
     pauseSubMutation.mutate(
-      { gymId: activeGymId, subscriptionId: subId },
-      { onSuccess: () => { toast({ title: "Subscription paused" }); invalidateBilling(); }, onError: () => toast({ title: "Error", description: "Failed to pause." }) }
+      { gymId: activeGymId, subscriptionId: pauseSubConfirm },
+      {
+        onSuccess: () => { toast({ title: "Subscription paused" }); setPauseSubConfirm(null); invalidateBilling(); },
+        onError: (err: any) => { toast({ title: "Failed to pause subscription", description: err?.response?.data?.error || err?.message || "An unexpected error occurred.", variant: "destructive" }); setPauseSubConfirm(null); }
+      }
     );
   };
 
@@ -159,7 +175,10 @@ export function MemberDetail() {
     if (!activeGymId) return;
     resumeSubMutation.mutate(
       { gymId: activeGymId, subscriptionId: subId },
-      { onSuccess: () => { toast({ title: "Subscription resumed" }); invalidateBilling(); }, onError: () => toast({ title: "Error", description: "Failed to resume." }) }
+      {
+        onSuccess: () => { toast({ title: "Subscription resumed" }); invalidateBilling(); },
+        onError: (err: any) => toast({ title: "Failed to resume subscription", description: err?.response?.data?.error || err?.message || "An unexpected error occurred.", variant: "destructive" })
+      }
     );
   };
 
@@ -589,14 +608,16 @@ export function MemberDetail() {
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
           <div className="flex flex-wrap gap-3">
             <button
+              disabled={isBillingMutating}
               onClick={() => setSubOpen(true)}
-              className="flex items-center gap-2 px-4 py-2.5 bg-primary text-primary-foreground hover:bg-primary/90 rounded-xl font-medium transition-colors shadow-lg shadow-primary/20"
+              className="flex items-center gap-2 px-4 py-2.5 bg-primary text-primary-foreground hover:bg-primary/90 rounded-xl font-medium transition-colors shadow-lg shadow-primary/20 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Plus className="h-4 w-4" /> Start Subscription
             </button>
             <button
+              disabled={isBillingMutating}
               onClick={() => setChargeOpen(true)}
-              className="flex items-center gap-2 px-4 py-2.5 bg-white/5 border border-border rounded-xl text-sm font-medium text-foreground hover:bg-white/10 transition-colors"
+              className="flex items-center gap-2 px-4 py-2.5 bg-white/5 border border-border rounded-xl text-sm font-medium text-foreground hover:bg-white/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <DollarSign className="h-4 w-4" /> One-Time Charge
             </button>
@@ -636,22 +657,22 @@ export function MemberDetail() {
                       <div className="flex gap-2 mt-3 pt-3 border-t border-border">
                         {sub.status === "active" && (
                           <>
-                            <button onClick={() => handlePauseMemberSub(sub.id)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-yellow-500/10 text-yellow-500 hover:bg-yellow-500/20 transition-colors">
+                            <button disabled={isBillingMutating} onClick={() => handlePauseMemberSub(sub.id)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-yellow-500/10 text-yellow-500 hover:bg-yellow-500/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
                               <Pause className="h-3 w-3" /> Pause
                             </button>
-                            <button onClick={() => setCancelSubDialog(sub.id)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-destructive/10 text-destructive hover:bg-destructive/20 transition-colors">
+                            <button disabled={isBillingMutating} onClick={() => setCancelSubDialog(sub.id)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-destructive/10 text-destructive hover:bg-destructive/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
                               <XCircle className="h-3 w-3" /> Cancel
                             </button>
                           </>
                         )}
                         {sub.status === "paused" && (
-                          <button onClick={() => handleResumeMemberSub(sub.id)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20 transition-colors">
-                            <Play className="h-3 w-3" /> Resume
+                          <button disabled={isBillingMutating} onClick={() => handleResumeMemberSub(sub.id)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                            {resumeSubMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Play className="h-3 w-3" />} Resume
                           </button>
                         )}
                         {sub.status === "cancel_at_period_end" && (
-                          <button onClick={() => handleResumeMemberSub(sub.id)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20 transition-colors">
-                            <RefreshCw className="h-3 w-3" /> Undo Cancel
+                          <button disabled={isBillingMutating} onClick={() => handleResumeMemberSub(sub.id)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                            {resumeSubMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />} Undo Cancel
                           </button>
                         )}
                       </div>
@@ -818,7 +839,7 @@ export function MemberDetail() {
         <AlertDialogContent className="bg-card border-border">
           <AlertDialogHeader>
             <AlertDialogTitle>Cancel Subscription</AlertDialogTitle>
-            <AlertDialogDescription>Are you sure you want to cancel this subscription?</AlertDialogDescription>
+            <AlertDialogDescription>Are you sure you want to cancel this subscription? This affects the member's billing.</AlertDialogDescription>
           </AlertDialogHeader>
           <div className="space-y-4 py-2">
             <div className="flex gap-4">
@@ -831,6 +852,12 @@ export function MemberDetail() {
                 <span className="text-sm text-foreground">Cancel immediately</span>
               </label>
             </div>
+            {!cancelAtPeriodEnd && (
+              <div className="p-3 rounded-xl bg-destructive/5 border border-destructive/20 flex items-center gap-3">
+                <AlertTriangle className="h-4 w-4 text-destructive flex-shrink-0" />
+                <p className="text-xs text-destructive">Immediate cancellation stops billing right now and revokes access.</p>
+              </div>
+            )}
             <div className="space-y-2">
               <Label>Reason (optional)</Label>
               <Textarea value={cancelReason} onChange={(e) => setCancelReason(e.target.value)} placeholder="Why is this being cancelled?" rows={2} className="bg-background border-border" />
@@ -838,9 +865,25 @@ export function MemberDetail() {
           </div>
           <AlertDialogFooter>
             <AlertDialogCancel className="bg-transparent border-border hover:bg-white/5">Keep Subscription</AlertDialogCancel>
-            <AlertDialogAction onClick={handleCancelMemberSub} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+            <AlertDialogAction onClick={handleCancelMemberSub} disabled={cancelSubMutation.isPending} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
               {cancelSubMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
               Cancel Subscription
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={pauseSubConfirm !== null} onOpenChange={() => setPauseSubConfirm(null)}>
+        <AlertDialogContent className="bg-card border-border">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Pause Subscription</AlertDialogTitle>
+            <AlertDialogDescription>This will pause billing for this member. No invoices will be generated until the subscription is resumed.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="bg-transparent border-border hover:bg-white/5">Keep Active</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmPauseMemberSub} disabled={pauseSubMutation.isPending} className="bg-yellow-600 text-white hover:bg-yellow-700">
+              {pauseSubMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              Pause Subscription
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

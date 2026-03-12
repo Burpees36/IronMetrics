@@ -140,7 +140,7 @@ export function Billing() {
           setPlanOpen(false);
           setPlanForm({ name: "", price: "", billingInterval: "monthly", description: "" });
         },
-        onError: () => toast({ title: "Error", description: "Failed to create plan." })
+        onError: (err: any) => toast({ title: "Failed to create plan", description: err?.response?.data?.error || err?.message || "An unexpected error occurred. Please try again.", variant: "destructive" })
       }
     );
   };
@@ -159,7 +159,7 @@ export function Billing() {
           setSubOpen(false);
           setSubForm({ memberId: "", planId: "" });
         },
-        onError: () => toast({ title: "Error", description: "Failed to create subscription." })
+        onError: (err: any) => toast({ title: "Failed to create subscription", description: err?.response?.data?.error || err?.message || "An unexpected error occurred. Please try again.", variant: "destructive" })
       }
     );
   };
@@ -179,20 +179,28 @@ export function Billing() {
           setCancelDialog(null);
           setCancelReason("");
         },
-        onError: () => toast({ title: "Error", description: "Failed to cancel subscription." })
+        onError: (err: any) => toast({ title: "Failed to cancel subscription", description: err?.response?.data?.error || err?.message || "An unexpected error occurred.", variant: "destructive" })
       }
     );
   };
 
-  const handlePauseSub = (subId: number) => {
+  const [pauseConfirm, setPauseConfirm] = useState<{ subId: number; memberName: string } | null>(null);
+
+  const handlePauseSub = (subId: number, memberName: string) => {
+    setPauseConfirm({ subId, memberName });
+  };
+
+  const confirmPauseSub = () => {
+    if (!pauseConfirm) return;
     pauseMutation.mutate(
-      { gymId: activeGymId, subscriptionId: subId },
+      { gymId: activeGymId, subscriptionId: pauseConfirm.subId },
       {
         onSuccess: () => {
           invalidateBilling();
-          toast({ title: "Subscription paused" });
+          toast({ title: "Subscription paused", description: `${pauseConfirm.memberName}'s billing has been paused.` });
+          setPauseConfirm(null);
         },
-        onError: () => toast({ title: "Error", description: "Failed to pause subscription." })
+        onError: (err: any) => { toast({ title: "Failed to pause subscription", description: err?.response?.data?.error || err?.message || "An unexpected error occurred.", variant: "destructive" }); setPauseConfirm(null); }
       }
     );
   };
@@ -205,10 +213,12 @@ export function Billing() {
           invalidateBilling();
           toast({ title: "Subscription resumed" });
         },
-        onError: () => toast({ title: "Error", description: "Failed to resume subscription." })
+        onError: (err: any) => toast({ title: "Failed to resume subscription", description: err?.response?.data?.error || err?.message || "An unexpected error occurred.", variant: "destructive" })
       }
     );
   };
+
+  const isMutating = createPlanMutation.isPending || createSubMutation.isPending || cancelMutation.isPending || pauseMutation.isPending || resumeMutation.isPending;
 
   const tabs: { key: BillingTab; label: string; icon: React.ElementType }[] = [
     { key: "plans", label: "Plans", icon: CreditCard },
@@ -441,10 +451,10 @@ export function Billing() {
                           <DropdownMenuSeparator />
                           {sub.status === "active" && (
                             <>
-                              <DropdownMenuItem onClick={() => handlePauseSub(sub.id)}>
+                              <DropdownMenuItem disabled={isMutating} onClick={() => handlePauseSub(sub.id, sub.memberName)}>
                                 <Pause className="h-4 w-4 mr-2" /> Pause
                               </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => setCancelDialog({ subId: sub.id, memberName: sub.memberName })} className="text-destructive focus:text-destructive">
+                              <DropdownMenuItem disabled={isMutating} onClick={() => setCancelDialog({ subId: sub.id, memberName: sub.memberName })} className="text-destructive focus:text-destructive">
                                 <XCircle className="h-4 w-4 mr-2" /> Cancel
                               </DropdownMenuItem>
                             </>
@@ -748,7 +758,7 @@ export function Billing() {
           <AlertDialogHeader>
             <AlertDialogTitle>Cancel Subscription</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to cancel {cancelDialog?.memberName}'s subscription?
+              Are you sure you want to cancel {cancelDialog?.memberName}'s subscription? This action affects their billing.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <div className="space-y-4 py-2">
@@ -762,6 +772,12 @@ export function Billing() {
                 <span className="text-sm text-foreground">Cancel immediately</span>
               </label>
             </div>
+            {!cancelAtPeriodEnd && (
+              <div className="p-3 rounded-xl bg-destructive/5 border border-destructive/20 flex items-center gap-3">
+                <AlertTriangle className="h-4 w-4 text-destructive flex-shrink-0" />
+                <p className="text-xs text-destructive">Immediate cancellation stops billing right now and revokes access.</p>
+              </div>
+            )}
             <div className="space-y-2">
               <Label>Reason (optional)</Label>
               <Textarea value={cancelReason} onChange={(e) => setCancelReason(e.target.value)} placeholder="Why is this member cancelling?" rows={2} />
@@ -769,9 +785,27 @@ export function Billing() {
           </div>
           <AlertDialogFooter>
             <AlertDialogCancel>Keep Subscription</AlertDialogCancel>
-            <AlertDialogAction onClick={handleCancelSub} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+            <AlertDialogAction onClick={handleCancelSub} disabled={cancelMutation.isPending} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
               {cancelMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
               Cancel Subscription
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={!!pauseConfirm} onOpenChange={() => setPauseConfirm(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Pause Subscription</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will pause billing for {pauseConfirm?.memberName}. No invoices will be generated until the subscription is resumed.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep Active</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmPauseSub} disabled={pauseMutation.isPending} className="bg-yellow-600 text-white hover:bg-yellow-700">
+              {pauseMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              Pause Subscription
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

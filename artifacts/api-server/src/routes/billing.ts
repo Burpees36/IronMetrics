@@ -1,9 +1,12 @@
 import { Router, type IRouter } from "express";
 import { eq, and, count, desc, sql, gte, lt } from "drizzle-orm";
-import { db, membershipPlansTable, subscriptionsTable, invoicesTable, membersTable, paymentsTable, refundsTable } from "@workspace/db";
+import { db, membershipPlansTable, subscriptionsTable, invoicesTable, membersTable, paymentsTable, refundsTable, billingAuditLogsTable, billingWebhookEventsTable, gymsTable, gymStaffTable } from "@workspace/db";
 import { CreateMembershipPlanBody, CreateSubscriptionBody, UpdateSubscriptionBody } from "@workspace/api-zod";
 import { stripeService } from "../stripeService";
 import { getPublishableKey } from "../stripeClient";
+import { requireBillingPermission, requireBillingRead, getPermissionsForRole } from "../middlewares/billingRbac";
+import { computeBillingSummary } from "../billingMetrics";
+import { billingAuditLogger } from "../billingAuditLogger";
 
 const router: IRouter = Router();
 
@@ -11,6 +14,14 @@ function parseGymId(params: any): number | null {
   const raw = Array.isArray(params.gymId) ? params.gymId[0] : params.gymId;
   const id = parseInt(raw, 10);
   return isNaN(id) ? null : id;
+}
+
+function getActor(req: any) {
+  return {
+    userId: req.user?.id,
+    name: req.user?.username || req.user?.name || undefined,
+    source: "ui" as const,
+  };
 }
 
 router.get("/gyms/:gymId/stripe/publishable-key", async (_req, res): Promise<void> => {
@@ -22,7 +33,32 @@ router.get("/gyms/:gymId/stripe/publishable-key", async (_req, res): Promise<voi
   }
 });
 
-router.get("/gyms/:gymId/plans", async (req, res): Promise<void> => {
+router.get("/gyms/:gymId/billing/permissions", async (req, res): Promise<void> => {
+  if (!req.isAuthenticated()) {
+    res.json({ role: null, permissions: [] });
+    return;
+  }
+
+  const gymId = parseGymId(req.params);
+  if (!gymId) { res.status(400).json({ error: "Invalid gym ID" }); return; }
+
+  const userId = req.user!.id;
+  const [gym] = await db.select().from(gymsTable).where(eq(gymsTable.id, gymId));
+  let role: string | null = null;
+
+  if (gym && gym.ownerId === userId) {
+    role = "owner";
+  } else {
+    const [staff] = await db.select().from(gymStaffTable)
+      .where(and(eq(gymStaffTable.userId, userId), eq(gymStaffTable.gymId, gymId), eq(gymStaffTable.isActive, true)));
+    role = staff?.role || null;
+  }
+
+  const perms = role ? getPermissionsForRole(role) : [];
+  res.json({ role, permissions: perms });
+});
+
+router.get("/gyms/:gymId/plans", requireBillingRead(), async (req, res): Promise<void> => {
   const gymId = parseGymId(req.params);
   if (!gymId) { res.status(400).json({ error: "Invalid gym ID" }); return; }
 
@@ -41,7 +77,7 @@ router.get("/gyms/:gymId/plans", async (req, res): Promise<void> => {
   res.json(plansWithCounts);
 });
 
-router.post("/gyms/:gymId/plans", async (req, res): Promise<void> => {
+router.post("/gyms/:gymId/plans", requireBillingPermission("billing.create_plan"), async (req, res): Promise<void> => {
   const gymId = parseGymId(req.params);
   if (!gymId) { res.status(400).json({ error: "Invalid gym ID" }); return; }
 
@@ -54,10 +90,22 @@ router.post("/gyms/:gymId/plans", async (req, res): Promise<void> => {
     price: String(parsed.data.price),
   }).returning();
 
+  await billingAuditLogger.log({
+    gymId,
+    actorUserId: req.user?.id,
+    actorName: req.user?.username,
+    action: "plan.created",
+    entityType: "plan",
+    entityId: String(plan.id),
+    amount: parseFloat(plan.price),
+    source: "ui",
+    afterValue: { name: plan.name, price: plan.price, interval: plan.billingInterval },
+  });
+
   res.status(201).json({ ...plan, price: parseFloat(plan.price), memberCount: 0 });
 });
 
-router.get("/gyms/:gymId/subscriptions", async (req, res): Promise<void> => {
+router.get("/gyms/:gymId/subscriptions", requireBillingRead(), async (req, res): Promise<void> => {
   const gymId = parseGymId(req.params);
   if (!gymId) { res.status(400).json({ error: "Invalid gym ID" }); return; }
 
@@ -73,18 +121,18 @@ router.get("/gyms/:gymId/subscriptions", async (req, res): Promise<void> => {
   res.json(subs.map((s) => ({ ...s, amount: parseFloat(s.amount) })));
 });
 
-router.post("/gyms/:gymId/subscriptions", async (req, res): Promise<void> => {
+router.post("/gyms/:gymId/subscriptions", requireBillingPermission("billing.create_subscription"), async (req, res): Promise<void> => {
   const gymId = parseGymId(req.params);
   if (!gymId) { res.status(400).json({ error: "Invalid gym ID" }); return; }
 
   const parsed = CreateSubscriptionBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
 
-  const [member] = await db.select().from(membersTable).where(eq(membersTable.id, parsed.data.memberId));
-  if (!member) { res.status(404).json({ error: "Member not found" }); return; }
+  const [member] = await db.select().from(membersTable).where(and(eq(membersTable.id, parsed.data.memberId), eq(membersTable.gymId, gymId)));
+  if (!member) { res.status(404).json({ error: "Member not found in this gym" }); return; }
 
-  const [plan] = await db.select().from(membershipPlansTable).where(eq(membershipPlansTable.id, parsed.data.planId));
-  if (!plan) { res.status(404).json({ error: "Plan not found" }); return; }
+  const [plan] = await db.select().from(membershipPlansTable).where(and(eq(membershipPlansTable.id, parsed.data.planId), eq(membershipPlansTable.gymId, gymId)));
+  if (!plan) { res.status(404).json({ error: "Plan not found in this gym" }); return; }
 
   const today = new Date().toISOString().split("T")[0];
   const [sub] = await db.insert(subscriptionsTable).values({
@@ -101,10 +149,23 @@ router.post("/gyms/:gymId/subscriptions", async (req, res): Promise<void> => {
 
   await db.update(membersTable).set({ membershipType: plan.name, status: "active" }).where(eq(membersTable.id, parsed.data.memberId));
 
+  await billingAuditLogger.log({
+    gymId,
+    memberId: parsed.data.memberId,
+    actorUserId: req.user?.id,
+    actorName: req.user?.username,
+    action: "subscription.created",
+    entityType: "subscription",
+    entityId: String(sub.id),
+    amount: parseFloat(plan.price),
+    source: "ui",
+    afterValue: { planName: plan.name, status: "active" },
+  });
+
   res.status(201).json({ ...sub, amount: parseFloat(sub.amount) });
 });
 
-router.patch("/gyms/:gymId/subscriptions/:subscriptionId", async (req, res): Promise<void> => {
+router.patch("/gyms/:gymId/subscriptions/:subscriptionId", requireBillingPermission("billing.cancel_subscription"), async (req, res): Promise<void> => {
   const gymId = parseGymId(req.params);
   const raw = Array.isArray(req.params.subscriptionId) ? req.params.subscriptionId[0] : req.params.subscriptionId;
   const subId = parseInt(raw, 10);
@@ -127,7 +188,7 @@ router.patch("/gyms/:gymId/subscriptions/:subscriptionId", async (req, res): Pro
   res.json({ ...sub, amount: parseFloat(sub.amount) });
 });
 
-router.post("/gyms/:gymId/members/:memberId/setup-intent", async (req, res): Promise<void> => {
+router.post("/gyms/:gymId/members/:memberId/setup-intent", requireBillingPermission("billing.create_subscription"), async (req, res): Promise<void> => {
   const gymId = parseGymId(req.params);
   const memberId = parseInt(req.params.memberId, 10);
   if (!gymId || isNaN(memberId)) { res.status(400).json({ error: "Invalid IDs" }); return; }
@@ -140,7 +201,7 @@ router.post("/gyms/:gymId/members/:memberId/setup-intent", async (req, res): Pro
   }
 });
 
-router.get("/gyms/:gymId/members/:memberId/payment-methods", async (req, res): Promise<void> => {
+router.get("/gyms/:gymId/members/:memberId/payment-methods", requireBillingRead(), async (req, res): Promise<void> => {
   const gymId = parseGymId(req.params);
   const memberId = parseInt(req.params.memberId, 10);
   if (!gymId || isNaN(memberId)) { res.status(400).json({ error: "Invalid IDs" }); return; }
@@ -153,7 +214,7 @@ router.get("/gyms/:gymId/members/:memberId/payment-methods", async (req, res): P
   }
 });
 
-router.post("/gyms/:gymId/members/:memberId/stripe-subscription", async (req, res): Promise<void> => {
+router.post("/gyms/:gymId/members/:memberId/stripe-subscription", requireBillingPermission("billing.create_subscription"), async (req, res): Promise<void> => {
   const gymId = parseGymId(req.params);
   const memberId = parseInt(req.params.memberId, 10);
   if (!gymId || isNaN(memberId)) { res.status(400).json({ error: "Invalid IDs" }); return; }
@@ -162,14 +223,14 @@ router.post("/gyms/:gymId/members/:memberId/stripe-subscription", async (req, re
   if (!planId) { res.status(400).json({ error: "planId is required" }); return; }
 
   try {
-    const result = await stripeService.createStripeSubscription(memberId, gymId, planId, paymentMethodId);
+    const result = await stripeService.createStripeSubscription(memberId, gymId, planId, paymentMethodId, getActor(req));
     res.status(201).json(result);
   } catch (err: any) {
     res.status(400).json({ error: err.message });
   }
 });
 
-router.post("/gyms/:gymId/subscriptions/:subscriptionId/cancel", async (req, res): Promise<void> => {
+router.post("/gyms/:gymId/subscriptions/:subscriptionId/cancel", requireBillingPermission("billing.cancel_subscription"), async (req, res): Promise<void> => {
   const gymId = parseGymId(req.params);
   const subId = parseInt(req.params.subscriptionId, 10);
   if (!gymId || isNaN(subId)) { res.status(400).json({ error: "Invalid IDs" }); return; }
@@ -177,40 +238,40 @@ router.post("/gyms/:gymId/subscriptions/:subscriptionId/cancel", async (req, res
   const { cancelAtPeriodEnd = true, reason } = req.body;
 
   try {
-    const result = await stripeService.cancelSubscription(subId, gymId, cancelAtPeriodEnd, reason);
+    const result = await stripeService.cancelSubscription(subId, gymId, cancelAtPeriodEnd, reason, getActor(req));
     res.json(result);
   } catch (err: any) {
     res.status(400).json({ error: err.message });
   }
 });
 
-router.post("/gyms/:gymId/subscriptions/:subscriptionId/pause", async (req, res): Promise<void> => {
+router.post("/gyms/:gymId/subscriptions/:subscriptionId/pause", requireBillingPermission("billing.pause_subscription"), async (req, res): Promise<void> => {
   const gymId = parseGymId(req.params);
   const subId = parseInt(req.params.subscriptionId, 10);
   if (!gymId || isNaN(subId)) { res.status(400).json({ error: "Invalid IDs" }); return; }
 
   try {
-    const result = await stripeService.pauseSubscription(subId, gymId);
+    const result = await stripeService.pauseSubscription(subId, gymId, getActor(req));
     res.json(result);
   } catch (err: any) {
     res.status(400).json({ error: err.message });
   }
 });
 
-router.post("/gyms/:gymId/subscriptions/:subscriptionId/resume", async (req, res): Promise<void> => {
+router.post("/gyms/:gymId/subscriptions/:subscriptionId/resume", requireBillingPermission("billing.resume_subscription"), async (req, res): Promise<void> => {
   const gymId = parseGymId(req.params);
   const subId = parseInt(req.params.subscriptionId, 10);
   if (!gymId || isNaN(subId)) { res.status(400).json({ error: "Invalid IDs" }); return; }
 
   try {
-    const result = await stripeService.resumeSubscription(subId, gymId);
+    const result = await stripeService.resumeSubscription(subId, gymId, getActor(req));
     res.json(result);
   } catch (err: any) {
     res.status(400).json({ error: err.message });
   }
 });
 
-router.post("/gyms/:gymId/members/:memberId/charge", async (req, res): Promise<void> => {
+router.post("/gyms/:gymId/members/:memberId/charge", requireBillingPermission("billing.create_charge"), async (req, res): Promise<void> => {
   const gymId = parseGymId(req.params);
   const memberId = parseInt(req.params.memberId, 10);
   if (!gymId || isNaN(memberId)) { res.status(400).json({ error: "Invalid IDs" }); return; }
@@ -218,15 +279,18 @@ router.post("/gyms/:gymId/members/:memberId/charge", async (req, res): Promise<v
   const { amount, description, paymentMethodId } = req.body;
   if (!amount || !description) { res.status(400).json({ error: "amount and description required" }); return; }
 
+  const parsedAmount = parseFloat(amount);
+  if (isNaN(parsedAmount) || parsedAmount <= 0) { res.status(400).json({ error: "Amount must be a positive number" }); return; }
+
   try {
-    const result = await stripeService.createOneTimeCharge(memberId, gymId, parseFloat(amount), description, paymentMethodId);
+    const result = await stripeService.createOneTimeCharge(memberId, gymId, parsedAmount, description, paymentMethodId, getActor(req));
     res.status(201).json(result);
   } catch (err: any) {
     res.status(400).json({ error: err.message });
   }
 });
 
-router.post("/gyms/:gymId/payments/:paymentId/refund", async (req, res): Promise<void> => {
+router.post("/gyms/:gymId/payments/:paymentId/refund", requireBillingPermission("billing.issue_refund"), async (req, res): Promise<void> => {
   const gymId = parseGymId(req.params);
   const paymentId = parseInt(req.params.paymentId, 10);
   if (!gymId || isNaN(paymentId)) { res.status(400).json({ error: "Invalid IDs" }); return; }
@@ -234,14 +298,14 @@ router.post("/gyms/:gymId/payments/:paymentId/refund", async (req, res): Promise
   const { amount, reason } = req.body;
 
   try {
-    const result = await stripeService.refundPayment(paymentId, gymId, amount ? parseFloat(amount) : undefined, reason);
+    const result = await stripeService.refundPayment(paymentId, gymId, amount ? parseFloat(amount) : undefined, reason, getActor(req));
     res.json(result);
   } catch (err: any) {
     res.status(400).json({ error: err.message });
   }
 });
 
-router.get("/gyms/:gymId/members/:memberId/billing-history", async (req, res): Promise<void> => {
+router.get("/gyms/:gymId/members/:memberId/billing-history", requireBillingRead(), async (req, res): Promise<void> => {
   const gymId = parseGymId(req.params);
   const memberId = parseInt(req.params.memberId, 10);
   if (!gymId || isNaN(memberId)) { res.status(400).json({ error: "Invalid IDs" }); return; }
@@ -254,7 +318,7 @@ router.get("/gyms/:gymId/members/:memberId/billing-history", async (req, res): P
   }
 });
 
-router.get("/gyms/:gymId/payments", async (req, res): Promise<void> => {
+router.get("/gyms/:gymId/payments", requireBillingRead(), async (req, res): Promise<void> => {
   const gymId = parseGymId(req.params);
   if (!gymId) { res.status(400).json({ error: "Invalid gym ID" }); return; }
 
@@ -267,7 +331,7 @@ router.get("/gyms/:gymId/payments", async (req, res): Promise<void> => {
   res.json(payments.map((p) => ({ ...p, amount: parseFloat(p.amount) })));
 });
 
-router.get("/gyms/:gymId/refunds", async (req, res): Promise<void> => {
+router.get("/gyms/:gymId/refunds", requireBillingRead(), async (req, res): Promise<void> => {
   const gymId = parseGymId(req.params);
   if (!gymId) { res.status(400).json({ error: "Invalid gym ID" }); return; }
 
@@ -280,7 +344,7 @@ router.get("/gyms/:gymId/refunds", async (req, res): Promise<void> => {
   res.json(refunds.map((r) => ({ ...r, amount: parseFloat(r.amount) })));
 });
 
-router.get("/gyms/:gymId/cancelled-members", async (req, res): Promise<void> => {
+router.get("/gyms/:gymId/cancelled-members", requireBillingRead(), async (req, res): Promise<void> => {
   const gymId = parseGymId(req.params);
   if (!gymId) { res.status(400).json({ error: "Invalid gym ID" }); return; }
 
@@ -296,8 +360,8 @@ router.get("/gyms/:gymId/cancelled-members", async (req, res): Promise<void> => 
     endDate = new Date(y, m + 1, 1);
   } else {
     const now = new Date();
-    startDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-    endDate = new Date(now.getFullYear(), now.getMonth(), 1);
+    startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+    endDate = new Date(now.getFullYear(), now.getMonth() + 1, 1);
   }
 
   const cancelledSubs = await db
@@ -350,70 +414,55 @@ router.get("/gyms/:gymId/cancelled-members", async (req, res): Promise<void> => 
   });
 });
 
-router.get("/gyms/:gymId/billing-summary", async (req, res): Promise<void> => {
+router.get("/gyms/:gymId/billing-summary", requireBillingRead(), async (req, res): Promise<void> => {
   const gymId = parseGymId(req.params);
   if (!gymId) { res.status(400).json({ error: "Invalid gym ID" }); return; }
 
-  const activeSubs = await db
-    .select()
-    .from(subscriptionsTable)
-    .where(and(eq(subscriptionsTable.gymId, gymId), eq(subscriptionsTable.status, "active")));
-
-  const allSubs = await db
-    .select()
-    .from(subscriptionsTable)
-    .where(eq(subscriptionsTable.gymId, gymId));
-
-  const failedPaymentSubs = allSubs.filter((s) => s.failedPayments > 0);
-  const overdueSubs = allSubs.filter((s) => s.status === "past_due");
-
-  const mrr = activeSubs.reduce((sum, s) => sum + parseFloat(s.amount), 0);
-  const arm = activeSubs.length > 0 ? mrr / activeSubs.length : 0;
-
-  const now = new Date();
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-
-  const monthPayments = await db
-    .select()
-    .from(paymentsTable)
-    .where(and(
-      eq(paymentsTable.gymId, gymId),
-      gte(paymentsTable.createdAt, monthStart),
-      eq(paymentsTable.status, "succeeded"),
-    ));
-
-  const collectionsThisMonth = monthPayments.reduce((sum, p) => sum + parseFloat(p.amount), 0);
-
-  const monthRefunds = await db
-    .select()
-    .from(refundsTable)
-    .where(and(
-      eq(refundsTable.gymId, gymId),
-      gte(refundsTable.createdAt, monthStart),
-    ));
-
-  const refundsThisMonth = monthRefunds.reduce((sum, r) => sum + parseFloat(r.amount), 0);
-
-  const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-  const cancelledThisMonth = allSubs.filter((s) =>
-    s.cancelledAt && s.cancelledAt >= thisMonthStart
-  );
-
-  res.json({
-    mrr,
-    arr: mrr * 12,
-    arm,
-    activeSubscriptions: activeSubs.length,
-    totalSubscriptions: allSubs.length,
-    failedPayments: failedPaymentSubs.length,
-    overdueAccounts: overdueSubs.length,
-    collectionsThisMonth,
-    refundsThisMonth,
-    cancelledThisMonth: cancelledThisMonth.length,
-  });
+  try {
+    const summary = await computeBillingSummary(gymId);
+    res.json(summary);
+  } catch (err: any) {
+    res.status(500).json({ error: "Failed to compute billing summary" });
+  }
 });
 
-router.get("/gyms/:gymId/invoices", async (req, res): Promise<void> => {
+router.get("/gyms/:gymId/billing/audit-logs", requireBillingPermission("billing.view_audit_logs"), async (req, res): Promise<void> => {
+  const gymId = parseGymId(req.params);
+  if (!gymId) { res.status(400).json({ error: "Invalid gym ID" }); return; }
+
+  const limit = Math.min(parseInt(req.query.limit as string) || 100, 500);
+  const offset = parseInt(req.query.offset as string) || 0;
+  const memberId = req.query.memberId ? parseInt(req.query.memberId as string) : undefined;
+  const action = req.query.action as string | undefined;
+
+  const logs = await billingAuditLogger.getAuditLogs(gymId, { limit, offset, memberId, action });
+  res.json(logs);
+});
+
+router.get("/gyms/:gymId/billing/webhook-events", requireBillingPermission("billing.view_audit_logs"), async (req, res): Promise<void> => {
+  const gymId = parseGymId(req.params);
+  if (!gymId) { res.status(400).json({ error: "Invalid gym ID" }); return; }
+
+  const limit = Math.min(parseInt(req.query.limit as string) || 50, 200);
+
+  const events = await db
+    .select({
+      id: billingWebhookEventsTable.id,
+      stripeEventId: billingWebhookEventsTable.stripeEventId,
+      eventType: billingWebhookEventsTable.eventType,
+      status: billingWebhookEventsTable.status,
+      processingError: billingWebhookEventsTable.processingError,
+      processedAt: billingWebhookEventsTable.processedAt,
+      createdAt: billingWebhookEventsTable.createdAt,
+    })
+    .from(billingWebhookEventsTable)
+    .orderBy(desc(billingWebhookEventsTable.createdAt))
+    .limit(limit);
+
+  res.json(events);
+});
+
+router.get("/gyms/:gymId/invoices", requireBillingRead(), async (req, res): Promise<void> => {
   const gymId = parseGymId(req.params);
   if (!gymId) { res.status(400).json({ error: "Invalid gym ID" }); return; }
 

@@ -68,6 +68,8 @@ All tables in `lib/db/src/schema/`:
 - **payments** — Payment transactions with Stripe payment intent tracking
 - **refunds** — Refund records with Stripe refund ID
 - **billing_events** — Billing lifecycle events audit trail
+- **billing_audit_logs** — Production audit trail (actorUserId, action, entityType, beforeValue/afterValue, amount, source)
+- **billing_webhook_events** — Webhook event dedup + idempotency (stripeEventId UNIQUE, status, processingError)
 - **products** — Retail inventory
 - **sales** — POS transactions (items stored as JSON)
 - **workouts** — WOD/strength/hero workouts (field is `title`, NOT `name`)
@@ -171,6 +173,11 @@ All mounted at `/api` prefix:
 - **Auto-linking**: First login auto-links user to seeded gym as owner
 - **Vite proxy**: Frontend proxies `/api` requests to Express on port 8080
 - **Stripe**: Connected via Replit integration. Env vars: STRIPE_SECRET_KEY, STRIPE_PUBLISHABLE_KEY, STRIPE_ACCOUNT_ID. Webhook route registered before express.json() in app.ts. Stripe init on startup: runMigrations → getStripeSync → findOrCreateManagedWebhook → syncBackfill. Service in stripeService.ts, client in stripeClient.ts
+- **Billing audit**: All billing mutations log to `billing_audit_logs` via `billingAuditLogger.ts` (actor, action, before/after, amount, source)
+- **Webhook idempotency**: Webhooks deduped via `billing_webhook_events.stripe_event_id` UNIQUE constraint; duplicate events skipped
+- **Billing RBAC**: `billingRbac.ts` middleware checks gym_staff role. Permissions: owner/admin = full, front_desk = read+charge+subscribe, coach = none, analyst = read-only
+- **Billing metrics**: Centralized in `billingMetrics.ts` (computeBillingSummary, computeMRR, computeARM, getMonthWindow)
+- **Billing audit script**: `pnpm --filter @workspace/scripts run audit:billing` — prints MRR, ARM, data integrity warnings, webhook health
 - **Tenant isolation**: All member-linked mutations verify `memberId + gymId` match to prevent cross-gym IDOR
 - **No hardcoded metrics**: All dashboard/intelligence/AI operator values are computed from actual DB queries
 - **Loading states**: All pages handle three states: no gym selected, loading, error/empty

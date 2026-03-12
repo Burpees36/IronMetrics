@@ -1,4 +1,288 @@
-import { getStripeSync } from "./stripeClient";
+import { getStripeSync, getUncachableStripeClient } from "./stripeClient";
+import { db, subscriptionsTable, paymentsTable, refundsTable, invoicesTable, membersTable, billingWebhookEventsTable } from "@workspace/db";
+import { eq, and } from "drizzle-orm";
+import { billingAuditLogger } from "./billingAuditLogger";
+import type Stripe from "stripe";
+
+async function claimEvent(stripeEventId: string, eventType: string): Promise<boolean> {
+  try {
+    const result = await db.insert(billingWebhookEventsTable).values({
+      stripeEventId,
+      eventType,
+      status: "processing",
+      rawPayload: null,
+    }).onConflictDoNothing().returning();
+
+    return result.length > 0;
+  } catch {
+    return false;
+  }
+}
+
+async function recordEventResult(stripeEventId: string, status: "processed" | "failed", error?: string): Promise<void> {
+  await db.update(billingWebhookEventsTable).set({
+    status,
+    processingError: error || null,
+    processedAt: new Date(),
+  }).where(eq(billingWebhookEventsTable.stripeEventId, stripeEventId));
+}
+
+function extractGymId(metadata: Stripe.Metadata | null | undefined): number | null {
+  const raw = metadata?.gymId;
+  if (!raw) return null;
+  const id = parseInt(raw, 10);
+  return isNaN(id) ? null : id;
+}
+
+function extractMemberId(metadata: Stripe.Metadata | null | undefined): number | null {
+  const raw = metadata?.memberId;
+  if (!raw) return null;
+  const id = parseInt(raw, 10);
+  return isNaN(id) ? null : id;
+}
+
+async function handleSubscriptionCreated(sub: Stripe.Subscription): Promise<void> {
+  const gymId = extractGymId(sub.metadata);
+  const memberId = extractMemberId(sub.metadata);
+  if (!gymId || !memberId) return;
+
+  const [existing] = await db.select().from(subscriptionsTable)
+    .where(eq(subscriptionsTable.stripeSubscriptionId, sub.id));
+
+  if (existing) {
+    await db.update(subscriptionsTable).set({
+      status: sub.status === "active" ? "active" : sub.status === "trialing" ? "active" : "pending",
+      currentPeriodStart: new Date((sub as any).current_period_start * 1000).toISOString().split("T")[0],
+      currentPeriodEnd: new Date((sub as any).current_period_end * 1000).toISOString().split("T")[0],
+    }).where(eq(subscriptionsTable.id, existing.id));
+  }
+
+  await billingAuditLogger.log({
+    gymId,
+    memberId,
+    action: "subscription.created",
+    entityType: "subscription",
+    entityId: sub.id,
+    source: "webhook",
+    afterValue: { status: sub.status, stripeId: sub.id },
+  });
+}
+
+async function handleSubscriptionUpdated(sub: Stripe.Subscription): Promise<void> {
+  const [existing] = await db.select().from(subscriptionsTable)
+    .where(eq(subscriptionsTable.stripeSubscriptionId, sub.id));
+  if (!existing) return;
+
+  const beforeStatus = existing.status;
+  let newStatus = existing.status;
+
+  if (sub.status === "active" && !(sub as any).cancel_at_period_end) {
+    newStatus = "active";
+  } else if (sub.status === "active" && (sub as any).cancel_at_period_end) {
+    newStatus = "cancel_at_period_end";
+  } else if (sub.status === "past_due") {
+    newStatus = "past_due";
+  } else if (sub.status === "canceled") {
+    newStatus = "cancelled";
+  } else if (sub.status === "paused") {
+    newStatus = "paused";
+  } else if (sub.status === "unpaid") {
+    newStatus = "past_due";
+  }
+
+  const updates: any = {
+    status: newStatus,
+    currentPeriodStart: new Date((sub as any).current_period_start * 1000).toISOString().split("T")[0],
+    currentPeriodEnd: new Date((sub as any).current_period_end * 1000).toISOString().split("T")[0],
+  };
+
+  if (newStatus === "cancelled" && !existing.cancelledAt) {
+    updates.cancelledAt = new Date();
+  }
+
+  if ((sub as any).cancel_at_period_end && newStatus === "cancel_at_period_end" && !existing.cancelledAt) {
+    updates.cancelledAt = new Date();
+  }
+
+  await db.update(subscriptionsTable).set(updates).where(eq(subscriptionsTable.id, existing.id));
+
+  if (newStatus === "cancelled" || newStatus === "past_due") {
+    const memberStatus = newStatus === "cancelled" ? "cancelled" : "active";
+    await db.update(membersTable).set({ status: memberStatus }).where(eq(membersTable.id, existing.memberId));
+  } else if (newStatus === "active" && beforeStatus !== "active") {
+    await db.update(membersTable).set({ status: "active" }).where(eq(membersTable.id, existing.memberId));
+  }
+
+  await billingAuditLogger.log({
+    gymId: existing.gymId,
+    memberId: existing.memberId,
+    action: "webhook.reconciliation",
+    entityType: "subscription",
+    entityId: sub.id,
+    source: "webhook",
+    beforeValue: { status: beforeStatus },
+    afterValue: { status: newStatus },
+  });
+}
+
+async function handleSubscriptionDeleted(sub: Stripe.Subscription): Promise<void> {
+  const [existing] = await db.select().from(subscriptionsTable)
+    .where(eq(subscriptionsTable.stripeSubscriptionId, sub.id));
+  if (!existing) return;
+
+  await db.update(subscriptionsTable).set({
+    status: "cancelled",
+    cancelledAt: existing.cancelledAt || new Date(),
+  }).where(eq(subscriptionsTable.id, existing.id));
+
+  await db.update(membersTable).set({ status: "cancelled" }).where(eq(membersTable.id, existing.memberId));
+
+  await billingAuditLogger.log({
+    gymId: existing.gymId,
+    memberId: existing.memberId,
+    action: "subscription.cancelled",
+    entityType: "subscription",
+    entityId: sub.id,
+    source: "webhook",
+    beforeValue: { status: existing.status },
+    afterValue: { status: "cancelled" },
+  });
+}
+
+async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice): Promise<void> {
+  const subId = typeof invoice.subscription === "string" ? invoice.subscription : (invoice.subscription as any)?.id;
+  if (!subId) return;
+
+  const [sub] = await db.select().from(subscriptionsTable)
+    .where(eq(subscriptionsTable.stripeSubscriptionId, subId));
+  if (!sub) return;
+
+  const [member] = await db.select().from(membersTable).where(eq(membersTable.id, sub.memberId));
+  if (!member) return;
+
+  const amountPaid = (invoice.amount_paid || 0) / 100;
+  const stripeInvoiceId = invoice.id;
+  const piId = typeof invoice.payment_intent === "string" ? invoice.payment_intent : (invoice.payment_intent as any)?.id;
+
+  const existingPayments = await db.select().from(paymentsTable)
+    .where(and(
+      eq(paymentsTable.stripePaymentIntentId, piId || ""),
+      eq(paymentsTable.gymId, sub.gymId)
+    ));
+
+  if (existingPayments.length === 0 && amountPaid > 0) {
+    await db.insert(paymentsTable).values({
+      gymId: sub.gymId,
+      memberId: sub.memberId,
+      memberName: `${member.firstName} ${member.lastName}`,
+      amount: String(amountPaid),
+      type: "subscription",
+      status: "succeeded",
+      description: `Invoice ${stripeInvoiceId}`,
+      stripePaymentIntentId: piId || null,
+    });
+  }
+
+  await db.update(subscriptionsTable).set({
+    status: "active",
+    failedPayments: 0,
+  }).where(eq(subscriptionsTable.id, sub.id));
+
+  await billingAuditLogger.log({
+    gymId: sub.gymId,
+    memberId: sub.memberId,
+    action: "payment.succeeded",
+    entityType: "payment",
+    entityId: piId || stripeInvoiceId,
+    amount: amountPaid,
+    source: "webhook",
+  });
+}
+
+async function handleInvoicePaymentFailed(invoice: Stripe.Invoice): Promise<void> {
+  const subId = typeof invoice.subscription === "string" ? invoice.subscription : (invoice.subscription as any)?.id;
+  if (!subId) return;
+
+  const [sub] = await db.select().from(subscriptionsTable)
+    .where(eq(subscriptionsTable.stripeSubscriptionId, subId));
+  if (!sub) return;
+
+  await db.update(subscriptionsTable).set({
+    failedPayments: sub.failedPayments + 1,
+    status: sub.failedPayments >= 2 ? "past_due" : sub.status,
+  }).where(eq(subscriptionsTable.id, sub.id));
+
+  await billingAuditLogger.log({
+    gymId: sub.gymId,
+    memberId: sub.memberId,
+    action: "payment.failed",
+    entityType: "payment",
+    entityId: invoice.id,
+    amount: (invoice.amount_due || 0) / 100,
+    source: "webhook",
+    metadata: { attemptCount: sub.failedPayments + 1 },
+  });
+}
+
+async function handleChargeRefunded(charge: Stripe.Charge): Promise<void> {
+  const piId = typeof charge.payment_intent === "string" ? charge.payment_intent : (charge.payment_intent as any)?.id;
+  if (!piId) return;
+
+  const [payment] = await db.select().from(paymentsTable)
+    .where(eq(paymentsTable.stripePaymentIntentId, piId));
+  if (!payment) return;
+
+  const [member] = await db.select().from(membersTable).where(eq(membersTable.id, payment.memberId));
+  const refundAmount = (charge.amount_refunded || 0) / 100;
+
+  const existingRefunds = await db.select().from(refundsTable)
+    .where(and(
+      eq(refundsTable.stripeRefundId, charge.id),
+      eq(refundsTable.gymId, payment.gymId)
+    ));
+
+  if (existingRefunds.length === 0 && refundAmount > 0) {
+    await db.insert(refundsTable).values({
+      gymId: payment.gymId,
+      memberId: payment.memberId,
+      memberName: member ? `${member.firstName} ${member.lastName}` : payment.memberName,
+      amount: String(refundAmount),
+      reason: "Stripe refund",
+      status: "succeeded",
+      paymentId: payment.id,
+      stripeRefundId: charge.id,
+    });
+  }
+
+  await billingAuditLogger.log({
+    gymId: payment.gymId,
+    memberId: payment.memberId,
+    action: "refund.issued",
+    entityType: "refund",
+    entityId: charge.id,
+    amount: refundAmount,
+    source: "webhook",
+  });
+}
+
+async function handlePaymentMethodAttached(pm: Stripe.PaymentMethod): Promise<void> {
+  const customerId = typeof pm.customer === "string" ? pm.customer : (pm.customer as any)?.id;
+  if (!customerId) return;
+
+  const [member] = await db.select().from(membersTable)
+    .where(eq(membersTable.stripeCustomerId, customerId));
+  if (!member) return;
+
+  await billingAuditLogger.log({
+    gymId: member.gymId,
+    memberId: member.id,
+    action: "payment_method.updated",
+    entityType: "payment_method",
+    entityId: pm.id,
+    source: "webhook",
+    afterValue: { brand: pm.card?.brand, last4: pm.card?.last4 },
+  });
+}
 
 export class WebhookHandlers {
   static async processWebhook(payload: Buffer, signature: string): Promise<void> {
@@ -6,12 +290,71 @@ export class WebhookHandlers {
       throw new Error(
         "STRIPE WEBHOOK ERROR: Payload must be a Buffer. " +
         "Received type: " + typeof payload + ". " +
-        "This usually means express.json() parsed the body before reaching this handler. " +
         "FIX: Ensure webhook route is registered BEFORE app.use(express.json())."
       );
     }
 
-    const sync = await getStripeSync();
-    await sync.processWebhook(payload, signature);
+    const stripe = await getUncachableStripeClient();
+    const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+
+    let event: Stripe.Event;
+
+    if (webhookSecret) {
+      event = stripe.webhooks.constructEvent(payload, signature, webhookSecret);
+    } else {
+      const sync = await getStripeSync();
+      await sync.processWebhook(payload, signature);
+
+      event = JSON.parse(payload.toString()) as Stripe.Event;
+    }
+
+    const eventId = event.id;
+    const eventType = event.type;
+
+    const claimed = await claimEvent(eventId, eventType);
+    if (!claimed) {
+      console.log(`[WEBHOOK] Skipping duplicate event ${eventId} (${eventType})`);
+      return;
+    }
+
+    try {
+      switch (eventType) {
+        case "customer.subscription.created":
+          await handleSubscriptionCreated(event.data.object as Stripe.Subscription);
+          break;
+        case "customer.subscription.updated":
+          await handleSubscriptionUpdated(event.data.object as Stripe.Subscription);
+          break;
+        case "customer.subscription.deleted":
+          await handleSubscriptionDeleted(event.data.object as Stripe.Subscription);
+          break;
+        case "invoice.payment_succeeded":
+          await handleInvoicePaymentSucceeded(event.data.object as Stripe.Invoice);
+          break;
+        case "invoice.payment_failed":
+          await handleInvoicePaymentFailed(event.data.object as Stripe.Invoice);
+          break;
+        case "charge.refunded":
+          await handleChargeRefunded(event.data.object as Stripe.Charge);
+          break;
+        case "payment_method.attached":
+          await handlePaymentMethodAttached(event.data.object as Stripe.PaymentMethod);
+          break;
+        case "invoice.created":
+        case "invoice.finalized":
+          console.log(`[WEBHOOK] Received ${eventType} — logged, no action needed`);
+          break;
+        default:
+          console.log(`[WEBHOOK] Unhandled event type: ${eventType}`);
+          break;
+      }
+
+      await recordEventResult(eventId, "processed");
+      console.log(`[WEBHOOK] Processed ${eventType} (${eventId})`);
+    } catch (err: any) {
+      console.error(`[WEBHOOK] Error processing ${eventType} (${eventId}):`, err.message);
+      await recordEventResult(eventId, "failed", err.message);
+      throw err;
+    }
   }
 }

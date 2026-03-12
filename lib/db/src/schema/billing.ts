@@ -115,3 +115,41 @@ export const billingEventsTable = pgTable("billing_events", {
 export const insertBillingEventSchema = createInsertSchema(billingEventsTable).omit({ id: true, createdAt: true });
 export type InsertBillingEvent = z.infer<typeof insertBillingEventSchema>;
 export type BillingEvent = typeof billingEventsTable.$inferSelect;
+
+export const billingAuditLogsTable = pgTable("billing_audit_logs", {
+  id: serial("id").primaryKey(),
+  gymId: integer("gym_id").notNull().references(() => gymsTable.id),
+  memberId: integer("member_id").references(() => membersTable.id),
+  actorUserId: text("actor_user_id"),
+  actorName: text("actor_name"),
+  action: text("action").notNull(),
+  entityType: text("entity_type").notNull(),
+  entityId: text("entity_id"),
+  beforeValue: text("before_value"),
+  afterValue: text("after_value"),
+  amount: numeric("amount", { precision: 10, scale: 2 }),
+  currency: text("currency").default("usd"),
+  reason: text("reason"),
+  source: text("source").notNull().default("ui"),
+  metadata: text("metadata"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const insertBillingAuditLogSchema = createInsertSchema(billingAuditLogsTable).omit({ id: true, createdAt: true });
+export type InsertBillingAuditLog = z.infer<typeof insertBillingAuditLogSchema>;
+export type BillingAuditLog = typeof billingAuditLogsTable.$inferSelect;
+
+export const billingWebhookEventsTable = pgTable("billing_webhook_events", {
+  id: serial("id").primaryKey(),
+  stripeEventId: text("stripe_event_id").notNull().unique(),
+  eventType: text("event_type").notNull(),
+  status: text("status").notNull().default("pending"),
+  processingError: text("processing_error"),
+  rawPayload: text("raw_payload"),
+  processedAt: timestamp("processed_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const insertBillingWebhookEventSchema = createInsertSchema(billingWebhookEventsTable).omit({ id: true, createdAt: true });
+export type InsertBillingWebhookEvent = z.infer<typeof insertBillingWebhookEventSchema>;
+export type BillingWebhookEvent = typeof billingWebhookEventsTable.$inferSelect;
