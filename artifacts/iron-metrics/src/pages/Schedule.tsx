@@ -570,7 +570,7 @@ export function Schedule() {
                     <h4 className="text-base md:text-lg font-semibold text-foreground group-hover:text-primary transition-colors">{cls.name}</h4>
                     <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs md:text-sm text-muted-foreground mt-1">
                       <span className="font-bold text-foreground">{format(new Date(cls.startTime), 'h:mm a')}</span>
-                      <span className="flex items-center gap-1"><Clock className="h-3.5 w-3.5"/> 60 min</span>
+                      <span className="flex items-center gap-1"><Clock className="h-3.5 w-3.5"/> {Math.round((new Date(cls.endTime).getTime() - new Date(cls.startTime).getTime()) / 60000)} min</span>
                       <span className="flex items-center gap-1"><Users className="h-3.5 w-3.5"/> {cls.coachName || 'TBD'}</span>
                       <span className="text-xs">{cls.capacity - cls.enrolled} spots left</span>
                     </div>
