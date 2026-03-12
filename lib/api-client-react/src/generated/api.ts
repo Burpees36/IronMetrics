@@ -20,6 +20,7 @@ import type {
   AiGeneratedContent,
   AiTask,
   Announcement,
+  ApplyTemplateBody,
   Attendance,
   AttendanceReport,
   AuthUser,
@@ -27,11 +28,17 @@ import type {
   CancelSubscriptionBody,
   CancelledMembersResponse,
   CheckInBody,
+  ClassTemplate,
+  ClassTemplateDetail,
   CohortData,
   ConvertLeadToMemberBody,
+  CopyWeekBody,
+  CopyWeekPreview,
+  CopyWeekResult,
   CreateAiTaskBody,
   CreateAnnouncementBody,
   CreateClassBody,
+  CreateClassTemplateBody,
   CreateDocumentBody,
   CreateGymBody,
   CreateLeadActivityBody,
@@ -103,6 +110,7 @@ import type {
   TimelineEvent,
   UpdateAiTaskBody,
   UpdateClassBody,
+  UpdateClassTemplateBody,
   UpdateGymBody,
   UpdateLeadBody,
   UpdateMemberBody,
@@ -2759,6 +2767,844 @@ export const useCheckInToClass = <
   TContext
 > => {
   return useMutation(getCheckInToClassMutationOptions(options));
+};
+
+/**
+ * @summary Preview copying last week's classes
+ */
+export const getPreviewCopyWeekUrl = (gymId: number) => {
+  return `/api/gyms/${gymId}/classes/copy-week/preview`;
+};
+
+export const previewCopyWeek = async (
+  gymId: number,
+  copyWeekBody: CopyWeekBody,
+  options?: RequestInit,
+): Promise<CopyWeekPreview> => {
+  return customFetch<CopyWeekPreview>(getPreviewCopyWeekUrl(gymId), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(copyWeekBody),
+  });
+};
+
+export const getPreviewCopyWeekMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof previewCopyWeek>>,
+    TError,
+    { gymId: number; data: BodyType<CopyWeekBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof previewCopyWeek>>,
+  TError,
+  { gymId: number; data: BodyType<CopyWeekBody> },
+  TContext
+> => {
+  const mutationKey = ["previewCopyWeek"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof previewCopyWeek>>,
+    { gymId: number; data: BodyType<CopyWeekBody> }
+  > = (props) => {
+    const { gymId, data } = props ?? {};
+
+    return previewCopyWeek(gymId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type PreviewCopyWeekMutationResult = NonNullable<
+  Awaited<ReturnType<typeof previewCopyWeek>>
+>;
+export type PreviewCopyWeekMutationBody = BodyType<CopyWeekBody>;
+export type PreviewCopyWeekMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Preview copying last week's classes
+ */
+export const usePreviewCopyWeek = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof previewCopyWeek>>,
+    TError,
+    { gymId: number; data: BodyType<CopyWeekBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof previewCopyWeek>>,
+  TError,
+  { gymId: number; data: BodyType<CopyWeekBody> },
+  TContext
+> => {
+  return useMutation(getPreviewCopyWeekMutationOptions(options));
+};
+
+/**
+ * @summary Copy classes from one week to another
+ */
+export const getCopyWeekUrl = (gymId: number) => {
+  return `/api/gyms/${gymId}/classes/copy-week`;
+};
+
+export const copyWeek = async (
+  gymId: number,
+  copyWeekBody: CopyWeekBody,
+  options?: RequestInit,
+): Promise<CopyWeekResult> => {
+  return customFetch<CopyWeekResult>(getCopyWeekUrl(gymId), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(copyWeekBody),
+  });
+};
+
+export const getCopyWeekMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof copyWeek>>,
+    TError,
+    { gymId: number; data: BodyType<CopyWeekBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof copyWeek>>,
+  TError,
+  { gymId: number; data: BodyType<CopyWeekBody> },
+  TContext
+> => {
+  const mutationKey = ["copyWeek"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof copyWeek>>,
+    { gymId: number; data: BodyType<CopyWeekBody> }
+  > = (props) => {
+    const { gymId, data } = props ?? {};
+
+    return copyWeek(gymId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CopyWeekMutationResult = NonNullable<
+  Awaited<ReturnType<typeof copyWeek>>
+>;
+export type CopyWeekMutationBody = BodyType<CopyWeekBody>;
+export type CopyWeekMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Copy classes from one week to another
+ */
+export const useCopyWeek = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof copyWeek>>,
+    TError,
+    { gymId: number; data: BodyType<CopyWeekBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof copyWeek>>,
+  TError,
+  { gymId: number; data: BodyType<CopyWeekBody> },
+  TContext
+> => {
+  return useMutation(getCopyWeekMutationOptions(options));
+};
+
+/**
+ * @summary List class schedule templates
+ */
+export const getListClassTemplatesUrl = (gymId: number) => {
+  return `/api/gyms/${gymId}/class-templates`;
+};
+
+export const listClassTemplates = async (
+  gymId: number,
+  options?: RequestInit,
+): Promise<ClassTemplate[]> => {
+  return customFetch<ClassTemplate[]>(getListClassTemplatesUrl(gymId), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListClassTemplatesQueryKey = (gymId: number) => {
+  return [`/api/gyms/${gymId}/class-templates`] as const;
+};
+
+export const getListClassTemplatesQueryOptions = <
+  TData = Awaited<ReturnType<typeof listClassTemplates>>,
+  TError = ErrorType<unknown>,
+>(
+  gymId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listClassTemplates>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListClassTemplatesQueryKey(gymId);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listClassTemplates>>
+  > = ({ signal }) => listClassTemplates(gymId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!gymId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof listClassTemplates>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListClassTemplatesQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listClassTemplates>>
+>;
+export type ListClassTemplatesQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List class schedule templates
+ */
+
+export function useListClassTemplates<
+  TData = Awaited<ReturnType<typeof listClassTemplates>>,
+  TError = ErrorType<unknown>,
+>(
+  gymId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listClassTemplates>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListClassTemplatesQueryOptions(gymId, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Save current week as a template
+ */
+export const getCreateClassTemplateUrl = (gymId: number) => {
+  return `/api/gyms/${gymId}/class-templates`;
+};
+
+export const createClassTemplate = async (
+  gymId: number,
+  createClassTemplateBody: CreateClassTemplateBody,
+  options?: RequestInit,
+): Promise<ClassTemplateDetail> => {
+  return customFetch<ClassTemplateDetail>(getCreateClassTemplateUrl(gymId), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(createClassTemplateBody),
+  });
+};
+
+export const getCreateClassTemplateMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createClassTemplate>>,
+    TError,
+    { gymId: number; data: BodyType<CreateClassTemplateBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createClassTemplate>>,
+  TError,
+  { gymId: number; data: BodyType<CreateClassTemplateBody> },
+  TContext
+> => {
+  const mutationKey = ["createClassTemplate"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createClassTemplate>>,
+    { gymId: number; data: BodyType<CreateClassTemplateBody> }
+  > = (props) => {
+    const { gymId, data } = props ?? {};
+
+    return createClassTemplate(gymId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateClassTemplateMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createClassTemplate>>
+>;
+export type CreateClassTemplateMutationBody = BodyType<CreateClassTemplateBody>;
+export type CreateClassTemplateMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Save current week as a template
+ */
+export const useCreateClassTemplate = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createClassTemplate>>,
+    TError,
+    { gymId: number; data: BodyType<CreateClassTemplateBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createClassTemplate>>,
+  TError,
+  { gymId: number; data: BodyType<CreateClassTemplateBody> },
+  TContext
+> => {
+  return useMutation(getCreateClassTemplateMutationOptions(options));
+};
+
+/**
+ * @summary Get template details with items
+ */
+export const getGetClassTemplateUrl = (gymId: number, templateId: number) => {
+  return `/api/gyms/${gymId}/class-templates/${templateId}`;
+};
+
+export const getClassTemplate = async (
+  gymId: number,
+  templateId: number,
+  options?: RequestInit,
+): Promise<ClassTemplateDetail> => {
+  return customFetch<ClassTemplateDetail>(
+    getGetClassTemplateUrl(gymId, templateId),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetClassTemplateQueryKey = (
+  gymId: number,
+  templateId: number,
+) => {
+  return [`/api/gyms/${gymId}/class-templates/${templateId}`] as const;
+};
+
+export const getGetClassTemplateQueryOptions = <
+  TData = Awaited<ReturnType<typeof getClassTemplate>>,
+  TError = ErrorType<void>,
+>(
+  gymId: number,
+  templateId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getClassTemplate>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetClassTemplateQueryKey(gymId, templateId);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getClassTemplate>>
+  > = ({ signal }) =>
+    getClassTemplate(gymId, templateId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!(gymId && templateId),
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getClassTemplate>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetClassTemplateQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getClassTemplate>>
+>;
+export type GetClassTemplateQueryError = ErrorType<void>;
+
+/**
+ * @summary Get template details with items
+ */
+
+export function useGetClassTemplate<
+  TData = Awaited<ReturnType<typeof getClassTemplate>>,
+  TError = ErrorType<void>,
+>(
+  gymId: number,
+  templateId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getClassTemplate>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetClassTemplateQueryOptions(
+    gymId,
+    templateId,
+    options,
+  );
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Rename or update template
+ */
+export const getUpdateClassTemplateUrl = (
+  gymId: number,
+  templateId: number,
+) => {
+  return `/api/gyms/${gymId}/class-templates/${templateId}`;
+};
+
+export const updateClassTemplate = async (
+  gymId: number,
+  templateId: number,
+  updateClassTemplateBody: UpdateClassTemplateBody,
+  options?: RequestInit,
+): Promise<ClassTemplate> => {
+  return customFetch<ClassTemplate>(
+    getUpdateClassTemplateUrl(gymId, templateId),
+    {
+      ...options,
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(updateClassTemplateBody),
+    },
+  );
+};
+
+export const getUpdateClassTemplateMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateClassTemplate>>,
+    TError,
+    {
+      gymId: number;
+      templateId: number;
+      data: BodyType<UpdateClassTemplateBody>;
+    },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateClassTemplate>>,
+  TError,
+  {
+    gymId: number;
+    templateId: number;
+    data: BodyType<UpdateClassTemplateBody>;
+  },
+  TContext
+> => {
+  const mutationKey = ["updateClassTemplate"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateClassTemplate>>,
+    {
+      gymId: number;
+      templateId: number;
+      data: BodyType<UpdateClassTemplateBody>;
+    }
+  > = (props) => {
+    const { gymId, templateId, data } = props ?? {};
+
+    return updateClassTemplate(gymId, templateId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateClassTemplateMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateClassTemplate>>
+>;
+export type UpdateClassTemplateMutationBody = BodyType<UpdateClassTemplateBody>;
+export type UpdateClassTemplateMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Rename or update template
+ */
+export const useUpdateClassTemplate = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateClassTemplate>>,
+    TError,
+    {
+      gymId: number;
+      templateId: number;
+      data: BodyType<UpdateClassTemplateBody>;
+    },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateClassTemplate>>,
+  TError,
+  {
+    gymId: number;
+    templateId: number;
+    data: BodyType<UpdateClassTemplateBody>;
+  },
+  TContext
+> => {
+  return useMutation(getUpdateClassTemplateMutationOptions(options));
+};
+
+/**
+ * @summary Delete a template
+ */
+export const getDeleteClassTemplateUrl = (
+  gymId: number,
+  templateId: number,
+) => {
+  return `/api/gyms/${gymId}/class-templates/${templateId}`;
+};
+
+export const deleteClassTemplate = async (
+  gymId: number,
+  templateId: number,
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(getDeleteClassTemplateUrl(gymId, templateId), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getDeleteClassTemplateMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteClassTemplate>>,
+    TError,
+    { gymId: number; templateId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteClassTemplate>>,
+  TError,
+  { gymId: number; templateId: number },
+  TContext
+> => {
+  const mutationKey = ["deleteClassTemplate"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteClassTemplate>>,
+    { gymId: number; templateId: number }
+  > = (props) => {
+    const { gymId, templateId } = props ?? {};
+
+    return deleteClassTemplate(gymId, templateId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteClassTemplateMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteClassTemplate>>
+>;
+
+export type DeleteClassTemplateMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Delete a template
+ */
+export const useDeleteClassTemplate = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteClassTemplate>>,
+    TError,
+    { gymId: number; templateId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof deleteClassTemplate>>,
+  TError,
+  { gymId: number; templateId: number },
+  TContext
+> => {
+  return useMutation(getDeleteClassTemplateMutationOptions(options));
+};
+
+/**
+ * @summary Preview applying a template to a target week
+ */
+export const getPreviewApplyTemplateUrl = (
+  gymId: number,
+  templateId: number,
+) => {
+  return `/api/gyms/${gymId}/class-templates/${templateId}/apply/preview`;
+};
+
+export const previewApplyTemplate = async (
+  gymId: number,
+  templateId: number,
+  applyTemplateBody: ApplyTemplateBody,
+  options?: RequestInit,
+): Promise<CopyWeekPreview> => {
+  return customFetch<CopyWeekPreview>(
+    getPreviewApplyTemplateUrl(gymId, templateId),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(applyTemplateBody),
+    },
+  );
+};
+
+export const getPreviewApplyTemplateMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof previewApplyTemplate>>,
+    TError,
+    { gymId: number; templateId: number; data: BodyType<ApplyTemplateBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof previewApplyTemplate>>,
+  TError,
+  { gymId: number; templateId: number; data: BodyType<ApplyTemplateBody> },
+  TContext
+> => {
+  const mutationKey = ["previewApplyTemplate"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof previewApplyTemplate>>,
+    { gymId: number; templateId: number; data: BodyType<ApplyTemplateBody> }
+  > = (props) => {
+    const { gymId, templateId, data } = props ?? {};
+
+    return previewApplyTemplate(gymId, templateId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type PreviewApplyTemplateMutationResult = NonNullable<
+  Awaited<ReturnType<typeof previewApplyTemplate>>
+>;
+export type PreviewApplyTemplateMutationBody = BodyType<ApplyTemplateBody>;
+export type PreviewApplyTemplateMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Preview applying a template to a target week
+ */
+export const usePreviewApplyTemplate = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof previewApplyTemplate>>,
+    TError,
+    { gymId: number; templateId: number; data: BodyType<ApplyTemplateBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof previewApplyTemplate>>,
+  TError,
+  { gymId: number; templateId: number; data: BodyType<ApplyTemplateBody> },
+  TContext
+> => {
+  return useMutation(getPreviewApplyTemplateMutationOptions(options));
+};
+
+/**
+ * @summary Apply a template to a target week
+ */
+export const getApplyClassTemplateUrl = (gymId: number, templateId: number) => {
+  return `/api/gyms/${gymId}/class-templates/${templateId}/apply`;
+};
+
+export const applyClassTemplate = async (
+  gymId: number,
+  templateId: number,
+  applyTemplateBody: ApplyTemplateBody,
+  options?: RequestInit,
+): Promise<CopyWeekResult> => {
+  return customFetch<CopyWeekResult>(
+    getApplyClassTemplateUrl(gymId, templateId),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(applyTemplateBody),
+    },
+  );
+};
+
+export const getApplyClassTemplateMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof applyClassTemplate>>,
+    TError,
+    { gymId: number; templateId: number; data: BodyType<ApplyTemplateBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof applyClassTemplate>>,
+  TError,
+  { gymId: number; templateId: number; data: BodyType<ApplyTemplateBody> },
+  TContext
+> => {
+  const mutationKey = ["applyClassTemplate"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof applyClassTemplate>>,
+    { gymId: number; templateId: number; data: BodyType<ApplyTemplateBody> }
+  > = (props) => {
+    const { gymId, templateId, data } = props ?? {};
+
+    return applyClassTemplate(gymId, templateId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ApplyClassTemplateMutationResult = NonNullable<
+  Awaited<ReturnType<typeof applyClassTemplate>>
+>;
+export type ApplyClassTemplateMutationBody = BodyType<ApplyTemplateBody>;
+export type ApplyClassTemplateMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Apply a template to a target week
+ */
+export const useApplyClassTemplate = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof applyClassTemplate>>,
+    TError,
+    { gymId: number; templateId: number; data: BodyType<ApplyTemplateBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof applyClassTemplate>>,
+  TError,
+  { gymId: number; templateId: number; data: BodyType<ApplyTemplateBody> },
+  TContext
+> => {
+  return useMutation(getApplyClassTemplateMutationOptions(options));
 };
 
 /**

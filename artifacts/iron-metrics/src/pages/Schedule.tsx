@@ -1,12 +1,12 @@
 import React, { useState, useMemo } from "react";
 import { useGym } from "@/store/GymContext";
-import { useListClasses, useCreateClass, useGetClass, useDeleteClass, useCheckInToClass, useUpdateClass, useListMembers, useListStaff, getListClassesQueryKey, getGetClassQueryKey } from "@workspace/api-client-react";
-import type { StaffMember, CreateClassBodyType, Member } from "@workspace/api-client-react";
+import { useListClasses, useCreateClass, useGetClass, useDeleteClass, useCheckInToClass, useUpdateClass, useListMembers, useListStaff, getListClassesQueryKey, getGetClassQueryKey, usePreviewCopyWeek, useCopyWeek, useListClassTemplates, useCreateClassTemplate, useGetClassTemplate, useDeleteClassTemplate, useUpdateClassTemplate, usePreviewApplyTemplate, useApplyClassTemplate, getListClassTemplatesQueryKey } from "@workspace/api-client-react";
+import type { StaffMember, CreateClassBodyType, Member, ClassTemplate, CopyWeekPreviewItem } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { format, startOfWeek, addDays, addWeeks, subWeeks, isSameDay, isToday, endOfWeek } from "date-fns";
 import { motion } from "framer-motion";
-import { Loader2, Plus, Clock, Users, Trash2, Search, UserCheck, X, ChevronLeft, ChevronRight } from "lucide-react";
+import { Loader2, Plus, Clock, Users, Trash2, Search, UserCheck, X, ChevronLeft, ChevronRight, Copy, FileText, MoreHorizontal, Save, Play, Pencil, AlertTriangle, CalendarPlus, LayoutTemplate } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogAction, AlertDialogCancel } from "@/components/ui/alert-dialog";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
 export function Schedule() {
   const { activeGymId } = useGym();
@@ -81,6 +82,165 @@ export function Schedule() {
   const deleteClassMutation = useDeleteClass();
   const checkInMutation = useCheckInToClass();
   const updateClassMutation = useUpdateClass();
+
+  const [copyWeekOpen, setCopyWeekOpen] = useState(false);
+  const [copyWeekPreviewData, setCopyWeekPreviewData] = useState<{ toCreate: CopyWeekPreviewItem[]; toSkip: CopyWeekPreviewItem[]; warnings: string[] } | null>(null);
+
+  const [templateManagerOpen, setTemplateManagerOpen] = useState(false);
+  const [saveTemplateOpen, setSaveTemplateOpen] = useState(false);
+  const [templateName, setTemplateName] = useState("");
+  const [applyTemplateId, setApplyTemplateId] = useState<number | null>(null);
+  const [applyTemplatePreviewData, setApplyTemplatePreviewData] = useState<{ toCreate: CopyWeekPreviewItem[]; toSkip: CopyWeekPreviewItem[]; warnings: string[] } | null>(null);
+  const [renameTemplateId, setRenameTemplateId] = useState<number | null>(null);
+  const [renameTemplateName, setRenameTemplateName] = useState("");
+  const [deleteTemplateId, setDeleteTemplateId] = useState<number | null>(null);
+  const [viewTemplateId, setViewTemplateId] = useState<number | null>(null);
+
+  const { data: templates } = useListClassTemplates(activeGymId as number, {
+    query: { enabled: !!activeGymId }
+  });
+
+  const { data: viewTemplateDetail } = useGetClassTemplate(activeGymId as number, viewTemplateId as number, {
+    query: { enabled: !!activeGymId && !!viewTemplateId }
+  });
+
+  const previewCopyWeekMutation = usePreviewCopyWeek();
+  const copyWeekMutation = useCopyWeek();
+  const createTemplateMutation = useCreateClassTemplate();
+  const deleteTemplateMutation = useDeleteClassTemplate();
+  const updateTemplateMutation = useUpdateClassTemplate();
+  const previewApplyMutation = usePreviewApplyTemplate();
+  const applyTemplateMutation = useApplyClassTemplate();
+
+  const previousWeekStart = useMemo(() => subWeeks(currentWeekStart, 1), [currentWeekStart]);
+
+  const WEEKDAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+  function handleCopyWeekPreview() {
+    if (!activeGymId) return;
+    previewCopyWeekMutation.mutate(
+      { gymId: activeGymId, data: { sourceWeek: previousWeekStart.toISOString().split("T")[0], targetWeek: currentWeekStart.toISOString().split("T")[0] } },
+      {
+        onSuccess: (data) => {
+          setCopyWeekPreviewData(data as any);
+        },
+        onError: (error: any) => {
+          toast({ title: "Error", description: error?.data?.error || "Failed to preview copy." });
+        },
+      }
+    );
+    setCopyWeekOpen(true);
+  }
+
+  function handleCopyWeekConfirm() {
+    if (!activeGymId) return;
+    copyWeekMutation.mutate(
+      { gymId: activeGymId, data: { sourceWeek: previousWeekStart.toISOString().split("T")[0], targetWeek: currentWeekStart.toISOString().split("T")[0] } },
+      {
+        onSuccess: (data: any) => {
+          queryClient.invalidateQueries({ queryKey: getListClassesQueryKey(activeGymId) });
+          setCopyWeekOpen(false);
+          setCopyWeekPreviewData(null);
+          toast({ title: "Week Copied", description: data.message });
+        },
+        onError: (error: any) => {
+          toast({ title: "Error", description: error?.data?.error || "Failed to copy week." });
+        },
+      }
+    );
+  }
+
+  function handleSaveTemplate(e: React.FormEvent) {
+    e.preventDefault();
+    if (!activeGymId || !templateName.trim()) return;
+    createTemplateMutation.mutate(
+      { gymId: activeGymId, data: { name: templateName.trim(), sourceWeek: currentWeekStart.toISOString().split("T")[0] } },
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: getListClassTemplatesQueryKey(activeGymId) });
+          setSaveTemplateOpen(false);
+          setTemplateName("");
+          toast({ title: "Template Saved", description: `"${templateName.trim()}" has been saved.` });
+        },
+        onError: (error: any) => {
+          toast({ title: "Error", description: error?.data?.error || "Failed to save template." });
+        },
+      }
+    );
+  }
+
+  function handleApplyTemplatePreview(templateId: number) {
+    if (!activeGymId) return;
+    setApplyTemplateId(templateId);
+    previewApplyMutation.mutate(
+      { gymId: activeGymId, templateId, data: { targetWeek: currentWeekStart.toISOString().split("T")[0] } },
+      {
+        onSuccess: (data) => {
+          setApplyTemplatePreviewData(data as any);
+        },
+        onError: (error: any) => {
+          toast({ title: "Error", description: error?.data?.error || "Failed to preview." });
+        },
+      }
+    );
+  }
+
+  function handleApplyTemplateConfirm() {
+    if (!activeGymId || !applyTemplateId) return;
+    applyTemplateMutation.mutate(
+      { gymId: activeGymId, templateId: applyTemplateId, data: { targetWeek: currentWeekStart.toISOString().split("T")[0] } },
+      {
+        onSuccess: (data: any) => {
+          queryClient.invalidateQueries({ queryKey: getListClassesQueryKey(activeGymId) });
+          setApplyTemplateId(null);
+          setApplyTemplatePreviewData(null);
+          setTemplateManagerOpen(false);
+          toast({ title: "Template Applied", description: data.message });
+        },
+        onError: (error: any) => {
+          toast({ title: "Error", description: error?.data?.error || "Failed to apply template." });
+        },
+      }
+    );
+  }
+
+  function handleRenameTemplate(e: React.FormEvent) {
+    e.preventDefault();
+    if (!activeGymId || !renameTemplateId || !renameTemplateName.trim()) return;
+    updateTemplateMutation.mutate(
+      { gymId: activeGymId, templateId: renameTemplateId, data: { name: renameTemplateName.trim() } },
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: getListClassTemplatesQueryKey(activeGymId) });
+          setRenameTemplateId(null);
+          setRenameTemplateName("");
+          toast({ title: "Renamed", description: "Template has been renamed." });
+        },
+        onError: (error: any) => {
+          toast({ title: "Error", description: error?.data?.error || "Failed to rename." });
+        },
+      }
+    );
+  }
+
+  function handleDeleteTemplate() {
+    if (!activeGymId || !deleteTemplateId) return;
+    deleteTemplateMutation.mutate(
+      { gymId: activeGymId, templateId: deleteTemplateId },
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: getListClassTemplatesQueryKey(activeGymId) });
+          setDeleteTemplateId(null);
+          toast({ title: "Deleted", description: "Template has been deleted." });
+        },
+        onError: (error: any) => {
+          toast({ title: "Error", description: error?.data?.error || "Failed to delete." });
+        },
+      }
+    );
+  }
+
+  const hasClassesThisWeek = (classes && classes.length > 0) || false;
 
   const { data: classDetail, isLoading: detailLoading } = useGetClass(
     activeGymId as number,
@@ -306,13 +466,37 @@ export function Schedule() {
           <h1 className="text-2xl md:text-3xl font-display font-bold text-foreground">Schedule</h1>
           <p className="text-sm md:text-base text-muted-foreground mt-1">Manage classes and attendance.</p>
         </div>
-        <button
-          onClick={openCreateDialog}
-          className="flex items-center justify-center gap-2 px-4 py-2.5 bg-primary text-primary-foreground hover:bg-primary/90 rounded-xl font-medium transition-colors shadow-lg shadow-primary/20 min-h-[44px] w-full sm:w-auto"
-        >
-          <Plus className="h-5 w-5" />
-          <span>New Class</span>
-        </button>
+        <div className="flex items-center gap-2 w-full sm:w-auto">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className="flex items-center justify-center gap-2 px-3 py-2.5 border border-border hover:bg-secondary text-foreground rounded-xl font-medium transition-colors min-h-[44px]">
+                <MoreHorizontal className="h-5 w-5" />
+                <span className="hidden sm:inline">Actions</span>
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuItem onClick={handleCopyWeekPreview}>
+                <Copy className="h-4 w-4 mr-2" />
+                Copy Last Week
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setSaveTemplateOpen(true)} disabled={!hasClassesThisWeek}>
+                <Save className="h-4 w-4 mr-2" />
+                Save Week as Template
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setTemplateManagerOpen(true)}>
+                <LayoutTemplate className="h-4 w-4 mr-2" />
+                Manage Templates
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <button
+            onClick={openCreateDialog}
+            className="flex items-center justify-center gap-2 px-4 py-2.5 bg-primary text-primary-foreground hover:bg-primary/90 rounded-xl font-medium transition-colors shadow-lg shadow-primary/20 min-h-[44px] flex-1 sm:flex-initial sm:w-auto"
+          >
+            <Plus className="h-5 w-5" />
+            <span>New Class</span>
+          </button>
+        </div>
       </header>
 
       <div className="flex items-center gap-2 shrink-0">
@@ -418,7 +602,44 @@ export function Schedule() {
                   </div>
                 </div>
               </motion.div>
-            )) : (
+            )) : !isLoading && !hasClassesThisWeek ? (
+              <div className="text-center py-16 space-y-6">
+                <div className="mx-auto w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center">
+                  <CalendarPlus className="h-8 w-8 text-primary" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-foreground mb-1">No classes this week</h3>
+                  <p className="text-sm text-muted-foreground max-w-md mx-auto">
+                    Get started by creating a class, copying last week's schedule, or applying a saved template.
+                  </p>
+                </div>
+                <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+                  <button
+                    onClick={openCreateDialog}
+                    className="flex items-center gap-2 px-4 py-2.5 bg-primary text-primary-foreground hover:bg-primary/90 rounded-xl font-medium transition-colors min-h-[44px]"
+                  >
+                    <Plus className="h-4 w-4" />
+                    Create Class
+                  </button>
+                  <button
+                    onClick={handleCopyWeekPreview}
+                    className="flex items-center gap-2 px-4 py-2.5 border border-border hover:bg-secondary rounded-xl font-medium transition-colors min-h-[44px] text-foreground"
+                  >
+                    <Copy className="h-4 w-4" />
+                    Copy Last Week
+                  </button>
+                  {templates && templates.length > 0 && (
+                    <button
+                      onClick={() => setTemplateManagerOpen(true)}
+                      className="flex items-center gap-2 px-4 py-2.5 border border-border hover:bg-secondary rounded-xl font-medium transition-colors min-h-[44px] text-foreground"
+                    >
+                      <LayoutTemplate className="h-4 w-4" />
+                      Apply Template
+                    </button>
+                  )}
+                </div>
+              </div>
+            ) : (
               <div className="text-center py-12 text-muted-foreground">
                 No classes scheduled for this day.
               </div>
@@ -751,6 +972,315 @@ export function Schedule() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <Dialog open={copyWeekOpen} onOpenChange={(open) => { if (!open) { setCopyWeekOpen(false); setCopyWeekPreviewData(null); } }}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Copy Last Week</DialogTitle>
+            <DialogDescription>
+              Copy classes from the week of {format(previousWeekStart, 'MMM d')} to the week of {format(currentWeekStart, 'MMM d, yyyy')}.
+            </DialogDescription>
+          </DialogHeader>
+          {previewCopyWeekMutation.isPending ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-6 w-6 text-primary animate-spin" />
+            </div>
+          ) : copyWeekPreviewData ? (
+            <div className="space-y-4 max-h-[60vh] overflow-y-auto">
+              {copyWeekPreviewData.warnings.length > 0 && (
+                <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3 space-y-1">
+                  {copyWeekPreviewData.warnings.map((w, i) => (
+                    <div key={i} className="flex items-start gap-2 text-sm text-yellow-700 dark:text-yellow-400">
+                      <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+                      <span>{w}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {copyWeekPreviewData.toCreate.length > 0 && (
+                <div>
+                  <h4 className="text-sm font-semibold text-foreground mb-2">Classes to create ({copyWeekPreviewData.toCreate.length})</h4>
+                  <div className="space-y-1.5">
+                    {copyWeekPreviewData.toCreate.map((item, i) => (
+                      <div key={i} className="flex items-center justify-between p-2.5 rounded-lg border border-border bg-green-500/5">
+                        <div>
+                          <span className="text-sm font-medium">{item.name}</span>
+                          <span className="text-xs text-muted-foreground ml-2">{WEEKDAY_NAMES[item.weekday!]} {item.startTime} - {item.endTime}</span>
+                        </div>
+                        <Badge variant="outline" className="text-xs bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/30">New</Badge>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {copyWeekPreviewData.toSkip.length > 0 && (
+                <div>
+                  <h4 className="text-sm font-semibold text-muted-foreground mb-2">Skipped duplicates ({copyWeekPreviewData.toSkip.length})</h4>
+                  <div className="space-y-1.5">
+                    {copyWeekPreviewData.toSkip.map((item, i) => (
+                      <div key={i} className="flex items-center justify-between p-2.5 rounded-lg border border-border opacity-60">
+                        <div>
+                          <span className="text-sm font-medium">{item.name}</span>
+                          <span className="text-xs text-muted-foreground ml-2">{WEEKDAY_NAMES[item.weekday!]} {item.startTime}</span>
+                        </div>
+                        <Badge variant="secondary" className="text-xs">Exists</Badge>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {copyWeekPreviewData.toCreate.length === 0 && copyWeekPreviewData.toSkip.length === 0 && (
+                <p className="text-sm text-muted-foreground text-center py-4">No classes found in last week to copy.</p>
+              )}
+            </div>
+          ) : null}
+          <DialogFooter>
+            <button type="button" onClick={() => { setCopyWeekOpen(false); setCopyWeekPreviewData(null); }} className="px-4 py-2 rounded-lg border border-border text-muted-foreground hover:bg-secondary transition-colors">
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleCopyWeekConfirm}
+              disabled={copyWeekMutation.isPending || !copyWeekPreviewData || copyWeekPreviewData.toCreate.length === 0}
+              className="px-4 py-2 bg-primary text-primary-foreground rounded-lg font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
+            >
+              {copyWeekMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : `Copy ${copyWeekPreviewData?.toCreate.length || 0} Classes`}
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={saveTemplateOpen} onOpenChange={(open) => { if (!open) { setSaveTemplateOpen(false); setTemplateName(""); } }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Save Week as Template</DialogTitle>
+            <DialogDescription>Save the current week's schedule (week of {format(currentWeekStart, 'MMM d')}) as a reusable template.</DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleSaveTemplate} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="template-name">Template Name *</Label>
+              <Input
+                id="template-name"
+                placeholder='e.g. "Regular Week", "Summer Schedule"'
+                value={templateName}
+                onChange={(e) => setTemplateName(e.target.value)}
+                required
+              />
+            </div>
+            <DialogFooter>
+              <button type="button" onClick={() => { setSaveTemplateOpen(false); setTemplateName(""); }} className="px-4 py-2 rounded-lg border border-border text-muted-foreground hover:bg-secondary transition-colors">
+                Cancel
+              </button>
+              <button type="submit" disabled={createTemplateMutation.isPending || !templateName.trim()} className="px-4 py-2 bg-primary text-primary-foreground rounded-lg font-medium hover:bg-primary/90 transition-colors disabled:opacity-50">
+                {createTemplateMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save Template"}
+              </button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Sheet open={templateManagerOpen} onOpenChange={(open) => { if (!open) { setTemplateManagerOpen(false); setApplyTemplateId(null); setApplyTemplatePreviewData(null); } }}>
+        <SheetContent className="overflow-y-auto sm:max-w-lg">
+          <SheetHeader>
+            <SheetTitle>Schedule Templates</SheetTitle>
+            <SheetDescription>Manage and apply saved schedule templates.</SheetDescription>
+          </SheetHeader>
+          <div className="mt-6 space-y-4">
+            {!templates || templates.length === 0 ? (
+              <div className="text-center py-12 space-y-4">
+                <div className="mx-auto w-12 h-12 rounded-xl bg-muted flex items-center justify-center">
+                  <LayoutTemplate className="h-6 w-6 text-muted-foreground" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-foreground">No templates yet</p>
+                  <p className="text-xs text-muted-foreground mt-1">Save a week's schedule as a template to reuse it later.</p>
+                </div>
+                <button
+                  onClick={() => { setTemplateManagerOpen(false); setSaveTemplateOpen(true); }}
+                  disabled={!hasClassesThisWeek}
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
+                >
+                  <Save className="h-4 w-4" />
+                  Save Current Week
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {templates.map((tmpl) => (
+                  <div key={tmpl.id} className="p-4 rounded-xl border border-border space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h4 className="text-sm font-semibold text-foreground">{tmpl.name}</h4>
+                        <p className="text-xs text-muted-foreground">{format(new Date(tmpl.createdAt), 'MMM d, yyyy')}</p>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => handleApplyTemplatePreview(tmpl.id)}
+                          className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-primary-foreground rounded-lg text-xs font-medium hover:bg-primary/90 transition-colors"
+                        >
+                          <Play className="h-3.5 w-3.5" />
+                          Apply
+                        </button>
+                        <button
+                          onClick={() => setViewTemplateId(viewTemplateId === tmpl.id ? null : tmpl.id)}
+                          className="p-1.5 text-muted-foreground hover:text-foreground rounded-lg hover:bg-secondary transition-colors"
+                          title="View template contents"
+                        >
+                          <FileText className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          onClick={() => { setRenameTemplateId(tmpl.id); setRenameTemplateName(tmpl.name); }}
+                          className="p-1.5 text-muted-foreground hover:text-foreground rounded-lg hover:bg-secondary transition-colors"
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          onClick={() => setDeleteTemplateId(tmpl.id)}
+                          className="p-1.5 text-muted-foreground hover:text-destructive rounded-lg hover:bg-destructive/10 transition-colors"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                    {viewTemplateId === tmpl.id && viewTemplateDetail && (viewTemplateDetail as any).items && (
+                      <div className="border-t border-border pt-3 space-y-1.5">
+                        <p className="text-xs font-semibold text-muted-foreground mb-2">{((viewTemplateDetail as any).items || []).length} classes in template:</p>
+                        {((viewTemplateDetail as any).items || []).map((item: any, i: number) => (
+                          <div key={i} className="flex items-center justify-between p-2 rounded-lg bg-muted/30 text-sm">
+                            <div>
+                              <span className="font-medium">{item.className}</span>
+                              <span className="text-xs text-muted-foreground ml-2">{WEEKDAY_NAMES[item.weekday]} {item.startTime} - {item.endTime}</span>
+                            </div>
+                            <Badge variant="outline" className="text-xs">{item.type}</Badge>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </SheetContent>
+      </Sheet>
+
+      <Dialog open={!!applyTemplateId && !!applyTemplatePreviewData} onOpenChange={(open) => { if (!open) { setApplyTemplateId(null); setApplyTemplatePreviewData(null); } }}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Apply Template</DialogTitle>
+            <DialogDescription>Apply template to the week of {format(currentWeekStart, 'MMM d, yyyy')}.</DialogDescription>
+          </DialogHeader>
+          {previewApplyMutation.isPending ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-6 w-6 text-primary animate-spin" />
+            </div>
+          ) : applyTemplatePreviewData ? (
+            <div className="space-y-4 max-h-[60vh] overflow-y-auto">
+              {applyTemplatePreviewData.warnings.length > 0 && (
+                <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3 space-y-1">
+                  {applyTemplatePreviewData.warnings.map((w, i) => (
+                    <div key={i} className="flex items-start gap-2 text-sm text-yellow-700 dark:text-yellow-400">
+                      <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+                      <span>{w}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {applyTemplatePreviewData.toCreate.length > 0 && (
+                <div>
+                  <h4 className="text-sm font-semibold text-foreground mb-2">Classes to create ({applyTemplatePreviewData.toCreate.length})</h4>
+                  <div className="space-y-1.5">
+                    {applyTemplatePreviewData.toCreate.map((item, i) => (
+                      <div key={i} className="flex items-center justify-between p-2.5 rounded-lg border border-border bg-green-500/5">
+                        <div>
+                          <span className="text-sm font-medium">{item.name}</span>
+                          <span className="text-xs text-muted-foreground ml-2">{WEEKDAY_NAMES[item.weekday!]} {item.startTime} - {item.endTime}</span>
+                        </div>
+                        <Badge variant="outline" className="text-xs bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/30">New</Badge>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {applyTemplatePreviewData.toSkip.length > 0 && (
+                <div>
+                  <h4 className="text-sm font-semibold text-muted-foreground mb-2">Skipped duplicates ({applyTemplatePreviewData.toSkip.length})</h4>
+                  <div className="space-y-1.5">
+                    {applyTemplatePreviewData.toSkip.map((item, i) => (
+                      <div key={i} className="flex items-center justify-between p-2.5 rounded-lg border border-border opacity-60">
+                        <div>
+                          <span className="text-sm font-medium">{item.name}</span>
+                          <span className="text-xs text-muted-foreground ml-2">{WEEKDAY_NAMES[item.weekday!]} {item.startTime}</span>
+                        </div>
+                        <Badge variant="secondary" className="text-xs">Exists</Badge>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {applyTemplatePreviewData.toCreate.length === 0 && applyTemplatePreviewData.toSkip.length === 0 && (
+                <p className="text-sm text-muted-foreground text-center py-4">This template has no items.</p>
+              )}
+            </div>
+          ) : null}
+          <DialogFooter>
+            <button type="button" onClick={() => { setApplyTemplateId(null); setApplyTemplatePreviewData(null); }} className="px-4 py-2 rounded-lg border border-border text-muted-foreground hover:bg-secondary transition-colors">
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleApplyTemplateConfirm}
+              disabled={applyTemplateMutation.isPending || !applyTemplatePreviewData || applyTemplatePreviewData.toCreate.length === 0}
+              className="px-4 py-2 bg-primary text-primary-foreground rounded-lg font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
+            >
+              {applyTemplateMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : `Apply ${applyTemplatePreviewData?.toCreate.length || 0} Classes`}
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!renameTemplateId} onOpenChange={(open) => { if (!open) { setRenameTemplateId(null); setRenameTemplateName(""); } }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Rename Template</DialogTitle>
+            <DialogDescription>Enter a new name for this template.</DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleRenameTemplate} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="rename-template">Name *</Label>
+              <Input id="rename-template" value={renameTemplateName} onChange={(e) => setRenameTemplateName(e.target.value)} required />
+            </div>
+            <DialogFooter>
+              <button type="button" onClick={() => { setRenameTemplateId(null); setRenameTemplateName(""); }} className="px-4 py-2 rounded-lg border border-border text-muted-foreground hover:bg-secondary transition-colors">
+                Cancel
+              </button>
+              <button type="submit" disabled={updateTemplateMutation.isPending || !renameTemplateName.trim()} className="px-4 py-2 bg-primary text-primary-foreground rounded-lg font-medium hover:bg-primary/90 transition-colors disabled:opacity-50">
+                {updateTemplateMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Rename"}
+              </button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={!!deleteTemplateId} onOpenChange={(open) => { if (!open) setDeleteTemplateId(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Template</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this template? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteTemplate}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleteTemplateMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

@@ -3,6 +3,7 @@ export * from "./gyms";
 export * from "./members";
 export * from "./leads";
 export * from "./classes";
+export * from "./class-templates";
 export * from "./attendance";
 export * from "./billing";
 export * from "./retail";

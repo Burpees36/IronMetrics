@@ -867,6 +867,295 @@ export const CheckInToClassBody = zod.object({
 });
 
 /**
+ * @summary Preview copying last week's classes
+ */
+export const PreviewCopyWeekParams = zod.object({
+  gymId: zod.coerce.number(),
+});
+
+export const PreviewCopyWeekBody = zod.object({
+  sourceWeek: zod.date(),
+  targetWeek: zod.date(),
+});
+
+export const PreviewCopyWeekResponse = zod.object({
+  toCreate: zod.array(
+    zod.object({
+      name: zod.string().optional(),
+      weekday: zod.number().optional(),
+      startTime: zod.string().optional(),
+      endTime: zod.string().optional(),
+      type: zod.string().optional(),
+      capacity: zod.number().optional(),
+      coachName: zod.string().nullish(),
+      description: zod.string().nullish(),
+      reason: zod.string().optional(),
+    }),
+  ),
+  toSkip: zod.array(
+    zod.object({
+      name: zod.string().optional(),
+      weekday: zod.number().optional(),
+      startTime: zod.string().optional(),
+      endTime: zod.string().optional(),
+      type: zod.string().optional(),
+      capacity: zod.number().optional(),
+      coachName: zod.string().nullish(),
+      description: zod.string().nullish(),
+      reason: zod.string().optional(),
+    }),
+  ),
+  warnings: zod.array(zod.string()),
+});
+
+/**
+ * @summary Copy classes from one week to another
+ */
+export const CopyWeekParams = zod.object({
+  gymId: zod.coerce.number(),
+});
+
+export const CopyWeekBody = zod.object({
+  sourceWeek: zod.date(),
+  targetWeek: zod.date(),
+});
+
+export const CopyWeekResponse = zod.object({
+  created: zod.array(
+    zod.object({
+      id: zod.number(),
+      gymId: zod.number(),
+      name: zod.string(),
+      description: zod.string().nullish(),
+      coachId: zod.number().nullish(),
+      coachName: zod.string().nullish(),
+      startTime: zod.date(),
+      endTime: zod.date(),
+      capacity: zod.number(),
+      enrolled: zod.number(),
+      type: zod.enum([
+        "regular",
+        "personal_training",
+        "intro",
+        "specialty",
+        "open_gym",
+      ]),
+      status: zod.enum(["scheduled", "in_progress", "completed", "cancelled"]),
+      createdAt: zod.date(),
+    }),
+  ),
+  skipped: zod.array(
+    zod.object({
+      name: zod.string().optional(),
+      weekday: zod.number().optional(),
+      startTime: zod.string().optional(),
+      endTime: zod.string().optional(),
+      type: zod.string().optional(),
+      capacity: zod.number().optional(),
+      coachName: zod.string().nullish(),
+      description: zod.string().nullish(),
+      reason: zod.string().optional(),
+    }),
+  ),
+  warnings: zod.array(zod.string()),
+  message: zod.string(),
+});
+
+/**
+ * @summary List class schedule templates
+ */
+export const ListClassTemplatesParams = zod.object({
+  gymId: zod.coerce.number(),
+});
+
+export const ListClassTemplatesResponseItem = zod.object({
+  id: zod.number(),
+  gymId: zod.number(),
+  name: zod.string(),
+  description: zod.string().nullish(),
+  createdAt: zod.date(),
+  updatedAt: zod.date().optional(),
+});
+export const ListClassTemplatesResponse = zod.array(
+  ListClassTemplatesResponseItem,
+);
+
+/**
+ * @summary Save current week as a template
+ */
+export const CreateClassTemplateParams = zod.object({
+  gymId: zod.coerce.number(),
+});
+
+export const CreateClassTemplateBody = zod.object({
+  name: zod.string(),
+  description: zod.string().nullish(),
+  sourceWeek: zod.date(),
+});
+
+/**
+ * @summary Get template details with items
+ */
+export const GetClassTemplateParams = zod.object({
+  gymId: zod.coerce.number(),
+  templateId: zod.coerce.number(),
+});
+
+export const GetClassTemplateResponse = zod
+  .object({
+    id: zod.number(),
+    gymId: zod.number(),
+    name: zod.string(),
+    description: zod.string().nullish(),
+    createdAt: zod.date(),
+    updatedAt: zod.date().optional(),
+  })
+  .and(
+    zod.object({
+      items: zod.array(
+        zod.object({
+          id: zod.number(),
+          templateId: zod.number(),
+          weekday: zod.number(),
+          startTime: zod.string(),
+          endTime: zod.string(),
+          className: zod.string(),
+          type: zod.string(),
+          capacity: zod.number(),
+          coachId: zod.number().nullish(),
+          coachName: zod.string().nullish(),
+          description: zod.string().nullish(),
+        }),
+      ),
+    }),
+  );
+
+/**
+ * @summary Rename or update template
+ */
+export const UpdateClassTemplateParams = zod.object({
+  gymId: zod.coerce.number(),
+  templateId: zod.coerce.number(),
+});
+
+export const UpdateClassTemplateBody = zod.object({
+  name: zod.string().optional(),
+  description: zod.string().nullish(),
+});
+
+export const UpdateClassTemplateResponse = zod.object({
+  id: zod.number(),
+  gymId: zod.number(),
+  name: zod.string(),
+  description: zod.string().nullish(),
+  createdAt: zod.date(),
+  updatedAt: zod.date().optional(),
+});
+
+/**
+ * @summary Delete a template
+ */
+export const DeleteClassTemplateParams = zod.object({
+  gymId: zod.coerce.number(),
+  templateId: zod.coerce.number(),
+});
+
+/**
+ * @summary Preview applying a template to a target week
+ */
+export const PreviewApplyTemplateParams = zod.object({
+  gymId: zod.coerce.number(),
+  templateId: zod.coerce.number(),
+});
+
+export const PreviewApplyTemplateBody = zod.object({
+  targetWeek: zod.date(),
+});
+
+export const PreviewApplyTemplateResponse = zod.object({
+  toCreate: zod.array(
+    zod.object({
+      name: zod.string().optional(),
+      weekday: zod.number().optional(),
+      startTime: zod.string().optional(),
+      endTime: zod.string().optional(),
+      type: zod.string().optional(),
+      capacity: zod.number().optional(),
+      coachName: zod.string().nullish(),
+      description: zod.string().nullish(),
+      reason: zod.string().optional(),
+    }),
+  ),
+  toSkip: zod.array(
+    zod.object({
+      name: zod.string().optional(),
+      weekday: zod.number().optional(),
+      startTime: zod.string().optional(),
+      endTime: zod.string().optional(),
+      type: zod.string().optional(),
+      capacity: zod.number().optional(),
+      coachName: zod.string().nullish(),
+      description: zod.string().nullish(),
+      reason: zod.string().optional(),
+    }),
+  ),
+  warnings: zod.array(zod.string()),
+});
+
+/**
+ * @summary Apply a template to a target week
+ */
+export const ApplyClassTemplateParams = zod.object({
+  gymId: zod.coerce.number(),
+  templateId: zod.coerce.number(),
+});
+
+export const ApplyClassTemplateBody = zod.object({
+  targetWeek: zod.date(),
+});
+
+export const ApplyClassTemplateResponse = zod.object({
+  created: zod.array(
+    zod.object({
+      id: zod.number(),
+      gymId: zod.number(),
+      name: zod.string(),
+      description: zod.string().nullish(),
+      coachId: zod.number().nullish(),
+      coachName: zod.string().nullish(),
+      startTime: zod.date(),
+      endTime: zod.date(),
+      capacity: zod.number(),
+      enrolled: zod.number(),
+      type: zod.enum([
+        "regular",
+        "personal_training",
+        "intro",
+        "specialty",
+        "open_gym",
+      ]),
+      status: zod.enum(["scheduled", "in_progress", "completed", "cancelled"]),
+      createdAt: zod.date(),
+    }),
+  ),
+  skipped: zod.array(
+    zod.object({
+      name: zod.string().optional(),
+      weekday: zod.number().optional(),
+      startTime: zod.string().optional(),
+      endTime: zod.string().optional(),
+      type: zod.string().optional(),
+      capacity: zod.number().optional(),
+      coachName: zod.string().nullish(),
+      description: zod.string().nullish(),
+      reason: zod.string().optional(),
+    }),
+  ),
+  warnings: zod.array(zod.string()),
+  message: zod.string(),
+});
+
+/**
  * @summary List attendance records
  */
 export const ListAttendanceParams = zod.object({

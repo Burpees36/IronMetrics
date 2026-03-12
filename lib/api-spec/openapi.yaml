@@ -787,6 +787,233 @@ paths:
               schema:
                 $ref: "#/components/schemas/Attendance"
 
+  # CLASS SCHEDULING SHORTCUTS
+  /gyms/{gymId}/classes/copy-week/preview:
+    post:
+      operationId: previewCopyWeek
+      tags: [classes]
+      summary: Preview copying last week's classes
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CopyWeekBody"
+      responses:
+        "200":
+          description: Preview of classes to create and skip
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CopyWeekPreview"
+
+  /gyms/{gymId}/classes/copy-week:
+    post:
+      operationId: copyWeek
+      tags: [classes]
+      summary: Copy classes from one week to another
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CopyWeekBody"
+      responses:
+        "200":
+          description: Result of copy operation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CopyWeekResult"
+
+  /gyms/{gymId}/class-templates:
+    get:
+      operationId: listClassTemplates
+      tags: [classes]
+      summary: List class schedule templates
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of templates
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ClassTemplate"
+    post:
+      operationId: createClassTemplate
+      tags: [classes]
+      summary: Save current week as a template
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateClassTemplateBody"
+      responses:
+        "201":
+          description: Created template
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ClassTemplateDetail"
+
+  /gyms/{gymId}/class-templates/{templateId}:
+    get:
+      operationId: getClassTemplate
+      tags: [classes]
+      summary: Get template details with items
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: templateId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Template with items
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ClassTemplateDetail"
+        "404":
+          description: Not found
+    patch:
+      operationId: updateClassTemplate
+      tags: [classes]
+      summary: Rename or update template
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: templateId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateClassTemplateBody"
+      responses:
+        "200":
+          description: Updated template
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ClassTemplate"
+    delete:
+      operationId: deleteClassTemplate
+      tags: [classes]
+      summary: Delete a template
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: templateId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /gyms/{gymId}/class-templates/{templateId}/apply/preview:
+    post:
+      operationId: previewApplyTemplate
+      tags: [classes]
+      summary: Preview applying a template to a target week
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: templateId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ApplyTemplateBody"
+      responses:
+        "200":
+          description: Preview of classes to create and skip
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CopyWeekPreview"
+
+  /gyms/{gymId}/class-templates/{templateId}/apply:
+    post:
+      operationId: applyClassTemplate
+      tags: [classes]
+      summary: Apply a template to a target week
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: templateId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ApplyTemplateBody"
+      responses:
+        "200":
+          description: Result of apply operation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CopyWeekResult"
+
   # ATTENDANCE
   /gyms/{gymId}/attendance:
     get:
@@ -3143,6 +3370,185 @@ components:
           enum: [present, late_cancel, no_show]
       required:
         - memberId
+
+    CopyWeekBody:
+      type: object
+      properties:
+        sourceWeek:
+          type: string
+          format: date
+        targetWeek:
+          type: string
+          format: date
+      required:
+        - sourceWeek
+        - targetWeek
+
+    CopyWeekPreviewItem:
+      type: object
+      properties:
+        name:
+          type: string
+        weekday:
+          type: integer
+        startTime:
+          type: string
+        endTime:
+          type: string
+        type:
+          type: string
+        capacity:
+          type: integer
+        coachName:
+          type: ["string", "null"]
+        description:
+          type: ["string", "null"]
+        reason:
+          type: string
+
+    CopyWeekPreview:
+      type: object
+      properties:
+        toCreate:
+          type: array
+          items:
+            $ref: "#/components/schemas/CopyWeekPreviewItem"
+        toSkip:
+          type: array
+          items:
+            $ref: "#/components/schemas/CopyWeekPreviewItem"
+        warnings:
+          type: array
+          items:
+            type: string
+      required:
+        - toCreate
+        - toSkip
+        - warnings
+
+    CopyWeekResult:
+      type: object
+      properties:
+        created:
+          type: array
+          items:
+            $ref: "#/components/schemas/GymClass"
+        skipped:
+          type: array
+          items:
+            $ref: "#/components/schemas/CopyWeekPreviewItem"
+        warnings:
+          type: array
+          items:
+            type: string
+        message:
+          type: string
+      required:
+        - created
+        - skipped
+        - warnings
+        - message
+
+    ClassTemplate:
+      type: object
+      properties:
+        id:
+          type: integer
+        gymId:
+          type: integer
+        name:
+          type: string
+        description:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - gymId
+        - name
+        - createdAt
+
+    ClassTemplateItem:
+      type: object
+      properties:
+        id:
+          type: integer
+        templateId:
+          type: integer
+        weekday:
+          type: integer
+        startTime:
+          type: string
+        endTime:
+          type: string
+        className:
+          type: string
+        type:
+          type: string
+        capacity:
+          type: integer
+        coachId:
+          type: ["integer", "null"]
+        coachName:
+          type: ["string", "null"]
+        description:
+          type: ["string", "null"]
+      required:
+        - id
+        - templateId
+        - weekday
+        - startTime
+        - endTime
+        - className
+        - type
+        - capacity
+
+    ClassTemplateDetail:
+      allOf:
+        - $ref: "#/components/schemas/ClassTemplate"
+        - type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/ClassTemplateItem"
+          required:
+            - items
+
+    CreateClassTemplateBody:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: ["string", "null"]
+        sourceWeek:
+          type: string
+          format: date
+      required:
+        - name
+        - sourceWeek
+
+    UpdateClassTemplateBody:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: ["string", "null"]
+
+    ApplyTemplateBody:
+      type: object
+      properties:
+        targetWeek:
+          type: string
+          format: date
+      required:
+        - targetWeek
 
     Attendance:
       type: object

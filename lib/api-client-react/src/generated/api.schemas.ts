@@ -579,6 +579,86 @@ export interface CheckInBody {
   status?: CheckInBodyStatus;
 }
 
+export interface CopyWeekBody {
+  sourceWeek: string;
+  targetWeek: string;
+}
+
+export interface CopyWeekPreviewItem {
+  name?: string;
+  weekday?: number;
+  startTime?: string;
+  endTime?: string;
+  type?: string;
+  capacity?: number;
+  /** @nullable */
+  coachName?: string | null;
+  /** @nullable */
+  description?: string | null;
+  reason?: string;
+}
+
+export interface CopyWeekPreview {
+  toCreate: CopyWeekPreviewItem[];
+  toSkip: CopyWeekPreviewItem[];
+  warnings: string[];
+}
+
+export interface CopyWeekResult {
+  created: GymClass[];
+  skipped: CopyWeekPreviewItem[];
+  warnings: string[];
+  message: string;
+}
+
+export interface ClassTemplate {
+  id: number;
+  gymId: number;
+  name: string;
+  /** @nullable */
+  description?: string | null;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export interface ClassTemplateItem {
+  id: number;
+  templateId: number;
+  weekday: number;
+  startTime: string;
+  endTime: string;
+  className: string;
+  type: string;
+  capacity: number;
+  /** @nullable */
+  coachId?: number | null;
+  /** @nullable */
+  coachName?: string | null;
+  /** @nullable */
+  description?: string | null;
+}
+
+export type ClassTemplateDetail = ClassTemplate & {
+  items: ClassTemplateItem[];
+};
+
+export interface CreateClassTemplateBody {
+  name: string;
+  /** @nullable */
+  description?: string | null;
+  sourceWeek: string;
+}
+
+export interface UpdateClassTemplateBody {
+  name?: string;
+  /** @nullable */
+  description?: string | null;
+}
+
+export interface ApplyTemplateBody {
+  targetWeek: string;
+}
+
 export type MembershipPlanBillingInterval =
   (typeof MembershipPlanBillingInterval)[keyof typeof MembershipPlanBillingInterval];
 

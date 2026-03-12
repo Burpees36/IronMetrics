@@ -62,6 +62,8 @@ All tables in `lib/db/src/schema/`:
 - **leads** — Lead pipeline CRM (new → contacted → scheduled → trial → converted/lost) with followUpNote, lostReason, convertedAt fields
 - **lead_activities** — Lead activity timeline/audit log (type, description, metadata per lead)
 - **classes** — Class schedule with capacity tracking
+- **class_templates** — Reusable weekly schedule templates (gym-scoped)
+- **class_template_items** — Individual class slots within a template (weekday, time, class name, type, capacity, coach)
 - **attendance** — Check-in records linked to members/classes
 - **membership_plans** — Plan definitions with pricing (stripeProductId, stripePriceId)
 - **subscriptions** — Active member subscriptions (stripeSubscriptionId, cancelledAt, cancelReason)
@@ -114,7 +116,7 @@ All pages with real API data (no hardcoded values), fully interactive:
 2. **Intelligence Hub** — RSI score gauge, risk radar table, intervention cards + recommendation execution tracker with interactive checklists
 3. **Members** — Searchable member directory with status/risk filters, Add Member dialog, CSV Import flow (5-step: upload, map columns, preview/validate, confirm, results), row actions (view profile, edit, add note, change status), clickable rows to member detail, empty state with import CTA
 4. **Member Detail** — Full profile page with tabs (Overview, Billing, Notes, Timeline), edit dialog, status management (hold/cancel/reactivate), add notes, attendance history, subscription info. Billing tab: subscription management (start/pause/resume/cancel), payment methods, payment history, one-time charges
-5. **Schedule** — Weekly class calendar with create class dialog, class detail sheet with roster, check-in flow (member search + check-in), delete class with confirmation
+5. **Schedule** — Weekly class calendar with create class dialog, class detail sheet with roster, check-in flow (member search + check-in), delete class with confirmation, Copy Last Week (clone previous week's classes with preview/confirmation), Save/Apply Templates (save week as named template, apply to any week), template management (view contents, rename, delete), empty schedule CTAs
 6. **Leads (Sales Pipeline)** — Kanban-style pipeline board (New, Contacted, Intro Scheduled, Converted, Lost), summary strip (active/stale/follow-up/converted counts), lead detail drawer with activity timeline, follow-up scheduling, contact logging, stale lead detection, convert-to-member flow with start date, sales insights panel (funnel, source performance, bottleneck callouts), smart filters (stage/stale/follow-up due), polished add-lead dialog
 7. **Billing** — 5-tab billing command center (Plans, Subscriptions, Payments, Refunds, Cancelled). MRR/Active/ARM/Failed/Collected summary cards. Subscription actions (pause/resume/cancel with reason). Cancelled members view with month picker and lost revenue tracking. Full Stripe integration
 8. **Programming Hub** — Premium daily programming interface with date navigation (day/week view), section-based workout builder (warm-up, strength, conditioning, etc.), slide-over create/edit panel, role-based views (staff vs. member), duplicate-day functionality, draft/published workflow, result logging for members, and onboarding empty states
@@ -153,7 +155,7 @@ All mounted at `/api` prefix:
 - Members: `/api/gyms/:gymId/members` (list, create, get, update, notes, timeline, import/preview, import/confirm)
 - Leads: `/api/gyms/:gymId/leads` (CRUD + convert to member)
 - Staff: `/api/gyms/:gymId/staff` (CRUD)
-- Classes: `/api/gyms/:gymId/classes` (CRUD + checkin)
+- Classes: `/api/gyms/:gymId/classes` (CRUD + checkin), `/api/gyms/:gymId/classes/copy-week` (copy + preview), `/api/gyms/:gymId/class-templates` (CRUD + apply + preview)
 - Attendance: `/api/gyms/:gymId/attendance`
 - Billing: Plans, subscriptions, invoices, payments, refunds, billing-summary, cancelled-members under `/api/gyms/:gymId/`
 - Stripe: setup-intent, payment-methods, stripe-subscription, charge, refund, billing-history under `/api/gyms/:gymId/members/:memberId/`
