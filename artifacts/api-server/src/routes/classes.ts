@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { eq, and, gte, lte, desc } from "drizzle-orm";
-import { db, classesTable, attendanceTable } from "@workspace/db";
+import { db, classesTable, attendanceTable, gymStaffTable } from "@workspace/db";
 import { CreateClassBody, UpdateClassBody } from "@workspace/api-zod";
 
 const router: IRouter = Router();
@@ -35,9 +35,17 @@ router.post("/gyms/:gymId/classes", async (req, res): Promise<void> => {
   const parsed = CreateClassBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
 
+  let coachName: string | null = null;
+  if (parsed.data.coachId) {
+    const [staff] = await db.select().from(gymStaffTable).where(and(eq(gymStaffTable.id, parsed.data.coachId), eq(gymStaffTable.gymId, gymId)));
+    if (!staff) { res.status(400).json({ error: "Invalid coach ID" }); return; }
+    coachName = `${staff.firstName} ${staff.lastName}`;
+  }
+
   const [gymClass] = await db.insert(classesTable).values({
     ...parsed.data,
     gymId,
+    coachName,
     enrolled: 0,
     status: "scheduled",
     startTime: new Date(parsed.data.startTime),
@@ -73,6 +81,14 @@ router.patch("/gyms/:gymId/classes/:classId", async (req, res): Promise<void> =>
   const updateData: any = { ...parsed.data };
   if (updateData.startTime) updateData.startTime = new Date(updateData.startTime);
   if (updateData.endTime) updateData.endTime = new Date(updateData.endTime);
+
+  if (updateData.coachId) {
+    const [staff] = await db.select().from(gymStaffTable).where(and(eq(gymStaffTable.id, updateData.coachId), eq(gymStaffTable.gymId, gymId)));
+    if (!staff) { res.status(400).json({ error: "Invalid coach ID" }); return; }
+    updateData.coachName = `${staff.firstName} ${staff.lastName}`;
+  } else if (updateData.coachId === null) {
+    updateData.coachName = null;
+  }
 
   const [gymClass] = await db.update(classesTable).set(updateData).where(and(eq(classesTable.id, classId), eq(classesTable.gymId, gymId))).returning();
   if (!gymClass) { res.status(404).json({ error: "Class not found" }); return; }

@@ -1,11 +1,12 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { useGym } from "@/store/GymContext";
-import { useListClasses, useCreateClass, useGetClass, useDeleteClass, useCheckInToClass, useListMembers, getListClassesQueryKey, getGetClassQueryKey } from "@workspace/api-client-react";
+import { useListClasses, useCreateClass, useGetClass, useDeleteClass, useCheckInToClass, useUpdateClass, useListMembers, useListStaff, getListClassesQueryKey, getGetClassQueryKey } from "@workspace/api-client-react";
+import type { StaffMember, CreateClassBodyType, Member } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
-import { format, startOfWeek, addDays } from "date-fns";
+import { format, startOfWeek, addDays, addWeeks, subWeeks, isSameDay, isToday, endOfWeek } from "date-fns";
 import { motion } from "framer-motion";
-import { Loader2, Plus, Clock, Users, Trash2, Search, UserCheck, X } from "lucide-react";
+import { Loader2, Plus, Clock, Users, Trash2, Search, UserCheck, X, ChevronLeft, ChevronRight } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogAction, AlertDialogCancel } from "@/components/ui/alert-dialog";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
@@ -19,12 +20,40 @@ export function Schedule() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
-  const { data: classes, isLoading } = useListClasses(activeGymId as number, {}, {
+  const [weekOffset, setWeekOffset] = useState(0);
+  const currentWeekStart = useMemo(() => {
+    const base = startOfWeek(new Date(), { weekStartsOn: 1 });
+    return weekOffset === 0 ? base : addWeeks(base, weekOffset);
+  }, [weekOffset]);
+  const days = useMemo(() => Array.from({ length: 7 }).map((_, i) => addDays(currentWeekStart, i)), [currentWeekStart]);
+
+  const todayInWeek = days.findIndex((d) => isToday(d));
+  const [selectedDayIndex, setSelectedDayIndex] = useState(todayInWeek >= 0 ? todayInWeek : 0);
+
+  const selectedDate = days[selectedDayIndex];
+
+  const weekEnd = useMemo(() => endOfWeek(currentWeekStart, { weekStartsOn: 1 }), [currentWeekStart]);
+  const classParams = useMemo(() => ({
+    startDate: currentWeekStart.toISOString(),
+    endDate: weekEnd.toISOString(),
+  }), [currentWeekStart, weekEnd]);
+
+  const { data: classes, isLoading } = useListClasses(activeGymId as number, classParams, {
     query: { enabled: !!activeGymId }
   });
 
-  const weekStart = startOfWeek(new Date(), { weekStartsOn: 1 });
-  const days = Array.from({ length: 7 }).map((_, i) => addDays(weekStart, i));
+  const filteredClasses = useMemo(() => {
+    if (!classes) return [];
+    return classes.filter((cls) => {
+      const clsDate = new Date(cls.startTime);
+      return isSameDay(clsDate, selectedDate);
+    });
+  }, [classes, selectedDate]);
+
+  const { data: staffList } = useListStaff(activeGymId as number, {
+    query: { enabled: !!activeGymId }
+  });
+  const activeStaff = useMemo(() => (staffList || []).filter((s) => s.isActive), [staffList]);
 
   const [createOpen, setCreateOpen] = useState(false);
   const [detailClassId, setDetailClassId] = useState<number | null>(null);
@@ -37,7 +66,7 @@ export function Schedule() {
     startTime: "",
     endTime: "",
     capacity: "",
-    coachName: "",
+    coachId: "none",
     description: "",
     type: "regular" as string,
   });
@@ -45,6 +74,7 @@ export function Schedule() {
   const createClassMutation = useCreateClass();
   const deleteClassMutation = useDeleteClass();
   const checkInMutation = useCheckInToClass();
+  const updateClassMutation = useUpdateClass();
 
   const { data: classDetail, isLoading: detailLoading } = useGetClass(
     activeGymId as number,
@@ -57,10 +87,10 @@ export function Schedule() {
     { search: memberSearch || undefined, limit: 20 },
     { query: { enabled: !!activeGymId && !!checkinClassId } }
   );
-  const members = membersData?.members ?? (Array.isArray(membersData) ? membersData : []);
+  const members: Member[] = membersData?.members ?? [];
 
   function resetForm() {
-    setFormData({ name: "", startTime: "", endTime: "", capacity: "", coachName: "", description: "", type: "regular" });
+    setFormData({ name: "", startTime: "", endTime: "", capacity: "", coachId: "none", description: "", type: "regular" });
   }
 
   function handleCreateClass(e: React.FormEvent) {
@@ -78,9 +108,9 @@ export function Schedule() {
           startTime: startDate.toISOString(),
           endTime: endDate.toISOString(),
           capacity: parseInt(formData.capacity, 10),
-          type: formData.type as any,
+          type: formData.type as CreateClassBodyType,
           description: formData.description || null,
-          coachId: null,
+          coachId: formData.coachId && formData.coachId !== "none" ? parseInt(formData.coachId, 10) : null,
         },
       },
       {
@@ -138,6 +168,56 @@ export function Schedule() {
     );
   }
 
+  function handleAssignCoach(coachId: string) {
+    if (!activeGymId || !detailClassId) return;
+
+    const newCoachId = coachId === "none" ? null : parseInt(coachId, 10);
+
+    updateClassMutation.mutate(
+      {
+        gymId: activeGymId,
+        classId: detailClassId,
+        data: { coachId: newCoachId },
+      },
+      {
+        onSuccess: () => {
+          toast({ title: "Coach Updated", description: "Coach assignment has been updated." });
+          queryClient.invalidateQueries({ queryKey: getListClassesQueryKey(activeGymId) });
+          queryClient.invalidateQueries({ queryKey: getGetClassQueryKey(activeGymId, detailClassId) });
+        },
+        onError: () => {
+          toast({ title: "Error", description: "Failed to update coach." });
+        },
+      }
+    );
+  }
+
+  function handlePrevWeek() {
+    const newOffset = weekOffset - 1;
+    setWeekOffset(newOffset);
+    if (newOffset === 0) {
+      const base = startOfWeek(new Date(), { weekStartsOn: 1 });
+      const newDays = Array.from({ length: 7 }).map((_, i) => addDays(base, i));
+      const idx = newDays.findIndex((d) => isToday(d));
+      setSelectedDayIndex(idx >= 0 ? idx : 0);
+    } else {
+      setSelectedDayIndex(0);
+    }
+  }
+
+  function handleNextWeek() {
+    const newOffset = weekOffset + 1;
+    setWeekOffset(newOffset);
+    if (newOffset === 0) {
+      const base = startOfWeek(new Date(), { weekStartsOn: 1 });
+      const newDays = Array.from({ length: 7 }).map((_, i) => addDays(base, i));
+      const idx = newDays.findIndex((d) => isToday(d));
+      setSelectedDayIndex(idx >= 0 ? idx : 0);
+    } else {
+      setSelectedDayIndex(0);
+    }
+  }
+
   return (
     <div className="space-y-4 md:space-y-6 h-full flex flex-col">
       <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 md:gap-4 shrink-0">
@@ -154,19 +234,54 @@ export function Schedule() {
         </button>
       </header>
 
-      <div className="flex gap-2 md:grid md:grid-cols-7 md:gap-4 mb-2 md:mb-6 shrink-0 overflow-x-auto scrollbar-none -mx-4 px-4 md:mx-0 md:px-0 pb-1 md:pb-0">
-        {days.map((day, i) => (
-          <div key={i} className={`p-2.5 md:p-3 rounded-2xl text-center border shrink-0 min-w-[56px] md:min-w-0 ${
-            i === 0 ? "bg-primary/10 border-primary/30" : "bg-card border-border"
-          }`}>
-            <div className={`text-[10px] md:text-xs font-semibold uppercase mb-0.5 md:mb-1 ${i === 0 ? "text-primary" : "text-muted-foreground"}`}>
-              {format(day, 'EEE')}
-            </div>
-            <div className={`text-lg md:text-xl font-bold ${i === 0 ? "text-foreground" : "text-foreground"}`}>
-              {format(day, 'd')}
-            </div>
-          </div>
-        ))}
+      <div className="flex items-center gap-2 shrink-0">
+        <button
+          onClick={handlePrevWeek}
+          className="p-2 rounded-lg border border-border hover:bg-secondary transition-colors"
+          aria-label="Previous week"
+        >
+          <ChevronLeft className="h-4 w-4" />
+        </button>
+        <div className="flex gap-2 md:grid md:grid-cols-7 md:gap-4 flex-1 mb-0 overflow-x-auto scrollbar-none pb-1 md:pb-0">
+          {days.map((day, i) => {
+            const isSelected = i === selectedDayIndex;
+            const isDayToday = isToday(day);
+            return (
+              <button
+                key={i}
+                onClick={() => setSelectedDayIndex(i)}
+                className={`p-2.5 md:p-3 rounded-2xl text-center border shrink-0 min-w-[56px] md:min-w-0 transition-all cursor-pointer ${
+                  isSelected
+                    ? "bg-primary/10 border-primary/30 ring-2 ring-primary/20"
+                    : isDayToday
+                      ? "bg-primary/5 border-primary/20"
+                      : "bg-card border-border hover:border-primary/30"
+                }`}
+              >
+                <div className={`text-[10px] md:text-xs font-semibold uppercase mb-0.5 md:mb-1 ${isSelected ? "text-primary" : isDayToday ? "text-primary/70" : "text-muted-foreground"}`}>
+                  {format(day, 'EEE')}
+                </div>
+                <div className={`text-lg md:text-xl font-bold ${isSelected ? "text-primary" : "text-foreground"}`}>
+                  {format(day, 'd')}
+                </div>
+                {isDayToday && (
+                  <div className="w-1.5 h-1.5 rounded-full bg-primary mx-auto mt-1" />
+                )}
+              </button>
+            );
+          })}
+        </div>
+        <button
+          onClick={handleNextWeek}
+          className="p-2 rounded-lg border border-border hover:bg-secondary transition-colors"
+          aria-label="Next week"
+        >
+          <ChevronRight className="h-4 w-4" />
+        </button>
+      </div>
+
+      <div className="text-sm text-muted-foreground shrink-0">
+        {format(selectedDate, 'EEEE, MMMM d, yyyy')}
       </div>
 
       <div className="flex-1 bg-card border border-border rounded-2xl shadow-sm p-4 md:p-6 overflow-y-auto custom-scrollbar">
@@ -176,7 +291,7 @@ export function Schedule() {
           </div>
         ) : (
           <div className="space-y-3 md:space-y-4">
-            {classes?.length ? classes.map((cls, i) => (
+            {filteredClasses.length ? filteredClasses.map((cls, i) => (
               <motion.div
                 key={cls.id}
                 initial={{ opacity: 0, x: -10 }}
@@ -273,8 +388,20 @@ export function Schedule() {
                 <Input id="capacity" type="number" min="1" value={formData.capacity} onChange={(e) => setFormData(p => ({ ...p, capacity: e.target.value }))} required />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="coach-name">Coach Name</Label>
-                <Input id="coach-name" value={formData.coachName} onChange={(e) => setFormData(p => ({ ...p, coachName: e.target.value }))} />
+                <Label htmlFor="coach-select">Coach</Label>
+                <Select value={formData.coachId} onValueChange={(v) => setFormData(p => ({ ...p, coachId: v }))}>
+                  <SelectTrigger id="coach-select">
+                    <SelectValue placeholder="Select coach" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">No Coach</SelectItem>
+                    {activeStaff.map((s) => (
+                      <SelectItem key={s.id} value={String(s.id)}>
+                        {s.firstName} {s.lastName}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
             <div className="space-y-2">
@@ -319,9 +446,27 @@ export function Schedule() {
                     <span className="text-muted-foreground">End</span>
                     <p className="font-medium">{format(new Date(classDetail.endTime), 'MMM d, h:mm a')}</p>
                   </div>
-                  <div>
+                  <div className="col-span-2">
                     <span className="text-muted-foreground">Coach</span>
-                    <p className="font-medium">{classDetail.coachName || "TBD"}</p>
+                    <div className="mt-1">
+                      <Select
+                        value={classDetail.coachId ? String(classDetail.coachId) : "none"}
+                        onValueChange={handleAssignCoach}
+                        disabled={updateClassMutation.isPending}
+                      >
+                        <SelectTrigger className="w-full">
+                          <SelectValue placeholder="Assign Coach" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">No Coach</SelectItem>
+                          {activeStaff.map((s) => (
+                            <SelectItem key={s.id} value={String(s.id)}>
+                              {s.firstName} {s.lastName}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
                   <div>
                     <span className="text-muted-foreground">Capacity</span>
@@ -409,7 +554,7 @@ export function Schedule() {
               />
             </div>
             <div className="max-h-64 overflow-y-auto space-y-1">
-              {members.length ? members.map((member: any) => (
+              {members.length ? members.map((member) => (
                 <button
                   key={member.id}
                   onClick={() => handleCheckIn(member.id)}
