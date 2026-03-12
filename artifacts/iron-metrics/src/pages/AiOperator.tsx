@@ -325,7 +325,7 @@ export function AiOperator() {
         <Bot className="absolute -right-4 -bottom-4 h-24 md:h-32 w-24 md:w-32 text-primary/10" />
       </div>
 
-      <div className="flex-1 bg-card border border-border rounded-2xl shadow-sm overflow-hidden flex flex-col">
+      <div className="flex-1 min-h-[60vh] bg-card border border-border rounded-2xl shadow-sm overflow-hidden flex flex-col">
         <div className="p-3 md:p-4 border-b border-border bg-muted/30 shrink-0">
           <div className="flex justify-between items-center mb-3">
             <div className="flex gap-1 bg-muted/50 rounded-lg p-1">
