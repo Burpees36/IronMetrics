@@ -129,6 +129,21 @@ router.patch("/gyms/:gymId", async (req, res): Promise<void> => {
     return;
   }
 
+  const [existingGym] = await db.select().from(gymsTable).where(eq(gymsTable.id, gymId));
+  if (!existingGym) {
+    res.status(404).json({ error: "Gym not found" });
+    return;
+  }
+
+  const isOwner = existingGym.ownerId === req.user.id;
+  const [staffEntry] = await db.select().from(gymStaffTable).where(
+    and(eq(gymStaffTable.gymId, gymId), eq(gymStaffTable.userId, req.user.id))
+  );
+  if (!isOwner && !staffEntry) {
+    res.status(403).json({ error: "You do not have access to this gym" });
+    return;
+  }
+
   const parsed = UpdateGymBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });

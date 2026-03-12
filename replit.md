@@ -115,8 +115,8 @@ All pages with real API data (no hardcoded values), fully interactive:
 6. **Leads** — Pipeline with create/edit lead dialogs, stage filter badges, move stage, convert to member, mark as lost
 7. **Billing** — 5-tab billing command center (Plans, Subscriptions, Payments, Refunds, Cancelled). MRR/Active/ARM/Failed/Collected summary cards. Subscription actions (pause/resume/cancel with reason). Cancelled members view with month picker and lost revenue tracking. Full Stripe integration
 8. **Workouts** — WOD cards with create workout dialog (title, type, movements, date)
-9. **AI Operator** — Fully functional: approve/dismiss/edit AI tasks, type filter tabs, edit modal for draft content, owner brief generation with rendered display modal, task count badges, error states
-10. **Settings** — General gym info, staff management table with invite staff dialog
+9. **AI Operator** — Fully functional: approve/dismiss/edit AI tasks, type filter tabs, edit modal for draft content, owner brief generation with rendered display modal, task count badges, error states, gym-branded email sending (Send Email button visible only when platform + gym email configured, contextual banner for missing config)
+10. **Settings** — General gym info, email settings (fromName/fromEmail for branded sending), staff management table with invite staff dialog
 11. **Resources** — Operational playbooks for gym owners with expandable phases
 
 ## Generated API Hooks (Mutations)
@@ -161,7 +161,8 @@ All mounted at `/api` prefix:
 - Intelligence: RSI score, risk radar, interventions, cohorts, revenue forecast, overview
 - Recommendations: Execution state, checklist toggle, owner actions (CRUD)
 - Knowledge: Sources CRUD, documents, chunks, search, taxonomy, stats, ingest jobs, audit trail
-- AI: Tasks, outreach generation, owner brief generation
+- AI: Tasks, outreach generation, owner brief generation, email-status, send-email (gym-branded)
+- Email: Platform holds single RESEND_API_KEY or SENDGRID_API_KEY; each gym configures fromEmail/fromName in Settings for branded sending. AI routes enforce gym access (owner or staff).
 - Reports: Dashboard stats, membership, revenue, attendance reports
 
 ## Key Patterns

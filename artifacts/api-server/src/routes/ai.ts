@@ -1,6 +1,6 @@
-import { Router, type IRouter } from "express";
+import { Router, type IRouter, type Request, type Response, type NextFunction } from "express";
 import { eq, desc, and } from "drizzle-orm";
-import { db, aiTasksTable, aiGeneratedContentTable, membersTable, leadsTable, gymsTable } from "@workspace/db";
+import { db, aiTasksTable, aiGeneratedContentTable, membersTable, leadsTable, gymsTable, gymStaffTable } from "@workspace/db";
 import { CreateAiTaskBody, GenerateMemberOutreachBody, UpdateAiTaskBody } from "@workspace/api-zod";
 import { generateAiTasks } from "../services/ai-task-generation";
 import { getEmailService } from "../services/email-service";
@@ -13,9 +13,25 @@ function parseGymId(params: any): number | null {
   return isNaN(id) ? null : id;
 }
 
+async function verifyGymAccess(gymId: number, userId: string): Promise<{ allowed: boolean; gym?: any }> {
+  const [gym] = await db.select().from(gymsTable).where(eq(gymsTable.id, gymId));
+  if (!gym) return { allowed: false };
+
+  const isOwner = gym.ownerId === userId;
+  if (isOwner) return { allowed: true, gym };
+
+  const [staffEntry] = await db.select().from(gymStaffTable).where(
+    and(eq(gymStaffTable.gymId, gymId), eq(gymStaffTable.userId, userId))
+  );
+  return { allowed: !!staffEntry, gym };
+}
+
 router.get("/gyms/:gymId/ai/tasks", async (req, res): Promise<void> => {
   const gymId = parseGymId(req.params);
   if (!gymId) { res.status(400).json({ error: "Invalid gym ID" }); return; }
+
+  const access = await verifyGymAccess(gymId, req.user.id);
+  if (!access.allowed) { res.status(access.gym ? 403 : 404).json({ error: access.gym ? "You do not have access to this gym" : "Gym not found" }); return; }
 
   const tasks = await db.select().from(aiTasksTable).where(eq(aiTasksTable.gymId, gymId)).orderBy(desc(aiTasksTable.createdAt));
   res.json(tasks);
@@ -24,6 +40,9 @@ router.get("/gyms/:gymId/ai/tasks", async (req, res): Promise<void> => {
 router.patch("/gyms/:gymId/ai/tasks/:taskId", async (req, res): Promise<void> => {
   const gymId = parseGymId(req.params);
   if (!gymId) { res.status(400).json({ error: "Invalid gym ID" }); return; }
+
+  const access = await verifyGymAccess(gymId, req.user.id);
+  if (!access.allowed) { res.status(access.gym ? 403 : 404).json({ error: access.gym ? "You do not have access to this gym" : "Gym not found" }); return; }
 
   const taskId = parseInt(req.params.taskId, 10);
   if (isNaN(taskId)) { res.status(400).json({ error: "Invalid task ID" }); return; }
@@ -55,6 +74,9 @@ router.post("/gyms/:gymId/ai/tasks", async (req, res): Promise<void> => {
   const gymId = parseGymId(req.params);
   if (!gymId) { res.status(400).json({ error: "Invalid gym ID" }); return; }
 
+  const access = await verifyGymAccess(gymId, req.user.id);
+  if (!access.allowed) { res.status(access.gym ? 403 : 404).json({ error: access.gym ? "You do not have access to this gym" : "Gym not found" }); return; }
+
   const parsed = CreateAiTaskBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
 
@@ -65,6 +87,9 @@ router.post("/gyms/:gymId/ai/tasks", async (req, res): Promise<void> => {
 router.post("/gyms/:gymId/ai/generate-outreach", async (req, res): Promise<void> => {
   const gymId = parseGymId(req.params);
   if (!gymId) { res.status(400).json({ error: "Invalid gym ID" }); return; }
+
+  const access = await verifyGymAccess(gymId, req.user.id);
+  if (!access.allowed) { res.status(access.gym ? 403 : 404).json({ error: access.gym ? "You do not have access to this gym" : "Gym not found" }); return; }
 
   const parsed = GenerateMemberOutreachBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
@@ -117,6 +142,9 @@ router.post("/gyms/:gymId/ai/generate-outreach", async (req, res): Promise<void>
 router.post("/gyms/:gymId/ai/generate-brief", async (req, res): Promise<void> => {
   const gymId = parseGymId(req.params);
   if (!gymId) { res.status(400).json({ error: "Invalid gym ID" }); return; }
+
+  const access = await verifyGymAccess(gymId, req.user.id);
+  if (!access.allowed) { res.status(access.gym ? 403 : 404).json({ error: access.gym ? "You do not have access to this gym" : "Gym not found" }); return; }
 
   const { count } = await import("drizzle-orm");
   const { eq, and, sql } = await import("drizzle-orm");
@@ -179,20 +207,25 @@ router.get("/gyms/:gymId/ai/email-status", async (req, res): Promise<void> => {
   const gymId = parseGymId(req.params);
   if (!gymId) { res.status(400).json({ error: "Invalid gym ID" }); return; }
 
-  const [gym] = await db.select().from(gymsTable).where(eq(gymsTable.id, gymId));
+  const access = await verifyGymAccess(gymId, req.user.id);
+  if (!access.allowed) { res.status(access.gym ? 403 : 404).json({ error: access.gym ? "You do not have access to this gym" : "Gym not found" }); return; }
+
   const emailService = getEmailService();
-  const gymEmailConfigured = !!(gym?.fromEmail);
+  const gymEmailConfigured = !!(access.gym?.fromEmail);
   res.json({
     configured: emailService.isConfigured(),
     gymEmailConfigured,
-    fromEmail: gym?.fromEmail || null,
-    fromName: gym?.fromName || null,
+    fromEmail: access.gym?.fromEmail || null,
+    fromName: access.gym?.fromName || null,
   });
 });
 
 router.post("/gyms/:gymId/ai/tasks/:taskId/send-email", async (req, res): Promise<void> => {
   const gymId = parseGymId(req.params);
   if (!gymId) { res.status(400).json({ error: "Invalid gym ID" }); return; }
+
+  const access = await verifyGymAccess(gymId, req.user.id);
+  if (!access.allowed) { res.status(access.gym ? 403 : 404).json({ error: access.gym ? "You do not have access to this gym" : "Gym not found" }); return; }
 
   const taskId = parseInt(req.params.taskId, 10);
   if (isNaN(taskId)) { res.status(400).json({ error: "Invalid task ID" }); return; }
@@ -228,15 +261,11 @@ router.post("/gyms/:gymId/ai/tasks/:taskId/send-email", async (req, res): Promis
     return;
   }
 
-  const [gym] = await db.select().from(gymsTable).where(eq(gymsTable.id, gymId));
+  const gym = access.gym;
   if (!gym?.fromEmail) {
     res.status(400).json({ error: "Gym email sender not configured. Go to Settings to set your From Email and From Name." });
     return;
   }
-
-  const fromAddress = gym.fromName
-    ? `${gym.fromName} <${gym.fromEmail}>`
-    : gym.fromEmail;
 
   const subjectMap: Record<string, string> = {
     outreach: `Checking in, ${recipientName.split(" ")[0]}`,
@@ -250,7 +279,8 @@ router.post("/gyms/:gymId/ai/tasks/:taskId/send-email", async (req, res): Promis
     to: recipientEmail,
     subject,
     text: task.aiContent,
-    from: fromAddress,
+    fromEmail: gym.fromEmail,
+    fromName: gym.fromName || undefined,
   });
 
   if (!result.success) {
@@ -266,6 +296,9 @@ router.post("/gyms/:gymId/ai/tasks/:taskId/send-email", async (req, res): Promis
 router.post("/gyms/:gymId/ai/generate-tasks", async (req, res): Promise<void> => {
   const gymId = parseGymId(req.params);
   if (!gymId) { res.status(400).json({ error: "Invalid gym ID" }); return; }
+
+  const access = await verifyGymAccess(gymId, req.user.id);
+  if (!access.allowed) { res.status(access.gym ? 403 : 404).json({ error: access.gym ? "You do not have access to this gym" : "Gym not found" }); return; }
 
   try {
     const result = await generateAiTasks(gymId);

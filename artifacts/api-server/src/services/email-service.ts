@@ -1,6 +1,14 @@
+interface EmailParams {
+  to: string;
+  subject: string;
+  text: string;
+  fromEmail?: string;
+  fromName?: string;
+}
+
 interface EmailService {
   isConfigured(): boolean;
-  sendEmail(params: { to: string; subject: string; text: string; from?: string }): Promise<{ success: boolean; messageId?: string; error?: string }>;
+  sendEmail(params: EmailParams): Promise<{ success: boolean; messageId?: string; error?: string }>;
 }
 
 class ResendEmailService implements EmailService {
@@ -14,8 +22,17 @@ class ResendEmailService implements EmailService {
     return !!this.apiKey;
   }
 
-  async sendEmail(params: { to: string; subject: string; text: string; from?: string }): Promise<{ success: boolean; messageId?: string; error?: string }> {
+  async sendEmail(params: EmailParams): Promise<{ success: boolean; messageId?: string; error?: string }> {
     try {
+      let from: string;
+      if (params.fromEmail && params.fromName) {
+        from = `${params.fromName} <${params.fromEmail}>`;
+      } else if (params.fromEmail) {
+        from = params.fromEmail;
+      } else {
+        from = "Iron Metrics <onboarding@resend.dev>";
+      }
+
       const response = await fetch("https://api.resend.com/emails", {
         method: "POST",
         headers: {
@@ -23,7 +40,7 @@ class ResendEmailService implements EmailService {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          from: params.from || "Iron Metrics <onboarding@resend.dev>",
+          from,
           to: [params.to],
           subject: params.subject,
           text: params.text,
@@ -54,8 +71,15 @@ class SendGridEmailService implements EmailService {
     return !!this.apiKey;
   }
 
-  async sendEmail(params: { to: string; subject: string; text: string; from?: string }): Promise<{ success: boolean; messageId?: string; error?: string }> {
+  async sendEmail(params: EmailParams): Promise<{ success: boolean; messageId?: string; error?: string }> {
     try {
+      const fromObj: { email: string; name?: string } = {
+        email: params.fromEmail || "noreply@ironmetrics.app",
+      };
+      if (params.fromName) {
+        fromObj.name = params.fromName;
+      }
+
       const response = await fetch("https://api.sendgrid.com/v3/mail/send", {
         method: "POST",
         headers: {
@@ -64,7 +88,7 @@ class SendGridEmailService implements EmailService {
         },
         body: JSON.stringify({
           personalizations: [{ to: [{ email: params.to }] }],
-          from: { email: params.from || "noreply@ironmetrics.app" },
+          from: fromObj,
           subject: params.subject,
           content: [{ type: "text/plain", value: params.text }],
         }),
