@@ -84,6 +84,7 @@ export function Billing() {
   const [cancelDialog, setCancelDialog] = useState<{ subId: number; memberName: string } | null>(null);
   const [cancelReason, setCancelReason] = useState("");
   const [cancelAtPeriodEnd, setCancelAtPeriodEnd] = useState(true);
+  const [pauseConfirm, setPauseConfirm] = useState<{ subId: number; memberName: string } | null>(null);
 
   if (!activeGymId) {
     return (
@@ -183,8 +184,6 @@ export function Billing() {
       }
     );
   };
-
-  const [pauseConfirm, setPauseConfirm] = useState<{ subId: number; memberName: string } | null>(null);
 
   const handlePauseSub = (subId: number, memberName: string) => {
     setPauseConfirm({ subId, memberName });
