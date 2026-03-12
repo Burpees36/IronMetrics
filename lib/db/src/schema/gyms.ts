@@ -15,6 +15,8 @@ export const gymsTable = pgTable("gyms", {
   timezone: text("timezone").notNull().default("America/New_York"),
   logoUrl: text("logo_url"),
   website: text("website"),
+  businessName: text("business_name"),
+  description: text("description"),
   fromEmail: text("from_email"),
   fromName: text("from_name"),
   ownerId: text("owner_id").notNull(),

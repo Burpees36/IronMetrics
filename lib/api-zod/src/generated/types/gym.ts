@@ -11,6 +11,10 @@ export interface Gym {
   name: string;
   slug: string;
   /** @nullable */
+  businessName?: string | null;
+  /** @nullable */
+  description?: string | null;
+  /** @nullable */
   email?: string | null;
   /** @nullable */
   phone?: string | null;
@@ -31,6 +35,7 @@ export interface Gym {
   fromEmail?: string | null;
   /** @nullable */
   fromName?: string | null;
+  ownerId?: string;
   memberCount: number;
   activeCount: number;
   createdAt: Date;

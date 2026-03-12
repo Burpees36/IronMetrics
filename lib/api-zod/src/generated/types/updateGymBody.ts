@@ -9,6 +9,10 @@
 export interface UpdateGymBody {
   name?: string;
   /** @nullable */
+  businessName?: string | null;
+  /** @nullable */
+  description?: string | null;
+  /** @nullable */
   email?: string | null;
   /** @nullable */
   phone?: string | null;

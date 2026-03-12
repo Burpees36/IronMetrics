@@ -144,12 +144,11 @@ router.patch("/gyms/:gymId", async (req, res): Promise<void> => {
     return;
   }
 
-  const isOwner = existingGym.ownerId === req.user.id;
   const [staffEntry] = await db.select().from(gymStaffTable).where(
     and(eq(gymStaffTable.gymId, gymId), eq(gymStaffTable.userId, req.user.id))
   );
-  if (!isOwner && !staffEntry) {
-    res.status(403).json({ error: "You do not have access to this gym" });
+  if (!staffEntry || !["gym_owner", "admin"].includes(staffEntry.role)) {
+    res.status(403).json({ error: "Only owners and admins can update gym settings" });
     return;
   }
 

@@ -2367,6 +2367,10 @@ components:
           type: string
         slug:
           type: string
+        businessName:
+          type: ["string", "null"]
+        description:
+          type: ["string", "null"]
         email:
           type: ["string", "null"]
         phone:
@@ -2389,6 +2393,8 @@ components:
           type: ["string", "null"]
         fromName:
           type: ["string", "null"]
+        ownerId:
+          type: string
         memberCount:
           type: integer
         activeCount:
@@ -2433,6 +2439,10 @@ components:
       properties:
         name:
           type: string
+        businessName:
+          type: ["string", "null"]
+        description:
+          type: ["string", "null"]
         email:
           type: ["string", "null"]
         phone:
