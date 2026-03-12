@@ -31,7 +31,12 @@ router.post("/gyms/:gymId/workouts", async (req, res): Promise<void> => {
   const gymId = parseGymId(req.params);
   if (!gymId) { res.status(400).json({ error: "Invalid gym ID" }); return; }
 
-  const parsed = CreateWorkoutBody.safeParse(req.body);
+  const bodyWithDate = { ...req.body };
+  if (typeof bodyWithDate.workoutDate === "string") {
+    bodyWithDate.workoutDate = new Date(bodyWithDate.workoutDate + (bodyWithDate.workoutDate.includes("T") ? "" : "T00:00:00"));
+  }
+
+  const parsed = CreateWorkoutBody.safeParse(bodyWithDate);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
 
   const [workout] = await db.insert(workoutsTable).values({

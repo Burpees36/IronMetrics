@@ -277,10 +277,10 @@ export function Workouts() {
         });
         setPanelOpen(false);
         setEditData(null);
-      } catch {
+      } catch (error: any) {
         toast({
           title: "Error",
-          description: "Failed to save programming. Please try again.",
+          description: error?.data?.error || error?.message || "Failed to save programming. Please try again.",
           variant: "destructive",
         });
       }
