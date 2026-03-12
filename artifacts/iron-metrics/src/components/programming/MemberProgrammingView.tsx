@@ -1,11 +1,6 @@
 import React, { useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import {
-  ChevronDown,
-  ChevronUp,
-  Dumbbell,
-  Clock,
-  Timer,
   FileText,
   BarChart3,
   Users,
@@ -17,7 +12,9 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { getSectionTypeInfo, SectionData } from "./SectionEditor";
+import { getSectionTypeInfo } from "./SectionEditor";
+
+const LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
 interface Workout {
   id: number;
@@ -36,39 +33,22 @@ interface MemberProgrammingViewProps {
   isLoggingResult: boolean;
 }
 
-function workoutToSection(workout: Workout): SectionData & { workoutId: number } {
-  return {
-    workoutId: workout.id,
-    id: `workout-${workout.id}`,
-    type: (workout.type as any) || "conditioning",
-    title: workout.title,
-    instructions: workout.description || "",
-    movements: workout.movements || [],
-    timeCap: "",
-    stimulus: "",
-    scalingNotes: "",
-    coachNotes: "",
-    memberNotes: "",
-    trackResults: true,
-  };
-}
-
 interface MemberSectionCardProps {
   workout: Workout;
   onLogResult: (workoutId: number, result: { result: string; notes: string; isRx: boolean; isPr: boolean }) => void;
   isLoggingResult: boolean;
   index: number;
+  total: number;
 }
 
-function MemberSectionCard({ workout, onLogResult, isLoggingResult, index }: MemberSectionCardProps) {
-  const [expanded, setExpanded] = useState(index === 0);
+function MemberSectionCard({ workout, onLogResult, isLoggingResult, index, total }: MemberSectionCardProps) {
   const [showLogForm, setShowLogForm] = useState(false);
   const [result, setResult] = useState("");
   const [notes, setNotes] = useState("");
   const [isRx, setIsRx] = useState(false);
   const [isPr, setIsPr] = useState(false);
 
-  const typeMapping: Record<string, any> = {
+  const typeMapping: Record<string, string> = {
     amrap: "conditioning",
     for_time: "conditioning",
     emom: "conditioning",
@@ -84,7 +64,8 @@ function MemberSectionCard({ workout, onLogResult, isLoggingResult, index }: Mem
   };
 
   const sectionType = typeMapping[workout.type] || "conditioning";
-  const typeInfo = getSectionTypeInfo(sectionType);
+  const typeInfo = getSectionTypeInfo(sectionType as any);
+  const letter = LETTERS[index] || String(index + 1);
 
   const handleSubmitResult = () => {
     if (!result.trim()) return;
@@ -100,157 +81,127 @@ function MemberSectionCard({ workout, onLogResult, isLoggingResult, index }: Mem
     <motion.div
       initial={{ opacity: 0, y: 15 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: index * 0.08 }}
-      className="bg-card border border-border rounded-2xl overflow-hidden shadow-sm"
+      transition={{ delay: index * 0.06 }}
+      className="space-y-1"
     >
-      <button
-        onClick={() => setExpanded(!expanded)}
-        className="w-full flex items-center gap-3 px-5 py-4 text-left hover:bg-muted/30 transition-colors"
-      >
-        <div className={`h-10 w-10 rounded-xl flex items-center justify-center bg-muted ${typeInfo.color}`}>
-          {typeInfo.icon}
-        </div>
-        <div className="flex-1 min-w-0">
-          <h3 className="text-base font-bold text-foreground truncate">
-            {workout.title}
-          </h3>
-          <p className="text-xs text-muted-foreground capitalize">
-            {workout.type?.replace("_", " ")}
-            {workout.movements.length > 0 && ` · ${workout.movements.length} movements`}
+      <div className="flex items-center gap-2 mb-1.5">
+        <span className="h-6 w-6 rounded-lg flex items-center justify-center bg-primary/10 text-primary text-xs font-bold shrink-0">
+          {letter}
+        </span>
+        <span className={`${typeInfo.color} shrink-0`}>{typeInfo.icon}</span>
+        <h3 className="text-sm font-bold text-foreground">
+          {workout.title}
+        </h3>
+        {workout.resultCount > 0 && (
+          <span className="flex items-center gap-1 text-[10px] text-muted-foreground ml-auto">
+            <Users className="h-3 w-3" />
+            {workout.resultCount}
+          </span>
+        )}
+      </div>
+
+      {workout.description && (
+        <div className="pl-8 mb-2">
+          <p className="text-sm text-foreground/90 whitespace-pre-line leading-relaxed">
+            {workout.description}
           </p>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
-          {workout.resultCount > 0 && (
-            <span className="flex items-center gap-1 text-xs text-muted-foreground">
-              <Users className="h-3 w-3" />
-              {workout.resultCount}
-            </span>
-          )}
-          {expanded ? (
-            <ChevronUp className="h-4 w-4 text-muted-foreground" />
-          ) : (
-            <ChevronDown className="h-4 w-4 text-muted-foreground" />
-          )}
+      )}
+
+      {workout.movements.length > 0 && !workout.description && (
+        <div className="pl-8 mb-2">
+          <p className="text-sm text-foreground/80">
+            {workout.movements.join(" · ")}
+          </p>
         </div>
-      </button>
+      )}
 
-      <AnimatePresence>
-        {expanded && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: "auto", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            className="overflow-hidden"
+      <div className="pl-8">
+        {!showLogForm ? (
+          <button
+            onClick={() => setShowLogForm(true)}
+            className="flex items-center gap-1.5 text-xs text-primary hover:text-primary/80 transition-colors font-medium"
           >
-            <div className="px-5 pb-5 space-y-4">
-              {workout.description && (
-                <div className="p-4 rounded-xl bg-muted/50 border border-border">
-                  <p className="text-sm text-foreground whitespace-pre-line leading-relaxed">
-                    {workout.description}
-                  </p>
+            <BarChart3 className="h-3.5 w-3.5" />
+            Log Result
+          </button>
+        ) : (
+          <motion.div
+            initial={{ opacity: 0, y: 5 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="space-y-2.5 p-3 rounded-xl bg-muted/30 border border-border mt-1"
+          >
+            <div className="space-y-1">
+              <Label className="text-xs">
+                Result <span className="text-destructive">*</span>
+              </Label>
+              <Input
+                value={result}
+                onChange={(e) => setResult(e.target.value)}
+                placeholder="e.g. 5 rounds + 3 reps, 12:45, 225 lbs"
+                className="h-8 text-sm"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Notes</Label>
+              <Input
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="Optional notes"
+                className="h-8 text-sm"
+              />
+            </div>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-1.5">
+                  <Switch
+                    checked={isRx}
+                    onCheckedChange={setIsRx}
+                    className="scale-75"
+                  />
+                  <Label className="text-xs cursor-pointer flex items-center gap-1">
+                    <CheckCircle2 className="h-3 w-3 text-emerald-500" />
+                    Rx
+                  </Label>
                 </div>
-              )}
-
-              {workout.movements.length > 0 && (
-                <div className="space-y-2">
-                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                    Movements
-                  </p>
-                  <div className="space-y-1.5">
-                    {workout.movements.map((mov, j) => (
-                      <div
-                        key={j}
-                        className="flex items-center gap-2.5 px-3 py-2 rounded-lg bg-muted/30"
-                      >
-                        <Dumbbell className="h-3.5 w-3.5 text-primary shrink-0" />
-                        <span className="text-sm text-foreground">{mov}</span>
-                      </div>
-                    ))}
-                  </div>
+                <div className="flex items-center gap-1.5">
+                  <Switch
+                    checked={isPr}
+                    onCheckedChange={setIsPr}
+                    className="scale-75"
+                  />
+                  <Label className="text-xs cursor-pointer flex items-center gap-1">
+                    <Trophy className="h-3 w-3 text-amber-500" />
+                    PR
+                  </Label>
                 </div>
-              )}
-
-              <div className="pt-2 border-t border-border">
-                {!showLogForm ? (
-                  <button
-                    onClick={() => setShowLogForm(true)}
-                    className="flex items-center gap-2 px-4 py-2.5 w-full justify-center rounded-xl border border-dashed border-primary/40 text-primary hover:bg-primary/5 transition-colors text-sm font-medium"
-                  >
-                    <BarChart3 className="h-4 w-4" />
-                    Log My Result
-                  </button>
-                ) : (
-                  <motion.div
-                    initial={{ opacity: 0, y: 5 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="space-y-3 p-4 rounded-xl bg-muted/30 border border-border"
-                  >
-                    <div className="space-y-1.5">
-                      <Label className="text-xs">
-                        Result <span className="text-destructive">*</span>
-                      </Label>
-                      <Input
-                        value={result}
-                        onChange={(e) => setResult(e.target.value)}
-                        placeholder="e.g. 5 rounds + 3 reps, 12:45, 225 lbs"
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label className="text-xs">Notes</Label>
-                      <Input
-                        value={notes}
-                        onChange={(e) => setNotes(e.target.value)}
-                        placeholder="Optional notes about your performance"
-                      />
-                    </div>
-                    <div className="flex items-center gap-6">
-                      <div className="flex items-center gap-2">
-                        <Switch
-                          checked={isRx}
-                          onCheckedChange={setIsRx}
-                        />
-                        <Label className="text-xs cursor-pointer flex items-center gap-1">
-                          <CheckCircle2 className="h-3 w-3 text-emerald-500" />
-                          Rx
-                        </Label>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Switch
-                          checked={isPr}
-                          onCheckedChange={setIsPr}
-                        />
-                        <Label className="text-xs cursor-pointer flex items-center gap-1">
-                          <Trophy className="h-3 w-3 text-amber-500" />
-                          PR
-                        </Label>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2 pt-1">
-                      <button
-                        onClick={() => setShowLogForm(false)}
-                        className="px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        onClick={handleSubmitResult}
-                        disabled={!result.trim() || isLoggingResult}
-                        className="flex items-center gap-1.5 px-4 py-1.5 text-xs font-medium rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
-                      >
-                        {isLoggingResult && (
-                          <Loader2 className="h-3 w-3 animate-spin" />
-                        )}
-                        Submit Result
-                      </button>
-                    </div>
-                  </motion.div>
-                )}
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setShowLogForm(false)}
+                  className="px-2.5 py-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSubmitResult}
+                  disabled={!result.trim() || isLoggingResult}
+                  className="flex items-center gap-1 px-3 py-1 text-xs font-medium rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
+                >
+                  {isLoggingResult && (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  )}
+                  Submit
+                </button>
               </div>
             </div>
           </motion.div>
         )}
-      </AnimatePresence>
+      </div>
+
+      {index < total - 1 && (
+        <div className="border-b border-border/50 my-3 ml-8" />
+      )}
     </motion.div>
   );
 }
@@ -278,7 +229,7 @@ export function MemberProgrammingView({
             <Zap className="h-5 w-5 text-primary" />
           </div>
           <div>
-            <h2 className="text-lg font-bold text-foreground">Today's Programming</h2>
+            <h2 className="text-lg font-bold text-foreground">Today's Workout</h2>
             <p className="text-xs text-muted-foreground">
               {new Date(todayStr + "T00:00:00").toLocaleDateString("en-US", {
                 weekday: "long",
@@ -290,7 +241,7 @@ export function MemberProgrammingView({
         </div>
 
         {todayWorkouts.length > 0 ? (
-          <div className="space-y-3">
+          <div className="bg-card border border-border rounded-2xl p-5">
             {todayWorkouts.map((workout, i) => (
               <MemberSectionCard
                 key={workout.id}
@@ -298,6 +249,7 @@ export function MemberProgrammingView({
                 onLogResult={onLogResult}
                 isLoggingResult={isLoggingResult}
                 index={i}
+                total={todayWorkouts.length}
               />
             ))}
           </div>
@@ -334,15 +286,18 @@ export function MemberProgrammingView({
                     day: "numeric",
                   })}
                 </p>
-                {dateWorkouts.map((workout, i) => (
-                  <MemberSectionCard
-                    key={workout.id}
-                    workout={workout}
-                    onLogResult={onLogResult}
-                    isLoggingResult={isLoggingResult}
-                    index={i}
-                  />
-                ))}
+                <div className="bg-card border border-border rounded-2xl p-5">
+                  {dateWorkouts.map((workout, i) => (
+                    <MemberSectionCard
+                      key={workout.id}
+                      workout={workout}
+                      onLogResult={onLogResult}
+                      isLoggingResult={isLoggingResult}
+                      index={i}
+                      total={dateWorkouts.length}
+                    />
+                  ))}
+                </div>
               </div>
             );
           })}

@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import {
   SectionEditor,
   SectionTypePicker,
+  QuickAddBar,
   SectionData,
   SectionType,
   createEmptySection,
@@ -68,10 +69,18 @@ export function CreateProgrammingPanel({
     }
   }, [open, initialData, initialDate]);
 
-  const hasChanges =
-    title !== (initialData?.title || "") ||
-    sections.length !== (initialData?.sections?.length || 0) ||
-    date !== (initialData?.date || initialDate);
+  const hasChanges = (() => {
+    if (title !== (initialData?.title || "")) return true;
+    if (date !== (initialData?.date || initialDate)) return true;
+    const origSections = initialData?.sections || [];
+    if (sections.length !== origSections.length) return true;
+    for (let i = 0; i < sections.length; i++) {
+      const s = sections[i];
+      const o = origSections[i];
+      if (s.title !== o.title || s.instructions !== o.instructions || s.type !== o.type || s.coachNotes !== o.coachNotes || s.trackResults !== o.trackResults) return true;
+    }
+    return false;
+  })();
 
   const handleClose = () => {
     if (hasChanges) {
@@ -134,6 +143,18 @@ export function CreateProgrammingPanel({
     });
   }, []);
 
+  const formatDateLabel = (d: string) => {
+    try {
+      return new Date(d + "T00:00:00").toLocaleDateString("en-US", {
+        weekday: "long",
+        month: "short",
+        day: "numeric",
+      });
+    } catch {
+      return d;
+    }
+  };
+
   return (
     <AnimatePresence>
       {open && (
@@ -155,10 +176,10 @@ export function CreateProgrammingPanel({
             <div className="flex items-center justify-between px-6 py-4 border-b border-border shrink-0">
               <div>
                 <h2 className="text-lg font-bold text-foreground">
-                  {initialData ? "Edit Programming" : "Create Programming Day"}
+                  {initialData ? "Edit Programming" : "New Programming Day"}
                 </h2>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  Build the day's workout programming with sections
+                  {date ? formatDateLabel(date) : "Select a date"}
                 </p>
               </div>
               <button
@@ -169,12 +190,10 @@ export function CreateProgrammingPanel({
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-6 space-y-6">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="flex-1 overflow-y-auto p-6 space-y-5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                  <Label className="text-xs">
-                    Date <span className="text-destructive">*</span>
-                  </Label>
+                  <Label className="text-xs text-muted-foreground">Date</Label>
                   <Input
                     type="date"
                     value={date}
@@ -186,6 +205,7 @@ export function CreateProgrammingPanel({
                         return next;
                       });
                     }}
+                    className="bg-muted/30"
                   />
                   {errors.date && (
                     <p className="text-xs text-destructive flex items-center gap-1">
@@ -195,9 +215,7 @@ export function CreateProgrammingPanel({
                   )}
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="text-xs">
-                    Title <span className="text-destructive">*</span>
-                  </Label>
+                  <Label className="text-xs text-muted-foreground">Title</Label>
                   <Input
                     value={title}
                     onChange={(e) => {
@@ -208,7 +226,8 @@ export function CreateProgrammingPanel({
                         return next;
                       });
                     }}
-                    placeholder="e.g. Monday Programming, Test Week Day 1"
+                    placeholder="e.g. Monday, Test Week Day 1"
+                    className="bg-muted/30"
                   />
                   {errors.title && (
                     <p className="text-xs text-destructive flex items-center gap-1">
@@ -219,90 +238,69 @@ export function CreateProgrammingPanel({
                 </div>
               </div>
 
+              {errors.sections && (
+                <p className="text-xs text-destructive flex items-center gap-1">
+                  <AlertTriangle className="h-3 w-3" />
+                  {errors.sections}
+                </p>
+              )}
+
               <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <Label className="text-sm font-semibold">Sections</Label>
-                    <p className="text-xs text-muted-foreground">
-                      Add workout sections in order
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => setShowTypePicker(!showTypePicker)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-dashed border-primary/40 text-primary hover:bg-primary/5 transition-colors"
+                {sections.map((section, i) => (
+                  <motion.div
+                    key={section.id}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    layout
                   >
-                    <Plus className="h-3.5 w-3.5" />
-                    Add Section
-                  </button>
-                </div>
-
-                {errors.sections && (
-                  <p className="text-xs text-destructive flex items-center gap-1">
-                    <AlertTriangle className="h-3 w-3" />
-                    {errors.sections}
-                  </p>
-                )}
-
-                <AnimatePresence>
-                  {showTypePicker && (
-                    <motion.div
-                      initial={{ opacity: 0, height: 0 }}
-                      animate={{ opacity: 1, height: "auto" }}
-                      exit={{ opacity: 0, height: 0 }}
-                      className="overflow-hidden"
-                    >
-                      <div className="p-4 border border-dashed border-border rounded-xl bg-muted/30">
-                        <p className="text-xs text-muted-foreground mb-3">
-                          Choose a section type:
-                        </p>
-                        <SectionTypePicker onSelect={addSection} />
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-
-                <div className="space-y-3">
-                  {sections.map((section, i) => (
-                    <motion.div
-                      key={section.id}
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -10 }}
-                      layout
-                    >
-                      <SectionEditor
-                        section={section}
-                        index={i}
-                        totalSections={sections.length}
-                        onChange={(s) => updateSection(i, s)}
-                        onRemove={() => removeSection(i)}
-                        onMoveUp={() => moveSection(i, -1)}
-                        onMoveDown={() => moveSection(i, 1)}
-                      />
-                    </motion.div>
-                  ))}
-                </div>
-
-                {sections.length === 0 && !showTypePicker && (
-                  <div className="text-center py-12 border border-dashed border-border rounded-xl">
-                    <div className="h-12 w-12 bg-muted rounded-xl flex items-center justify-center mx-auto mb-3">
-                      <Plus className="h-6 w-6 text-muted-foreground" />
-                    </div>
-                    <p className="text-sm font-medium text-muted-foreground">
-                      No sections yet
-                    </p>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Click "Add Section" to start building
-                    </p>
-                    <button
-                      onClick={() => setShowTypePicker(true)}
-                      className="mt-4 px-4 py-2 text-sm font-medium rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
-                    >
-                      Add First Section
-                    </button>
-                  </div>
-                )}
+                    <SectionEditor
+                      section={section}
+                      index={i}
+                      totalSections={sections.length}
+                      onChange={(s) => updateSection(i, s)}
+                      onRemove={() => removeSection(i)}
+                      onMoveUp={() => moveSection(i, -1)}
+                      onMoveDown={() => moveSection(i, 1)}
+                    />
+                  </motion.div>
+                ))}
               </div>
+
+              <AnimatePresence>
+                {showTypePicker && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: "auto" }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="overflow-hidden"
+                  >
+                    <div className="p-4 border border-dashed border-border rounded-xl bg-muted/20">
+                      <p className="text-xs text-muted-foreground mb-3">
+                        All section types:
+                      </p>
+                      <SectionTypePicker onSelect={addSection} />
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              {sections.length === 0 && !showTypePicker ? (
+                <div className="text-center py-10 border border-dashed border-border rounded-xl bg-muted/10">
+                  <div className="h-12 w-12 bg-muted rounded-xl flex items-center justify-center mx-auto mb-3">
+                    <Plus className="h-6 w-6 text-muted-foreground" />
+                  </div>
+                  <p className="text-sm font-medium text-muted-foreground mb-1">
+                    Start building your workout
+                  </p>
+                  <p className="text-xs text-muted-foreground mb-4">
+                    Add sections like warm-up, strength, conditioning
+                  </p>
+                  <QuickAddBar onAdd={addSection} onShowAll={() => setShowTypePicker(true)} />
+                </div>
+              ) : (
+                <QuickAddBar onAdd={addSection} onShowAll={() => setShowTypePicker(true)} />
+              )}
             </div>
 
             <div className="px-6 py-4 border-t border-border shrink-0 flex items-center justify-between gap-3">
@@ -321,7 +319,7 @@ export function CreateProgrammingPanel({
                   {isSaving && (
                     <Loader2 className="h-3.5 w-3.5 animate-spin" />
                   )}
-                  Save as Draft
+                  Save Draft
                 </button>
                 <button
                   onClick={() => handleSave("published")}
