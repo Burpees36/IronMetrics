@@ -1735,6 +1735,55 @@ paths:
               schema:
                 $ref: "#/components/schemas/AiTask"
 
+  /gyms/{gymId}/ai/generate-tasks:
+    post:
+      operationId: generateAiTasks
+      tags: [ai-operator]
+      summary: Scan gym data and generate AI tasks for at-risk members, stale leads, new members, and failed payments
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Generated tasks result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenerateAiTasksResponse"
+
+  /gyms/{gymId}/ai/tasks/{taskId}:
+    patch:
+      operationId: updateAiTask
+      tags: [ai-operator]
+      summary: Update AI task status or content
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateAiTaskBody"
+      responses:
+        "200":
+          description: Updated AI task
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AiTask"
+
   # REPORTING
   /gyms/{gymId}/reports/dashboard:
     get:
@@ -3499,6 +3548,28 @@ components:
         - title
         - description
         - priority
+
+    UpdateAiTaskBody:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [pending, approved, sent, completed, dismissed]
+        aiContent:
+          type: ["string", "null"]
+
+    GenerateAiTasksResponse:
+      type: object
+      properties:
+        created:
+          type: integer
+        tasks:
+          type: array
+          items:
+            $ref: "#/components/schemas/AiTask"
+      required:
+        - created
+        - tasks
 
     DashboardStats:
       type: object

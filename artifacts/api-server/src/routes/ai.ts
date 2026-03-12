@@ -1,7 +1,8 @@
 import { Router, type IRouter } from "express";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, and } from "drizzle-orm";
 import { db, aiTasksTable, aiGeneratedContentTable, membersTable } from "@workspace/db";
-import { CreateAiTaskBody, GenerateMemberOutreachBody } from "@workspace/api-zod";
+import { CreateAiTaskBody, GenerateMemberOutreachBody, UpdateAiTaskBody } from "@workspace/api-zod";
+import { generateAiTasks } from "../services/ai-task-generation";
 
 const router: IRouter = Router();
 
@@ -17,6 +18,38 @@ router.get("/gyms/:gymId/ai/tasks", async (req, res): Promise<void> => {
 
   const tasks = await db.select().from(aiTasksTable).where(eq(aiTasksTable.gymId, gymId)).orderBy(desc(aiTasksTable.createdAt));
   res.json(tasks);
+});
+
+router.patch("/gyms/:gymId/ai/tasks/:taskId", async (req, res): Promise<void> => {
+  const gymId = parseGymId(req.params);
+  if (!gymId) { res.status(400).json({ error: "Invalid gym ID" }); return; }
+
+  const taskId = parseInt(req.params.taskId, 10);
+  if (isNaN(taskId)) { res.status(400).json({ error: "Invalid task ID" }); return; }
+
+  const parsed = UpdateAiTaskBody.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+
+  const [existing] = await db.select().from(aiTasksTable).where(and(eq(aiTasksTable.id, taskId), eq(aiTasksTable.gymId, gymId)));
+  if (!existing) { res.status(404).json({ error: "Task not found" }); return; }
+
+  const updateData: Record<string, any> = {};
+  if (parsed.data.status !== undefined) updateData.status = parsed.data.status;
+  if (parsed.data.aiContent !== undefined) updateData.aiContent = parsed.data.aiContent;
+
+  if (Object.keys(updateData).length === 0) {
+    res.status(400).json({ error: "At least one of 'status' or 'aiContent' must be provided" });
+    return;
+  }
+
+  if (updateData.status === "approved" && (existing.type === "outreach" || existing.type === "leads" || existing.type === "billing")) {
+    updateData.status = "sent";
+  } else if (updateData.status === "approved" && (existing.type === "onboarding" || existing.type === "retention" || existing.type === "campaign" || existing.type === "analysis")) {
+    updateData.status = "completed";
+  }
+
+  const [updated] = await db.update(aiTasksTable).set(updateData).where(eq(aiTasksTable.id, taskId)).returning();
+  res.json(updated);
 });
 
 router.post("/gyms/:gymId/ai/tasks", async (req, res): Promise<void> => {
@@ -141,6 +174,19 @@ router.post("/gyms/:gymId/ai/generate-brief", async (req, res): Promise<void> =>
     ...content,
     confidence: parseFloat(content.confidence),
   });
+});
+
+router.post("/gyms/:gymId/ai/generate-tasks", async (req, res): Promise<void> => {
+  const gymId = parseGymId(req.params);
+  if (!gymId) { res.status(400).json({ error: "Invalid gym ID" }); return; }
+
+  try {
+    const result = await generateAiTasks(gymId);
+    res.json(result);
+  } catch (error) {
+    console.error("Error generating AI tasks:", error);
+    res.status(500).json({ error: "Failed to generate AI tasks" });
+  }
 });
 
 export default router;

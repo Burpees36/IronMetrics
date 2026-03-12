@@ -101,7 +101,7 @@ All tables in `lib/db/src/schema/`:
 - **Plans**: 4 (Unlimited, 3x/Week, Open Gym, Drop-In)
 - **Products**: 6
 - **Workouts**: 4
-- **AI Tasks**: 2
+- **AI Tasks**: 11 (10 pending across outreach/onboarding/leads/billing/campaign/retention, 1 completed analysis)
 - **Announcements**: 3, Documents: 3
 
 ## Frontend Pages
@@ -115,7 +115,7 @@ All pages with real API data (no hardcoded values), fully interactive:
 6. **Leads** — Pipeline with create/edit lead dialogs, stage filter badges, move stage, convert to member, mark as lost
 7. **Billing** — 5-tab billing command center (Plans, Subscriptions, Payments, Refunds, Cancelled). MRR/Active/ARM/Failed/Collected summary cards. Subscription actions (pause/resume/cancel with reason). Cancelled members view with month picker and lost revenue tracking. Full Stripe integration
 8. **Workouts** — WOD cards with create workout dialog (title, type, movements, date)
-9. **AI Operator** — Real task list from DB, dynamic member/risk counts from dashboard API
+9. **AI Operator** — Fully functional: approve/dismiss/edit AI tasks, type filter tabs, edit modal for draft content, owner brief generation with rendered display modal, task count badges, error states
 10. **Settings** — General gym info, staff management table with invite staff dialog
 11. **Resources** — Operational playbooks for gym owners with expandable phases
 
@@ -135,7 +135,7 @@ All available mutation hooks from `@workspace/api-client-react`:
 - `useCreateGym`, `useUpdateGym`
 - `useCreateProduct`, `useCreateSale`
 - `useCreateAnnouncement`, `useCreateDocument`
-- `useGenerateMemberOutreach`, `useGenerateOwnerBrief`, `useCreateAiTask`
+- `useGenerateMemberOutreach`, `useGenerateOwnerBrief`, `useCreateAiTask`, `useUpdateAiTask`
 
 All mutations accept `{ gymId: number; data: BodyType<...> }` as mutate args.
 Use `getListMembersQueryKey(gymId)` etc. for cache invalidation.

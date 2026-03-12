@@ -46,6 +46,7 @@ import type {
   CreateWorkoutBody,
   CreateWorkoutResultBody,
   DashboardStats,
+  GenerateAiTasksResponse,
   GenerateOutreachBody,
   GetCancelledMembersParams,
   GetMemberBillingHistory200,
@@ -86,6 +87,7 @@ import type {
   StaffMember,
   Subscription,
   TimelineEvent,
+  UpdateAiTaskBody,
   UpdateClassBody,
   UpdateGymBody,
   UpdateLeadBody,
@@ -6345,6 +6347,178 @@ export const useCreateAiTask = <
   TContext
 > => {
   return useMutation(getCreateAiTaskMutationOptions(options));
+};
+
+/**
+ * @summary Scan gym data and generate AI tasks for at-risk members, stale leads, new members, and failed payments
+ */
+export const getGenerateAiTasksUrl = (gymId: number) => {
+  return `/api/gyms/${gymId}/ai/generate-tasks`;
+};
+
+export const generateAiTasks = async (
+  gymId: number,
+  options?: RequestInit,
+): Promise<GenerateAiTasksResponse> => {
+  return customFetch<GenerateAiTasksResponse>(getGenerateAiTasksUrl(gymId), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getGenerateAiTasksMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof generateAiTasks>>,
+    TError,
+    { gymId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof generateAiTasks>>,
+  TError,
+  { gymId: number },
+  TContext
+> => {
+  const mutationKey = ["generateAiTasks"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof generateAiTasks>>,
+    { gymId: number }
+  > = (props) => {
+    const { gymId } = props ?? {};
+
+    return generateAiTasks(gymId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type GenerateAiTasksMutationResult = NonNullable<
+  Awaited<ReturnType<typeof generateAiTasks>>
+>;
+
+export type GenerateAiTasksMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Scan gym data and generate AI tasks for at-risk members, stale leads, new members, and failed payments
+ */
+export const useGenerateAiTasks = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof generateAiTasks>>,
+    TError,
+    { gymId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof generateAiTasks>>,
+  TError,
+  { gymId: number },
+  TContext
+> => {
+  return useMutation(getGenerateAiTasksMutationOptions(options));
+};
+
+/**
+ * @summary Update AI task status or content
+ */
+export const getUpdateAiTaskUrl = (gymId: number, taskId: number) => {
+  return `/api/gyms/${gymId}/ai/tasks/${taskId}`;
+};
+
+export const updateAiTask = async (
+  gymId: number,
+  taskId: number,
+  updateAiTaskBody: UpdateAiTaskBody,
+  options?: RequestInit,
+): Promise<AiTask> => {
+  return customFetch<AiTask>(getUpdateAiTaskUrl(gymId, taskId), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(updateAiTaskBody),
+  });
+};
+
+export const getUpdateAiTaskMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateAiTask>>,
+    TError,
+    { gymId: number; taskId: number; data: BodyType<UpdateAiTaskBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateAiTask>>,
+  TError,
+  { gymId: number; taskId: number; data: BodyType<UpdateAiTaskBody> },
+  TContext
+> => {
+  const mutationKey = ["updateAiTask"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateAiTask>>,
+    { gymId: number; taskId: number; data: BodyType<UpdateAiTaskBody> }
+  > = (props) => {
+    const { gymId, taskId, data } = props ?? {};
+
+    return updateAiTask(gymId, taskId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateAiTaskMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateAiTask>>
+>;
+export type UpdateAiTaskMutationBody = BodyType<UpdateAiTaskBody>;
+export type UpdateAiTaskMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Update AI task status or content
+ */
+export const useUpdateAiTask = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateAiTask>>,
+    TError,
+    { gymId: number; taskId: number; data: BodyType<UpdateAiTaskBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateAiTask>>,
+  TError,
+  { gymId: number; taskId: number; data: BodyType<UpdateAiTaskBody> },
+  TContext
+> => {
+  return useMutation(getUpdateAiTaskMutationOptions(options));
 };
 
 /**

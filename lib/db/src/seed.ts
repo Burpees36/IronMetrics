@@ -94,7 +94,7 @@ async function seed() {
 
   console.log("Created subscriptions");
 
-  await db.insert(leadsTable).values([
+  const leads = await db.insert(leadsTable).values([
     { gymId: gym.id, firstName: "Ryan", lastName: "Cooper", email: "ryan.c@email.com", phone: "(512) 555-2001", stage: "new", source: "website" },
     { gymId: gym.id, firstName: "Jessica", lastName: "Perez", email: "jessica.p@email.com", phone: "(512) 555-2002", stage: "contacted", source: "referral" },
     { gymId: gym.id, firstName: "David", lastName: "Murphy", email: "david.m@email.com", phone: "(512) 555-2003", stage: "trial_scheduled", source: "instagram" },
@@ -103,7 +103,7 @@ async function seed() {
     { gymId: gym.id, firstName: "Nicole", lastName: "Hill", email: "nicole.h@email.com", phone: "(512) 555-2006", stage: "new", source: "walk-in" },
     { gymId: gym.id, firstName: "Kevin", lastName: "Torres", email: "kevin.t@email.com", phone: "(512) 555-2007", stage: "contacted", source: "facebook", isStale: true },
     { gymId: gym.id, firstName: "Stephanie", lastName: "Evans", email: "steph.e@email.com", phone: "(512) 555-2008", stage: "lost", source: "website" },
-  ]);
+  ]).returning();
 
   console.log("Created 8 leads");
 
@@ -198,8 +198,34 @@ async function seed() {
 
   console.log("Created documents");
 
+  const atRiskMembers2 = members.filter(m => (m.riskTier === 'high' || m.riskTier === 'critical') && m.status === 'active');
+  const newMembers = members.filter(m => {
+    const joinDate = new Date(m.joinDate || '');
+    const daysSinceJoin = (Date.now() - joinDate.getTime()) / (1000 * 60 * 60 * 24);
+    return daysSinceJoin < 200 && m.status === 'active';
+  });
+  const holdMembers = members.filter(m => m.status === 'hold');
+  const staleLead = leads.find(l => l.isStale);
+  const trialLead = leads.find(l => l.stage === 'trial_completed');
+
+  const arm0 = atRiskMembers2[0] || members[0];
+  const arm1 = atRiskMembers2[1] || members[1];
+  const arm2 = atRiskMembers2[2] || members[2];
+  const nm0 = newMembers[0] || members[3];
+  const nm1 = newMembers[1] || members[4];
+  const holdMem = holdMembers[0] || members[5];
+
   await db.insert(aiTasksTable).values([
-    { gymId: gym.id, type: "outreach", title: "Send re-engagement emails", description: "Draft and send personalized outreach to 5 at-risk members", priority: "high", status: "pending" },
+    { gymId: gym.id, type: "outreach", title: `Re-engage ${arm0.firstName}`, description: `${arm0.firstName} ${arm0.lastName} has only visited ${arm0.attendanceCount30d} time(s) in the last 30 days. Send a personalized check-in email.`, priority: "high", status: "pending", targetId: arm0.id, targetType: "member", aiContent: `Hi ${arm0.firstName},\n\nWe noticed it's been a while since your last visit and wanted to check in. Your progress matters to us!\n\nWould you like to schedule a quick chat about your goals?\n\n[AI-Generated Draft]` },
+    { gymId: gym.id, type: "outreach", title: `Win back ${arm1.firstName}`, description: `${arm1.firstName} ${arm1.lastName} shows critical churn risk. Send a win-back offer with a complimentary session.`, priority: "high", status: "pending", targetId: arm1.id, targetType: "member", aiContent: `Hi ${arm1.firstName},\n\nWe've made some exciting changes and added new programming. We'd love to offer you a complimentary drop-in session.\n\nWhat day works best for you?\n\n[AI-Generated Draft]` },
+    { gymId: gym.id, type: "outreach", title: `Check in with ${arm2.firstName}`, description: `${arm2.firstName} has been flagged as high risk. A quick personal touchpoint could help retain them.`, priority: "medium", status: "pending", targetId: arm2.id, targetType: "member", aiContent: `Hi ${arm2.firstName},\n\nJust wanted to check in and see how things are going. We'd love to help you get back into a routine that works.\n\nLet us know if there's anything we can do!\n\n[AI-Generated Draft]` },
+    { gymId: gym.id, type: "onboarding", title: `Onboarding plan for ${nm0.firstName}`, description: `${nm0.firstName} ${nm0.lastName} joined recently. Create a 30-day onboarding plan with coach check-ins.`, priority: "medium", status: "pending", targetId: nm0.id, targetType: "member", aiContent: `Welcome ${nm0.firstName}!\n\nYour 30-Day Plan:\n- Week 1: Fundamentals classes + gym orientation\n- Week 2: Try 3 different class times\n- Week 3: Coach check-in on goals & scaling\n- Week 4: First benchmark workout\n\n[AI-Generated Draft]` },
+    { gymId: gym.id, type: "onboarding", title: `Follow up with ${nm1.firstName}`, description: `${nm1.firstName} is in their first 90 days. Schedule a progress check-in to boost retention.`, priority: "low", status: "pending", targetId: nm1.id, targetType: "member", aiContent: `Hi ${nm1.firstName},\n\nYou're making great progress! Let's schedule a quick 10-minute check-in to review your goals and make sure you're getting the most out of your membership.\n\n[AI-Generated Draft]` },
+    { gymId: gym.id, type: "leads", title: `Follow up on stale lead: ${staleLead!.firstName} ${staleLead!.lastName}`, description: `${staleLead!.firstName} ${staleLead!.lastName} was contacted via ${staleLead!.source} but hasn't responded. Send a follow-up message before the lead goes cold.`, priority: "medium", status: "pending", targetId: staleLead!.id, targetType: "lead", aiContent: `Hi ${staleLead!.firstName},\n\nJust following up on our earlier conversation. We'd love to get you in for a free trial class.\n\nNo commitment — just come see if it's a good fit. What day works best?\n\n[AI-Generated Draft]` },
+    { gymId: gym.id, type: "leads", title: `Convert trial lead: ${trialLead!.firstName} ${trialLead!.lastName}`, description: `${trialLead!.firstName} ${trialLead!.lastName} completed a trial class. Send a personalized follow-up to convert to membership.`, priority: "high", status: "pending", targetId: trialLead!.id, targetType: "lead", aiContent: `Hi ${trialLead!.firstName},\n\nGreat seeing you at your trial! We'd love to have you join the community. As a trial follow-up, we can offer you a discounted first month.\n\nReady to get started?\n\n[AI-Generated Draft]` },
+    { gymId: gym.id, type: "billing", title: `Follow up on hold member: ${holdMem.firstName} ${holdMem.lastName}`, description: `${holdMem.firstName} ${holdMem.lastName} has been on hold. Check if they're ready to reactivate or if there's an issue to resolve.`, priority: "medium", status: "pending", targetId: holdMem.id, targetType: "member", aiContent: `Hi ${holdMem.firstName},\n\nWe noticed your membership is currently on hold. We'd love to have you back!\n\nIs there anything we can help with to make your return easier?\n\n[AI-Generated Draft]` },
+    { gymId: gym.id, type: "campaign", title: "Launch spring referral campaign", description: "Design a member referral campaign offering a free month for each successful referral to boost growth.", priority: "low", status: "pending", aiContent: `Spring Referral Program:\n- Members get 1 free month for each referral who signs up\n- New members get 10% off first 3 months\n- Campaign runs April 1-30\n- Promote via email blast + in-gym signage\n\n[AI-Generated Draft]` },
+    { gymId: gym.id, type: "retention", title: "Plan member appreciation event", description: "Organize a member appreciation event to strengthen community bonds and reduce churn.", priority: "low", status: "pending", aiContent: `Member Appreciation Day Plan:\n- Date: Last Saturday of the month\n- Partner WOD + BBQ social\n- Awards for consistency, improvement, community spirit\n- Photo ops for social media\n- Budget: ~$300\n\n[AI-Generated Draft]` },
     { gymId: gym.id, type: "analysis", title: "Review weekend class attendance", description: "Analyze weekend attendance trends and recommend scheduling changes", priority: "medium", status: "completed" },
   ]);
 

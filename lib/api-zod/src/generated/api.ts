@@ -1828,6 +1828,67 @@ export const CreateAiTaskBody = zod.object({
 });
 
 /**
+ * @summary Scan gym data and generate AI tasks for at-risk members, stale leads, new members, and failed payments
+ */
+export const GenerateAiTasksParams = zod.object({
+  gymId: zod.coerce.number(),
+});
+
+export const GenerateAiTasksResponse = zod.object({
+  created: zod.number(),
+  tasks: zod.array(
+    zod.object({
+      id: zod.number(),
+      gymId: zod.number(),
+      type: zod.string(),
+      title: zod.string(),
+      description: zod.string(),
+      priority: zod.enum(["high", "medium", "low"]),
+      status: zod.enum([
+        "pending",
+        "approved",
+        "sent",
+        "completed",
+        "dismissed",
+      ]),
+      targetId: zod.number().nullish(),
+      targetType: zod.string().nullish(),
+      aiContent: zod.string().nullish(),
+      createdAt: zod.date(),
+    }),
+  ),
+});
+
+/**
+ * @summary Update AI task status or content
+ */
+export const UpdateAiTaskParams = zod.object({
+  gymId: zod.coerce.number(),
+  taskId: zod.coerce.number(),
+});
+
+export const UpdateAiTaskBody = zod.object({
+  status: zod
+    .enum(["pending", "approved", "sent", "completed", "dismissed"])
+    .optional(),
+  aiContent: zod.string().nullish(),
+});
+
+export const UpdateAiTaskResponse = zod.object({
+  id: zod.number(),
+  gymId: zod.number(),
+  type: zod.string(),
+  title: zod.string(),
+  description: zod.string(),
+  priority: zod.enum(["high", "medium", "low"]),
+  status: zod.enum(["pending", "approved", "sent", "completed", "dismissed"]),
+  targetId: zod.number().nullish(),
+  targetType: zod.string().nullish(),
+  aiContent: zod.string().nullish(),
+  createdAt: zod.date(),
+});
+
+/**
  * @summary Get owner dashboard key metrics
  */
 export const GetDashboardStatsParams = zod.object({

@@ -1144,6 +1144,28 @@ export interface CreateAiTaskBody {
   aiContent?: string | null;
 }
 
+export type UpdateAiTaskBodyStatus =
+  (typeof UpdateAiTaskBodyStatus)[keyof typeof UpdateAiTaskBodyStatus];
+
+export const UpdateAiTaskBodyStatus = {
+  pending: "pending",
+  approved: "approved",
+  sent: "sent",
+  completed: "completed",
+  dismissed: "dismissed",
+} as const;
+
+export interface UpdateAiTaskBody {
+  status?: UpdateAiTaskBodyStatus;
+  /** @nullable */
+  aiContent?: string | null;
+}
+
+export interface GenerateAiTasksResponse {
+  created: number;
+  tasks: AiTask[];
+}
+
 export type DashboardStatsRevenueByMonthItem = {
   month: string;
   revenue: number;
