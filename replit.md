@@ -112,7 +112,7 @@ All tables in `lib/db/src/schema/`:
 All pages with real API data (no hardcoded values), fully interactive:
 1. **Dashboard** — KPI grid (active members, MRR, weekly attendance, at-risk count), revenue chart, member status breakdown
 2. **Intelligence Hub** — RSI score gauge, risk radar table, intervention cards + recommendation execution tracker with interactive checklists
-3. **Members** — Searchable member directory with status/risk filters, Add Member dialog, row actions (view profile, edit, add note, change status), clickable rows to member detail
+3. **Members** — Searchable member directory with status/risk filters, Add Member dialog, CSV Import flow (5-step: upload, map columns, preview/validate, confirm, results), row actions (view profile, edit, add note, change status), clickable rows to member detail, empty state with import CTA
 4. **Member Detail** — Full profile page with tabs (Overview, Billing, Notes, Timeline), edit dialog, status management (hold/cancel/reactivate), add notes, attendance history, subscription info. Billing tab: subscription management (start/pause/resume/cancel), payment methods, payment history, one-time charges
 5. **Schedule** — Weekly class calendar with create class dialog, class detail sheet with roster, check-in flow (member search + check-in), delete class with confirmation
 6. **Leads (Sales Pipeline)** — Kanban-style pipeline board (New, Contacted, Intro Scheduled, Converted, Lost), summary strip (active/stale/follow-up/converted counts), lead detail drawer with activity timeline, follow-up scheduling, contact logging, stale lead detection, convert-to-member flow with start date, sales insights panel (funnel, source performance, bottleneck callouts), smart filters (stage/stale/follow-up due), polished add-lead dialog
@@ -149,7 +149,7 @@ All mounted at `/api` prefix:
 - `GET /api/healthz` — Health check
 - Auth: `/api/login`, `/api/callback`, `/api/logout`, `/api/auth/user`
 - Gyms: CRUD at `/api/gyms`, `/api/gyms/:gymId`
-- Members: `/api/gyms/:gymId/members` (list, create, get, update, notes, timeline)
+- Members: `/api/gyms/:gymId/members` (list, create, get, update, notes, timeline, import/preview, import/confirm)
 - Leads: `/api/gyms/:gymId/leads` (CRUD + convert to member)
 - Staff: `/api/gyms/:gymId/staff` (CRUD)
 - Classes: `/api/gyms/:gymId/classes` (CRUD + checkin)
@@ -186,6 +186,7 @@ All mounted at `/api` prefix:
 - **Rate limiting**: `express-rate-limit` — 120 req/min general API, 30 req/15min for auth. Returns JSON error messages.
 - **Capacity enforcement**: Check-in route blocks when `enrolled >= capacity` (409). Also prevents duplicate check-ins.
 - **Error boundary**: React `ErrorBoundary` wraps all protected page content in `ProtectedRoute`. Shows friendly recovery UI on crash.
+- **CSV import**: Client-side parsing with PapaParse, server-side validation + duplicate detection. Two endpoints: `import/preview` (validate + preview) and `import/confirm` (execute). Supports flexible date formats, phone normalization, auto column mapping. Max 5000 rows. Timeline events logged as "imported" type.
 - **No hardcoded metrics**: All dashboard/intelligence/AI operator values are computed from actual DB queries
 - **Loading states**: All pages handle three states: no gym selected, loading, error/empty
 - **Routing**: wouter with base path `import.meta.env.BASE_URL`; use relative paths in Links/navigate (e.g., `/members/${id}` not `${BASE_URL}members/${id}`)

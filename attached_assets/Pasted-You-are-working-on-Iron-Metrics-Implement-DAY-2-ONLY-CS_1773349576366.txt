@@ -1,0 +1,186 @@
+You are working on Iron Metrics. Implement DAY 2 ONLY: CSV MEMBER IMPORT FOUNDATION.
+
+Do not start the full onboarding wizard yet.
+Do not implement Wodify direct import yet.
+Do not implement billing history import yet.
+Do not implement class templates, payment failure notifications, update card flow, or any Tier 2/Tier 3 work.
+Keep this sprint tightly scoped to production-ready member CSV import.
+
+OBJECTIVE
+Build a clean, trustworthy CSV member import flow so a real gym owner can bring existing members into Iron Metrics without manual re-entry.
+
+WHY THIS IS NEXT
+Iron Metrics is now safer after Day 1 hardening. The next launch blocker is onboarding. A gym owner will not switch systems if they cannot import their members. This sprint should make onboarding materially real without overbuilding the full wizard yet.
+
+SUCCESS CRITERIA
+- Staff can upload a CSV file from the Members area or onboarding entry point.
+- The system parses the file and shows a preview before importing.
+- Staff can map CSV columns to Iron Metrics member fields.
+- The import validates rows, highlights errors, and supports skipping invalid rows.
+- Duplicate detection prevents obvious double-imports.
+- Import creates members only for the current gym.
+- Import returns a clear results summary: created, skipped, errored.
+- The flow feels premium, safe, and understandable to a non-technical gym owner.
+
+SCOPE
+
+PART 1 — CSV IMPORT UI
+Create a production-quality import entry point in the Members experience.
+
+Requirements:
+- Add an “Import Members” action in the Members page.
+- Open a modal, drawer, or dedicated import flow with these stages:
+  1. Upload CSV
+  2. Map columns
+  3. Preview & validate
+  4. Confirm import
+  5. Results summary
+- Use the existing premium UI style of the app.
+- Include a downloadable sample CSV or at least a clearly displayed expected-column example.
+- Show friendly help text, not developer language.
+
+PART 2 — CSV PARSING + COLUMN MAPPING
+Allow flexible input instead of forcing a rigid exact template.
+
+Requirements:
+- Parse CSV safely on upload.
+- Support common member fields such as:
+  - first name
+  - last name
+  - email
+  - phone
+  - status
+  - join date
+  - membership plan / plan name if applicable
+  - monthly rate / billing amount if applicable
+  - notes
+- Let the user map incoming CSV columns to known Iron Metrics member fields.
+- Auto-suggest mappings when column names are obvious.
+- Allow optional fields to be left unmapped.
+- Require the minimum fields needed to create a valid member record.
+- Make sure column mapping is gym-scoped only through the authenticated user context.
+
+PART 3 — VALIDATION + PREVIEW
+Before importing, show the user exactly what will happen.
+
+Requirements:
+- Show a preview table of parsed rows.
+- Validate each row and surface row-level issues clearly.
+- Examples of validation:
+  - missing required names or other required fields
+  - invalid email format
+  - invalid date format
+  - invalid numeric amount format
+  - unsupported status values
+- Allow the import to continue with valid rows while skipping invalid ones, but make that behavior explicit.
+- Show counts before import:
+  - total rows
+  - valid rows
+  - invalid rows
+  - possible duplicates
+- Never import blindly.
+
+PART 4 — DUPLICATE DETECTION
+Prevent duplicate members from being created accidentally.
+
+Requirements:
+- Add duplicate detection scoped to the current gym.
+- Use practical matching rules such as:
+  - exact email match
+  - or strong name + phone match if email missing
+- In the preview, mark possible duplicates clearly.
+- For Day 2, default behavior should be safe:
+  - skip rows that are clear duplicates
+  - do not overwrite existing members yet
+- Return those skipped rows in the results summary.
+- Do not attempt a full merge/update workflow in this sprint.
+
+PART 5 — BACKEND IMPORT ENDPOINTS
+Create safe import APIs.
+
+Requirements:
+- Add backend endpoints for:
+  1. parse/preview import
+  2. confirm/finalize import
+- All endpoints must require authentication and current gym access.
+- Reuse the Day 1 gym access protections.
+- Never allow one gym to import into another gym.
+- Validate payloads with Zod or existing schema patterns.
+- Sanitize and normalize imported values before insert.
+- Do not trust frontend validation alone.
+
+PART 6 — IMPORT EXECUTION
+Make the actual import safe and predictable.
+
+Requirements:
+- Import valid rows in bulk where practical, but preserve per-row results.
+- Normalize data before insert:
+  - trim strings
+  - normalize email casing
+  - normalize phone formatting if possible
+  - parse dates consistently
+  - safely parse amounts
+- Any created records must be tied to the active gym.
+- Return a final import summary:
+  - rows processed
+  - members created
+  - duplicates skipped
+  - invalid rows skipped
+  - unexpected failures
+- If one row fails, do not fail the entire import unless there is a system-level problem.
+
+PART 7 — EMPTY STATE / ONBOARDING BRIDGE
+Without building the full onboarding wizard yet, make this import discoverable.
+
+Requirements:
+- If the gym has zero members, show a stronger empty state with:
+  - Add Member manually
+  - Import Members from CSV
+- Optional: add a lightweight onboarding banner/card that points to member import, but do not build the full multi-step onboarding wizard yet.
+
+OUT OF SCOPE
+Do not build:
+- Full onboarding wizard
+- Wodify API import
+- Mindbody import
+- Stripe billing import
+- Update-existing-members merge flow
+- Import scheduling/classes
+- Import leads
+- Background jobs unless absolutely necessary
+- Any unrelated refactors
+
+UX EXPECTATIONS
+This should feel like software a real gym owner can trust:
+- clear labels
+- no scary technical jargon
+- strong preview before commit
+- explicit results after import
+- clean error messaging
+- polished visual hierarchy
+
+TESTING / VALIDATION
+After implementation, verify:
+1. A valid CSV can be uploaded, mapped, previewed, and imported successfully.
+2. Invalid rows are flagged before import.
+3. Duplicate existing members are skipped safely.
+4. Members are only created inside the active gym.
+5. Another gym’s data cannot be affected by the import.
+6. Empty gym state now encourages import.
+7. Import summary is clear and useful.
+
+DELIVERABLES
+Provide:
+1. Files changed
+2. What was implemented in each file
+3. Any schema changes or config updates
+4. Validation rules supported
+5. Known limitations intentionally deferred to later
+6. Manual QA checklist
+
+GUARDRAILS
+- DAY 2 ONLY.
+- Keep scope tight.
+- Build the CSV import flow well instead of partially building the whole onboarding system.
+- Prefer a trustworthy import experience over fancy extras.
+- Reuse existing auth, gym access, UI, and mutation/query patterns.

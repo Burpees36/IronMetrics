@@ -3,7 +3,8 @@ import { useGym } from "@/store/GymContext";
 import { useListMembers, useCreateMember, useUpdateMember, useAddMemberNote, getListMembersQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
-import { Loader2, Search, Plus, Filter, MoreHorizontal, UserCircle } from "lucide-react";
+import { Loader2, Search, Plus, Filter, MoreHorizontal, UserCircle, Upload, FileSpreadsheet } from "lucide-react";
+import { ImportMembersDialog } from "@/components/members/ImportMembersDialog";
 import { Link, useLocation } from "wouter";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useToast } from "@/hooks/use-toast";
@@ -58,6 +59,7 @@ export function Members() {
   const [, navigate] = useLocation();
 
   const [addOpen, setAddOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [noteOpen, setNoteOpen] = useState(false);
@@ -321,6 +323,14 @@ export function Members() {
               {statusFilter.length > 0 && <span className="ml-1 text-xs font-medium text-primary">{statusFilter.length}</span>}
             </button>
             <button
+              onClick={() => setImportOpen(true)}
+              className="flex items-center gap-2 px-3 md:px-4 py-2.5 bg-card border border-border hover:bg-muted rounded-xl font-medium transition-colors min-h-[44px]"
+              aria-label="Import members"
+            >
+              <Upload className="h-5 w-5 text-muted-foreground" />
+              <span className="hidden sm:inline text-sm">Import</span>
+            </button>
+            <button
               onClick={() => setAddOpen(true)}
               className="flex items-center gap-2 px-3 md:px-4 py-2.5 bg-primary text-primary-foreground hover:bg-primary/90 rounded-xl font-medium transition-colors shadow-lg shadow-primary/20 min-h-[44px]"
             >
@@ -386,9 +396,7 @@ export function Members() {
               </motion.div>
             ))}
             {data?.members.length === 0 && (
-              <div className="px-6 py-12 text-center text-muted-foreground">
-                No members found matching your search.
-              </div>
+              <EmptyMemberState hasSearch={!!search || statusFilter.length > 0} onImport={() => setImportOpen(true)} onAdd={() => setAddOpen(true)} />
             )}
           </div>
         ) : (
@@ -453,8 +461,8 @@ export function Members() {
                 ))}
                 {data?.members.length === 0 && (
                   <tr>
-                    <td colSpan={5} className="px-6 py-12 text-center text-muted-foreground">
-                      No members found matching your search.
+                    <td colSpan={5}>
+                      <EmptyMemberState hasSearch={!!search || statusFilter.length > 0} onImport={() => setImportOpen(true)} onAdd={() => setAddOpen(true)} />
                     </td>
                   </tr>
                 )}
@@ -678,6 +686,52 @@ export function Members() {
           </div>
         </SheetContent>
       </Sheet>
+
+      <ImportMembersDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        onImportComplete={() => {
+          queryClient.invalidateQueries({ queryKey: getListMembersQueryKey(gymId, filterParams) });
+        }}
+      />
+    </div>
+  );
+}
+
+function EmptyMemberState({ hasSearch, onImport, onAdd }: { hasSearch: boolean; onImport: () => void; onAdd: () => void }) {
+  if (hasSearch) {
+    return (
+      <div className="px-6 py-12 text-center text-muted-foreground">
+        No members found matching your search.
+      </div>
+    );
+  }
+
+  return (
+    <div className="px-6 py-16 text-center">
+      <div className="mx-auto w-14 h-14 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center mb-4">
+        <UserCircle className="h-7 w-7 text-amber-400" />
+      </div>
+      <h3 className="text-lg font-semibold text-foreground mb-1">No members yet</h3>
+      <p className="text-sm text-muted-foreground mb-6 max-w-sm mx-auto">
+        Get started by importing your existing members from a spreadsheet, or add them one at a time.
+      </p>
+      <div className="flex items-center justify-center gap-3">
+        <button
+          onClick={onImport}
+          className="flex items-center gap-2 px-4 py-2.5 bg-amber-500 text-black font-medium text-sm rounded-xl hover:bg-amber-400 transition-colors shadow-lg shadow-amber-500/20"
+        >
+          <FileSpreadsheet className="h-4 w-4" />
+          Import from CSV
+        </button>
+        <button
+          onClick={onAdd}
+          className="flex items-center gap-2 px-4 py-2.5 bg-card border border-border text-foreground font-medium text-sm rounded-xl hover:bg-muted transition-colors"
+        >
+          <Plus className="h-4 w-4" />
+          Add Manually
+        </button>
+      </div>
     </div>
   );
 }
