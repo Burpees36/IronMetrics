@@ -23,7 +23,7 @@ async function generateAtRiskMemberTasks(gymId: number): Promise<GeneratedTask[]
   );
 
   const existingTasks = await db.select().from(aiTasksTable).where(
-    and(eq(aiTasksTable.gymId, gymId), eq(aiTasksTable.targetType, "member"), sql`${aiTasksTable.status} IN ('pending', 'approved')`)
+    and(eq(aiTasksTable.gymId, gymId), eq(aiTasksTable.targetType, "member"), sql`${aiTasksTable.status} IN ('pending', 'approved', 'sent', 'completed')`)
   );
   const existingMemberIds = new Set(existingTasks.map(t => t.targetId));
 
@@ -36,14 +36,14 @@ async function generateAtRiskMemberTasks(gymId: number): Promise<GeneratedTask[]
       gymId,
       type: "outreach",
       title: isCritical ? `Win back ${member.firstName} ${member.lastName}` : `Re-engage ${member.firstName} ${member.lastName}`,
-      description: `${member.firstName} ${member.lastName} has visited ${member.attendanceCount30d} time(s) in the last 30 days and is flagged as ${member.riskTier} risk. ${isCritical ? 'Send a win-back offer with complimentary session.' : 'Send a personalized check-in email.'}`,
+      description: `${member.firstName} ${member.lastName} has visited ${member.attendanceCount30d} time(s) in the last 30 days and is flagged as ${member.riskTier} risk. ${isCritical ? 'Reach out with a personal invitation to reconnect.' : 'Schedule a goal review or casual catch-up.'}`,
       priority: isCritical ? "high" : "medium",
       status: "pending",
       targetId: member.id,
       targetType: "member",
       aiContent: isCritical
-        ? `Hi ${member.firstName},\n\nWe've made some exciting changes and added new programming that we think you'd enjoy.\n\nWe'd love to offer you a complimentary drop-in session to come check things out. No pressure, just a chance to reconnect.\n\nWhat day works best for you this week?\n\n[AI-Generated Draft]`
-        : `Hi ${member.firstName},\n\nWe noticed it's been a little while since your last visit and wanted to check in. Your progress matters to us, and we'd love to help you get back on track.\n\nWould you like to schedule a quick chat about your goals?\n\n[AI-Generated Draft]`,
+        ? `Hi ${member.firstName},\n\nI was thinking about you and wanted to reach out personally. We've got some exciting new programming and challenges coming up that I think you'd really enjoy.\n\nI'd love to set up a quick goal review session — just 15 minutes to catch up, see where you're at, and map out a plan that fits your schedule. No pressure at all, just a chance to reconnect.\n\nWould you be free for a coffee or a quick chat at the gym this week? I'll buy the coffee.\n\nLooking forward to hearing from you!`
+        : `Hi ${member.firstName},\n\nJust wanted to reach out and see how things are going! It's been a little while since we've seen you, and we genuinely miss having you around.\n\nI'd love to schedule a quick goal review — even just 10 minutes to check in on your progress and make sure we're helping you hit your targets. We also have some awesome upcoming events and challenges that might be right up your alley.\n\nWant to grab a quick coffee or chat at the gym this week? Let me know what works for you!`,
     });
   }
   return tasks;
@@ -60,7 +60,7 @@ async function generateNewMemberOnboardingTasks(gymId: number): Promise<Generate
   );
 
   const existingTasks = await db.select().from(aiTasksTable).where(
-    and(eq(aiTasksTable.gymId, gymId), eq(aiTasksTable.type, "onboarding"), sql`${aiTasksTable.status} IN ('pending', 'approved')`)
+    and(eq(aiTasksTable.gymId, gymId), eq(aiTasksTable.type, "onboarding"), sql`${aiTasksTable.status} IN ('pending', 'approved', 'sent', 'completed')`)
   );
   const existingMemberIds = new Set(existingTasks.map(t => t.targetId));
 
@@ -71,12 +71,12 @@ async function generateNewMemberOnboardingTasks(gymId: number): Promise<Generate
       gymId,
       type: "onboarding",
       title: `Onboarding plan for ${member.firstName} ${member.lastName}`,
-      description: `${member.firstName} joined recently. Create a 30-day onboarding plan with coach check-ins and milestone tracking.`,
+      description: `${member.firstName} joined recently. Set up a structured onboarding path with coach check-ins and milestone tracking.`,
       priority: "medium",
       status: "pending",
       targetId: member.id,
       targetType: "member",
-      aiContent: `Welcome ${member.firstName}!\n\nYour 30-Day Plan:\n- Week 1: Fundamentals classes + gym orientation\n- Week 2: Try 3 different class times to find your favorite\n- Week 3: Coach check-in on goals & scaling options\n- Week 4: First benchmark workout to set your baseline\n\nLet us know if you have any questions!\n\n[AI-Generated Draft]`,
+      aiContent: `Welcome ${member.firstName}!\n\nWe're so glad you're here. Here's your personalized 30-Day Onboarding Plan:\n\nWeek 1 — Foundations & Orientation\n- Complete your intro sessions with a coach\n- Tour the facility and meet the team\n- Set your initial goals (strength, fitness, lifestyle)\n\nWeek 2 — Find Your Rhythm\n- Try 3 different class times to find what fits your schedule\n- Pair up with a training buddy\n- Log your first workouts and start tracking progress\n\nWeek 3 — Coach Check-In\n- Scheduled 1-on-1 with your coach to review progress\n- Adjust scaling and movement progressions\n- Talk about nutrition and recovery\n\nWeek 4 — Celebrate Your Wins\n- Complete your first benchmark workout to set your baseline\n- Bright Spots Friday — we'll celebrate your early wins with the community!\n- Map out your next 90-day goals with your coach\n\nRemember: every expert was once a beginner. We're here for you every step of the way!`,
     });
   }
   return tasks;
@@ -88,7 +88,7 @@ async function generateStaleLeadTasks(gymId: number): Promise<GeneratedTask[]> {
   );
 
   const existingTasks = await db.select().from(aiTasksTable).where(
-    and(eq(aiTasksTable.gymId, gymId), eq(aiTasksTable.type, "leads"), eq(aiTasksTable.targetType, "lead"), sql`${aiTasksTable.status} IN ('pending', 'approved')`)
+    and(eq(aiTasksTable.gymId, gymId), eq(aiTasksTable.type, "leads"), eq(aiTasksTable.targetType, "lead"), sql`${aiTasksTable.status} IN ('pending', 'approved', 'sent', 'completed')`)
   );
   const existingLeadIds = new Set(existingTasks.map(t => t.targetId));
 
@@ -98,13 +98,13 @@ async function generateStaleLeadTasks(gymId: number): Promise<GeneratedTask[]> {
     tasks.push({
       gymId,
       type: "leads",
-      title: `Follow up on stale lead: ${lead.firstName} ${lead.lastName}`,
-      description: `${lead.firstName} ${lead.lastName} was contacted via ${lead.source} but hasn't responded. Send a follow-up message before the lead goes cold.`,
+      title: `Schedule No Sweat Intro: ${lead.firstName} ${lead.lastName}`,
+      description: `${lead.firstName} ${lead.lastName} was contacted via ${lead.source} but hasn't booked yet. Invite them to a No Sweat Intro before the lead goes cold.`,
       priority: "medium",
       status: "pending",
       targetId: lead.id,
       targetType: "lead",
-      aiContent: `Hi ${lead.firstName},\n\nJust following up on our earlier conversation. We'd love to get you in for a free trial class.\n\nNo commitment — just come see if it's a good fit. What day works best?\n\n[AI-Generated Draft]`,
+      aiContent: `Hi ${lead.firstName},\n\nI wanted to follow up and see if you're still interested in checking us out!\n\nWe'd love to have you in for a No Sweat Intro — it's a free, no-pressure consultation where we sit down, learn about your goals, and show you around the gym. It's completely casual, takes about 20 minutes, and there's zero obligation.\n\nWe find it's the best way for people to see if we're the right fit. No workout required (unless you want to!).\n\nWould any of these times work for you this week?\n- [Morning option]\n- [Afternoon option]\n- [Evening option]\n\nJust let me know, and I'll get you on the calendar!`,
     });
   }
   return tasks;
@@ -116,7 +116,7 @@ async function generateFailedPaymentTasks(gymId: number): Promise<GeneratedTask[
   );
 
   const existingTasks = await db.select().from(aiTasksTable).where(
-    and(eq(aiTasksTable.gymId, gymId), eq(aiTasksTable.type, "billing"), sql`${aiTasksTable.status} IN ('pending', 'approved')`)
+    and(eq(aiTasksTable.gymId, gymId), eq(aiTasksTable.type, "billing"), sql`${aiTasksTable.status} IN ('pending', 'approved', 'sent', 'completed')`)
   );
   const existingMemberIds = new Set(existingTasks.map(t => t.targetId));
 
@@ -129,12 +129,12 @@ async function generateFailedPaymentTasks(gymId: number): Promise<GeneratedTask[
       gymId,
       type: "billing",
       title: `Payment issue: ${member.firstName} ${member.lastName}`,
-      description: `${member.firstName} ${member.lastName}'s subscription (${sub.planName}) has a payment issue. Follow up to resolve billing and retain the member.`,
+      description: `${member.firstName} ${member.lastName}'s subscription (${sub.planName}) has a payment issue. Reach out warmly to resolve and keep them active.`,
       priority: "high",
       status: "pending",
       targetId: member.id,
       targetType: "member",
-      aiContent: `Hi ${member.firstName},\n\nWe noticed there may be an issue with your payment method on file. We want to make sure your membership stays active so you don't miss any sessions.\n\nCould you take a moment to update your payment information? If you have any questions about your account, please don't hesitate to reach out.\n\n[AI-Generated Draft]`,
+      aiContent: `Hi ${member.firstName},\n\nHope you're doing well! I wanted to give you a quick heads-up — it looks like there might be a small hiccup with the payment method on file for your membership.\n\nThese things happen all the time (expired cards, bank updates, etc.), and it's super easy to fix. We just want to make sure everything stays smooth so you don't miss any sessions.\n\nYou can update your info anytime, or just give us a call and we'll sort it out together in 2 minutes.\n\nThanks so much, and see you in class!`,
     });
   }
   return tasks;

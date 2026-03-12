@@ -46,6 +46,7 @@ import type {
   CreateWorkoutBody,
   CreateWorkoutResultBody,
   DashboardStats,
+  EmailStatusResponse,
   GenerateAiTasksResponse,
   GenerateOutreachBody,
   GetCancelledMembersParams,
@@ -84,6 +85,7 @@ import type {
   RevenueForecast,
   RevenueReport,
   Sale,
+  SendEmailResponse,
   StaffMember,
   Subscription,
   TimelineEvent,
@@ -6520,6 +6522,178 @@ export const useUpdateAiTask = <
 > => {
   return useMutation(getUpdateAiTaskMutationOptions(options));
 };
+
+/**
+ * @summary Send the AI task content as an email to the target member or lead
+ */
+export const getSendAiTaskEmailUrl = (gymId: number, taskId: number) => {
+  return `/api/gyms/${gymId}/ai/tasks/${taskId}/send-email`;
+};
+
+export const sendAiTaskEmail = async (
+  gymId: number,
+  taskId: number,
+  options?: RequestInit,
+): Promise<SendEmailResponse> => {
+  return customFetch<SendEmailResponse>(getSendAiTaskEmailUrl(gymId, taskId), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getSendAiTaskEmailMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof sendAiTaskEmail>>,
+    TError,
+    { gymId: number; taskId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof sendAiTaskEmail>>,
+  TError,
+  { gymId: number; taskId: number },
+  TContext
+> => {
+  const mutationKey = ["sendAiTaskEmail"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof sendAiTaskEmail>>,
+    { gymId: number; taskId: number }
+  > = (props) => {
+    const { gymId, taskId } = props ?? {};
+
+    return sendAiTaskEmail(gymId, taskId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SendAiTaskEmailMutationResult = NonNullable<
+  Awaited<ReturnType<typeof sendAiTaskEmail>>
+>;
+
+export type SendAiTaskEmailMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Send the AI task content as an email to the target member or lead
+ */
+export const useSendAiTaskEmail = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof sendAiTaskEmail>>,
+    TError,
+    { gymId: number; taskId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof sendAiTaskEmail>>,
+  TError,
+  { gymId: number; taskId: number },
+  TContext
+> => {
+  return useMutation(getSendAiTaskEmailMutationOptions(options));
+};
+
+/**
+ * @summary Check if email sending is configured
+ */
+export const getGetAiEmailStatusUrl = (gymId: number) => {
+  return `/api/gyms/${gymId}/ai/email-status`;
+};
+
+export const getAiEmailStatus = async (
+  gymId: number,
+  options?: RequestInit,
+): Promise<EmailStatusResponse> => {
+  return customFetch<EmailStatusResponse>(getGetAiEmailStatusUrl(gymId), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetAiEmailStatusQueryKey = (gymId: number) => {
+  return [`/api/gyms/${gymId}/ai/email-status`] as const;
+};
+
+export const getGetAiEmailStatusQueryOptions = <
+  TData = Awaited<ReturnType<typeof getAiEmailStatus>>,
+  TError = ErrorType<unknown>,
+>(
+  gymId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getAiEmailStatus>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetAiEmailStatusQueryKey(gymId);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getAiEmailStatus>>
+  > = ({ signal }) => getAiEmailStatus(gymId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!gymId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getAiEmailStatus>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetAiEmailStatusQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getAiEmailStatus>>
+>;
+export type GetAiEmailStatusQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Check if email sending is configured
+ */
+
+export function useGetAiEmailStatus<
+  TData = Awaited<ReturnType<typeof getAiEmailStatus>>,
+  TError = ErrorType<unknown>,
+>(
+  gymId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getAiEmailStatus>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetAiEmailStatusQueryOptions(gymId, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
 
 /**
  * @summary Get owner dashboard key metrics

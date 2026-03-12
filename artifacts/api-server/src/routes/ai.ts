@@ -1,8 +1,9 @@
 import { Router, type IRouter } from "express";
 import { eq, desc, and } from "drizzle-orm";
-import { db, aiTasksTable, aiGeneratedContentTable, membersTable } from "@workspace/db";
+import { db, aiTasksTable, aiGeneratedContentTable, membersTable, leadsTable } from "@workspace/db";
 import { CreateAiTaskBody, GenerateMemberOutreachBody, UpdateAiTaskBody } from "@workspace/api-zod";
 import { generateAiTasks } from "../services/ai-task-generation";
+import { getEmailService } from "../services/email-service";
 
 const router: IRouter = Router();
 
@@ -42,9 +43,7 @@ router.patch("/gyms/:gymId/ai/tasks/:taskId", async (req, res): Promise<void> =>
     return;
   }
 
-  if (updateData.status === "approved" && (existing.type === "outreach" || existing.type === "leads" || existing.type === "billing")) {
-    updateData.status = "sent";
-  } else if (updateData.status === "approved" && (existing.type === "onboarding" || existing.type === "retention" || existing.type === "campaign" || existing.type === "analysis")) {
+  if (updateData.status === "approved") {
     updateData.status = "completed";
   }
 
@@ -76,24 +75,24 @@ router.post("/gyms/:gymId/ai/generate-outreach", async (req, res): Promise<void>
 
   const templates: Record<string, { subject: string; content: string }> = {
     at_risk: {
-      subject: `We miss you, ${member.firstName}!`,
-      content: `Hi ${member.firstName},\n\nWe noticed it's been a little while since your last visit and wanted to check in. Your progress matters to us, and we'd love to help you get back on track.\n\nWhether you need to adjust your schedule, try a different class format, or just need some extra motivation, we're here for you.\n\nWould you like to schedule a quick chat about your goals? We can find the best way to make the gym work for your current routine.\n\nLooking forward to seeing you soon!\n\n[AI-Generated Draft - Review before sending]`,
+      subject: `Checking in, ${member.firstName}`,
+      content: `Hi ${member.firstName},\n\nJust wanted to reach out and see how things are going! It's been a little while since we've seen you, and we genuinely miss having you around.\n\nI'd love to schedule a quick goal review — even just 10 minutes to check in on your progress and make sure we're helping you hit your targets. We also have some great upcoming events and challenges that might be right up your alley.\n\nWant to grab a quick coffee or chat at the gym this week? Let me know what works for you!`,
     },
     win_back: {
-      subject: `A fresh start at the gym, ${member.firstName}`,
-      content: `Hi ${member.firstName},\n\nIt's been a while since we've seen you, and we wanted to reach out. We've made some exciting changes and added new programming that we think you'd enjoy.\n\nWe'd love to offer you a complimentary drop-in session to come check things out. No pressure, just a chance to reconnect.\n\nWhat day works best for you this week?\n\n[AI-Generated Draft - Review before sending]`,
+      subject: `We'd love to reconnect, ${member.firstName}`,
+      content: `Hi ${member.firstName},\n\nI was thinking about you and wanted to reach out personally. We've got some exciting new programming and challenges coming up that I think you'd really enjoy.\n\nI'd love to set up a quick goal review session — just 15 minutes to catch up, see where you're at, and map out a plan that fits your schedule. No pressure at all, just a chance to reconnect.\n\nWould you be free for a coffee or a quick chat at the gym this week? I'll buy the coffee.`,
     },
     celebration: {
       subject: `Congrats on your milestone, ${member.firstName}!`,
-      content: `Hi ${member.firstName},\n\nWe wanted to take a moment to celebrate your commitment! Your consistency and effort haven't gone unnoticed.\n\nKeep up the amazing work. Your dedication inspires everyone at the gym.\n\n[AI-Generated Draft - Review before sending]`,
+      content: `Hi ${member.firstName},\n\nWe wanted to take a moment to celebrate your commitment! Your consistency and effort haven't gone unnoticed.\n\nKeep up the amazing work — your dedication inspires everyone at the gym. We'll be celebrating wins like yours at our next Bright Spots Friday!`,
     },
     onboarding: {
       subject: `Welcome to the team, ${member.firstName}!`,
-      content: `Hi ${member.firstName},\n\nWelcome! We're so excited to have you as part of our community.\n\nHere are a few things to help you get started:\n- Book your first intro session to get oriented\n- Check out the class schedule and find times that work for you\n- Don't hesitate to ask coaches any questions\n- Remember: everyone started somewhere!\n\nLet us know if there's anything we can help with.\n\n[AI-Generated Draft - Review before sending]`,
+      content: `Hi ${member.firstName},\n\nWelcome! We're so excited to have you as part of our community.\n\nHere's what your first few weeks look like:\n- Complete your intro sessions with a coach to get oriented\n- Try a few different class times to find your rhythm\n- Your coach will schedule a 1-on-1 check-in around week 3\n- At week 4, we'll do your first benchmark workout to set your baseline\n\nRemember: every expert was once a beginner. We're here for you every step of the way!`,
     },
     billing: {
-      subject: `Quick note about your account, ${member.firstName}`,
-      content: `Hi ${member.firstName},\n\nWe noticed there may be an issue with your payment method on file. We want to make sure your membership stays active so you don't miss any sessions.\n\nCould you take a moment to update your payment information? If you have any questions about your account, please don't hesitate to reach out.\n\n[AI-Generated Draft - Review before sending]`,
+      subject: `Quick heads-up about your account, ${member.firstName}`,
+      content: `Hi ${member.firstName},\n\nHope you're doing well! I wanted to give you a quick heads-up — it looks like there might be a small hiccup with the payment method on file for your membership.\n\nThese things happen all the time (expired cards, bank updates, etc.), and it's super easy to fix. We just want to make sure everything stays smooth so you don't miss any sessions.\n\nYou can update your info anytime, or just give us a call and we'll sort it out together in 2 minutes.\n\nThanks so much, and see you in class!`,
     },
   };
 
@@ -158,7 +157,7 @@ router.post("/gyms/:gymId/ai/generate-brief", async (req, res): Promise<void> =>
 3. **This Week**: Engage ${leads} open lead${leads !== 1 ? 's' : ''} in pipeline
 4. **Strategic**: Review member engagement patterns and class capacity
 
-[AI-Generated Brief - Based on current gym data]`;
+*Based on current gym data*`;
 
   const [content] = await db.insert(aiGeneratedContentTable).values({
     gymId,
@@ -174,6 +173,76 @@ router.post("/gyms/:gymId/ai/generate-brief", async (req, res): Promise<void> =>
     ...content,
     confidence: parseFloat(content.confidence),
   });
+});
+
+router.get("/gyms/:gymId/ai/email-status", async (req, res): Promise<void> => {
+  const gymId = parseGymId(req.params);
+  if (!gymId) { res.status(400).json({ error: "Invalid gym ID" }); return; }
+
+  const emailService = getEmailService();
+  res.json({ configured: emailService.isConfigured() });
+});
+
+router.post("/gyms/:gymId/ai/tasks/:taskId/send-email", async (req, res): Promise<void> => {
+  const gymId = parseGymId(req.params);
+  if (!gymId) { res.status(400).json({ error: "Invalid gym ID" }); return; }
+
+  const taskId = parseInt(req.params.taskId, 10);
+  if (isNaN(taskId)) { res.status(400).json({ error: "Invalid task ID" }); return; }
+
+  const [task] = await db.select().from(aiTasksTable).where(and(eq(aiTasksTable.id, taskId), eq(aiTasksTable.gymId, gymId)));
+  if (!task) { res.status(404).json({ error: "Task not found" }); return; }
+
+  if (task.status === "sent") { res.status(409).json({ error: "Email has already been sent for this task" }); return; }
+  if (task.status === "dismissed") { res.status(400).json({ error: "Cannot send email for a dismissed task" }); return; }
+  if (!task.aiContent) { res.status(400).json({ error: "Task has no content to send" }); return; }
+  if (!task.targetId || !task.targetType) { res.status(400).json({ error: "Task has no target recipient" }); return; }
+
+  let recipientEmail: string | null = null;
+  let recipientName = "";
+
+  if (task.targetType === "member") {
+    const [member] = await db.select().from(membersTable).where(and(eq(membersTable.id, task.targetId), eq(membersTable.gymId, gymId)));
+    if (!member) { res.status(404).json({ error: "Member not found" }); return; }
+    recipientEmail = member.email;
+    recipientName = `${member.firstName} ${member.lastName}`;
+  } else if (task.targetType === "lead") {
+    const [lead] = await db.select().from(leadsTable).where(and(eq(leadsTable.id, task.targetId), eq(leadsTable.gymId, gymId)));
+    if (!lead) { res.status(404).json({ error: "Lead not found" }); return; }
+    recipientEmail = lead.email;
+    recipientName = `${lead.firstName} ${lead.lastName}`;
+  }
+
+  if (!recipientEmail) { res.status(400).json({ error: "Recipient has no email address" }); return; }
+
+  const emailService = getEmailService();
+  if (!emailService.isConfigured()) {
+    res.status(503).json({ error: "Email service not configured. Set up Resend or SendGrid to enable email sending." });
+    return;
+  }
+
+  const subjectMap: Record<string, string> = {
+    outreach: `Checking in, ${recipientName.split(" ")[0]}`,
+    leads: `Let's connect, ${recipientName.split(" ")[0]}`,
+    billing: `Quick heads-up about your account, ${recipientName.split(" ")[0]}`,
+    onboarding: `Welcome to the team, ${recipientName.split(" ")[0]}!`,
+  };
+  const subject = subjectMap[task.type] || `Message from your gym`;
+
+  const result = await emailService.sendEmail({
+    to: recipientEmail,
+    subject,
+    text: task.aiContent,
+  });
+
+  if (!result.success) {
+    res.status(500).json({ error: result.error || "Failed to send email" });
+    return;
+  }
+
+  await db.update(aiTasksTable).set({ status: "sent", updatedAt: new Date() }).where(eq(aiTasksTable.id, taskId));
+
+  res.json({ success: true, messageId: result.messageId, recipientEmail, recipientName });
 });
 
 router.post("/gyms/:gymId/ai/generate-tasks", async (req, res): Promise<void> => {

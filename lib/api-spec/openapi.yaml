@@ -1784,6 +1784,49 @@ paths:
               schema:
                 $ref: "#/components/schemas/AiTask"
 
+  /gyms/{gymId}/ai/tasks/{taskId}/send-email:
+    post:
+      operationId: sendAiTaskEmail
+      tags: [ai-operator]
+      summary: Send the AI task content as an email to the target member or lead
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Email sent successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SendEmailResponse"
+
+  /gyms/{gymId}/ai/email-status:
+    get:
+      operationId: getAiEmailStatus
+      tags: [ai-operator]
+      summary: Check if email sending is configured
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Email configuration status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EmailStatusResponse"
+
   # REPORTING
   /gyms/{gymId}/reports/dashboard:
     get:
@@ -3570,6 +3613,30 @@ components:
       required:
         - created
         - tasks
+
+    SendEmailResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        messageId:
+          type: ["string", "null"]
+        recipientEmail:
+          type: string
+        recipientName:
+          type: string
+      required:
+        - success
+        - recipientEmail
+        - recipientName
+
+    EmailStatusResponse:
+      type: object
+      properties:
+        configured:
+          type: boolean
+      required:
+        - configured
 
     DashboardStats:
       type: object

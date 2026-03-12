@@ -1889,6 +1889,32 @@ export const UpdateAiTaskResponse = zod.object({
 });
 
 /**
+ * @summary Send the AI task content as an email to the target member or lead
+ */
+export const SendAiTaskEmailParams = zod.object({
+  gymId: zod.coerce.number(),
+  taskId: zod.coerce.number(),
+});
+
+export const SendAiTaskEmailResponse = zod.object({
+  success: zod.boolean(),
+  messageId: zod.string().nullish(),
+  recipientEmail: zod.string(),
+  recipientName: zod.string(),
+});
+
+/**
+ * @summary Check if email sending is configured
+ */
+export const GetAiEmailStatusParams = zod.object({
+  gymId: zod.coerce.number(),
+});
+
+export const GetAiEmailStatusResponse = zod.object({
+  configured: zod.boolean(),
+});
+
+/**
  * @summary Get owner dashboard key metrics
  */
 export const GetDashboardStatsParams = zod.object({

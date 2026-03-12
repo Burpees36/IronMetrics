@@ -1166,6 +1166,18 @@ export interface GenerateAiTasksResponse {
   tasks: AiTask[];
 }
 
+export interface SendEmailResponse {
+  success: boolean;
+  /** @nullable */
+  messageId?: string | null;
+  recipientEmail: string;
+  recipientName: string;
+}
+
+export interface EmailStatusResponse {
+  configured: boolean;
+}
+
 export type DashboardStatsRevenueByMonthItem = {
   month: string;
   revenue: number;

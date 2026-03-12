@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from "react";
 import { useGym } from "@/store/GymContext";
-import { useListAiTasks, useGenerateOwnerBrief, useUpdateAiTask, useGenerateAiTasks, useGetDashboardStats, getListAiTasksQueryKey } from "@workspace/api-client-react";
+import { useListAiTasks, useGenerateOwnerBrief, useUpdateAiTask, useGenerateAiTasks, useGetDashboardStats, getListAiTasksQueryKey, useSendAiTaskEmail, useGetAiEmailStatus } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { motion, AnimatePresence } from "framer-motion";
@@ -16,7 +16,10 @@ import {
   Bot, Sparkles, Send, CheckCircle2, Clock, Loader2,
   FileText, X, Filter, Users, CreditCard, UserPlus,
   Target, Megaphone, BarChart3, Edit2, RefreshCw,
+  History, Mail, MailCheck, AlertCircle,
 } from "lucide-react";
+
+const EMAIL_TASK_TYPES = new Set(["outreach", "leads", "billing"]);
 
 const TYPE_CONFIG: Record<string, { label: string; icon: React.ElementType; color: string }> = {
   outreach: { label: "Outreach", icon: Send, color: "bg-blue-500/10 text-blue-500" },
@@ -28,8 +31,23 @@ const TYPE_CONFIG: Record<string, { label: string; icon: React.ElementType; colo
   analysis: { label: "Analysis", icon: BarChart3, color: "bg-orange-500/10 text-orange-500" },
 };
 
+const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
+  sent: { label: "Sent", color: "bg-blue-500/10 text-blue-500" },
+  completed: { label: "Completed", color: "bg-emerald-500/10 text-emerald-500" },
+  dismissed: { label: "Dismissed", color: "bg-muted text-muted-foreground" },
+  approved: { label: "Approved", color: "bg-primary/10 text-primary" },
+};
+
 function getTypeConfig(type: string) {
   return TYPE_CONFIG[type] || { label: type, icon: FileText, color: "bg-secondary text-secondary-foreground" };
+}
+
+function isEmailType(type: string) {
+  return EMAIL_TASK_TYPES.has(type);
+}
+
+function hasTarget(task: any) {
+  return task.targetId && task.targetType;
 }
 
 export function AiOperator() {
@@ -43,6 +61,9 @@ export function AiOperator() {
   const [editTask, setEditTask] = useState<any | null>(null);
   const [editContent, setEditContent] = useState("");
   const [activeFilter, setActiveFilter] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<"pending" | "history">("pending");
+  const [historyFilter, setHistoryFilter] = useState<string | null>(null);
+  const [sendingTaskId, setSendingTaskId] = useState<number | null>(null);
 
   const { data: tasks, isLoading: tasksLoading, isError: tasksError } = useListAiTasks(activeGymId as number, {
     query: { enabled: !!activeGymId }
@@ -51,6 +72,12 @@ export function AiOperator() {
   const { data: stats } = useGetDashboardStats(activeGymId as number, {
     query: { enabled: !!activeGymId }
   });
+
+  const { data: emailStatus } = useGetAiEmailStatus(activeGymId as number, {
+    query: { enabled: !!activeGymId }
+  });
+
+  const emailConfigured = emailStatus?.configured ?? false;
 
   const generateBrief = useGenerateOwnerBrief({
     mutation: {
@@ -77,7 +104,11 @@ export function AiOperator() {
         queryClient.setQueryData(queryKey, (old: any[] | undefined) => {
           if (!old) return old;
           if (data.status === 'dismissed' || data.status === 'approved') {
-            return old.filter((t: any) => t.id !== taskId);
+            return old.map((t: any) => {
+              if (t.id !== taskId) return t;
+              const newStatus = data.status === 'approved' ? 'completed' : 'dismissed';
+              return { ...t, status: newStatus, updatedAt: new Date().toISOString() };
+            });
           }
           return old.map((t: any) => t.id === taskId ? { ...t, ...data } : t);
         });
@@ -90,6 +121,24 @@ export function AiOperator() {
       },
       onSettled: () => {
         queryClient.invalidateQueries({ queryKey });
+      },
+    }
+  });
+
+  const sendEmail = useSendAiTaskEmail({
+    mutation: {
+      onSuccess: (data: any, variables: any) => {
+        queryClient.setQueryData(queryKey, (old: any[] | undefined) => {
+          if (!old) return old;
+          return old.map((t: any) => t.id === variables.taskId ? { ...t, status: 'sent', updatedAt: new Date().toISOString() } : t);
+        });
+        queryClient.invalidateQueries({ queryKey });
+        toast({ title: "Email Sent", description: `Email sent to ${data.recipientName} (${data.recipientEmail}).` });
+        setSendingTaskId(null);
+      },
+      onError: (err: any) => {
+        toast({ title: "Failed to Send", description: err?.response?.data?.error || "Could not send email. Please try again.", variant: "destructive" });
+        setSendingTaskId(null);
       },
     }
   });
@@ -111,10 +160,20 @@ export function AiOperator() {
     return tasks.filter((t: any) => t.status === 'pending');
   }, [tasks]);
 
-  const filteredTasks = useMemo(() => {
+  const historyTasks = useMemo(() => {
+    if (!tasks) return [];
+    return tasks.filter((t: any) => ['sent', 'completed', 'dismissed', 'approved'].includes(t.status));
+  }, [tasks]);
+
+  const filteredPendingTasks = useMemo(() => {
     if (!activeFilter) return pendingTasks;
     return pendingTasks.filter((t: any) => t.type === activeFilter);
   }, [pendingTasks, activeFilter]);
+
+  const filteredHistoryTasks = useMemo(() => {
+    if (!historyFilter) return historyTasks;
+    return historyTasks.filter((t: any) => t.status === historyFilter);
+  }, [historyTasks, historyFilter]);
 
   const typeCountMap = useMemo(() => {
     const map: Record<string, number> = {};
@@ -123,6 +182,14 @@ export function AiOperator() {
     });
     return map;
   }, [pendingTasks]);
+
+  const historyStatusCountMap = useMemo(() => {
+    const map: Record<string, number> = {};
+    historyTasks.forEach((t: any) => {
+      map[t.status] = (map[t.status] || 0) + 1;
+    });
+    return map;
+  }, [historyTasks]);
 
   const availableTypes = Object.keys(typeCountMap).sort();
 
@@ -135,13 +202,18 @@ export function AiOperator() {
       { gymId: activeGymId as number, taskId: task.id, data: { status: "approved" as const } },
       {
         onSuccess: () => {
-          toast({ title: "Task Approved", description: `"${task.title}" has been approved and queued for execution.` });
+          toast({ title: "Task Completed", description: `"${task.title}" has been marked as complete.` });
         },
         onError: () => {
-          toast({ title: "Error", description: "Failed to approve task.", variant: "destructive" });
+          toast({ title: "Error", description: "Failed to complete task.", variant: "destructive" });
         },
       }
     );
+  }
+
+  function handleSendEmail(task: any) {
+    setSendingTaskId(task.id);
+    sendEmail.mutate({ gymId: activeGymId as number, taskId: task.id });
   }
 
   function handleDismiss(task: any) {
@@ -185,11 +257,11 @@ export function AiOperator() {
       { gymId: activeGymId as number, taskId: editTask.id, data: { aiContent: editContent, status: "approved" as const } },
       {
         onSuccess: () => {
-          toast({ title: "Task Approved", description: `"${editTask.title}" updated and approved.` });
+          toast({ title: "Task Completed", description: `"${editTask.title}" updated and completed.` });
           setEditTask(null);
         },
         onError: () => {
-          toast({ title: "Error", description: "Failed to approve task.", variant: "destructive" });
+          toast({ title: "Error", description: "Failed to complete task.", variant: "destructive" });
         },
       }
     );
@@ -254,10 +326,33 @@ export function AiOperator() {
       <div className="flex-1 bg-card border border-border rounded-2xl shadow-sm overflow-hidden flex flex-col">
         <div className="p-3 md:p-4 border-b border-border bg-muted/30 shrink-0">
           <div className="flex justify-between items-center mb-3">
-            <h3 className="font-semibold text-foreground text-sm md:text-base">Pending Approvals</h3>
-            <span className="px-2 py-1 bg-primary/20 text-primary rounded text-xs font-bold">{filteredTasks.length} Task{filteredTasks.length !== 1 ? 's' : ''}</span>
+            <div className="flex gap-1 bg-muted/50 rounded-lg p-1">
+              <button
+                onClick={() => { setActiveTab("pending"); setHistoryFilter(null); }}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                  activeTab === "pending"
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <Filter className="h-3 w-3" />
+                Pending ({pendingCount})
+              </button>
+              <button
+                onClick={() => { setActiveTab("history"); setActiveFilter(null); }}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                  activeTab === "history"
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <History className="h-3 w-3" />
+                History ({historyTasks.length})
+              </button>
+            </div>
           </div>
-          {availableTypes.length > 1 && (
+
+          {activeTab === "pending" && availableTypes.length > 1 && (
             <div className="flex flex-wrap gap-1.5">
               <button
                 onClick={() => setActiveFilter(null)}
@@ -290,6 +385,37 @@ export function AiOperator() {
               })}
             </div>
           )}
+
+          {activeTab === "history" && Object.keys(historyStatusCountMap).length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              <button
+                onClick={() => setHistoryFilter(null)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                  historyFilter === null
+                    ? 'bg-primary text-primary-foreground shadow-sm'
+                    : 'bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground'
+                }`}
+              >
+                All ({historyTasks.length})
+              </button>
+              {Object.entries(historyStatusCountMap).sort().map(([status, count]) => {
+                const statusCfg = STATUS_CONFIG[status] || { label: status, color: "bg-muted text-muted-foreground" };
+                return (
+                  <button
+                    key={status}
+                    onClick={() => setHistoryFilter(historyFilter === status ? null : status)}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                      historyFilter === status
+                        ? 'bg-primary text-primary-foreground shadow-sm'
+                        : 'bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground'
+                    }`}
+                  >
+                    {statusCfg.label} ({count})
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
         
         <div className="flex-1 overflow-y-auto p-3 md:p-4 custom-scrollbar space-y-3 md:space-y-4">
@@ -301,94 +427,179 @@ export function AiOperator() {
               <h3 className="text-lg font-semibold text-foreground">Failed to load tasks</h3>
               <p className="text-muted-foreground text-sm mt-1">Please try refreshing the page.</p>
             </div>
-          ) : filteredTasks.length > 0 ? (
-            <AnimatePresence mode="popLayout">
-              {filteredTasks.map((task: any, i: number) => {
-                const config = getTypeConfig(task.type);
-                const TypeIcon = config.icon;
-                return (
-                  <motion.div
-                    key={task.id}
-                    layout
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, x: -20, transition: { duration: 0.2 } }}
-                    transition={{ delay: i * 0.05 }}
-                    className="p-4 md:p-5 rounded-xl border border-border bg-background hover:border-primary/40 transition-colors group"
-                  >
-                    <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-2 mb-3">
-                      <div className="flex items-center gap-3">
-                        <div className={`h-10 w-10 rounded-full flex items-center justify-center shrink-0 ${config.color}`}>
-                          <TypeIcon className="h-5 w-5" />
+          ) : activeTab === "pending" ? (
+            filteredPendingTasks.length > 0 ? (
+              <AnimatePresence mode="popLayout">
+                {filteredPendingTasks.map((task: any, i: number) => {
+                  const config = getTypeConfig(task.type);
+                  const TypeIcon = config.icon;
+                  const canEmail = isEmailType(task.type) && hasTarget(task);
+                  const isSending = sendingTaskId === task.id;
+                  return (
+                    <motion.div
+                      key={task.id}
+                      layout
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, x: -20, transition: { duration: 0.2 } }}
+                      transition={{ delay: i * 0.05 }}
+                      className="p-4 md:p-5 rounded-xl border border-border bg-background hover:border-primary/40 transition-colors group"
+                    >
+                      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-2 mb-3">
+                        <div className="flex items-center gap-3">
+                          <div className={`h-10 w-10 rounded-full flex items-center justify-center shrink-0 ${config.color}`}>
+                            <TypeIcon className="h-5 w-5" />
+                          </div>
+                          <div className="min-w-0">
+                            <h4 className="font-semibold text-foreground text-sm md:text-base">{task.title}</h4>
+                            <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+                              <Clock className="h-3 w-3" /> {task.createdAt ? new Date(task.createdAt).toLocaleDateString() : 'Recently'}
+                              <span className="mx-1">·</span>
+                              <span className="capitalize">{config.label}</span>
+                            </p>
+                          </div>
                         </div>
-                        <div className="min-w-0">
-                          <h4 className="font-semibold text-foreground text-sm md:text-base">{task.title}</h4>
-                          <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
-                            <Clock className="h-3 w-3" /> {task.createdAt ? new Date(task.createdAt).toLocaleDateString() : 'Recently'}
-                            <span className="mx-1">·</span>
-                            <span className="capitalize">{config.label}</span>
-                          </p>
-                        </div>
+                        <span className={`px-2.5 py-1 rounded text-[10px] font-bold uppercase tracking-wider self-start shrink-0 ${
+                          task.priority === 'high' ? 'bg-destructive/10 text-destructive' : task.priority === 'low' ? 'bg-muted text-muted-foreground' : 'bg-secondary text-secondary-foreground'
+                        }`}>
+                          {task.priority} Priority
+                        </span>
                       </div>
-                      <span className={`px-2.5 py-1 rounded text-[10px] font-bold uppercase tracking-wider self-start shrink-0 ${
-                        task.priority === 'high' ? 'bg-destructive/10 text-destructive' : task.priority === 'low' ? 'bg-muted text-muted-foreground' : 'bg-secondary text-secondary-foreground'
-                      }`}>
-                        {task.priority} Priority
-                      </span>
-                    </div>
-                    
-                    <p className="text-xs md:text-sm text-muted-foreground mb-3 md:mb-4">
-                      {task.description}
-                    </p>
+                      
+                      <p className="text-xs md:text-sm text-muted-foreground mb-3 md:mb-4">
+                        {task.description}
+                      </p>
 
-                    {task.aiContent && (
-                      <div className="mb-3 md:mb-4 p-3 md:p-4 rounded-lg bg-white/5 border border-white/10 text-xs md:text-sm font-mono text-foreground/80 relative whitespace-pre-wrap">
-                        <div className="absolute -top-3 left-4 bg-background px-2 text-[10px] text-primary uppercase font-bold flex items-center gap-1">
-                          <Sparkles className="h-3 w-3" /> Draft Content
+                      {task.aiContent && (
+                        <div className="mb-3 md:mb-4 p-3 md:p-4 rounded-lg bg-white/5 border border-white/10 text-xs md:text-sm font-mono text-foreground/80 relative whitespace-pre-wrap">
+                          <div className="absolute -top-3 left-4 bg-background px-2 text-[10px] text-primary uppercase font-bold flex items-center gap-1">
+                            <Sparkles className="h-3 w-3" /> Draft Content
+                          </div>
+                          {task.aiContent}
                         </div>
-                        {task.aiContent}
-                      </div>
-                    )}
+                      )}
 
-                    <div className="flex flex-col sm:flex-row justify-end gap-2 sm:gap-3 pt-2">
-                      <button
-                        onClick={() => handleDismiss(task)}
-                        disabled={updateTask.isPending}
-                        className="px-4 py-2 text-sm font-medium text-muted-foreground hover:text-destructive transition-colors min-h-[44px] order-3 sm:order-1"
-                      >
-                        Dismiss
-                      </button>
-                      <button
-                        onClick={() => openEditModal(task)}
-                        className="flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-muted-foreground hover:text-foreground border border-border hover:border-primary/40 rounded-lg transition-colors min-h-[44px] order-2"
-                      >
-                        <Edit2 className="h-4 w-4" />
-                        Edit
-                      </button>
-                      <button
-                        onClick={() => handleApprove(task)}
-                        disabled={updateTask.isPending}
-                        className="flex items-center justify-center gap-2 px-5 py-2 bg-primary text-primary-foreground hover:bg-primary/90 rounded-lg font-medium shadow-md shadow-primary/20 transition-all min-h-[44px] order-1 sm:order-3 disabled:opacity-50"
-                      >
-                        <CheckCircle2 className="h-4 w-4" />
-                        Approve & Execute
-                      </button>
-                    </div>
-                  </motion.div>
-                );
-              })}
-            </AnimatePresence>
+                      <div className="flex flex-col sm:flex-row justify-end gap-2 sm:gap-3 pt-2">
+                        <button
+                          onClick={() => handleDismiss(task)}
+                          disabled={updateTask.isPending || isSending}
+                          className="px-4 py-2 text-sm font-medium text-muted-foreground hover:text-destructive transition-colors min-h-[44px] order-4 sm:order-1"
+                        >
+                          Dismiss
+                        </button>
+                        <button
+                          onClick={() => openEditModal(task)}
+                          disabled={isSending}
+                          className="flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-muted-foreground hover:text-foreground border border-border hover:border-primary/40 rounded-lg transition-colors min-h-[44px] order-3 sm:order-2"
+                        >
+                          <Edit2 className="h-4 w-4" />
+                          Edit
+                        </button>
+                        {canEmail && emailConfigured && (
+                          <button
+                            onClick={() => handleSendEmail(task)}
+                            disabled={isSending || sendEmail.isPending}
+                            className="flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-blue-400 hover:text-blue-300 border border-blue-500/30 hover:border-blue-500/50 rounded-lg transition-colors min-h-[44px] order-2 sm:order-3 disabled:opacity-50"
+                          >
+                            {isSending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mail className="h-4 w-4" />}
+                            Send Email
+                          </button>
+                        )}
+                        <button
+                          onClick={() => handleApprove(task)}
+                          disabled={updateTask.isPending || isSending}
+                          className="flex items-center justify-center gap-2 px-5 py-2 bg-primary text-primary-foreground hover:bg-primary/90 rounded-lg font-medium shadow-md shadow-primary/20 transition-all min-h-[44px] order-1 sm:order-4 disabled:opacity-50"
+                        >
+                          <CheckCircle2 className="h-4 w-4" />
+                          Mark Complete
+                        </button>
+                      </div>
+                    </motion.div>
+                  );
+                })}
+              </AnimatePresence>
+            ) : (
+              <div className="text-center py-16 flex flex-col items-center">
+                <CheckCircle2 className="h-12 w-12 text-emerald-500/50 mb-4" />
+                <h3 className="text-lg font-semibold text-foreground">Inbox Zero</h3>
+                <p className="text-muted-foreground text-sm mt-1">
+                  {activeFilter ? `No pending ${getTypeConfig(activeFilter).label.toLowerCase()} tasks.` : 'All AI tasks have been handled.'}
+                </p>
+              </div>
+            )
           ) : (
-            <div className="text-center py-16 flex flex-col items-center">
-              <CheckCircle2 className="h-12 w-12 text-emerald-500/50 mb-4" />
-              <h3 className="text-lg font-semibold text-foreground">Inbox Zero</h3>
-              <p className="text-muted-foreground text-sm mt-1">
-                {activeFilter ? `No pending ${getTypeConfig(activeFilter).label.toLowerCase()} tasks.` : 'All AI tasks have been handled.'}
-              </p>
-            </div>
+            filteredHistoryTasks.length > 0 ? (
+              <div className="space-y-3 md:space-y-4">
+                {filteredHistoryTasks.map((task: any) => {
+                  const config = getTypeConfig(task.type);
+                  const TypeIcon = config.icon;
+                  const statusCfg = STATUS_CONFIG[task.status] || { label: task.status, color: "bg-muted text-muted-foreground" };
+                  return (
+                    <div
+                      key={task.id}
+                      className="p-4 md:p-5 rounded-xl border border-border bg-background/50 opacity-90"
+                    >
+                      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-2 mb-3">
+                        <div className="flex items-center gap-3">
+                          <div className={`h-10 w-10 rounded-full flex items-center justify-center shrink-0 ${config.color}`}>
+                            <TypeIcon className="h-5 w-5" />
+                          </div>
+                          <div className="min-w-0">
+                            <h4 className="font-semibold text-foreground text-sm md:text-base">{task.title}</h4>
+                            <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+                              <Clock className="h-3 w-3" /> {task.updatedAt ? new Date(task.updatedAt).toLocaleDateString() : task.createdAt ? new Date(task.createdAt).toLocaleDateString() : 'Unknown'}
+                              <span className="mx-1">·</span>
+                              <span className="capitalize">{config.label}</span>
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 self-start shrink-0">
+                          <span className={`px-2.5 py-1 rounded text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 ${statusCfg.color}`}>
+                            {task.status === 'sent' && <MailCheck className="h-3 w-3" />}
+                            {task.status === 'completed' && <CheckCircle2 className="h-3 w-3" />}
+                            {task.status === 'dismissed' && <X className="h-3 w-3" />}
+                            {statusCfg.label}
+                          </span>
+                        </div>
+                      </div>
+
+                      <p className="text-xs md:text-sm text-muted-foreground mb-3">
+                        {task.description}
+                      </p>
+
+                      {task.aiContent && (
+                        <div className="p-3 md:p-4 rounded-lg bg-white/5 border border-white/10 text-xs md:text-sm font-mono text-foreground/60 relative whitespace-pre-wrap">
+                          <div className="absolute -top-3 left-4 bg-background/50 px-2 text-[10px] text-muted-foreground uppercase font-bold flex items-center gap-1">
+                            {task.status === 'sent' ? <><MailCheck className="h-3 w-3" /> Sent Content</> : <><FileText className="h-3 w-3" /> Final Content</>}
+                          </div>
+                          {task.aiContent}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="text-center py-16 flex flex-col items-center">
+                <History className="h-12 w-12 text-muted-foreground/50 mb-4" />
+                <h3 className="text-lg font-semibold text-foreground">No History Yet</h3>
+                <p className="text-muted-foreground text-sm mt-1">
+                  {historyFilter ? `No ${STATUS_CONFIG[historyFilter]?.label.toLowerCase() || historyFilter} tasks.` : 'Completed and dismissed tasks will appear here.'}
+                </p>
+              </div>
+            )
           )}
         </div>
       </div>
+
+      {!emailConfigured && activeTab === "pending" && pendingTasks.some((t: any) => isEmailType(t.type) && hasTarget(t)) && (
+        <div className="flex items-center gap-3 px-4 py-3 bg-amber-500/10 border border-amber-500/20 rounded-xl text-sm shrink-0">
+          <AlertCircle className="h-5 w-5 text-amber-500 shrink-0" />
+          <p className="text-muted-foreground">
+            <strong className="text-foreground">Email sending is not configured.</strong> Set up a Resend or SendGrid integration to send emails directly from tasks.
+          </p>
+        </div>
+      )}
 
       <Dialog open={!!editTask} onOpenChange={(open) => { if (!open) setEditTask(null); }}>
         <DialogContent className="sm:max-w-lg">
@@ -424,7 +635,7 @@ export function AiOperator() {
               className="flex items-center gap-2 px-5 py-2 bg-primary text-primary-foreground hover:bg-primary/90 rounded-lg font-medium shadow-md shadow-primary/20 transition-all disabled:opacity-50"
             >
               <CheckCircle2 className="h-4 w-4" />
-              Save & Approve
+              Save & Complete
             </button>
           </DialogFooter>
         </DialogContent>
