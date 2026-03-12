@@ -400,9 +400,13 @@ export const ListLeadsResponseItem = zod.object({
   assignedToId: zod.number().nullish(),
   lastContactDate: zod.date().nullish(),
   nextFollowUpDate: zod.date().nullish(),
+  followUpNote: zod.string().nullish(),
+  lostReason: zod.string().nullish(),
   notes: zod.string().nullish(),
   isStale: zod.boolean(),
+  convertedAt: zod.date().nullish(),
   createdAt: zod.date(),
+  updatedAt: zod.date().optional(),
 });
 export const ListLeadsResponse = zod.array(ListLeadsResponseItem);
 
@@ -449,9 +453,13 @@ export const GetLeadResponse = zod.object({
   assignedToId: zod.number().nullish(),
   lastContactDate: zod.date().nullish(),
   nextFollowUpDate: zod.date().nullish(),
+  followUpNote: zod.string().nullish(),
+  lostReason: zod.string().nullish(),
   notes: zod.string().nullish(),
   isStale: zod.boolean(),
+  convertedAt: zod.date().nullish(),
   createdAt: zod.date(),
+  updatedAt: zod.date().optional(),
 });
 
 /**
@@ -468,8 +476,14 @@ export const UpdateLeadBody = zod.object({
     .optional(),
   assignedToId: zod.number().nullish(),
   nextFollowUpDate: zod.string().nullish(),
+  followUpNote: zod.string().nullish(),
+  lostReason: zod.string().nullish(),
   notes: zod.string().nullish(),
   source: zod.string().nullish(),
+  firstName: zod.string().optional(),
+  lastName: zod.string().optional(),
+  email: zod.string().optional(),
+  phone: zod.string().nullish(),
 });
 
 export const UpdateLeadResponse = zod.object({
@@ -491,9 +505,13 @@ export const UpdateLeadResponse = zod.object({
   assignedToId: zod.number().nullish(),
   lastContactDate: zod.date().nullish(),
   nextFollowUpDate: zod.date().nullish(),
+  followUpNote: zod.string().nullish(),
+  lostReason: zod.string().nullish(),
   notes: zod.string().nullish(),
   isStale: zod.boolean(),
+  convertedAt: zod.date().nullish(),
   createdAt: zod.date(),
+  updatedAt: zod.date().optional(),
 });
 
 /**
@@ -502,6 +520,11 @@ export const UpdateLeadResponse = zod.object({
 export const ConvertLeadToMemberParams = zod.object({
   gymId: zod.coerce.number(),
   leadId: zod.coerce.number(),
+});
+
+export const ConvertLeadToMemberBody = zod.object({
+  startDate: zod.date().optional(),
+  note: zod.string().optional(),
 });
 
 export const ConvertLeadToMemberResponse = zod.object({
@@ -523,6 +546,79 @@ export const ConvertLeadToMemberResponse = zod.object({
   attendanceCount30d: zod.number().nullish(),
   createdAt: zod.date(),
 });
+
+/**
+ * @summary Get sales funnel insights
+ */
+export const GetLeadInsightsParams = zod.object({
+  gymId: zod.coerce.number(),
+});
+
+export const GetLeadInsightsResponse = zod.object({
+  totalLeads: zod.number(),
+  totalActive: zod.number(),
+  stageCounts: zod.record(zod.string(), zod.number()),
+  staleCount: zod.number(),
+  needsFollowUp: zod.number(),
+  conversionsThisMonth: zod.number(),
+  bottleneckStage: zod.string(),
+  bottleneckCount: zod.number(),
+  sourcePerformance: zod.array(
+    zod.object({
+      source: zod.string().optional(),
+      total: zod.number().optional(),
+      converted: zod.number().optional(),
+      rate: zod.number().optional(),
+    }),
+  ),
+});
+
+/**
+ * @summary List lead activity history
+ */
+export const ListLeadActivitiesParams = zod.object({
+  gymId: zod.coerce.number(),
+  leadId: zod.coerce.number(),
+});
+
+export const ListLeadActivitiesResponseItem = zod.object({
+  id: zod.number(),
+  leadId: zod.number(),
+  gymId: zod.number(),
+  type: zod.string(),
+  description: zod.string(),
+  metadata: zod.string().nullish(),
+  createdAt: zod.date(),
+});
+export const ListLeadActivitiesResponse = zod.array(
+  ListLeadActivitiesResponseItem,
+);
+
+/**
+ * @summary Log a lead activity
+ */
+export const CreateLeadActivityParams = zod.object({
+  gymId: zod.coerce.number(),
+  leadId: zod.coerce.number(),
+});
+
+export const CreateLeadActivityBody = zod.object({
+  type: zod.string(),
+  description: zod.string(),
+});
+
+export const CreateLeadActivityResponseItem = zod.object({
+  id: zod.number(),
+  leadId: zod.number(),
+  gymId: zod.number(),
+  type: zod.string(),
+  description: zod.string(),
+  metadata: zod.string().nullish(),
+  createdAt: zod.date(),
+});
+export const CreateLeadActivityResponse = zod.array(
+  CreateLeadActivityResponseItem,
+);
 
 /**
  * @summary List gym staff

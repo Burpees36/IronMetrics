@@ -28,11 +28,13 @@ import type {
   CancelledMembersResponse,
   CheckInBody,
   CohortData,
+  ConvertLeadToMemberBody,
   CreateAiTaskBody,
   CreateAnnouncementBody,
   CreateClassBody,
   CreateDocumentBody,
   CreateGymBody,
+  CreateLeadActivityBody,
   CreateLeadBody,
   CreateMemberBody,
   CreateMemberNoteBody,
@@ -65,6 +67,8 @@ import type {
   InviteStaffBody,
   Invoice,
   Lead,
+  LeadActivity,
+  LeadInsights,
   ListAttendanceParams,
   ListClassesParams,
   ListInvoicesParams,
@@ -1514,11 +1518,14 @@ export const getConvertLeadToMemberUrl = (gymId: number, leadId: number) => {
 export const convertLeadToMember = async (
   gymId: number,
   leadId: number,
+  convertLeadToMemberBody: ConvertLeadToMemberBody,
   options?: RequestInit,
 ): Promise<Member> => {
   return customFetch<Member>(getConvertLeadToMemberUrl(gymId, leadId), {
     ...options,
     method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(convertLeadToMemberBody),
   });
 };
 
@@ -1529,14 +1536,14 @@ export const getConvertLeadToMemberMutationOptions = <
   mutation?: UseMutationOptions<
     Awaited<ReturnType<typeof convertLeadToMember>>,
     TError,
-    { gymId: number; leadId: number },
+    { gymId: number; leadId: number; data: BodyType<ConvertLeadToMemberBody> },
     TContext
   >;
   request?: SecondParameter<typeof customFetch>;
 }): UseMutationOptions<
   Awaited<ReturnType<typeof convertLeadToMember>>,
   TError,
-  { gymId: number; leadId: number },
+  { gymId: number; leadId: number; data: BodyType<ConvertLeadToMemberBody> },
   TContext
 > => {
   const mutationKey = ["convertLeadToMember"];
@@ -1550,11 +1557,11 @@ export const getConvertLeadToMemberMutationOptions = <
 
   const mutationFn: MutationFunction<
     Awaited<ReturnType<typeof convertLeadToMember>>,
-    { gymId: number; leadId: number }
+    { gymId: number; leadId: number; data: BodyType<ConvertLeadToMemberBody> }
   > = (props) => {
-    const { gymId, leadId } = props ?? {};
+    const { gymId, leadId, data } = props ?? {};
 
-    return convertLeadToMember(gymId, leadId, requestOptions);
+    return convertLeadToMember(gymId, leadId, data, requestOptions);
   };
 
   return { mutationFn, ...mutationOptions };
@@ -1563,7 +1570,7 @@ export const getConvertLeadToMemberMutationOptions = <
 export type ConvertLeadToMemberMutationResult = NonNullable<
   Awaited<ReturnType<typeof convertLeadToMember>>
 >;
-
+export type ConvertLeadToMemberMutationBody = BodyType<ConvertLeadToMemberBody>;
 export type ConvertLeadToMemberMutationError = ErrorType<unknown>;
 
 /**
@@ -1576,17 +1583,291 @@ export const useConvertLeadToMember = <
   mutation?: UseMutationOptions<
     Awaited<ReturnType<typeof convertLeadToMember>>,
     TError,
-    { gymId: number; leadId: number },
+    { gymId: number; leadId: number; data: BodyType<ConvertLeadToMemberBody> },
     TContext
   >;
   request?: SecondParameter<typeof customFetch>;
 }): UseMutationResult<
   Awaited<ReturnType<typeof convertLeadToMember>>,
   TError,
-  { gymId: number; leadId: number },
+  { gymId: number; leadId: number; data: BodyType<ConvertLeadToMemberBody> },
   TContext
 > => {
   return useMutation(getConvertLeadToMemberMutationOptions(options));
+};
+
+/**
+ * @summary Get sales funnel insights
+ */
+export const getGetLeadInsightsUrl = (gymId: number) => {
+  return `/api/gyms/${gymId}/leads/insights`;
+};
+
+export const getLeadInsights = async (
+  gymId: number,
+  options?: RequestInit,
+): Promise<LeadInsights> => {
+  return customFetch<LeadInsights>(getGetLeadInsightsUrl(gymId), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetLeadInsightsQueryKey = (gymId: number) => {
+  return [`/api/gyms/${gymId}/leads/insights`] as const;
+};
+
+export const getGetLeadInsightsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getLeadInsights>>,
+  TError = ErrorType<unknown>,
+>(
+  gymId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getLeadInsights>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetLeadInsightsQueryKey(gymId);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getLeadInsights>>> = ({
+    signal,
+  }) => getLeadInsights(gymId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!gymId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getLeadInsights>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetLeadInsightsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getLeadInsights>>
+>;
+export type GetLeadInsightsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get sales funnel insights
+ */
+
+export function useGetLeadInsights<
+  TData = Awaited<ReturnType<typeof getLeadInsights>>,
+  TError = ErrorType<unknown>,
+>(
+  gymId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getLeadInsights>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetLeadInsightsQueryOptions(gymId, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary List lead activity history
+ */
+export const getListLeadActivitiesUrl = (gymId: number, leadId: number) => {
+  return `/api/gyms/${gymId}/leads/${leadId}/activities`;
+};
+
+export const listLeadActivities = async (
+  gymId: number,
+  leadId: number,
+  options?: RequestInit,
+): Promise<LeadActivity[]> => {
+  return customFetch<LeadActivity[]>(getListLeadActivitiesUrl(gymId, leadId), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListLeadActivitiesQueryKey = (
+  gymId: number,
+  leadId: number,
+) => {
+  return [`/api/gyms/${gymId}/leads/${leadId}/activities`] as const;
+};
+
+export const getListLeadActivitiesQueryOptions = <
+  TData = Awaited<ReturnType<typeof listLeadActivities>>,
+  TError = ErrorType<unknown>,
+>(
+  gymId: number,
+  leadId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listLeadActivities>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListLeadActivitiesQueryKey(gymId, leadId);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listLeadActivities>>
+  > = ({ signal }) =>
+    listLeadActivities(gymId, leadId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!(gymId && leadId),
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof listLeadActivities>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListLeadActivitiesQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listLeadActivities>>
+>;
+export type ListLeadActivitiesQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List lead activity history
+ */
+
+export function useListLeadActivities<
+  TData = Awaited<ReturnType<typeof listLeadActivities>>,
+  TError = ErrorType<unknown>,
+>(
+  gymId: number,
+  leadId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listLeadActivities>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListLeadActivitiesQueryOptions(
+    gymId,
+    leadId,
+    options,
+  );
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Log a lead activity
+ */
+export const getCreateLeadActivityUrl = (gymId: number, leadId: number) => {
+  return `/api/gyms/${gymId}/leads/${leadId}/activities`;
+};
+
+export const createLeadActivity = async (
+  gymId: number,
+  leadId: number,
+  createLeadActivityBody: CreateLeadActivityBody,
+  options?: RequestInit,
+): Promise<LeadActivity[]> => {
+  return customFetch<LeadActivity[]>(getCreateLeadActivityUrl(gymId, leadId), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(createLeadActivityBody),
+  });
+};
+
+export const getCreateLeadActivityMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createLeadActivity>>,
+    TError,
+    { gymId: number; leadId: number; data: BodyType<CreateLeadActivityBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createLeadActivity>>,
+  TError,
+  { gymId: number; leadId: number; data: BodyType<CreateLeadActivityBody> },
+  TContext
+> => {
+  const mutationKey = ["createLeadActivity"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createLeadActivity>>,
+    { gymId: number; leadId: number; data: BodyType<CreateLeadActivityBody> }
+  > = (props) => {
+    const { gymId, leadId, data } = props ?? {};
+
+    return createLeadActivity(gymId, leadId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateLeadActivityMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createLeadActivity>>
+>;
+export type CreateLeadActivityMutationBody = BodyType<CreateLeadActivityBody>;
+export type CreateLeadActivityMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Log a lead activity
+ */
+export const useCreateLeadActivity = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createLeadActivity>>,
+    TError,
+    { gymId: number; leadId: number; data: BodyType<CreateLeadActivityBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createLeadActivity>>,
+  TError,
+  { gymId: number; leadId: number; data: BodyType<CreateLeadActivityBody> },
+  TContext
+> => {
+  return useMutation(getCreateLeadActivityMutationOptions(options));
 };
 
 /**

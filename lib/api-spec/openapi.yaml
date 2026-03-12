@@ -439,6 +439,17 @@ paths:
           required: true
           schema:
             type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                startDate:
+                  type: string
+                  format: date
+                note:
+                  type: string
       responses:
         "200":
           description: Conversion result
@@ -446,6 +457,89 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Member"
+
+  /gyms/{gymId}/leads/insights:
+    get:
+      operationId: getLeadInsights
+      tags: [leads]
+      summary: Get sales funnel insights
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Lead insights
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LeadInsights"
+
+  /gyms/{gymId}/leads/{leadId}/activities:
+    get:
+      operationId: listLeadActivities
+      tags: [leads]
+      summary: List lead activity history
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: leadId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Lead activities
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/LeadActivity"
+    post:
+      operationId: createLeadActivity
+      tags: [leads]
+      summary: Log a lead activity
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: leadId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                type:
+                  type: string
+                description:
+                  type: string
+              required:
+                - type
+                - description
+      responses:
+        "200":
+          description: Updated activities list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/LeadActivity"
 
   # STAFF
   /gyms/{gymId}/staff:
@@ -2706,11 +2800,21 @@ components:
         nextFollowUpDate:
           type: ["string", "null"]
           format: date
+        followUpNote:
+          type: ["string", "null"]
+        lostReason:
+          type: ["string", "null"]
         notes:
           type: ["string", "null"]
         isStale:
           type: boolean
+        convertedAt:
+          type: ["string", "null"]
+          format: date-time
         createdAt:
+          type: string
+          format: date-time
+        updatedAt:
           type: string
           format: date-time
       required:
@@ -2722,6 +2826,77 @@ components:
         - stage
         - isStale
         - createdAt
+
+    LeadActivity:
+      type: object
+      properties:
+        id:
+          type: integer
+        leadId:
+          type: integer
+        gymId:
+          type: integer
+        type:
+          type: string
+        description:
+          type: string
+        metadata:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - leadId
+        - gymId
+        - type
+        - description
+        - createdAt
+
+    LeadInsights:
+      type: object
+      properties:
+        totalLeads:
+          type: integer
+        totalActive:
+          type: integer
+        stageCounts:
+          type: object
+          additionalProperties:
+            type: integer
+        staleCount:
+          type: integer
+        needsFollowUp:
+          type: integer
+        conversionsThisMonth:
+          type: integer
+        bottleneckStage:
+          type: string
+        bottleneckCount:
+          type: integer
+        sourcePerformance:
+          type: array
+          items:
+            type: object
+            properties:
+              source:
+                type: string
+              total:
+                type: integer
+              converted:
+                type: integer
+              rate:
+                type: integer
+      required:
+        - totalLeads
+        - totalActive
+        - stageCounts
+        - staleCount
+        - needsFollowUp
+        - conversionsThisMonth
+        - bottleneckStage
+        - bottleneckCount
+        - sourcePerformance
 
     CreateLeadBody:
       type: object
@@ -2753,9 +2928,21 @@ components:
           type: ["integer", "null"]
         nextFollowUpDate:
           type: ["string", "null"]
+        followUpNote:
+          type: ["string", "null"]
+        lostReason:
+          type: ["string", "null"]
         notes:
           type: ["string", "null"]
         source:
+          type: ["string", "null"]
+        firstName:
+          type: string
+        lastName:
+          type: string
+        email:
+          type: string
+        phone:
           type: ["string", "null"]
 
     StaffMember:

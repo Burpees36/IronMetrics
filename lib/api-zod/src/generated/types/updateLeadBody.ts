@@ -14,7 +14,16 @@ export interface UpdateLeadBody {
   /** @nullable */
   nextFollowUpDate?: string | null;
   /** @nullable */
+  followUpNote?: string | null;
+  /** @nullable */
+  lostReason?: string | null;
+  /** @nullable */
   notes?: string | null;
   /** @nullable */
   source?: string | null;
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+  /** @nullable */
+  phone?: string | null;
 }

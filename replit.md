@@ -59,7 +59,8 @@ All tables in `lib/db/src/schema/`:
 - **members** — Full member CRM with risk scoring (risk_tier, risk_score, attendance_count_30d)
 - **member_notes** — Notes on members by staff
 - **timeline_events** — Member lifecycle events
-- **leads** — Lead pipeline (new → contacted → trial → negotiating → converted/lost)
+- **leads** — Lead pipeline CRM (new → contacted → scheduled → trial → converted/lost) with followUpNote, lostReason, convertedAt fields
+- **lead_activities** — Lead activity timeline/audit log (type, description, metadata per lead)
 - **classes** — Class schedule with capacity tracking
 - **attendance** — Check-in records linked to members/classes
 - **membership_plans** — Plan definitions with pricing (stripeProductId, stripePriceId)
@@ -114,7 +115,7 @@ All pages with real API data (no hardcoded values), fully interactive:
 3. **Members** — Searchable member directory with status/risk filters, Add Member dialog, row actions (view profile, edit, add note, change status), clickable rows to member detail
 4. **Member Detail** — Full profile page with tabs (Overview, Billing, Notes, Timeline), edit dialog, status management (hold/cancel/reactivate), add notes, attendance history, subscription info. Billing tab: subscription management (start/pause/resume/cancel), payment methods, payment history, one-time charges
 5. **Schedule** — Weekly class calendar with create class dialog, class detail sheet with roster, check-in flow (member search + check-in), delete class with confirmation
-6. **Leads** — Pipeline with create/edit lead dialogs, stage filter badges, move stage, convert to member, mark as lost
+6. **Leads (Sales Pipeline)** — Kanban-style pipeline board (New, Contacted, Intro Scheduled, Converted, Lost), summary strip (active/stale/follow-up/converted counts), lead detail drawer with activity timeline, follow-up scheduling, contact logging, stale lead detection, convert-to-member flow with start date, sales insights panel (funnel, source performance, bottleneck callouts), smart filters (stage/stale/follow-up due), polished add-lead dialog
 7. **Billing** — 5-tab billing command center (Plans, Subscriptions, Payments, Refunds, Cancelled). MRR/Active/ARM/Failed/Collected summary cards. Subscription actions (pause/resume/cancel with reason). Cancelled members view with month picker and lost revenue tracking. Full Stripe integration
 8. **Programming Hub** — Premium daily programming interface with date navigation (day/week view), section-based workout builder (warm-up, strength, conditioning, etc.), slide-over create/edit panel, role-based views (staff vs. member), duplicate-day functionality, draft/published workflow, result logging for members, and onboarding empty states
 9. **AI Operator** — Fully functional: approve/dismiss/edit AI tasks, type filter tabs, edit modal for draft content, owner brief generation with rendered display modal, task count badges, error states, gym-branded email sending (Send Email button visible only when platform + gym email configured, contextual banner for missing config)
@@ -125,7 +126,7 @@ All pages with real API data (no hardcoded values), fully interactive:
 
 All available mutation hooks from `@workspace/api-client-react`:
 - `useCreateMember`, `useUpdateMember`, `useAddMemberNote`
-- `useCreateLead`, `useUpdateLead`, `useConvertLeadToMember`
+- `useCreateLead`, `useUpdateLead`, `useConvertLeadToMember`, `useGetLeadInsights`, `useListLeadActivities`, `useCreateLeadActivity`
 - `useCreateClass`, `useUpdateClass`, `useDeleteClass`, `useCheckInToClass`
 - `useCreateMembershipPlan`, `useCreateSubscription`, `useUpdateSubscription`
 - `useCancelSubscription`, `usePauseSubscription`, `useResumeSubscription`

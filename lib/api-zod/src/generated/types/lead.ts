@@ -25,7 +25,14 @@ export interface Lead {
   /** @nullable */
   nextFollowUpDate?: Date | null;
   /** @nullable */
+  followUpNote?: string | null;
+  /** @nullable */
+  lostReason?: string | null;
+  /** @nullable */
   notes?: string | null;
   isStale: boolean;
+  /** @nullable */
+  convertedAt?: Date | null;
   createdAt: Date;
+  updatedAt?: Date;
 }

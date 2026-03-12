@@ -15,12 +15,29 @@ export const leadsTable = pgTable("leads", {
   assignedToId: integer("assigned_to_id"),
   lastContactDate: timestamp("last_contact_date", { withTimezone: true }),
   nextFollowUpDate: text("next_follow_up_date"),
+  followUpNote: text("follow_up_note"),
+  lostReason: text("lost_reason"),
   notes: text("notes"),
   isStale: boolean("is_stale").notNull().default(false),
+  convertedAt: timestamp("converted_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
+});
+
+export const leadActivitiesTable = pgTable("lead_activities", {
+  id: serial("id").primaryKey(),
+  leadId: integer("lead_id").notNull().references(() => leadsTable.id),
+  gymId: integer("gym_id").notNull().references(() => gymsTable.id),
+  type: text("type").notNull(),
+  description: text("description").notNull(),
+  metadata: text("metadata"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
 export const insertLeadSchema = createInsertSchema(leadsTable).omit({ id: true, createdAt: true, updatedAt: true });
 export type InsertLead = z.infer<typeof insertLeadSchema>;
 export type Lead = typeof leadsTable.$inferSelect;
+
+export const insertLeadActivitySchema = createInsertSchema(leadActivitiesTable).omit({ id: true, createdAt: true });
+export type InsertLeadActivity = z.infer<typeof insertLeadActivitySchema>;
+export type LeadActivity = typeof leadActivitiesTable.$inferSelect;

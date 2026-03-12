@@ -325,9 +325,48 @@ export interface Lead {
   /** @nullable */
   nextFollowUpDate?: string | null;
   /** @nullable */
+  followUpNote?: string | null;
+  /** @nullable */
+  lostReason?: string | null;
+  /** @nullable */
   notes?: string | null;
   isStale: boolean;
+  /** @nullable */
+  convertedAt?: string | null;
   createdAt: string;
+  updatedAt?: string;
+}
+
+export interface LeadActivity {
+  id: number;
+  leadId: number;
+  gymId: number;
+  type: string;
+  description: string;
+  /** @nullable */
+  metadata?: string | null;
+  createdAt: string;
+}
+
+export type LeadInsightsStageCounts = { [key: string]: number };
+
+export type LeadInsightsSourcePerformanceItem = {
+  source?: string;
+  total?: number;
+  converted?: number;
+  rate?: number;
+};
+
+export interface LeadInsights {
+  totalLeads: number;
+  totalActive: number;
+  stageCounts: LeadInsightsStageCounts;
+  staleCount: number;
+  needsFollowUp: number;
+  conversionsThisMonth: number;
+  bottleneckStage: string;
+  bottleneckCount: number;
+  sourcePerformance: LeadInsightsSourcePerformanceItem[];
 }
 
 export interface CreateLeadBody {
@@ -361,9 +400,18 @@ export interface UpdateLeadBody {
   /** @nullable */
   nextFollowUpDate?: string | null;
   /** @nullable */
+  followUpNote?: string | null;
+  /** @nullable */
+  lostReason?: string | null;
+  /** @nullable */
   notes?: string | null;
   /** @nullable */
   source?: string | null;
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+  /** @nullable */
+  phone?: string | null;
 }
 
 export type StaffMemberRole =
@@ -1476,6 +1524,16 @@ export type ListMembersParams = {
 export type ListLeadsParams = {
   stage?: string;
   search?: string;
+};
+
+export type ConvertLeadToMemberBody = {
+  startDate?: string;
+  note?: string;
+};
+
+export type CreateLeadActivityBody = {
+  type: string;
+  description: string;
 };
 
 export type ListClassesParams = {
