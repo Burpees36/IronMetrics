@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "yniQHRatN8Rov3SdKQZ-w"
+uri = "file://IRON_METRICS_ANALYSIS.md"
+type = "text"
+title = "Iron Metrics: Production Readiness & Competitive Gap Analysis"
