@@ -110,7 +110,7 @@ All tables in `lib/db/src/schema/`:
 ## Frontend Pages
 
 All pages with real API data (no hardcoded values), fully interactive:
-1. **Dashboard** — KPI grid (active members, MRR, weekly attendance, at-risk count), revenue chart, member status breakdown
+1. **Dashboard** — KPI grid (active members, MRR, weekly attendance, at-risk count), revenue chart, member status breakdown, onboarding resume banner for incomplete setups
 2. **Intelligence Hub** — RSI score gauge, risk radar table, intervention cards + recommendation execution tracker with interactive checklists
 3. **Members** — Searchable member directory with status/risk filters, Add Member dialog, CSV Import flow (5-step: upload, map columns, preview/validate, confirm, results), row actions (view profile, edit, add note, change status), clickable rows to member detail, empty state with import CTA
 4. **Member Detail** — Full profile page with tabs (Overview, Billing, Notes, Timeline), edit dialog, status management (hold/cancel/reactivate), add notes, attendance history, subscription info. Billing tab: subscription management (start/pause/resume/cancel), payment methods, payment history, one-time charges
@@ -121,6 +121,7 @@ All pages with real API data (no hardcoded values), fully interactive:
 9. **AI Operator** — Fully functional: approve/dismiss/edit AI tasks, type filter tabs, edit modal for draft content, owner brief generation with rendered display modal, task count badges, error states, gym-branded email sending (Send Email button visible only when platform + gym email configured, contextual banner for missing config)
 10. **Settings** — Full administration center with sidebar navigation (8 sections): General (editable gym identity, contact/location, timezone with save/cancel/dirty state), Staff & Access (searchable/filterable staff list with clickable rows, detail drawer, role edit, activate/deactivate, remove with confirmation, role permissions reference), Email & Notifications (outbound identity config, notification defaults), Billing & Plan (subscription status, payment method, billing history — Stripe-ready shell), Security (account info, access controls, 2FA placeholder), Branding (logo upload, brand colors — placeholder), Integrations (Stripe/Resend connected, Wodify/SMS available), Danger Zone (deactivate/delete with typed confirmation)
 11. **Resources** — Operational playbooks for gym owners with expandable phases
+12. **Onboarding Wizard** — 6-step guided setup for new gyms (Gym Basics, Membership Plans, Staff/Coaches, Members w/ CSV import bridge, Schedule, Launch summary). Progress persisted in `gym_onboarding` table. Steps auto-detect completeness from real data. Resumable from Dashboard banner. New gym creation redirects here automatically.
 
 ## Generated API Hooks (Mutations)
 
@@ -187,6 +188,7 @@ All mounted at `/api` prefix:
 - **Capacity enforcement**: Check-in route blocks when `enrolled >= capacity` (409). Also prevents duplicate check-ins.
 - **Error boundary**: React `ErrorBoundary` wraps all protected page content in `ProtectedRoute`. Shows friendly recovery UI on crash.
 - **CSV import**: Client-side parsing with PapaParse, server-side validation + duplicate detection. Two endpoints: `import/preview` (validate + preview) and `import/confirm` (execute). Supports flexible date formats, phone normalization, auto column mapping. Max 5000 rows. Timeline events logged as "imported" type.
+- **Onboarding wizard**: `gym_onboarding` table tracks per-gym progress (completedSteps, skippedSteps, currentStep, isComplete). Step completeness computed from real data (has members? has plans? has staff? has classes?). Routes: `GET/PATCH /gyms/:gymId/onboarding`. New gym creation redirects to `/onboarding`. Dashboard shows resume banner when incomplete.
 - **No hardcoded metrics**: All dashboard/intelligence/AI operator values are computed from actual DB queries
 - **Loading states**: All pages handle three states: no gym selected, loading, error/empty
 - **Routing**: wouter with base path `import.meta.env.BASE_URL`; use relative paths in Links/navigate (e.g., `/members/${id}` not `${BASE_URL}members/${id}`)

@@ -29,7 +29,7 @@ export function GymSelect() {
     }, {
       onSuccess: (data) => {
         setActiveGymId(data.id);
-        setLocation("/dashboard");
+        setLocation("/onboarding");
       }
     });
   };

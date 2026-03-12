@@ -45,3 +45,15 @@ export const gymStaffTable = pgTable("gym_staff", {
 export const insertGymStaffSchema = createInsertSchema(gymStaffTable).omit({ id: true, createdAt: true });
 export type InsertGymStaff = z.infer<typeof insertGymStaffSchema>;
 export type GymStaff = typeof gymStaffTable.$inferSelect;
+
+export const gymOnboardingTable = pgTable("gym_onboarding", {
+  id: serial("id").primaryKey(),
+  gymId: integer("gym_id").notNull().references(() => gymsTable.id).unique(),
+  currentStep: text("current_step").notNull().default("basics"),
+  completedSteps: text("completed_steps").array().notNull().default([]),
+  skippedSteps: text("skipped_steps").array().notNull().default([]),
+  isComplete: boolean("is_complete").notNull().default(false),
+  completedAt: timestamp("completed_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
+});

@@ -20,6 +20,7 @@ import aiRouter from "./ai";
 import reportsRouter from "./reports";
 import recommendationsRouter from "./recommendations";
 import knowledgeRouter from "./knowledge";
+import onboardingRouter from "./onboarding";
 
 const router: IRouter = Router();
 
@@ -47,5 +48,6 @@ router.use(intelligenceRouter);
 router.use(aiRouter);
 router.use(recommendationsRouter);
 router.use(knowledgeRouter);
+router.use(onboardingRouter);
 
 export default router;

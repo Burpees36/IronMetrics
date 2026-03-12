@@ -1,13 +1,54 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { useGym } from "@/store/GymContext";
 import { useGetDashboardStats } from "@workspace/api-client-react";
 import { 
   Users, TrendingUp, AlertTriangle, CalendarCheck, 
-  ArrowUpRight, ArrowDownRight, Loader2, BrainCircuit
+  ArrowUpRight, ArrowDownRight, Loader2, BrainCircuit, Rocket
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { AreaChart, Area, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
 import { Link } from "wouter";
+import { Button } from "@/components/ui/button";
+
+const API_BASE = import.meta.env.VITE_API_URL || "";
+
+function OnboardingBanner({ gymId }: { gymId: number }) {
+  const [show, setShow] = useState(false);
+  useEffect(() => {
+    fetch(`${API_BASE}/api/gyms/${gymId}/onboarding`, { credentials: "include" })
+      .then((r) => {
+        if (!r.ok) return null;
+        return r.json();
+      })
+      .then((data) => {
+        if (data && data.isComplete === false) setShow(true);
+      })
+      .catch(() => {});
+  }, [gymId]);
+
+  if (!show) return null;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: -10 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="bg-primary/10 border border-primary/20 rounded-xl p-4 flex items-center justify-between"
+    >
+      <div className="flex items-center gap-3">
+        <Rocket className="h-5 w-5 text-primary" />
+        <div>
+          <p className="font-medium text-foreground text-sm">Setup isn't complete yet</p>
+          <p className="text-xs text-muted-foreground">Pick up where you left off and finish configuring your gym.</p>
+        </div>
+      </div>
+      <Link href="/onboarding">
+        <Button size="sm" variant="outline" className="border-primary/30 text-primary hover:bg-primary/10">
+          Resume Setup
+        </Button>
+      </Link>
+    </motion.div>
+  );
+}
 
 export function Dashboard() {
   const { activeGymId } = useGym();
@@ -48,6 +89,7 @@ export function Dashboard() {
 
   return (
     <div className="space-y-6 md:space-y-8 pb-10">
+      <OnboardingBanner gymId={activeGymId} />
       <header className="flex flex-col md:flex-row md:items-center justify-between gap-3 md:gap-4">
         <div>
           <h1 className="text-2xl md:text-3xl font-display font-bold text-foreground">Overview</h1>

@@ -23,6 +23,7 @@ import { Workouts } from "@/pages/Workouts";
 import { Resources } from "@/pages/Resources";
 import { MemberDetail } from "@/pages/MemberDetail";
 import { Settings } from "@/pages/Settings";
+import { Onboarding } from "@/pages/Onboarding";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -97,6 +98,7 @@ function Router() {
       <Route path="/workouts" component={() => <ProtectedRoute component={Workouts} />} />
       <Route path="/resources" component={() => <ProtectedRoute component={Resources} />} />
       <Route path="/settings" component={() => <ProtectedRoute component={Settings} />} />
+      <Route path="/onboarding" component={() => <ProtectedRoute component={Onboarding} />} />
       
       <Route path="/:rest*">
         {() => <NotFound />}
