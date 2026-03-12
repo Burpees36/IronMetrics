@@ -63,8 +63,13 @@ export function Schedule() {
 
   const [formData, setFormData] = useState({
     name: "",
-    startTime: "",
-    endTime: "",
+    date: "",
+    startHour: "9",
+    startMinute: "00",
+    startAmPm: "AM",
+    endHour: "10",
+    endMinute: "00",
+    endAmPm: "AM",
     capacity: "",
     coachId: "none",
     description: "",
@@ -90,15 +95,40 @@ export function Schedule() {
   const members: Member[] = membersData?.members ?? [];
 
   function resetForm() {
-    setFormData({ name: "", startTime: "", endTime: "", capacity: "", coachId: "none", description: "", type: "regular" });
+    setFormData({ name: "", date: "", startHour: "9", startMinute: "00", startAmPm: "AM", endHour: "10", endMinute: "00", endAmPm: "AM", capacity: "", coachId: "none", description: "", type: "regular" });
+  }
+
+  function openCreateDialog() {
+    resetForm();
+    setFormData(p => ({ ...p, date: format(selectedDate, 'yyyy-MM-dd') }));
+    setCreateOpen(true);
+  }
+
+  function to24Hour(hour: string, amPm: string): number {
+    let h = parseInt(hour, 10);
+    if (amPm === "AM" && h === 12) h = 0;
+    if (amPm === "PM" && h !== 12) h += 12;
+    return h;
   }
 
   function handleCreateClass(e: React.FormEvent) {
     e.preventDefault();
     if (!activeGymId) return;
 
-    const startDate = new Date(formData.startTime);
-    const endDate = new Date(formData.endTime);
+    const startH = to24Hour(formData.startHour, formData.startAmPm);
+    const endH = to24Hour(formData.endHour, formData.endAmPm);
+    const startDate = new Date(`${formData.date}T${String(startH).padStart(2, '0')}:${formData.startMinute}:00`);
+    const endDate = new Date(`${formData.date}T${String(endH).padStart(2, '0')}:${formData.endMinute}:00`);
+
+    if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+      toast({ title: "Invalid Date/Time", description: "Please check your date and time selections." });
+      return;
+    }
+
+    if (endDate <= startDate) {
+      toast({ title: "Invalid Time Range", description: "End time must be after start time." });
+      return;
+    }
 
     createClassMutation.mutate(
       {
@@ -120,8 +150,9 @@ export function Schedule() {
           setCreateOpen(false);
           resetForm();
         },
-        onError: () => {
-          toast({ title: "Error", description: "Failed to create class." });
+        onError: (error: any) => {
+          const message = error?.data?.error || error?.message || "Failed to create class.";
+          toast({ title: "Error", description: message });
         },
       }
     );
@@ -139,8 +170,9 @@ export function Schedule() {
           setDeleteClassId(null);
           if (detailClassId === deleteClassId) setDetailClassId(null);
         },
-        onError: () => {
-          toast({ title: "Error", description: "Failed to delete class." });
+        onError: (error: any) => {
+          const message = error?.data?.error || error?.message || "Failed to delete class.";
+          toast({ title: "Error", description: message });
         },
       }
     );
@@ -161,8 +193,9 @@ export function Schedule() {
           setCheckinClassId(null);
           setMemberSearch("");
         },
-        onError: () => {
-          toast({ title: "Error", description: "Failed to check in member." });
+        onError: (error: any) => {
+          const message = error?.data?.error || error?.message || "Failed to check in member.";
+          toast({ title: "Error", description: message });
         },
       }
     );
@@ -185,8 +218,9 @@ export function Schedule() {
           queryClient.invalidateQueries({ queryKey: getListClassesQueryKey(activeGymId) });
           queryClient.invalidateQueries({ queryKey: getGetClassQueryKey(activeGymId, detailClassId) });
         },
-        onError: () => {
-          toast({ title: "Error", description: "Failed to update coach." });
+        onError: (error: any) => {
+          const message = error?.data?.error || error?.message || "Failed to update coach.";
+          toast({ title: "Error", description: message });
         },
       }
     );
@@ -226,7 +260,7 @@ export function Schedule() {
           <p className="text-sm md:text-base text-muted-foreground mt-1">Manage classes and attendance.</p>
         </div>
         <button
-          onClick={() => setCreateOpen(true)}
+          onClick={openCreateDialog}
           className="flex items-center justify-center gap-2 px-4 py-2.5 bg-primary text-primary-foreground hover:bg-primary/90 rounded-xl font-medium transition-colors shadow-lg shadow-primary/20 min-h-[44px] w-full sm:w-auto"
         >
           <Plus className="h-5 w-5" />
@@ -372,14 +406,66 @@ export function Schedule() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2">
-                <Label htmlFor="start-time">Start Time *</Label>
-                <Input id="start-time" type="datetime-local" value={formData.startTime} onChange={(e) => setFormData(p => ({ ...p, startTime: e.target.value }))} required />
+            <div className="space-y-2">
+              <Label htmlFor="class-date">Date *</Label>
+              <Input id="class-date" type="date" value={formData.date} onChange={(e) => setFormData(p => ({ ...p, date: e.target.value }))} required />
+            </div>
+            <div className="space-y-2">
+              <Label>Start Time *</Label>
+              <div className="flex items-center gap-2">
+                <Select value={formData.startHour} onValueChange={(v) => setFormData(p => ({ ...p, startHour: v }))}>
+                  <SelectTrigger className="w-[70px]"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {Array.from({ length: 12 }, (_, i) => i + 1).map(h => (
+                      <SelectItem key={h} value={String(h)}>{h}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <span className="text-muted-foreground font-bold">:</span>
+                <Select value={formData.startMinute} onValueChange={(v) => setFormData(p => ({ ...p, startMinute: v }))}>
+                  <SelectTrigger className="w-[70px]"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {["00", "15", "30", "45"].map(m => (
+                      <SelectItem key={m} value={m}>{m}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select value={formData.startAmPm} onValueChange={(v) => setFormData(p => ({ ...p, startAmPm: v }))}>
+                  <SelectTrigger className="w-[72px]"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="AM">AM</SelectItem>
+                    <SelectItem value="PM">PM</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="end-time">End Time *</Label>
-                <Input id="end-time" type="datetime-local" value={formData.endTime} onChange={(e) => setFormData(p => ({ ...p, endTime: e.target.value }))} required />
+            </div>
+            <div className="space-y-2">
+              <Label>End Time *</Label>
+              <div className="flex items-center gap-2">
+                <Select value={formData.endHour} onValueChange={(v) => setFormData(p => ({ ...p, endHour: v }))}>
+                  <SelectTrigger className="w-[70px]"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {Array.from({ length: 12 }, (_, i) => i + 1).map(h => (
+                      <SelectItem key={h} value={String(h)}>{h}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <span className="text-muted-foreground font-bold">:</span>
+                <Select value={formData.endMinute} onValueChange={(v) => setFormData(p => ({ ...p, endMinute: v }))}>
+                  <SelectTrigger className="w-[70px]"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {["00", "15", "30", "45"].map(m => (
+                      <SelectItem key={m} value={m}>{m}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select value={formData.endAmPm} onValueChange={(v) => setFormData(p => ({ ...p, endAmPm: v }))}>
+                  <SelectTrigger className="w-[72px]"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="AM">AM</SelectItem>
+                    <SelectItem value="PM">PM</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
