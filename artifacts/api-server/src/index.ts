@@ -1,3 +1,4 @@
+import { initStripe } from "./stripeClient";
 import app from "./app";
 
 const rawPort = process.env["PORT"];
@@ -12,6 +13,13 @@ const port = Number(rawPort);
 
 if (Number.isNaN(port) || port <= 0) {
   throw new Error(`Invalid PORT value: "${rawPort}"`);
+}
+
+try {
+  await initStripe();
+} catch (err: any) {
+  console.error("Stripe initialization failed (non-fatal):", err.message);
+  console.log("Server will start without Stripe features.");
 }
 
 app.listen(port, () => {

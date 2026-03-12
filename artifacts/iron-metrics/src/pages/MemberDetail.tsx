@@ -1,6 +1,13 @@
 import React, { useState } from "react";
 import { useGym } from "@/store/GymContext";
-import { useGetMember, useGetMemberTimeline, useUpdateMember, useAddMemberNote, getGetMemberQueryKey, getGetMemberTimelineQueryKey, getListMembersQueryKey } from "@workspace/api-client-react";
+import {
+  useGetMember, useGetMemberTimeline, useUpdateMember, useAddMemberNote,
+  getGetMemberQueryKey, getGetMemberTimelineQueryKey, getListMembersQueryKey,
+  useGetMemberBillingHistory, useListPaymentMethods, useCreateSetupIntent,
+  useCreateStripeSubscription, useCreateOneTimeCharge, useListMembershipPlans,
+  useCancelSubscription, usePauseSubscription, useResumeSubscription,
+  getGetMemberBillingHistoryQueryKey, getListSubscriptionsQueryKey,
+} from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useRoute, useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
@@ -8,7 +15,7 @@ import { motion } from "framer-motion";
 import {
   Loader2, ArrowLeft, UserCircle, Mail, Phone, Calendar, Shield,
   MapPin, StickyNote, Clock, Edit, Pause, XCircle, Play, AlertTriangle,
-  CheckCircle, Activity, CreditCard, Plus
+  CheckCircle, Activity, CreditCard, Plus, DollarSign, Receipt, RefreshCw
 } from "lucide-react";
 import { Link } from "wouter";
 import {
@@ -21,6 +28,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 export function MemberDetail() {
   const { activeGymId } = useGym();
@@ -30,10 +38,17 @@ export function MemberDetail() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const [activeTab, setActiveTab] = useState<"overview" | "notes" | "timeline">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "notes" | "timeline" | "billing">("overview");
   const [editOpen, setEditOpen] = useState(false);
   const [statusAction, setStatusAction] = useState<"hold" | "cancelled" | "active" | null>(null);
   const [noteContent, setNoteContent] = useState("");
+  const [chargeOpen, setChargeOpen] = useState(false);
+  const [chargeForm, setChargeForm] = useState({ amount: "", description: "" });
+  const [subOpen, setSubOpen] = useState(false);
+  const [subPlanId, setSubPlanId] = useState("");
+  const [cancelSubDialog, setCancelSubDialog] = useState<number | null>(null);
+  const [cancelReason, setCancelReason] = useState("");
+  const [cancelAtPeriodEnd, setCancelAtPeriodEnd] = useState(true);
 
   const [editForm, setEditForm] = useState({
     firstName: "",
@@ -56,10 +71,96 @@ export function MemberDetail() {
   const updateMutation = useUpdateMember();
   const addNoteMutation = useAddMemberNote();
 
+  const { data: billingHistory } = useGetMemberBillingHistory(activeGymId as number, memberId, {
+    query: { enabled: !!activeGymId && !!memberId && activeTab === "billing" } as any
+  });
+  const { data: paymentMethods } = useListPaymentMethods(activeGymId as number, memberId, {
+    query: { enabled: !!activeGymId && !!memberId && activeTab === "billing" } as any
+  });
+  const { data: plans } = useListMembershipPlans(activeGymId as number, {
+    query: { enabled: !!activeGymId && activeTab === "billing" }
+  });
+
+  const createChargeMutation = useCreateOneTimeCharge();
+  const createStripeSubMutation = useCreateStripeSubscription();
+  const cancelSubMutation = useCancelSubscription();
+  const pauseSubMutation = usePauseSubscription();
+  const resumeSubMutation = useResumeSubscription();
+
   const invalidateAll = () => {
     queryClient.invalidateQueries({ queryKey: getGetMemberQueryKey(activeGymId as number, memberId) });
     queryClient.invalidateQueries({ queryKey: getGetMemberTimelineQueryKey(activeGymId as number, memberId) });
     queryClient.invalidateQueries({ queryKey: getListMembersQueryKey(activeGymId as number) });
+  };
+
+  const invalidateBilling = () => {
+    invalidateAll();
+    queryClient.invalidateQueries({ queryKey: getGetMemberBillingHistoryQueryKey(activeGymId as number, memberId) });
+    queryClient.invalidateQueries({ queryKey: getListSubscriptionsQueryKey(activeGymId as number) });
+  };
+
+  const handleCreateCharge = () => {
+    if (!activeGymId || !chargeForm.amount || !chargeForm.description) return;
+    createChargeMutation.mutate(
+      { gymId: activeGymId, memberId, data: { amount: parseFloat(chargeForm.amount), description: chargeForm.description } },
+      {
+        onSuccess: () => {
+          toast({ title: "Charge created", description: `$${chargeForm.amount} charge applied.` });
+          setChargeOpen(false);
+          setChargeForm({ amount: "", description: "" });
+          invalidateBilling();
+        },
+        onError: () => toast({ title: "Error", description: "Failed to create charge." }),
+      }
+    );
+  };
+
+  const handleCreateStripeSub = () => {
+    if (!activeGymId || !subPlanId) return;
+    createStripeSubMutation.mutate(
+      { gymId: activeGymId, memberId, data: { planId: parseInt(subPlanId) } },
+      {
+        onSuccess: () => {
+          toast({ title: "Subscription created", description: "Stripe subscription started." });
+          setSubOpen(false);
+          setSubPlanId("");
+          invalidateBilling();
+        },
+        onError: () => toast({ title: "Error", description: "Failed to create subscription." }),
+      }
+    );
+  };
+
+  const handleCancelMemberSub = () => {
+    if (!activeGymId || cancelSubDialog === null) return;
+    cancelSubMutation.mutate(
+      { gymId: activeGymId, subscriptionId: cancelSubDialog, data: { cancelAtPeriodEnd, reason: cancelReason || undefined } },
+      {
+        onSuccess: () => {
+          toast({ title: "Subscription cancelled" });
+          setCancelSubDialog(null);
+          setCancelReason("");
+          invalidateBilling();
+        },
+        onError: () => toast({ title: "Error", description: "Failed to cancel subscription." }),
+      }
+    );
+  };
+
+  const handlePauseMemberSub = (subId: number) => {
+    if (!activeGymId) return;
+    pauseSubMutation.mutate(
+      { gymId: activeGymId, subscriptionId: subId },
+      { onSuccess: () => { toast({ title: "Subscription paused" }); invalidateBilling(); }, onError: () => toast({ title: "Error", description: "Failed to pause." }) }
+    );
+  };
+
+  const handleResumeMemberSub = (subId: number) => {
+    if (!activeGymId) return;
+    resumeSubMutation.mutate(
+      { gymId: activeGymId, subscriptionId: subId },
+      { onSuccess: () => { toast({ title: "Subscription resumed" }); invalidateBilling(); }, onError: () => toast({ title: "Error", description: "Failed to resume." }) }
+    );
   };
 
   const handleEditOpen = () => {
@@ -170,9 +271,28 @@ export function MemberDetail() {
 
   const tabs = [
     { key: "overview" as const, label: "Overview", icon: Activity },
+    { key: "billing" as const, label: "Billing", icon: CreditCard },
     { key: "notes" as const, label: "Notes", icon: StickyNote },
     { key: "timeline" as const, label: "Timeline", icon: Clock },
   ];
+
+  const billingData = billingHistory as any;
+  const methods = (paymentMethods ?? []) as any[];
+  const bSubs = billingData?.subscriptions ?? [];
+  const bPayments = billingData?.payments ?? [];
+  const bInvoices = billingData?.invoices ?? [];
+  const formatDate = (d: any) => d ? new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "—";
+  const subStatusColor = (s: string) => {
+    switch (s) {
+      case "active": return "bg-emerald-500/10 text-emerald-500 border-emerald-500/20";
+      case "paused": return "bg-yellow-500/10 text-yellow-500 border-yellow-500/20";
+      case "cancelled": case "cancel_at_period_end": return "bg-destructive/10 text-destructive border-destructive/20";
+      case "past_due": return "bg-orange-500/10 text-orange-500 border-orange-500/20";
+      case "succeeded": return "bg-emerald-500/10 text-emerald-500 border-emerald-500/20";
+      case "failed": return "bg-destructive/10 text-destructive border-destructive/20";
+      default: return "bg-muted text-muted-foreground border-border";
+    }
+  };
 
   return (
     <div className="space-y-6 pb-10">
@@ -464,6 +584,267 @@ export function MemberDetail() {
           )}
         </motion.div>
       )}
+
+      {activeTab === "billing" && (
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+          <div className="flex flex-wrap gap-3">
+            <button
+              onClick={() => setSubOpen(true)}
+              className="flex items-center gap-2 px-4 py-2.5 bg-primary text-primary-foreground hover:bg-primary/90 rounded-xl font-medium transition-colors shadow-lg shadow-primary/20"
+            >
+              <Plus className="h-4 w-4" /> Start Subscription
+            </button>
+            <button
+              onClick={() => setChargeOpen(true)}
+              className="flex items-center gap-2 px-4 py-2.5 bg-white/5 border border-border rounded-xl text-sm font-medium text-foreground hover:bg-white/10 transition-colors"
+            >
+              <DollarSign className="h-4 w-4" /> One-Time Charge
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="bg-card border border-border rounded-2xl p-6 shadow-sm">
+              <h3 className="text-lg font-semibold text-foreground flex items-center gap-2 mb-4">
+                <CreditCard className="h-5 w-5 text-primary" /> Subscriptions
+              </h3>
+              {bSubs.length > 0 ? (
+                <div className="space-y-4">
+                  {bSubs.map((sub: any) => (
+                    <div key={sub.id} className="p-4 bg-muted/20 border border-border rounded-xl">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="font-medium text-foreground">{sub.planName || `Plan #${sub.planId}`}</span>
+                        <span className={`px-2.5 py-1 rounded-full text-xs font-medium border ${subStatusColor(sub.status)}`}>
+                          {sub.status === "cancel_at_period_end" ? "Cancelling" : sub.status?.charAt(0).toUpperCase() + sub.status?.slice(1)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between text-sm text-muted-foreground mb-1">
+                        <span>Amount</span>
+                        <span className="text-foreground font-medium">${sub.amount}/mo</span>
+                      </div>
+                      {sub.currentPeriodEnd && (
+                        <div className="flex justify-between text-sm text-muted-foreground mb-1">
+                          <span>Next billing</span>
+                          <span className="text-foreground">{formatDate(sub.currentPeriodEnd)}</span>
+                        </div>
+                      )}
+                      {sub.stripeSubscriptionId && (
+                        <div className="flex justify-between text-sm text-muted-foreground mb-3">
+                          <span>Stripe ID</span>
+                          <span className="text-foreground font-mono text-xs">{sub.stripeSubscriptionId.slice(0, 20)}...</span>
+                        </div>
+                      )}
+                      <div className="flex gap-2 mt-3 pt-3 border-t border-border">
+                        {sub.status === "active" && (
+                          <>
+                            <button onClick={() => handlePauseMemberSub(sub.id)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-yellow-500/10 text-yellow-500 hover:bg-yellow-500/20 transition-colors">
+                              <Pause className="h-3 w-3" /> Pause
+                            </button>
+                            <button onClick={() => setCancelSubDialog(sub.id)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-destructive/10 text-destructive hover:bg-destructive/20 transition-colors">
+                              <XCircle className="h-3 w-3" /> Cancel
+                            </button>
+                          </>
+                        )}
+                        {sub.status === "paused" && (
+                          <button onClick={() => handleResumeMemberSub(sub.id)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20 transition-colors">
+                            <Play className="h-3 w-3" /> Resume
+                          </button>
+                        )}
+                        {sub.status === "cancel_at_period_end" && (
+                          <button onClick={() => handleResumeMemberSub(sub.id)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20 transition-colors">
+                            <RefreshCw className="h-3 w-3" /> Undo Cancel
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-muted-foreground text-sm">No subscriptions found.</p>
+              )}
+            </div>
+
+            <div className="bg-card border border-border rounded-2xl p-6 shadow-sm">
+              <h3 className="text-lg font-semibold text-foreground flex items-center gap-2 mb-4">
+                <CreditCard className="h-5 w-5 text-primary" /> Payment Methods
+              </h3>
+              {methods.length > 0 ? (
+                <div className="space-y-3">
+                  {methods.map((pm: any) => (
+                    <div key={pm.id} className="flex items-center justify-between p-3 bg-muted/20 border border-border rounded-xl">
+                      <div className="flex items-center gap-3">
+                        <CreditCard className="h-5 w-5 text-muted-foreground" />
+                        <div>
+                          <p className="text-sm font-medium text-foreground capitalize">{pm.brand || "card"} •••• {pm.last4 || "****"}</p>
+                          {pm.expMonth && <p className="text-xs text-muted-foreground">Expires {pm.expMonth}/{pm.expYear}</p>}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-muted-foreground text-sm">No payment methods on file.</p>
+              )}
+            </div>
+          </div>
+
+          <div className="bg-card border border-border rounded-2xl shadow-sm overflow-hidden">
+            <div className="p-6 border-b border-border">
+              <h3 className="text-lg font-semibold text-foreground flex items-center gap-2">
+                <Receipt className="h-5 w-5 text-primary" /> Payment History
+              </h3>
+            </div>
+            {bPayments.length > 0 ? (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm text-left">
+                  <thead className="text-xs text-muted-foreground uppercase bg-muted/30 border-b border-border">
+                    <tr>
+                      <th className="px-6 py-4 font-semibold">Date</th>
+                      <th className="px-6 py-4 font-semibold">Description</th>
+                      <th className="px-6 py-4 font-semibold">Amount</th>
+                      <th className="px-6 py-4 font-semibold">Type</th>
+                      <th className="px-6 py-4 font-semibold">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {bPayments.map((p: any) => (
+                      <tr key={p.id} className="hover:bg-white/5 transition-colors">
+                        <td className="px-6 py-4 text-muted-foreground">{formatDate(p.createdAt)}</td>
+                        <td className="px-6 py-4 text-foreground">{p.description || "—"}</td>
+                        <td className="px-6 py-4 text-foreground font-medium">${p.amount}</td>
+                        <td className="px-6 py-4 text-muted-foreground capitalize">{p.type?.replace("_", " ") || "—"}</td>
+                        <td className="px-6 py-4">
+                          <span className={`px-2.5 py-1 rounded-full text-xs font-medium border ${subStatusColor(p.status)}`}>
+                            {p.status?.charAt(0).toUpperCase() + p.status?.slice(1)}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="p-8 text-center text-muted-foreground">No payments recorded yet.</div>
+            )}
+          </div>
+
+          {bInvoices.length > 0 && (
+            <div className="bg-card border border-border rounded-2xl shadow-sm overflow-hidden">
+              <div className="p-6 border-b border-border">
+                <h3 className="text-lg font-semibold text-foreground">Invoices</h3>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm text-left">
+                  <thead className="text-xs text-muted-foreground uppercase bg-muted/30 border-b border-border">
+                    <tr>
+                      <th className="px-6 py-4 font-semibold">Date</th>
+                      <th className="px-6 py-4 font-semibold">Amount</th>
+                      <th className="px-6 py-4 font-semibold">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {bInvoices.map((inv: any) => (
+                      <tr key={inv.id} className="hover:bg-white/5 transition-colors">
+                        <td className="px-6 py-4 text-muted-foreground">{formatDate(inv.createdAt || inv.dueDate)}</td>
+                        <td className="px-6 py-4 text-foreground font-medium">${inv.amount}</td>
+                        <td className="px-6 py-4">
+                          <span className={`px-2.5 py-1 rounded-full text-xs font-medium border ${subStatusColor(inv.status)}`}>
+                            {inv.status?.charAt(0).toUpperCase() + inv.status?.slice(1)}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </motion.div>
+      )}
+
+      <Dialog open={chargeOpen} onOpenChange={setChargeOpen}>
+        <DialogContent className="bg-card border-border max-w-sm">
+          <DialogHeader>
+            <DialogTitle>One-Time Charge</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label>Amount ($) *</Label>
+              <Input type="number" step="0.01" value={chargeForm.amount} onChange={(e) => setChargeForm({ ...chargeForm, amount: e.target.value })} placeholder="25.00" className="bg-background border-border" />
+            </div>
+            <div className="space-y-2">
+              <Label>Description *</Label>
+              <Input value={chargeForm.description} onChange={(e) => setChargeForm({ ...chargeForm, description: e.target.value })} placeholder="e.g. Late cancel fee" className="bg-background border-border" />
+            </div>
+          </div>
+          <DialogFooter>
+            <button onClick={() => setChargeOpen(false)} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors">Cancel</button>
+            <button onClick={handleCreateCharge} disabled={createChargeMutation.isPending || !chargeForm.amount || !chargeForm.description} className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground hover:bg-primary/90 rounded-lg font-medium transition-colors disabled:opacity-50">
+              {createChargeMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+              Charge
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={subOpen} onOpenChange={setSubOpen}>
+        <DialogContent className="bg-card border-border max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Start Subscription</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label>Plan *</Label>
+              <Select value={subPlanId} onValueChange={setSubPlanId}>
+                <SelectTrigger className="bg-background border-border"><SelectValue placeholder="Select a plan" /></SelectTrigger>
+                <SelectContent>
+                  {(plans ?? []).map((p: any) => (
+                    <SelectItem key={p.id} value={String(p.id)}>{p.name} — ${p.price}/{p.billingInterval || "mo"}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <button onClick={() => setSubOpen(false)} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors">Cancel</button>
+            <button onClick={handleCreateStripeSub} disabled={createStripeSubMutation.isPending || !subPlanId} className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground hover:bg-primary/90 rounded-lg font-medium transition-colors disabled:opacity-50">
+              {createStripeSubMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+              Start Subscription
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={cancelSubDialog !== null} onOpenChange={() => setCancelSubDialog(null)}>
+        <AlertDialogContent className="bg-card border-border">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cancel Subscription</AlertDialogTitle>
+            <AlertDialogDescription>Are you sure you want to cancel this subscription?</AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="flex gap-4">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="radio" checked={cancelAtPeriodEnd} onChange={() => setCancelAtPeriodEnd(true)} className="accent-primary" />
+                <span className="text-sm text-foreground">Cancel at period end</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="radio" checked={!cancelAtPeriodEnd} onChange={() => setCancelAtPeriodEnd(false)} className="accent-destructive" />
+                <span className="text-sm text-foreground">Cancel immediately</span>
+              </label>
+            </div>
+            <div className="space-y-2">
+              <Label>Reason (optional)</Label>
+              <Textarea value={cancelReason} onChange={(e) => setCancelReason(e.target.value)} placeholder="Why is this being cancelled?" rows={2} className="bg-background border-border" />
+            </div>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="bg-transparent border-border hover:bg-white/5">Keep Subscription</AlertDialogCancel>
+            <AlertDialogAction onClick={handleCancelMemberSub} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              {cancelSubMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              Cancel Subscription
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
         <DialogContent className="bg-card border-border max-w-md">

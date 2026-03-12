@@ -13,6 +13,8 @@ export const SubscriptionStatus = {
   active: "active",
   paused: "paused",
   cancelled: "cancelled",
+  cancel_at_period_end: "cancel_at_period_end",
   past_due: "past_due",
+  pending: "pending",
   trial: "trial",
 } as const;

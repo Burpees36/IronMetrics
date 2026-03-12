@@ -877,6 +877,413 @@ paths:
                 items:
                   $ref: "#/components/schemas/Invoice"
 
+  /gyms/{gymId}/stripe/publishable-key:
+    get:
+      operationId: getStripePublishableKey
+      tags: [billing]
+      summary: Get Stripe publishable key
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Publishable key
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  publishableKey:
+                    type: string
+
+  /gyms/{gymId}/members/{memberId}/setup-intent:
+    post:
+      operationId: createSetupIntent
+      tags: [billing]
+      summary: Create Stripe setup intent for payment method
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: memberId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Setup intent
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  clientSecret:
+                    type: string
+                  customerId:
+                    type: string
+
+  /gyms/{gymId}/members/{memberId}/payment-methods:
+    get:
+      operationId: listPaymentMethods
+      tags: [billing]
+      summary: List payment methods for member
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: memberId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Payment methods
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                    brand:
+                      type: string
+                    last4:
+                      type: string
+                    expMonth:
+                      type: integer
+                    expYear:
+                      type: integer
+
+  /gyms/{gymId}/members/{memberId}/stripe-subscription:
+    post:
+      operationId: createStripeSubscription
+      tags: [billing]
+      summary: Create Stripe-backed subscription
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: memberId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - planId
+              properties:
+                planId:
+                  type: integer
+                paymentMethodId:
+                  type: string
+      responses:
+        "201":
+          description: Created subscription
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Subscription"
+
+  /gyms/{gymId}/members/{memberId}/billing-history:
+    get:
+      operationId: getMemberBillingHistory
+      tags: [billing]
+      summary: Get billing history for member
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: memberId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Billing history
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  subscriptions:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Subscription"
+                  payments:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/PaymentRecord"
+                  invoices:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Invoice"
+
+  /gyms/{gymId}/members/{memberId}/charge:
+    post:
+      operationId: createOneTimeCharge
+      tags: [billing]
+      summary: Create one-time charge for member
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: memberId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - amount
+                - description
+              properties:
+                amount:
+                  type: number
+                description:
+                  type: string
+                paymentMethodId:
+                  type: string
+      responses:
+        "201":
+          description: Charge result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaymentRecord"
+
+  /gyms/{gymId}/subscriptions/{subscriptionId}/cancel:
+    post:
+      operationId: cancelSubscription
+      tags: [billing]
+      summary: Cancel subscription
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: subscriptionId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                cancelAtPeriodEnd:
+                  type: boolean
+                  default: true
+                reason:
+                  type: string
+      responses:
+        "200":
+          description: Cancelled subscription
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Subscription"
+
+  /gyms/{gymId}/subscriptions/{subscriptionId}/pause:
+    post:
+      operationId: pauseSubscription
+      tags: [billing]
+      summary: Pause subscription
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: subscriptionId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Paused subscription
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Subscription"
+
+  /gyms/{gymId}/subscriptions/{subscriptionId}/resume:
+    post:
+      operationId: resumeSubscription
+      tags: [billing]
+      summary: Resume paused subscription
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: subscriptionId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Resumed subscription
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Subscription"
+
+  /gyms/{gymId}/payments:
+    get:
+      operationId: listPayments
+      tags: [billing]
+      summary: List payments
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Payments
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PaymentRecord"
+
+  /gyms/{gymId}/refunds:
+    get:
+      operationId: listRefunds
+      tags: [billing]
+      summary: List refunds
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Refunds
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/RefundRecord"
+
+  /gyms/{gymId}/payments/{paymentId}/refund:
+    post:
+      operationId: refundPayment
+      tags: [billing]
+      summary: Refund a payment
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: paymentId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                amount:
+                  type: number
+                reason:
+                  type: string
+      responses:
+        "200":
+          description: Refund result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RefundRecord"
+
+  /gyms/{gymId}/cancelled-members:
+    get:
+      operationId: getCancelledMembers
+      tags: [billing]
+      summary: Get cancelled members for a period
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: month
+          in: query
+          schema:
+            type: integer
+        - name: year
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Cancelled members data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CancelledMembersResponse"
+
+  /gyms/{gymId}/billing-summary:
+    get:
+      operationId: getBillingSummary
+      tags: [billing]
+      summary: Get billing dashboard summary
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Billing summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BillingSummary"
+
   # RETAIL / POS
   /gyms/{gymId}/products:
     get:
@@ -2160,7 +2567,7 @@ components:
           type: string
         status:
           type: string
-          enum: [active, paused, cancelled, past_due, trial]
+          enum: [active, paused, cancelled, cancel_at_period_end, past_due, pending, trial]
         currentPeriodStart:
           type: ["string", "null"]
           format: date
@@ -2171,6 +2578,13 @@ components:
           type: number
         failedPayments:
           type: integer
+        stripeSubscriptionId:
+          type: ["string", "null"]
+        cancelledAt:
+          type: ["string", "null"]
+          format: date-time
+        cancelReason:
+          type: ["string", "null"]
         createdAt:
           type: string
           format: date-time
@@ -2245,6 +2659,162 @@ components:
         - amount
         - status
         - createdAt
+
+    PaymentRecord:
+      type: object
+      properties:
+        id:
+          type: integer
+        gymId:
+          type: integer
+        memberId:
+          type: integer
+        memberName:
+          type: string
+        amount:
+          type: number
+        type:
+          type: string
+          enum: [subscription, one_time, drop_in]
+        status:
+          type: string
+          enum: [succeeded, pending, failed, refunded]
+        description:
+          type: ["string", "null"]
+        stripePaymentIntentId:
+          type: ["string", "null"]
+        stripeChargeId:
+          type: ["string", "null"]
+        invoiceId:
+          type: ["integer", "null"]
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - gymId
+        - memberId
+        - memberName
+        - amount
+        - type
+        - status
+        - createdAt
+
+    RefundRecord:
+      type: object
+      properties:
+        id:
+          type: integer
+        gymId:
+          type: integer
+        memberId:
+          type: integer
+        memberName:
+          type: string
+        amount:
+          type: number
+        reason:
+          type: ["string", "null"]
+        status:
+          type: string
+        paymentId:
+          type: ["integer", "null"]
+        stripeRefundId:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - gymId
+        - memberId
+        - memberName
+        - amount
+        - status
+        - createdAt
+
+    CancelledMembersResponse:
+      type: object
+      properties:
+        cancelledSubscriptions:
+          type: array
+          items:
+            type: object
+            properties:
+              subscriptionId:
+                type: integer
+              memberId:
+                type: integer
+              memberName:
+                type: string
+              planName:
+                type: string
+              amount:
+                type: number
+              cancelledAt:
+                type: ["string", "null"]
+                format: date-time
+              cancelReason:
+                type: ["string", "null"]
+              status:
+                type: string
+        cancelledMembers:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: integer
+              firstName:
+                type: string
+              lastName:
+                type: string
+              email:
+                type: string
+              phone:
+                type: ["string", "null"]
+              membershipType:
+                type: ["string", "null"]
+              joinDate:
+                type: ["string", "null"]
+              updatedAt:
+                type: string
+                format: date-time
+        lostRevenue:
+          type: number
+        period:
+          type: object
+          properties:
+            startDate:
+              type: string
+              format: date-time
+            endDate:
+              type: string
+              format: date-time
+
+    BillingSummary:
+      type: object
+      properties:
+        mrr:
+          type: number
+        arr:
+          type: number
+        arm:
+          type: number
+        activeSubscriptions:
+          type: integer
+        totalSubscriptions:
+          type: integer
+        failedPayments:
+          type: integer
+        overdueAccounts:
+          type: integer
+        collectionsThisMonth:
+          type: number
+        refundsThisMonth:
+          type: number
+        cancelledThisMonth:
+          type: integer
 
     Product:
       type: object

@@ -21,5 +21,11 @@ export interface Subscription {
   currentPeriodEnd?: Date | null;
   amount: number;
   failedPayments: number;
+  /** @nullable */
+  stripeSubscriptionId?: string | null;
+  /** @nullable */
+  cancelledAt?: Date | null;
+  /** @nullable */
+  cancelReason?: string | null;
   createdAt: Date;
 }

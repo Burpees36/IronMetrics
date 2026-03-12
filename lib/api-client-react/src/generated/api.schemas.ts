@@ -140,7 +140,9 @@ export const SubscriptionStatus = {
   active: "active",
   paused: "paused",
   cancelled: "cancelled",
+  cancel_at_period_end: "cancel_at_period_end",
   past_due: "past_due",
+  pending: "pending",
   trial: "trial",
 } as const;
 
@@ -158,6 +160,12 @@ export interface Subscription {
   currentPeriodEnd?: string | null;
   amount: number;
   failedPayments: number;
+  /** @nullable */
+  stripeSubscriptionId?: string | null;
+  /** @nullable */
+  cancelledAt?: string | null;
+  /** @nullable */
+  cancelReason?: string | null;
   createdAt: string;
 }
 
@@ -597,6 +605,112 @@ export interface Invoice {
   /** @nullable */
   description?: string | null;
   createdAt: string;
+}
+
+export type PaymentRecordType =
+  (typeof PaymentRecordType)[keyof typeof PaymentRecordType];
+
+export const PaymentRecordType = {
+  subscription: "subscription",
+  one_time: "one_time",
+  drop_in: "drop_in",
+} as const;
+
+export type PaymentRecordStatus =
+  (typeof PaymentRecordStatus)[keyof typeof PaymentRecordStatus];
+
+export const PaymentRecordStatus = {
+  succeeded: "succeeded",
+  pending: "pending",
+  failed: "failed",
+  refunded: "refunded",
+} as const;
+
+export interface PaymentRecord {
+  id: number;
+  gymId: number;
+  memberId: number;
+  memberName: string;
+  amount: number;
+  type: PaymentRecordType;
+  status: PaymentRecordStatus;
+  /** @nullable */
+  description?: string | null;
+  /** @nullable */
+  stripePaymentIntentId?: string | null;
+  /** @nullable */
+  stripeChargeId?: string | null;
+  /** @nullable */
+  invoiceId?: number | null;
+  createdAt: string;
+}
+
+export interface RefundRecord {
+  id: number;
+  gymId: number;
+  memberId: number;
+  memberName: string;
+  amount: number;
+  /** @nullable */
+  reason?: string | null;
+  status: string;
+  /** @nullable */
+  paymentId?: number | null;
+  /** @nullable */
+  stripeRefundId?: string | null;
+  createdAt: string;
+}
+
+export type CancelledMembersResponseCancelledSubscriptionsItem = {
+  subscriptionId?: number;
+  memberId?: number;
+  memberName?: string;
+  planName?: string;
+  amount?: number;
+  /** @nullable */
+  cancelledAt?: string | null;
+  /** @nullable */
+  cancelReason?: string | null;
+  status?: string;
+};
+
+export type CancelledMembersResponseCancelledMembersItem = {
+  id?: number;
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+  /** @nullable */
+  phone?: string | null;
+  /** @nullable */
+  membershipType?: string | null;
+  /** @nullable */
+  joinDate?: string | null;
+  updatedAt?: string;
+};
+
+export type CancelledMembersResponsePeriod = {
+  startDate?: string;
+  endDate?: string;
+};
+
+export interface CancelledMembersResponse {
+  cancelledSubscriptions?: CancelledMembersResponseCancelledSubscriptionsItem[];
+  cancelledMembers?: CancelledMembersResponseCancelledMembersItem[];
+  lostRevenue?: number;
+  period?: CancelledMembersResponsePeriod;
+}
+
+export interface BillingSummary {
+  mrr?: number;
+  arr?: number;
+  arm?: number;
+  activeSubscriptions?: number;
+  totalSubscriptions?: number;
+  failedPayments?: number;
+  overdueAccounts?: number;
+  collectionsThisMonth?: number;
+  refundsThisMonth?: number;
+  cancelledThisMonth?: number;
 }
 
 export interface Product {
@@ -1171,6 +1285,55 @@ export type ListSubscriptionsParams = {
 export type ListInvoicesParams = {
   memberId?: number;
   status?: string;
+};
+
+export type GetStripePublishableKey200 = {
+  publishableKey?: string;
+};
+
+export type CreateSetupIntent200 = {
+  clientSecret?: string;
+  customerId?: string;
+};
+
+export type ListPaymentMethods200Item = {
+  id?: string;
+  brand?: string;
+  last4?: string;
+  expMonth?: number;
+  expYear?: number;
+};
+
+export type CreateStripeSubscriptionBody = {
+  planId: number;
+  paymentMethodId?: string;
+};
+
+export type GetMemberBillingHistory200 = {
+  subscriptions?: Subscription[];
+  payments?: PaymentRecord[];
+  invoices?: Invoice[];
+};
+
+export type CreateOneTimeChargeBody = {
+  amount: number;
+  description: string;
+  paymentMethodId?: string;
+};
+
+export type CancelSubscriptionBody = {
+  cancelAtPeriodEnd?: boolean;
+  reason?: string;
+};
+
+export type RefundPaymentBody = {
+  amount?: number;
+  reason?: string;
+};
+
+export type GetCancelledMembersParams = {
+  month?: number;
+  year?: number;
 };
 
 export type ListWorkoutsParams = {

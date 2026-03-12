@@ -16,6 +16,7 @@
 - **Validation**: Zod (`zod/v4`), `drizzle-zod`
 - **API codegen**: Orval (from OpenAPI spec)
 - **Auth**: Replit Auth (OIDC with PKCE)
+- **Payments**: Stripe (via Replit integration)
 - **Charts**: Recharts
 - **Routing**: wouter
 - **Animations**: Framer Motion
@@ -61,9 +62,12 @@ All tables in `lib/db/src/schema/`:
 - **leads** — Lead pipeline (new → contacted → trial → negotiating → converted/lost)
 - **classes** — Class schedule with capacity tracking
 - **attendance** — Check-in records linked to members/classes
-- **membership_plans** — Plan definitions with pricing
-- **subscriptions** — Active member subscriptions
-- **invoices** — Billing invoices
+- **membership_plans** — Plan definitions with pricing (stripeProductId, stripePriceId)
+- **subscriptions** — Active member subscriptions (stripeSubscriptionId, cancelledAt, cancelReason)
+- **invoices** — Billing invoices (stripeInvoiceId, stripePaymentIntentId)
+- **payments** — Payment transactions with Stripe payment intent tracking
+- **refunds** — Refund records with Stripe refund ID
+- **billing_events** — Billing lifecycle events audit trail
 - **products** — Retail inventory
 - **sales** — POS transactions (items stored as JSON)
 - **workouts** — WOD/strength/hero workouts (field is `title`, NOT `name`)
@@ -104,10 +108,10 @@ All pages with real API data (no hardcoded values), fully interactive:
 1. **Dashboard** — KPI grid (active members, MRR, weekly attendance, at-risk count), revenue chart, member status breakdown
 2. **Intelligence Hub** — RSI score gauge, risk radar table, intervention cards + recommendation execution tracker with interactive checklists
 3. **Members** — Searchable member directory with status/risk filters, Add Member dialog, row actions (view profile, edit, add note, change status), clickable rows to member detail
-4. **Member Detail** — Full profile page with tabs (Overview, Notes, Timeline), edit dialog, status management (hold/cancel/reactivate), add notes, attendance history, subscription info
+4. **Member Detail** — Full profile page with tabs (Overview, Billing, Notes, Timeline), edit dialog, status management (hold/cancel/reactivate), add notes, attendance history, subscription info. Billing tab: subscription management (start/pause/resume/cancel), payment methods, payment history, one-time charges
 5. **Schedule** — Weekly class calendar with create class dialog, class detail sheet with roster, check-in flow (member search + check-in), delete class with confirmation
 6. **Leads** — Pipeline with create/edit lead dialogs, stage filter badges, move stage, convert to member, mark as lost
-7. **Billing** — MRR/ARR cards, plan table with create plan dialog, subscription list with create subscription dialog
+7. **Billing** — 5-tab billing command center (Plans, Subscriptions, Payments, Refunds, Cancelled). MRR/Active/ARM/Failed/Collected summary cards. Subscription actions (pause/resume/cancel with reason). Cancelled members view with month picker and lost revenue tracking. Full Stripe integration
 8. **Workouts** — WOD cards with create workout dialog (title, type, movements, date)
 9. **AI Operator** — Real task list from DB, dynamic member/risk counts from dashboard API
 10. **Settings** — General gym info, staff management table with invite staff dialog
@@ -120,6 +124,10 @@ All available mutation hooks from `@workspace/api-client-react`:
 - `useCreateLead`, `useUpdateLead`, `useConvertLeadToMember`
 - `useCreateClass`, `useUpdateClass`, `useDeleteClass`, `useCheckInToClass`
 - `useCreateMembershipPlan`, `useCreateSubscription`, `useUpdateSubscription`
+- `useCancelSubscription`, `usePauseSubscription`, `useResumeSubscription`
+- `useGetBillingSummary`, `useGetCancelledMembers`, `useListPayments`, `useListRefunds`
+- `useCreateSetupIntent`, `useListPaymentMethods`, `useCreateStripeSubscription`
+- `useCreateOneTimeCharge`, `useRefundPayment`, `useGetMemberBillingHistory`
 - `useCreateWorkout`, `useLogWorkoutResult`
 - `useInviteStaff`, `useUpdateStaff`, `useRemoveStaff`
 - `useCreateGym`, `useUpdateGym`
@@ -141,7 +149,9 @@ All mounted at `/api` prefix:
 - Staff: `/api/gyms/:gymId/staff` (CRUD)
 - Classes: `/api/gyms/:gymId/classes` (CRUD + checkin)
 - Attendance: `/api/gyms/:gymId/attendance`
-- Billing: Plans, subscriptions, invoices under `/api/gyms/:gymId/`
+- Billing: Plans, subscriptions, invoices, payments, refunds, billing-summary, cancelled-members under `/api/gyms/:gymId/`
+- Stripe: setup-intent, payment-methods, stripe-subscription, charge, refund, billing-history under `/api/gyms/:gymId/members/:memberId/`
+- Stripe Webhook: `/api/stripe/webhook` (raw body, registered before express.json())
 - Retail: Products + sales POS under `/api/gyms/:gymId/`
 - Workouts: `/api/gyms/:gymId/workouts` + results
 - Communications: `/api/gyms/:gymId/announcements`
@@ -160,6 +170,7 @@ All mounted at `/api` prefix:
 - **Gym context**: Frontend uses `GymContext` to track `activeGymId`; stored in localStorage
 - **Auto-linking**: First login auto-links user to seeded gym as owner
 - **Vite proxy**: Frontend proxies `/api` requests to Express on port 8080
+- **Stripe**: Connected via Replit integration. Env vars: STRIPE_SECRET_KEY, STRIPE_PUBLISHABLE_KEY, STRIPE_ACCOUNT_ID. Webhook route registered before express.json() in app.ts. Stripe init on startup: runMigrations → getStripeSync → findOrCreateManagedWebhook → syncBackfill. Service in stripeService.ts, client in stripeClient.ts
 - **Tenant isolation**: All member-linked mutations verify `memberId + gymId` match to prevent cross-gym IDOR
 - **No hardcoded metrics**: All dashboard/intelligence/AI operator values are computed from actual DB queries
 - **Loading states**: All pages handle three states: no gym selected, loading, error/empty

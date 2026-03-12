@@ -241,13 +241,18 @@ export const GetMemberResponse = zod
             "active",
             "paused",
             "cancelled",
+            "cancel_at_period_end",
             "past_due",
+            "pending",
             "trial",
           ]),
           currentPeriodStart: zod.date().nullish(),
           currentPeriodEnd: zod.date().nullish(),
           amount: zod.number(),
           failedPayments: zod.number(),
+          stripeSubscriptionId: zod.string().nullish(),
+          cancelledAt: zod.date().nullish(),
+          cancelReason: zod.string().nullish(),
           createdAt: zod.date(),
         })
         .optional(),
@@ -827,11 +832,22 @@ export const ListSubscriptionsResponseItem = zod.object({
   memberName: zod.string(),
   planId: zod.number(),
   planName: zod.string(),
-  status: zod.enum(["active", "paused", "cancelled", "past_due", "trial"]),
+  status: zod.enum([
+    "active",
+    "paused",
+    "cancelled",
+    "cancel_at_period_end",
+    "past_due",
+    "pending",
+    "trial",
+  ]),
   currentPeriodStart: zod.date().nullish(),
   currentPeriodEnd: zod.date().nullish(),
   amount: zod.number(),
   failedPayments: zod.number(),
+  stripeSubscriptionId: zod.string().nullish(),
+  cancelledAt: zod.date().nullish(),
+  cancelReason: zod.string().nullish(),
   createdAt: zod.date(),
 });
 export const ListSubscriptionsResponse = zod.array(
@@ -871,11 +887,22 @@ export const UpdateSubscriptionResponse = zod.object({
   memberName: zod.string(),
   planId: zod.number(),
   planName: zod.string(),
-  status: zod.enum(["active", "paused", "cancelled", "past_due", "trial"]),
+  status: zod.enum([
+    "active",
+    "paused",
+    "cancelled",
+    "cancel_at_period_end",
+    "past_due",
+    "pending",
+    "trial",
+  ]),
   currentPeriodStart: zod.date().nullish(),
   currentPeriodEnd: zod.date().nullish(),
   amount: zod.number(),
   failedPayments: zod.number(),
+  stripeSubscriptionId: zod.string().nullish(),
+  cancelledAt: zod.date().nullish(),
+  cancelReason: zod.string().nullish(),
   createdAt: zod.date(),
 });
 
@@ -904,6 +931,401 @@ export const ListInvoicesResponseItem = zod.object({
   createdAt: zod.date(),
 });
 export const ListInvoicesResponse = zod.array(ListInvoicesResponseItem);
+
+/**
+ * @summary Get Stripe publishable key
+ */
+export const GetStripePublishableKeyParams = zod.object({
+  gymId: zod.coerce.number(),
+});
+
+export const GetStripePublishableKeyResponse = zod.object({
+  publishableKey: zod.string().optional(),
+});
+
+/**
+ * @summary Create Stripe setup intent for payment method
+ */
+export const CreateSetupIntentParams = zod.object({
+  gymId: zod.coerce.number(),
+  memberId: zod.coerce.number(),
+});
+
+export const CreateSetupIntentResponse = zod.object({
+  clientSecret: zod.string().optional(),
+  customerId: zod.string().optional(),
+});
+
+/**
+ * @summary List payment methods for member
+ */
+export const ListPaymentMethodsParams = zod.object({
+  gymId: zod.coerce.number(),
+  memberId: zod.coerce.number(),
+});
+
+export const ListPaymentMethodsResponseItem = zod.object({
+  id: zod.string().optional(),
+  brand: zod.string().optional(),
+  last4: zod.string().optional(),
+  expMonth: zod.number().optional(),
+  expYear: zod.number().optional(),
+});
+export const ListPaymentMethodsResponse = zod.array(
+  ListPaymentMethodsResponseItem,
+);
+
+/**
+ * @summary Create Stripe-backed subscription
+ */
+export const CreateStripeSubscriptionParams = zod.object({
+  gymId: zod.coerce.number(),
+  memberId: zod.coerce.number(),
+});
+
+export const CreateStripeSubscriptionBody = zod.object({
+  planId: zod.number(),
+  paymentMethodId: zod.string().optional(),
+});
+
+/**
+ * @summary Get billing history for member
+ */
+export const GetMemberBillingHistoryParams = zod.object({
+  gymId: zod.coerce.number(),
+  memberId: zod.coerce.number(),
+});
+
+export const GetMemberBillingHistoryResponse = zod.object({
+  subscriptions: zod
+    .array(
+      zod.object({
+        id: zod.number(),
+        gymId: zod.number(),
+        memberId: zod.number(),
+        memberName: zod.string(),
+        planId: zod.number(),
+        planName: zod.string(),
+        status: zod.enum([
+          "active",
+          "paused",
+          "cancelled",
+          "cancel_at_period_end",
+          "past_due",
+          "pending",
+          "trial",
+        ]),
+        currentPeriodStart: zod.date().nullish(),
+        currentPeriodEnd: zod.date().nullish(),
+        amount: zod.number(),
+        failedPayments: zod.number(),
+        stripeSubscriptionId: zod.string().nullish(),
+        cancelledAt: zod.date().nullish(),
+        cancelReason: zod.string().nullish(),
+        createdAt: zod.date(),
+      }),
+    )
+    .optional(),
+  payments: zod
+    .array(
+      zod.object({
+        id: zod.number(),
+        gymId: zod.number(),
+        memberId: zod.number(),
+        memberName: zod.string(),
+        amount: zod.number(),
+        type: zod.enum(["subscription", "one_time", "drop_in"]),
+        status: zod.enum(["succeeded", "pending", "failed", "refunded"]),
+        description: zod.string().nullish(),
+        stripePaymentIntentId: zod.string().nullish(),
+        stripeChargeId: zod.string().nullish(),
+        invoiceId: zod.number().nullish(),
+        createdAt: zod.date(),
+      }),
+    )
+    .optional(),
+  invoices: zod
+    .array(
+      zod.object({
+        id: zod.number(),
+        gymId: zod.number(),
+        memberId: zod.number(),
+        memberName: zod.string(),
+        amount: zod.number(),
+        status: zod.enum(["paid", "unpaid", "failed", "refunded", "void"]),
+        dueDate: zod.date().nullish(),
+        paidAt: zod.date().nullish(),
+        description: zod.string().nullish(),
+        createdAt: zod.date(),
+      }),
+    )
+    .optional(),
+});
+
+/**
+ * @summary Create one-time charge for member
+ */
+export const CreateOneTimeChargeParams = zod.object({
+  gymId: zod.coerce.number(),
+  memberId: zod.coerce.number(),
+});
+
+export const CreateOneTimeChargeBody = zod.object({
+  amount: zod.number(),
+  description: zod.string(),
+  paymentMethodId: zod.string().optional(),
+});
+
+/**
+ * @summary Cancel subscription
+ */
+export const CancelSubscriptionParams = zod.object({
+  gymId: zod.coerce.number(),
+  subscriptionId: zod.coerce.number(),
+});
+
+export const cancelSubscriptionBodyCancelAtPeriodEndDefault = true;
+
+export const CancelSubscriptionBody = zod.object({
+  cancelAtPeriodEnd: zod
+    .boolean()
+    .default(cancelSubscriptionBodyCancelAtPeriodEndDefault),
+  reason: zod.string().optional(),
+});
+
+export const CancelSubscriptionResponse = zod.object({
+  id: zod.number(),
+  gymId: zod.number(),
+  memberId: zod.number(),
+  memberName: zod.string(),
+  planId: zod.number(),
+  planName: zod.string(),
+  status: zod.enum([
+    "active",
+    "paused",
+    "cancelled",
+    "cancel_at_period_end",
+    "past_due",
+    "pending",
+    "trial",
+  ]),
+  currentPeriodStart: zod.date().nullish(),
+  currentPeriodEnd: zod.date().nullish(),
+  amount: zod.number(),
+  failedPayments: zod.number(),
+  stripeSubscriptionId: zod.string().nullish(),
+  cancelledAt: zod.date().nullish(),
+  cancelReason: zod.string().nullish(),
+  createdAt: zod.date(),
+});
+
+/**
+ * @summary Pause subscription
+ */
+export const PauseSubscriptionParams = zod.object({
+  gymId: zod.coerce.number(),
+  subscriptionId: zod.coerce.number(),
+});
+
+export const PauseSubscriptionResponse = zod.object({
+  id: zod.number(),
+  gymId: zod.number(),
+  memberId: zod.number(),
+  memberName: zod.string(),
+  planId: zod.number(),
+  planName: zod.string(),
+  status: zod.enum([
+    "active",
+    "paused",
+    "cancelled",
+    "cancel_at_period_end",
+    "past_due",
+    "pending",
+    "trial",
+  ]),
+  currentPeriodStart: zod.date().nullish(),
+  currentPeriodEnd: zod.date().nullish(),
+  amount: zod.number(),
+  failedPayments: zod.number(),
+  stripeSubscriptionId: zod.string().nullish(),
+  cancelledAt: zod.date().nullish(),
+  cancelReason: zod.string().nullish(),
+  createdAt: zod.date(),
+});
+
+/**
+ * @summary Resume paused subscription
+ */
+export const ResumeSubscriptionParams = zod.object({
+  gymId: zod.coerce.number(),
+  subscriptionId: zod.coerce.number(),
+});
+
+export const ResumeSubscriptionResponse = zod.object({
+  id: zod.number(),
+  gymId: zod.number(),
+  memberId: zod.number(),
+  memberName: zod.string(),
+  planId: zod.number(),
+  planName: zod.string(),
+  status: zod.enum([
+    "active",
+    "paused",
+    "cancelled",
+    "cancel_at_period_end",
+    "past_due",
+    "pending",
+    "trial",
+  ]),
+  currentPeriodStart: zod.date().nullish(),
+  currentPeriodEnd: zod.date().nullish(),
+  amount: zod.number(),
+  failedPayments: zod.number(),
+  stripeSubscriptionId: zod.string().nullish(),
+  cancelledAt: zod.date().nullish(),
+  cancelReason: zod.string().nullish(),
+  createdAt: zod.date(),
+});
+
+/**
+ * @summary List payments
+ */
+export const ListPaymentsParams = zod.object({
+  gymId: zod.coerce.number(),
+});
+
+export const ListPaymentsResponseItem = zod.object({
+  id: zod.number(),
+  gymId: zod.number(),
+  memberId: zod.number(),
+  memberName: zod.string(),
+  amount: zod.number(),
+  type: zod.enum(["subscription", "one_time", "drop_in"]),
+  status: zod.enum(["succeeded", "pending", "failed", "refunded"]),
+  description: zod.string().nullish(),
+  stripePaymentIntentId: zod.string().nullish(),
+  stripeChargeId: zod.string().nullish(),
+  invoiceId: zod.number().nullish(),
+  createdAt: zod.date(),
+});
+export const ListPaymentsResponse = zod.array(ListPaymentsResponseItem);
+
+/**
+ * @summary List refunds
+ */
+export const ListRefundsParams = zod.object({
+  gymId: zod.coerce.number(),
+});
+
+export const ListRefundsResponseItem = zod.object({
+  id: zod.number(),
+  gymId: zod.number(),
+  memberId: zod.number(),
+  memberName: zod.string(),
+  amount: zod.number(),
+  reason: zod.string().nullish(),
+  status: zod.string(),
+  paymentId: zod.number().nullish(),
+  stripeRefundId: zod.string().nullish(),
+  createdAt: zod.date(),
+});
+export const ListRefundsResponse = zod.array(ListRefundsResponseItem);
+
+/**
+ * @summary Refund a payment
+ */
+export const RefundPaymentParams = zod.object({
+  gymId: zod.coerce.number(),
+  paymentId: zod.coerce.number(),
+});
+
+export const RefundPaymentBody = zod.object({
+  amount: zod.number().optional(),
+  reason: zod.string().optional(),
+});
+
+export const RefundPaymentResponse = zod.object({
+  id: zod.number(),
+  gymId: zod.number(),
+  memberId: zod.number(),
+  memberName: zod.string(),
+  amount: zod.number(),
+  reason: zod.string().nullish(),
+  status: zod.string(),
+  paymentId: zod.number().nullish(),
+  stripeRefundId: zod.string().nullish(),
+  createdAt: zod.date(),
+});
+
+/**
+ * @summary Get cancelled members for a period
+ */
+export const GetCancelledMembersParams = zod.object({
+  gymId: zod.coerce.number(),
+});
+
+export const GetCancelledMembersQueryParams = zod.object({
+  month: zod.coerce.number().optional(),
+  year: zod.coerce.number().optional(),
+});
+
+export const GetCancelledMembersResponse = zod.object({
+  cancelledSubscriptions: zod
+    .array(
+      zod.object({
+        subscriptionId: zod.number().optional(),
+        memberId: zod.number().optional(),
+        memberName: zod.string().optional(),
+        planName: zod.string().optional(),
+        amount: zod.number().optional(),
+        cancelledAt: zod.date().nullish(),
+        cancelReason: zod.string().nullish(),
+        status: zod.string().optional(),
+      }),
+    )
+    .optional(),
+  cancelledMembers: zod
+    .array(
+      zod.object({
+        id: zod.number().optional(),
+        firstName: zod.string().optional(),
+        lastName: zod.string().optional(),
+        email: zod.string().optional(),
+        phone: zod.string().nullish(),
+        membershipType: zod.string().nullish(),
+        joinDate: zod.string().nullish(),
+        updatedAt: zod.date().optional(),
+      }),
+    )
+    .optional(),
+  lostRevenue: zod.number().optional(),
+  period: zod
+    .object({
+      startDate: zod.date().optional(),
+      endDate: zod.date().optional(),
+    })
+    .optional(),
+});
+
+/**
+ * @summary Get billing dashboard summary
+ */
+export const GetBillingSummaryParams = zod.object({
+  gymId: zod.coerce.number(),
+});
+
+export const GetBillingSummaryResponse = zod.object({
+  mrr: zod.number().optional(),
+  arr: zod.number().optional(),
+  arm: zod.number().optional(),
+  activeSubscriptions: zod.number().optional(),
+  totalSubscriptions: zod.number().optional(),
+  failedPayments: zod.number().optional(),
+  overdueAccounts: zod.number().optional(),
+  collectionsThisMonth: zod.number().optional(),
+  refundsThisMonth: zod.number().optional(),
+  cancelledThisMonth: zod.number().optional(),
+});
 
 /**
  * @summary List retail products
