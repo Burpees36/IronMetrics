@@ -1,11 +1,14 @@
 import express, { type Express } from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
+import rateLimit, { type Options } from "express-rate-limit";
 import { authMiddleware } from "./middlewares/authMiddleware";
 import { WebhookHandlers } from "./webhookHandlers";
 import router from "./routes";
 
 const app: Express = express();
+
+app.set("trust proxy", 1);
 
 app.post(
   "/api/stripe/webhook",
@@ -38,6 +41,28 @@ app.use(cors({ credentials: true, origin: true }));
 app.use(cookieParser());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+const apiLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 120,
+  standardHeaders: "draft-7",
+  legacyHeaders: false,
+  message: { error: "Too many requests. Please try again in a moment." },
+  validate: { ip: false, trustProxy: false },
+} as Partial<Options>);
+
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 30,
+  standardHeaders: "draft-7",
+  legacyHeaders: false,
+  message: { error: "Too many authentication attempts. Please try again later." },
+  validate: { ip: false, trustProxy: false },
+} as Partial<Options>);
+
+app.use("/api/auth", authLimiter);
+app.use("/api", apiLimiter);
+
 app.use(authMiddleware);
 
 app.use("/api", router);

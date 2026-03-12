@@ -1,5 +1,6 @@
 import { Router, type IRouter } from "express";
 import { requireAuth } from "../middlewares/requireAuth";
+import { requireGymAccess } from "../middlewares/requireGymAccess";
 import healthRouter from "./health";
 import authRouter from "./auth";
 import gymsRouter from "./gyms";
@@ -27,6 +28,9 @@ router.use(authRouter);
 
 router.use(requireAuth);
 router.use(gymsRouter);
+
+router.use("/gyms/:gymId", requireGymAccess);
+
 router.use(membersRouter);
 router.use(leadsRouter);
 router.use(staffRouter);

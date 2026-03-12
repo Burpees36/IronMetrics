@@ -392,7 +392,7 @@ router.get("/gyms/:gymId/cancelled-members", requireBillingRead(), async (req, r
     ))
     .orderBy(desc(membersTable.updatedAt));
 
-  const lostRevenue = cancelledSubs.reduce((sum, s) => sum + parseFloat(s.amount), 0);
+  const lostRevenue = cancelledSubs.reduce((sum, s) => sum + parseFloat(s.amount || "0"), 0);
 
   res.json({
     cancelledSubscriptions: cancelledSubs.map((s) => ({ ...s, amount: parseFloat(s.amount) })),

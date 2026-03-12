@@ -1,0 +1,119 @@
+You are working on Iron Metrics. Implement DAY 1 FIXES ONLY. Do not start any onboarding wizard, CSV import, payment flows, forecasting, templates, member portal, or any Tier 2/Tier 3 work. Keep this sprint tightly scoped to security and immediate production hardening.
+
+OBJECTIVE
+Ship the first-day production fixes that address the most urgent security and stability risks:
+1. Tenant isolation / gym access enforcement
+2. Capacity enforcement on class check-in
+3. API rate limiting
+4. Frontend React error boundary
+5. Safe handling for RSI or similar calculations when member count is zero
+
+SUCCESS CRITERIA
+- No authenticated user can access another gym’s data by guessing a gymId.
+- Members, Leads, Attendance, Intelligence, Reports, and Classes routes all verify the caller actually has access to the requested gym before returning data or mutating state.
+- Check-in is blocked when a class is already full.
+- API routes are rate-limited with sensible defaults and clear error responses.
+- A frontend crash in one page/component does not white-screen the entire app.
+- Any score or metric that divides by member count safely handles zero members.
+
+IMPLEMENTATION REQUIREMENTS
+
+PART 1 — TENANT ISOLATION / GYM ACCESS ENFORCEMENT
+Create a reusable backend access-control layer for gym-scoped routes.
+
+Requirements:
+- Add a reusable helper or middleware that verifies the authenticated user has access to the target gym before the route continues.
+- Apply this to all gym-scoped routes that currently trust gymId without validating membership/access.
+- Cover read and write routes for:
+  - Members
+  - Leads / CRM
+  - Attendance
+  - Intelligence
+  - Reports
+  - Classes / scheduling
+- Use the existing auth/session/user model already present in the app.
+- Support existing role behavior where appropriate, but the first priority is access to the correct gym, not feature-level permission expansion.
+- Return proper HTTP status codes:
+  - 401 if not authenticated
+  - 403 if authenticated but does not have access to that gym
+  - 404 only where appropriate, not as a substitute for auth
+- Do not duplicate logic across route files. Centralize it.
+- Preserve current behavior for authorized users.
+- Add logs for denied access attempts in server logs for debugging.
+
+Edge cases:
+- Owner/admin/staff access should work if they belong to the gym.
+- Demo/dev flows should still work only if they are tied to the same gym context.
+- Prevent cross-gym reads and cross-gym writes.
+- Verify nested routes and detail routes are also protected, not just list endpoints.
+
+PART 2 — CAPACITY ENFORCEMENT ON CHECK-IN
+Fix class overbooking.
+
+Requirements:
+- Before incrementing enrolled or marking attendance/check-in, verify current enrolled count is below capacity.
+- If the class is full, reject the check-in with a clear error response/message.
+- Prevent race-condition-style double check-in as much as possible within the current architecture.
+- Do not allow enrolled to exceed capacity.
+- Preserve existing successful check-in behavior when space is available.
+- If there is already an attendance record or duplicate check-in protection, keep that working.
+
+PART 3 — API RATE LIMITING
+Add baseline abuse protection.
+
+Requirements:
+- Add rate limiting middleware to API routes.
+- Use sensible defaults for a SaaS admin app:
+  - General API limit for most routes
+  - More strict limit for auth-sensitive or expensive endpoints if needed
+- Make responses developer-friendly with a clear message when limit is exceeded.
+- Ensure rate limiting works in development and production without breaking normal usage.
+- If proxy settings are required for deployment, configure them correctly.
+- Do not introduce a breaking dependency on Redis unless already present and easy to use; start with a simple in-process limiter if needed for this sprint.
+
+PART 4 — FRONTEND ERROR BOUNDARY
+Prevent a single component crash from taking down the whole app.
+
+Requirements:
+- Add a reusable React error boundary around the main authenticated app shell/layout.
+- Show a polished fallback state with:
+  - Friendly message
+  - Retry/reload action
+  - Optional way to return home/dashboard
+- Log the error to console for now.
+- Keep styling consistent with the product’s premium UI.
+- Do not redesign the app; this is a resilience layer only.
+
+PART 5 — ZERO-MEMBER METRIC SAFETY
+Fix any divide-by-zero or NaN/Infinity issues in score calculations.
+
+Requirements:
+- Review RSI and any similar metrics that divide by member count.
+- If member count is zero, return a safe default and never render NaN or Infinity in the UI or API.
+- Keep the fallback behavior deterministic and easy to explain.
+- Update any UI formatting helpers if necessary so invalid numbers never appear.
+
+TESTING / VALIDATION
+After implementation, verify the following manually and/or with tests:
+1. User from Gym A cannot access Gym B members/leads/classes/reports/intelligence by changing gymId.
+2. Authorized user for Gym A can still access Gym A normally.
+3. Check-in succeeds when enrolled < capacity.
+4. Check-in fails cleanly when enrolled == capacity.
+5. Repeated rapid API calls trigger rate limiting.
+6. A forced frontend component crash shows the error boundary fallback instead of crashing the whole app.
+7. Zero-member gyms do not show NaN/Infinity anywhere in API responses or UI.
+
+DELIVERABLES
+Provide:
+1. A concise summary of files changed
+2. What was implemented in each file
+3. Any migration/config changes needed
+4. Any follow-up items discovered but intentionally deferred
+5. A short manual QA checklist
+
+GUARDRAILS
+- DAY 1 FIXES ONLY.
+- Do not add new product features outside this scope.
+- Do not begin CSV import, onboarding wizard, class templates, billing notifications, update card flow, or communication hub.
+- Prefer minimal, production-safe changes over broad refactors.
+- Reuse existing patterns and architecture where possible.

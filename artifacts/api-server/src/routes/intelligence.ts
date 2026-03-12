@@ -38,13 +38,13 @@ async function getGymMetrics(gymId: number) {
   const [cancelledCount] = await db.select({ count: count() }).from(membersTable).where(and(eq(membersTable.gymId, gymId), eq(membersTable.status, "cancelled")));
   const [totalCount] = await db.select({ count: count() }).from(membersTable).where(eq(membersTable.gymId, gymId));
 
-  const total = totalCount?.count ?? 1;
+  const total = totalCount?.count ?? 0;
   const active = activeCount?.count ?? 0;
   const cancelled = cancelledCount?.count ?? 0;
   const churnRate = total > 0 ? (cancelled / total) * 100 : 0;
 
   const subs = await db.select().from(subscriptionsTable).where(and(eq(subscriptionsTable.gymId, gymId), eq(subscriptionsTable.status, "active")));
-  const totalRev = subs.reduce((sum, s) => sum + parseFloat(s.amount), 0);
+  const totalRev = subs.reduce((sum, s) => sum + parseFloat(s.amount || "0"), 0);
   const avgRev = subs.length > 0 ? totalRev / subs.length : 0;
   const netGrowth = active - cancelled;
   const avgTenure = 8.5;
@@ -118,7 +118,7 @@ async function getInterventions(gymId: number) {
       impact: failedSubs.length > 0 ? "high" : "low",
       urgency: failedSubs.length > 0 ? "this_week" as const : "this_month" as const,
       score: failedSubs.length > 0 ? 85 : 30,
-      expectedRevenue: failedSubs.reduce((s, sub) => s + parseFloat(sub.amount), 0),
+      expectedRevenue: failedSubs.reduce((s, sub) => s + parseFloat(sub.amount || "0"), 0),
       affectedMembers: failedSubs.length,
       actions: ["Review dunning report for failed charges", "Send payment update reminders", "Offer alternative payment methods", "Follow up with personal call after 48 hours"],
       status: "pending",
@@ -252,10 +252,10 @@ router.get("/gyms/:gymId/intelligence/revenue-forecast", async (req, res): Promi
   if (!gymId) { res.status(400).json({ error: "Invalid gym ID" }); return; }
 
   const subs = await db.select().from(subscriptionsTable).where(and(eq(subscriptionsTable.gymId, gymId), eq(subscriptionsTable.status, "active")));
-  const currentMrr = subs.reduce((sum, s) => sum + parseFloat(s.amount), 0);
+  const currentMrr = subs.reduce((sum, s) => sum + parseFloat(s.amount || "0"), 0);
   const [totalCount] = await db.select({ count: count() }).from(membersTable).where(eq(membersTable.gymId, gymId));
   const [cancelledCount] = await db.select({ count: count() }).from(membersTable).where(and(eq(membersTable.gymId, gymId), eq(membersTable.status, "cancelled")));
-  const total = totalCount?.count ?? 1;
+  const total = totalCount?.count ?? 0;
   const churnRate = total > 0 ? Math.round((cancelledCount?.count ?? 0) / total * 1000) / 10 : 0;
 
   res.json({

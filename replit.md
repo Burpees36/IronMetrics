@@ -182,7 +182,10 @@ All mounted at `/api` prefix:
 - **Billing RBAC**: `billingRbac.ts` middleware checks gym_staff role. Permissions: owner/admin = full, front_desk = read+charge+subscribe, coach = none, analyst = read-only
 - **Billing metrics**: Centralized in `billingMetrics.ts` (computeBillingSummary, computeMRR, computeARM, getMonthWindow)
 - **Billing audit script**: `pnpm --filter @workspace/scripts run audit:billing` — prints MRR, ARM, data integrity warnings, webhook health
-- **Tenant isolation**: All member-linked mutations verify `memberId + gymId` match to prevent cross-gym IDOR
+- **Tenant isolation**: Global `requireGymAccess` middleware applied to all `/gyms/:gymId` routes in `routes/index.ts`. Verifies user is gym owner or active staff before any gym-scoped route executes. Returns 404 for non-existent gyms, 403 for unauthorized access. Logs denied access attempts.
+- **Rate limiting**: `express-rate-limit` — 120 req/min general API, 30 req/15min for auth. Returns JSON error messages.
+- **Capacity enforcement**: Check-in route blocks when `enrolled >= capacity` (409). Also prevents duplicate check-ins.
+- **Error boundary**: React `ErrorBoundary` wraps all protected page content in `ProtectedRoute`. Shows friendly recovery UI on crash.
 - **No hardcoded metrics**: All dashboard/intelligence/AI operator values are computed from actual DB queries
 - **Loading states**: All pages handle three states: no gym selected, loading, error/empty
 - **Routing**: wouter with base path `import.meta.env.BASE_URL`; use relative paths in Links/navigate (e.g., `/members/${id}` not `${BASE_URL}members/${id}`)

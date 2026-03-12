@@ -31,7 +31,7 @@ router.get("/gyms/:gymId/reports/dashboard", async (req, res): Promise<void> => 
   const [totalCount] = await db.select({ count: count() }).from(membersTable).where(eq(membersTable.gymId, gymId));
 
   const subs = await db.select().from(subscriptionsTable).where(and(eq(subscriptionsTable.gymId, gymId), eq(subscriptionsTable.status, "active")));
-  const mrr = subs.reduce((sum, s) => sum + parseFloat(s.amount), 0);
+  const mrr = subs.reduce((sum, s) => sum + parseFloat(s.amount || "0"), 0);
 
   const failedSubs = await db.select().from(subscriptionsTable).where(and(eq(subscriptionsTable.gymId, gymId), eq(subscriptionsTable.status, "past_due")));
 
@@ -53,7 +53,7 @@ router.get("/gyms/:gymId/reports/dashboard", async (req, res): Promise<void> => 
   const cancelled = cancelledCount?.count ?? 0;
   const hold = holdCount?.count ?? 0;
   const total = totalCount?.count ?? 0;
-  const churnRate = total > 0 ? (cancelled / total) * 100 : 0;
+  const churnRate = total > 0 ? Math.round((cancelled / total) * 1000) / 10 : 0;
 
   const atRiskMembers = await db.select({ count: count() }).from(membersTable).where(
     and(eq(membersTable.gymId, gymId), eq(membersTable.status, "active"),
@@ -148,7 +148,7 @@ router.get("/gyms/:gymId/reports/membership", async (req, res): Promise<void> =>
     return {
       planName: p.name,
       count: memberCount,
-      revenue: memberCount * parseFloat(p.price),
+      revenue: memberCount * parseFloat(p.price || "0"),
     };
   }));
 
@@ -185,13 +185,13 @@ router.get("/gyms/:gymId/reports/revenue", async (req, res): Promise<void> => {
   if (!gymId) { res.status(400).json({ error: "Invalid gym ID" }); return; }
 
   const subs = await db.select().from(subscriptionsTable).where(and(eq(subscriptionsTable.gymId, gymId), eq(subscriptionsTable.status, "active")));
-  const mrr = subs.reduce((sum, s) => sum + parseFloat(s.amount), 0);
+  const mrr = subs.reduce((sum, s) => sum + parseFloat(s.amount || "0"), 0);
   const activeMemberCount = subs.length || 1;
 
   const paidInvoices = await db.select().from(invoicesTable).where(and(eq(invoicesTable.gymId, gymId), eq(invoicesTable.status, "paid")));
   const allInvoices = await db.select().from(invoicesTable).where(eq(invoicesTable.gymId, gymId));
   const failedInvoices = await db.select().from(invoicesTable).where(and(eq(invoicesTable.gymId, gymId), eq(invoicesTable.status, "failed")));
-  const failedRevenue = failedInvoices.reduce((sum, i) => sum + parseFloat(i.amount), 0);
+  const failedRevenue = failedInvoices.reduce((sum, i) => sum + parseFloat(i.amount || "0"), 0);
   const collectionRate = allInvoices.length > 0 ? Math.round((paidInvoices.length / allInvoices.length) * 1000) / 10 : 100;
 
   const avgRevenuePerMember = Math.round(mrr / activeMemberCount);

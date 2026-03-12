@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, and, gte, lte, desc } from "drizzle-orm";
+import { eq, and, gte, lte, desc, sql, lt } from "drizzle-orm";
 import { db, classesTable, attendanceTable, gymStaffTable } from "@workspace/db";
 import { CreateClassBody, UpdateClassBody } from "@workspace/api-zod";
 
@@ -119,22 +119,51 @@ router.post("/gyms/:gymId/classes/:classId/checkin", async (req, res): Promise<v
   const status = req.body.status || "present";
 
   const { membersTable } = await import("@workspace/db");
-  const [member] = await db.select().from(membersTable).where(eq(membersTable.id, memberId));
+  const [member] = await db.select().from(membersTable).where(and(eq(membersTable.id, memberId), eq(membersTable.gymId, gymId)));
   if (!member) { res.status(404).json({ error: "Member not found" }); return; }
 
-  const [gymClass] = await db.select().from(classesTable).where(eq(classesTable.id, classId));
+  const [gymClass] = await db.select().from(classesTable).where(and(eq(classesTable.id, classId), eq(classesTable.gymId, gymId)));
+  if (!gymClass) { res.status(404).json({ error: "Class not found" }); return; }
+
+  const currentEnrolled = gymClass.enrolled || 0;
+  if (gymClass.capacity && currentEnrolled >= gymClass.capacity) {
+    res.status(409).json({ error: "Class is full", enrolled: currentEnrolled, capacity: gymClass.capacity });
+    return;
+  }
+
+  const [existing] = await db.select().from(attendanceTable).where(
+    and(eq(attendanceTable.classId, classId), eq(attendanceTable.memberId, memberId))
+  );
+  if (existing) {
+    res.status(409).json({ error: "Member is already checked in to this class" });
+    return;
+  }
+
+  const capacityCondition = gymClass.capacity
+    ? and(eq(classesTable.id, classId), lt(classesTable.enrolled, gymClass.capacity))
+    : eq(classesTable.id, classId);
+
+  const [updated] = await db
+    .update(classesTable)
+    .set({ enrolled: sql`COALESCE(${classesTable.enrolled}, 0) + 1` })
+    .where(capacityCondition)
+    .returning();
+
+  if (!updated) {
+    res.status(409).json({ error: "Class is full" });
+    return;
+  }
 
   const [attendance] = await db.insert(attendanceTable).values({
     gymId,
     memberId,
     memberName: `${member.firstName} ${member.lastName}`,
     classId,
-    className: gymClass?.name || "Open Gym",
+    className: gymClass.name || "Open Gym",
     checkinTime: new Date(),
     status,
   }).returning();
 
-  await db.update(classesTable).set({ enrolled: (gymClass?.enrolled || 0) + 1 }).where(eq(classesTable.id, classId));
   await db.update(membersTable).set({ lastVisitDate: new Date() }).where(eq(membersTable.id, memberId));
 
   res.status(201).json(attendance);
