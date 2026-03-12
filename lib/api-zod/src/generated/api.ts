@@ -42,6 +42,8 @@ export const ListGymsResponseItem = zod.object({
   timezone: zod.string(),
   logoUrl: zod.string().nullish(),
   website: zod.string().nullish(),
+  fromEmail: zod.string().nullish(),
+  fromName: zod.string().nullish(),
   memberCount: zod.number(),
   activeCount: zod.number(),
   createdAt: zod.date(),
@@ -82,6 +84,8 @@ export const GetGymResponse = zod.object({
   timezone: zod.string(),
   logoUrl: zod.string().nullish(),
   website: zod.string().nullish(),
+  fromEmail: zod.string().nullish(),
+  fromName: zod.string().nullish(),
   memberCount: zod.number(),
   activeCount: zod.number(),
   createdAt: zod.date(),
@@ -105,6 +109,8 @@ export const UpdateGymBody = zod.object({
   timezone: zod.string().optional(),
   logoUrl: zod.string().nullish(),
   website: zod.string().nullish(),
+  fromEmail: zod.string().nullish(),
+  fromName: zod.string().nullish(),
 });
 
 export const UpdateGymResponse = zod.object({
@@ -120,6 +126,8 @@ export const UpdateGymResponse = zod.object({
   timezone: zod.string(),
   logoUrl: zod.string().nullish(),
   website: zod.string().nullish(),
+  fromEmail: zod.string().nullish(),
+  fromName: zod.string().nullish(),
   memberCount: zod.number(),
   activeCount: zod.number(),
   createdAt: zod.date(),
@@ -1912,6 +1920,9 @@ export const GetAiEmailStatusParams = zod.object({
 
 export const GetAiEmailStatusResponse = zod.object({
   configured: zod.boolean(),
+  gymEmailConfigured: zod.boolean(),
+  fromEmail: zod.string().nullish(),
+  fromName: zod.string().nullish(),
 });
 
 /**

@@ -77,7 +77,9 @@ export function AiOperator() {
     query: { enabled: !!activeGymId }
   });
 
-  const emailConfigured = emailStatus?.configured ?? false;
+  const platformConfigured = emailStatus?.configured ?? false;
+  const gymEmailConfigured = emailStatus?.gymEmailConfigured ?? false;
+  const emailReady = platformConfigured && gymEmailConfigured;
 
   const generateBrief = useGenerateOwnerBrief({
     mutation: {
@@ -495,7 +497,7 @@ export function AiOperator() {
                           <Edit2 className="h-4 w-4" />
                           Edit
                         </button>
-                        {canEmail && emailConfigured && (
+                        {canEmail && emailReady && (
                           <button
                             onClick={() => handleSendEmail(task)}
                             disabled={isSending || sendEmail.isPending}
@@ -592,11 +594,15 @@ export function AiOperator() {
         </div>
       </div>
 
-      {!emailConfigured && activeTab === "pending" && pendingTasks.some((t: any) => isEmailType(t.type) && hasTarget(t)) && (
+      {!emailReady && activeTab === "pending" && pendingTasks.some((t: any) => isEmailType(t.type) && hasTarget(t)) && (
         <div className="flex items-center gap-3 px-4 py-3 bg-amber-500/10 border border-amber-500/20 rounded-xl text-sm shrink-0">
           <AlertCircle className="h-5 w-5 text-amber-500 shrink-0" />
           <p className="text-muted-foreground">
-            <strong className="text-foreground">Email sending is not configured.</strong> Set up a Resend or SendGrid integration to send emails directly from tasks.
+            {!platformConfigured ? (
+              <><strong className="text-foreground">Email service not connected.</strong> A Resend or SendGrid integration is needed to enable email sending.</>
+            ) : (
+              <><strong className="text-foreground">Email sender not configured.</strong> Go to <a href="/settings" className="text-primary underline underline-offset-2 hover:text-primary/80">Settings</a> to set your From Name and From Email so emails appear from your gym.</>
+            )}
           </p>
         </div>
       )}

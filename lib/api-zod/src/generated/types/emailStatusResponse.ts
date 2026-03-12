@@ -8,4 +8,9 @@
 
 export interface EmailStatusResponse {
   configured: boolean;
+  gymEmailConfigured: boolean;
+  /** @nullable */
+  fromEmail?: string | null;
+  /** @nullable */
+  fromName?: string | null;
 }

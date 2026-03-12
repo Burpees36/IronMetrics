@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { eq, desc, and } from "drizzle-orm";
-import { db, aiTasksTable, aiGeneratedContentTable, membersTable, leadsTable } from "@workspace/db";
+import { db, aiTasksTable, aiGeneratedContentTable, membersTable, leadsTable, gymsTable } from "@workspace/db";
 import { CreateAiTaskBody, GenerateMemberOutreachBody, UpdateAiTaskBody } from "@workspace/api-zod";
 import { generateAiTasks } from "../services/ai-task-generation";
 import { getEmailService } from "../services/email-service";
@@ -179,8 +179,15 @@ router.get("/gyms/:gymId/ai/email-status", async (req, res): Promise<void> => {
   const gymId = parseGymId(req.params);
   if (!gymId) { res.status(400).json({ error: "Invalid gym ID" }); return; }
 
+  const [gym] = await db.select().from(gymsTable).where(eq(gymsTable.id, gymId));
   const emailService = getEmailService();
-  res.json({ configured: emailService.isConfigured() });
+  const gymEmailConfigured = !!(gym?.fromEmail);
+  res.json({
+    configured: emailService.isConfigured(),
+    gymEmailConfigured,
+    fromEmail: gym?.fromEmail || null,
+    fromName: gym?.fromName || null,
+  });
 });
 
 router.post("/gyms/:gymId/ai/tasks/:taskId/send-email", async (req, res): Promise<void> => {
@@ -221,6 +228,16 @@ router.post("/gyms/:gymId/ai/tasks/:taskId/send-email", async (req, res): Promis
     return;
   }
 
+  const [gym] = await db.select().from(gymsTable).where(eq(gymsTable.id, gymId));
+  if (!gym?.fromEmail) {
+    res.status(400).json({ error: "Gym email sender not configured. Go to Settings to set your From Email and From Name." });
+    return;
+  }
+
+  const fromAddress = gym.fromName
+    ? `${gym.fromName} <${gym.fromEmail}>`
+    : gym.fromEmail;
+
   const subjectMap: Record<string, string> = {
     outreach: `Checking in, ${recipientName.split(" ")[0]}`,
     leads: `Let's connect, ${recipientName.split(" ")[0]}`,
@@ -233,6 +250,7 @@ router.post("/gyms/:gymId/ai/tasks/:taskId/send-email", async (req, res): Promis
     to: recipientEmail,
     subject,
     text: task.aiContent,
+    from: fromAddress,
   });
 
   if (!result.success) {

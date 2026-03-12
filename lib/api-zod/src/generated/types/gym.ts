@@ -27,6 +27,10 @@ export interface Gym {
   logoUrl?: string | null;
   /** @nullable */
   website?: string | null;
+  /** @nullable */
+  fromEmail?: string | null;
+  /** @nullable */
+  fromName?: string | null;
   memberCount: number;
   activeCount: number;
   createdAt: Date;

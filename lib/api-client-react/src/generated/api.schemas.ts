@@ -43,6 +43,10 @@ export interface Gym {
   logoUrl?: string | null;
   /** @nullable */
   website?: string | null;
+  /** @nullable */
+  fromEmail?: string | null;
+  /** @nullable */
+  fromName?: string | null;
   memberCount: number;
   activeCount: number;
   createdAt: string;
@@ -84,6 +88,10 @@ export interface UpdateGymBody {
   logoUrl?: string | null;
   /** @nullable */
   website?: string | null;
+  /** @nullable */
+  fromEmail?: string | null;
+  /** @nullable */
+  fromName?: string | null;
 }
 
 export type MemberStatus = (typeof MemberStatus)[keyof typeof MemberStatus];
@@ -1176,6 +1184,11 @@ export interface SendEmailResponse {
 
 export interface EmailStatusResponse {
   configured: boolean;
+  gymEmailConfigured: boolean;
+  /** @nullable */
+  fromEmail?: string | null;
+  /** @nullable */
+  fromName?: string | null;
 }
 
 export type DashboardStatsRevenueByMonthItem = {

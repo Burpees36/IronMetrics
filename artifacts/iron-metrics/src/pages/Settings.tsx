@@ -1,10 +1,10 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useGym } from "@/store/GymContext";
-import { useGetGym, useListStaff, useInviteStaff, getListStaffQueryKey } from "@workspace/api-client-react";
+import { useGetGym, useListStaff, useInviteStaff, useUpdateGym, getListStaffQueryKey, getGetGymQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { motion } from "framer-motion";
-import { Loader2, Settings as SettingsIcon, Users, Building2, Plus, Mail } from "lucide-react";
+import { Loader2, Settings as SettingsIcon, Users, Building2, Plus, Mail, Save, CheckCircle2 } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -25,9 +25,21 @@ export function Settings() {
   });
 
   const inviteStaffMutation = useInviteStaff();
+  const updateGymMutation = useUpdateGym();
 
   const [inviteOpen, setInviteOpen] = useState(false);
   const [inviteForm, setInviteForm] = useState({ email: "", firstName: "", lastName: "", role: "coach" as string });
+  const [emailForm, setEmailForm] = useState({ fromName: "", fromEmail: "" });
+  const [emailFormDirty, setEmailFormDirty] = useState(false);
+
+  useEffect(() => {
+    if (gym) {
+      setEmailForm({
+        fromName: (gym as any).fromName || "",
+        fromEmail: (gym as any).fromEmail || "",
+      });
+    }
+  }, [gym]);
 
   if (!activeGymId) {
     return (
@@ -46,6 +58,22 @@ export function Settings() {
       </div>
     );
   }
+
+  const handleSaveEmailSettings = () => {
+    updateGymMutation.mutate(
+      { gymId: activeGymId as number, data: { fromName: emailForm.fromName || null, fromEmail: emailForm.fromEmail || null } },
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: getGetGymQueryKey(activeGymId as number) });
+          toast({ title: "Email Settings Saved", description: "Your outbound email settings have been updated." });
+          setEmailFormDirty(false);
+        },
+        onError: () => {
+          toast({ title: "Error", description: "Failed to save email settings.", variant: "destructive" });
+        },
+      }
+    );
+  };
 
   const handleInviteStaff = () => {
     if (!inviteForm.email || !inviteForm.firstName || !inviteForm.lastName) return;
@@ -90,27 +118,80 @@ export function Settings() {
         </TabsList>
 
         <TabsContent value="general">
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="bg-card border border-border rounded-2xl p-6 shadow-sm mt-4">
-            <h3 className="text-lg font-semibold text-foreground mb-4">Gym Information</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <Label className="text-muted-foreground text-xs uppercase tracking-wider">Gym Name</Label>
-                <p className="text-foreground font-medium mt-1">{gym?.name || "—"}</p>
+          <div className="space-y-4 mt-4">
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="bg-card border border-border rounded-2xl p-6 shadow-sm">
+              <h3 className="text-lg font-semibold text-foreground mb-4">Gym Information</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <Label className="text-muted-foreground text-xs uppercase tracking-wider">Gym Name</Label>
+                  <p className="text-foreground font-medium mt-1">{gym?.name || "—"}</p>
+                </div>
+                <div>
+                  <Label className="text-muted-foreground text-xs uppercase tracking-wider">Address</Label>
+                  <p className="text-foreground font-medium mt-1">{gym?.address || "—"}</p>
+                </div>
+                <div>
+                  <Label className="text-muted-foreground text-xs uppercase tracking-wider">Phone</Label>
+                  <p className="text-foreground font-medium mt-1">{(gym as any)?.phone || "—"}</p>
+                </div>
+                <div>
+                  <Label className="text-muted-foreground text-xs uppercase tracking-wider">Timezone</Label>
+                  <p className="text-foreground font-medium mt-1">{(gym as any)?.timezone || "—"}</p>
+                </div>
               </div>
-              <div>
-                <Label className="text-muted-foreground text-xs uppercase tracking-wider">Address</Label>
-                <p className="text-foreground font-medium mt-1">{gym?.address || "—"}</p>
+            </motion.div>
+
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="bg-card border border-border rounded-2xl p-6 shadow-sm">
+              <div className="flex items-center gap-2 mb-1">
+                <Mail className="h-5 w-5 text-primary" />
+                <h3 className="text-lg font-semibold text-foreground">Email Settings</h3>
               </div>
-              <div>
-                <Label className="text-muted-foreground text-xs uppercase tracking-wider">Phone</Label>
-                <p className="text-foreground font-medium mt-1">{(gym as any)?.phone || "—"}</p>
+              <p className="text-muted-foreground text-sm mb-5">Configure how outbound emails appear to your members. Emails sent from the AI Operator will use these settings.</p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="fromName">From Name</Label>
+                  <Input
+                    id="fromName"
+                    value={emailForm.fromName}
+                    onChange={(e) => { setEmailForm({ ...emailForm, fromName: e.target.value }); setEmailFormDirty(true); }}
+                    placeholder='e.g. "Coach Mike" or "Iron Haven CrossFit"'
+                  />
+                  <p className="text-xs text-muted-foreground">The name members will see in their inbox.</p>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="fromEmail">From Email</Label>
+                  <Input
+                    id="fromEmail"
+                    type="email"
+                    value={emailForm.fromEmail}
+                    onChange={(e) => { setEmailForm({ ...emailForm, fromEmail: e.target.value }); setEmailFormDirty(true); }}
+                    placeholder="e.g. mike@ironhavencrossfit.com"
+                  />
+                  <p className="text-xs text-muted-foreground">Must be a verified domain on your email provider.</p>
+                </div>
               </div>
-              <div>
-                <Label className="text-muted-foreground text-xs uppercase tracking-wider">Timezone</Label>
-                <p className="text-foreground font-medium mt-1">{(gym as any)?.timezone || "—"}</p>
+              <div className="flex items-center justify-between mt-5 pt-4 border-t border-border">
+                <div className="flex items-center gap-2">
+                  {(gym as any)?.fromEmail ? (
+                    <span className="flex items-center gap-1.5 text-xs text-emerald-500">
+                      <CheckCircle2 className="h-3.5 w-3.5" />
+                      Email sender configured
+                    </span>
+                  ) : (
+                    <span className="text-xs text-muted-foreground">No email sender configured yet</span>
+                  )}
+                </div>
+                <button
+                  onClick={handleSaveEmailSettings}
+                  disabled={updateGymMutation.isPending || !emailFormDirty}
+                  className="flex items-center gap-2 px-4 py-2.5 bg-primary text-primary-foreground hover:bg-primary/90 rounded-xl font-medium transition-colors shadow-lg shadow-primary/20 disabled:opacity-50"
+                >
+                  {updateGymMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                  Save Email Settings
+                </button>
               </div>
-            </div>
-          </motion.div>
+            </motion.div>
+          </div>
         </TabsContent>
 
         <TabsContent value="staff">

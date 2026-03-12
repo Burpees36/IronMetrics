@@ -2005,6 +2005,10 @@ components:
           type: ["string", "null"]
         website:
           type: ["string", "null"]
+        fromEmail:
+          type: ["string", "null"]
+        fromName:
+          type: ["string", "null"]
         memberCount:
           type: integer
         activeCount:
@@ -2066,6 +2070,10 @@ components:
         logoUrl:
           type: ["string", "null"]
         website:
+          type: ["string", "null"]
+        fromEmail:
+          type: ["string", "null"]
+        fromName:
           type: ["string", "null"]
 
     Member:
@@ -3635,8 +3643,15 @@ components:
       properties:
         configured:
           type: boolean
+        gymEmailConfigured:
+          type: boolean
+        fromEmail:
+          type: ["string", "null"]
+        fromName:
+          type: ["string", "null"]
       required:
         - configured
+        - gymEmailConfigured
 
     DashboardStats:
       type: object

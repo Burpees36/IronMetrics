@@ -15,6 +15,8 @@ export const gymsTable = pgTable("gyms", {
   timezone: text("timezone").notNull().default("America/New_York"),
   logoUrl: text("logo_url"),
   website: text("website"),
+  fromEmail: text("from_email"),
+  fromName: text("from_name"),
   ownerId: text("owner_id").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
