@@ -649,7 +649,7 @@ export function Schedule() {
       </div>
 
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Create New Class</DialogTitle>
             <DialogDescription>Schedule a new class for your gym.</DialogDescription>
