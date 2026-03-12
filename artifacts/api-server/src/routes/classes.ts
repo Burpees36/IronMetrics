@@ -32,7 +32,12 @@ router.post("/gyms/:gymId/classes", async (req, res): Promise<void> => {
   const gymId = parseGymId(req.params);
   if (!gymId) { res.status(400).json({ error: "Invalid gym ID" }); return; }
 
-  const parsed = CreateClassBody.safeParse(req.body);
+  const body = {
+    ...req.body,
+    startTime: req.body.startTime ? new Date(req.body.startTime) : undefined,
+    endTime: req.body.endTime ? new Date(req.body.endTime) : undefined,
+  };
+  const parsed = CreateClassBody.safeParse(body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
 
   let coachName: string | null = null;
@@ -48,8 +53,6 @@ router.post("/gyms/:gymId/classes", async (req, res): Promise<void> => {
     coachName,
     enrolled: 0,
     status: "scheduled",
-    startTime: new Date(parsed.data.startTime),
-    endTime: new Date(parsed.data.endTime),
   }).returning();
 
   res.status(201).json(gymClass);
@@ -75,12 +78,13 @@ router.patch("/gyms/:gymId/classes/:classId", async (req, res): Promise<void> =>
   const classId = parseInt(raw, 10);
   if (!gymId || isNaN(classId)) { res.status(400).json({ error: "Invalid IDs" }); return; }
 
-  const parsed = UpdateClassBody.safeParse(req.body);
+  const body = { ...req.body };
+  if (body.startTime) body.startTime = new Date(body.startTime);
+  if (body.endTime) body.endTime = new Date(body.endTime);
+  const parsed = UpdateClassBody.safeParse(body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
 
   const updateData: any = { ...parsed.data };
-  if (updateData.startTime) updateData.startTime = new Date(updateData.startTime);
-  if (updateData.endTime) updateData.endTime = new Date(updateData.endTime);
 
   if (updateData.coachId) {
     const [staff] = await db.select().from(gymStaffTable).where(and(eq(gymStaffTable.id, updateData.coachId), eq(gymStaffTable.gymId, gymId)));
