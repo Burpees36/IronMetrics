@@ -35,8 +35,8 @@ export function Settings() {
   useEffect(() => {
     if (gym) {
       setEmailForm({
-        fromName: (gym as any).fromName || "",
-        fromEmail: (gym as any).fromEmail || "",
+        fromName: gym.fromName || "",
+        fromEmail: gym.fromEmail || "",
       });
     }
   }, [gym]);
@@ -132,11 +132,11 @@ export function Settings() {
                 </div>
                 <div>
                   <Label className="text-muted-foreground text-xs uppercase tracking-wider">Phone</Label>
-                  <p className="text-foreground font-medium mt-1">{(gym as any)?.phone || "—"}</p>
+                  <p className="text-foreground font-medium mt-1">{gym?.phone || "—"}</p>
                 </div>
                 <div>
                   <Label className="text-muted-foreground text-xs uppercase tracking-wider">Timezone</Label>
-                  <p className="text-foreground font-medium mt-1">{(gym as any)?.timezone || "—"}</p>
+                  <p className="text-foreground font-medium mt-1">{gym?.timezone || "—"}</p>
                 </div>
               </div>
             </motion.div>
@@ -172,7 +172,7 @@ export function Settings() {
               </div>
               <div className="flex items-center justify-between mt-5 pt-4 border-t border-border">
                 <div className="flex items-center gap-2">
-                  {(gym as any)?.fromEmail ? (
+                  {gym?.fromEmail ? (
                     <span className="flex items-center gap-1.5 text-xs text-emerald-500">
                       <CheckCircle2 className="h-3.5 w-3.5" />
                       Email sender configured

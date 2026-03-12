@@ -497,15 +497,22 @@ export function AiOperator() {
                           <Edit2 className="h-4 w-4" />
                           Edit
                         </button>
-                        {canEmail && emailReady && (
-                          <button
-                            onClick={() => handleSendEmail(task)}
-                            disabled={isSending || sendEmail.isPending}
-                            className="flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-blue-400 hover:text-blue-300 border border-blue-500/30 hover:border-blue-500/50 rounded-lg transition-colors min-h-[44px] order-2 sm:order-3 disabled:opacity-50"
-                          >
-                            {isSending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mail className="h-4 w-4" />}
-                            Send Email
-                          </button>
+                        {canEmail && (
+                          <div className="relative group order-2 sm:order-3">
+                            <button
+                              onClick={() => emailReady ? handleSendEmail(task) : undefined}
+                              disabled={!emailReady || isSending || sendEmail.isPending}
+                              className={`flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-colors min-h-[44px] disabled:opacity-50 disabled:cursor-not-allowed ${emailReady ? "text-blue-400 hover:text-blue-300 border border-blue-500/30 hover:border-blue-500/50" : "text-muted-foreground border border-border"}`}
+                            >
+                              {isSending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mail className="h-4 w-4" />}
+                              Send Email
+                            </button>
+                            {!emailReady && (
+                              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 bg-popover border border-border rounded-lg text-xs text-muted-foreground whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none shadow-lg z-10">
+                                {!platformConfigured ? "Email service not connected" : "Configure sender in Settings"}
+                              </div>
+                            )}
+                          </div>
                         )}
                         <button
                           onClick={() => handleApprove(task)}
