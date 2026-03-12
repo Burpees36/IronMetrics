@@ -60,6 +60,13 @@ export function Settings() {
   }
 
   const handleSaveEmailSettings = () => {
+    if (emailForm.fromEmail) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(emailForm.fromEmail)) {
+        toast({ title: "Invalid Email", description: "Please enter a valid email address.", variant: "destructive" });
+        return;
+      }
+    }
     updateGymMutation.mutate(
       { gymId: activeGymId as number, data: { fromName: emailForm.fromName || null, fromEmail: emailForm.fromEmail || null } },
       {
@@ -68,8 +75,9 @@ export function Settings() {
           toast({ title: "Email Settings Saved", description: "Your outbound email settings have been updated." });
           setEmailFormDirty(false);
         },
-        onError: () => {
-          toast({ title: "Error", description: "Failed to save email settings.", variant: "destructive" });
+        onError: (error: any) => {
+          const msg = error?.data?.error || error?.message || "Failed to save email settings.";
+          toast({ title: "Error", description: msg, variant: "destructive" });
         },
       }
     );

@@ -105,6 +105,15 @@ router.get("/gyms/:gymId", async (req, res): Promise<void> => {
     return;
   }
 
+  const isOwner = gym.ownerId === req.user.id;
+  const [staffEntry] = await db.select().from(gymStaffTable).where(
+    and(eq(gymStaffTable.gymId, gymId), eq(gymStaffTable.userId, req.user.id))
+  );
+  if (!isOwner && !staffEntry) {
+    res.status(403).json({ error: "You do not have access to this gym" });
+    return;
+  }
+
   const [memberCountResult] = await db
     .select({ count: count() })
     .from(membersTable)
@@ -148,6 +157,14 @@ router.patch("/gyms/:gymId", async (req, res): Promise<void> => {
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
     return;
+  }
+
+  if (parsed.data.fromEmail !== undefined && parsed.data.fromEmail !== null && parsed.data.fromEmail !== "") {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(parsed.data.fromEmail)) {
+      res.status(400).json({ error: "Invalid email format for fromEmail" });
+      return;
+    }
   }
 
   const [gym] = await db
