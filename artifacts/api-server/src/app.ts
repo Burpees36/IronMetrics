@@ -62,7 +62,8 @@ const authLimiter = rateLimit({
   validate: { ip: false, trustProxy: false },
 } as Partial<Options>);
 
-app.use("/api/auth", authLimiter);
+app.use("/api/login", authLimiter);
+app.use("/api/callback", authLimiter);
 app.use("/api", apiLimiter);
 
 app.use(authMiddleware);
