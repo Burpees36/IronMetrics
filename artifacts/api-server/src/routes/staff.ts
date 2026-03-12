@@ -15,7 +15,7 @@ router.get("/gyms/:gymId/staff", async (req, res): Promise<void> => {
   const gymId = parseGymId(req.params);
   if (!gymId) { res.status(400).json({ error: "Invalid gym ID" }); return; }
 
-  const [callerStaff] = await db.select().from(gymStaffTable).where(and(eq(gymStaffTable.gymId, gymId), eq(gymStaffTable.userId, req.user.id)));
+  const [callerStaff] = await db.select().from(gymStaffTable).where(and(eq(gymStaffTable.gymId, gymId), eq(gymStaffTable.userId, req.user!.id)));
   if (!callerStaff) {
     res.status(403).json({ error: "You do not have access to this gym" });
     return;
@@ -40,7 +40,7 @@ router.post("/gyms/:gymId/staff", async (req, res): Promise<void> => {
   const gymId = parseGymId(req.params);
   if (!gymId) { res.status(400).json({ error: "Invalid gym ID" }); return; }
 
-  const [callerStaff] = await db.select().from(gymStaffTable).where(and(eq(gymStaffTable.gymId, gymId), eq(gymStaffTable.userId, req.user.id)));
+  const [callerStaff] = await db.select().from(gymStaffTable).where(and(eq(gymStaffTable.gymId, gymId), eq(gymStaffTable.userId, req.user!.id)));
   if (!callerStaff || !["gym_owner", "admin"].includes(callerStaff.role)) {
     res.status(403).json({ error: "Only owners and admins can invite staff" });
     return;
@@ -67,7 +67,7 @@ router.patch("/gyms/:gymId/staff/:staffId", async (req, res): Promise<void> => {
   const staffId = parseInt(raw, 10);
   if (!gymId || isNaN(staffId)) { res.status(400).json({ error: "Invalid IDs" }); return; }
 
-  const [callerStaff] = await db.select().from(gymStaffTable).where(and(eq(gymStaffTable.gymId, gymId), eq(gymStaffTable.userId, req.user.id)));
+  const [callerStaff] = await db.select().from(gymStaffTable).where(and(eq(gymStaffTable.gymId, gymId), eq(gymStaffTable.userId, req.user!.id)));
   if (!callerStaff || !["gym_owner", "admin"].includes(callerStaff.role)) {
     res.status(403).json({ error: "Only owners and admins can manage staff" });
     return;
@@ -100,7 +100,7 @@ router.delete("/gyms/:gymId/staff/:staffId", async (req, res): Promise<void> => 
   const staffId = parseInt(raw, 10);
   if (!gymId || isNaN(staffId)) { res.status(400).json({ error: "Invalid IDs" }); return; }
 
-  const [callerStaff] = await db.select().from(gymStaffTable).where(and(eq(gymStaffTable.gymId, gymId), eq(gymStaffTable.userId, req.user.id)));
+  const [callerStaff] = await db.select().from(gymStaffTable).where(and(eq(gymStaffTable.gymId, gymId), eq(gymStaffTable.userId, req.user!.id)));
   if (!callerStaff || !["gym_owner", "admin"].includes(callerStaff.role)) {
     res.status(403).json({ error: "Only owners and admins can remove staff" });
     return;

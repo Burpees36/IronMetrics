@@ -159,7 +159,7 @@ router.get("/gyms/:gymId/reports/membership", async (req, res): Promise<void> =>
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
     months.push({
       month: d.toISOString().slice(0, 7),
-      newMembers: i === 0 ? (newThisMonth[0]?.count ?? 0) : Math.max(0, active - i),
+      newMembers: i === 0 ? (newThisMonth?.count ?? 0) : Math.max(0, active - i),
       churned: i === 0 ? cancelled : 0,
       net: i === 0 ? netGrowth : Math.max(0, active - i),
     });
@@ -170,7 +170,7 @@ router.get("/gyms/:gymId/reports/membership", async (req, res): Promise<void> =>
     totalInactive: 0,
     totalOnHold: hold,
     totalCancelled: cancelled,
-    newThisMonth: newThisMonth[0]?.count ?? 0,
+    newThisMonth: newThisMonth?.count ?? 0,
     churnedThisMonth: cancelled,
     netGrowth,
     churnRate,

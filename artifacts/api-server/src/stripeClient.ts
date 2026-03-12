@@ -59,7 +59,7 @@ export async function initStripe(): Promise<void> {
   }
 
   console.log("Initializing Stripe schema...");
-  await runMigrations({ databaseUrl, schema: "stripe" });
+  await runMigrations({ databaseUrl, schema: "stripe" } as any);
   console.log("Stripe schema ready");
 
   const stripeSync = await getStripeSync();
@@ -68,10 +68,10 @@ export async function initStripe(): Promise<void> {
   const domains = process.env.REPLIT_DOMAINS || process.env.REPLIT_DEV_DOMAIN || "";
   const webhookBaseUrl = `https://${domains.split(",")[0]}`;
   try {
-    const { webhook } = await stripeSync.findOrCreateManagedWebhook(
+    const result = await stripeSync.findOrCreateManagedWebhook(
       `${webhookBaseUrl}/api/stripe/webhook`
     );
-    console.log("Webhook configured:", webhook?.url || "setup complete");
+    console.log("Webhook configured:", (result as any)?.webhook?.url || "setup complete");
   } catch (err: any) {
     console.warn("Webhook setup warning (non-fatal):", err.message);
   }

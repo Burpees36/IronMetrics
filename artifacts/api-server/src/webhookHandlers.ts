@@ -150,7 +150,8 @@ async function handleSubscriptionDeleted(sub: Stripe.Subscription): Promise<void
 }
 
 async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice): Promise<void> {
-  const subId = typeof invoice.subscription === "string" ? invoice.subscription : (invoice.subscription as any)?.id;
+  const inv = invoice as any;
+  const subId = typeof inv.subscription === "string" ? inv.subscription : inv.subscription?.id;
   if (!subId) return;
 
   const [sub] = await db.select().from(subscriptionsTable)
@@ -162,7 +163,7 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice): Promise<v
 
   const amountPaid = (invoice.amount_paid || 0) / 100;
   const stripeInvoiceId = invoice.id;
-  const piId = typeof invoice.payment_intent === "string" ? invoice.payment_intent : (invoice.payment_intent as any)?.id;
+  const piId = typeof inv.payment_intent === "string" ? inv.payment_intent : inv.payment_intent?.id;
 
   const existingPayments = await db.select().from(paymentsTable)
     .where(and(
@@ -200,7 +201,8 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice): Promise<v
 }
 
 async function handleInvoicePaymentFailed(invoice: Stripe.Invoice): Promise<void> {
-  const subId = typeof invoice.subscription === "string" ? invoice.subscription : (invoice.subscription as any)?.id;
+  const inv = invoice as any;
+  const subId = typeof inv.subscription === "string" ? inv.subscription : inv.subscription?.id;
   if (!subId) return;
 
   const [sub] = await db.select().from(subscriptionsTable)

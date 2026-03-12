@@ -1,3 +1,4 @@
+import Stripe from "stripe";
 import { getUncachableStripeClient } from "./stripeClient";
 import { db, membersTable, subscriptionsTable, membershipPlansTable, invoicesTable, paymentsTable } from "@workspace/db";
 import { eq, and, sql } from "drizzle-orm";
@@ -94,7 +95,7 @@ export class StripeService {
         quarterly: "month",
         annual: "year",
       };
-      const interval = intervalMap[plan.billingInterval] || "month";
+      const interval = (intervalMap[plan.billingInterval] || "month") as Stripe.PriceCreateParams.Recurring.Interval;
       const intervalCount = plan.billingInterval === "quarterly" ? 3 : 1;
 
       const price = await stripe.prices.create({

@@ -173,6 +173,7 @@ All mounted at `/api` prefix:
 
 ## Key Patterns
 
+- **api-zod exports**: `index.ts` only re-exports `./generated/api` (Zod schemas). TypeScript interfaces live at `@workspace/api-zod/types` subpath to avoid duplicate name conflicts between Zod schemas and TS interfaces.
 - **Express 5**: All async handlers use `Promise<void>` return type; early returns use `res.status().json(); return;`
 - **Numeric fields**: Drizzle stores `numeric()` as strings — always `parseFloat()` before sending JSON
 - **Auth**: `req.isAuthenticated()` and `req.user` from auth middleware; `useAuth()` hook on frontend

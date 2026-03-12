@@ -93,7 +93,7 @@ router.post("/gyms/:gymId/plans", requireBillingPermission("billing.create_plan"
   await billingAuditLogger.log({
     gymId,
     actorUserId: req.user?.id,
-    actorName: req.user?.username,
+    actorName: req.user?.firstName || "Unknown",
     action: "plan.created",
     entityType: "plan",
     entityId: String(plan.id),
@@ -144,7 +144,7 @@ router.post("/gyms/:gymId/subscriptions", requireBillingPermission("billing.crea
     status: "active",
     amount: plan.price,
     failedPayments: 0,
-    currentPeriodStart: parsed.data.startDate || today,
+    currentPeriodStart: parsed.data.startDate ? (typeof parsed.data.startDate === 'string' ? parsed.data.startDate : (parsed.data.startDate as Date).toISOString().split('T')[0]) : today,
   }).returning();
 
   await db.update(membersTable).set({ membershipType: plan.name, status: "active" }).where(eq(membersTable.id, parsed.data.memberId));
@@ -153,7 +153,7 @@ router.post("/gyms/:gymId/subscriptions", requireBillingPermission("billing.crea
     gymId,
     memberId: parsed.data.memberId,
     actorUserId: req.user?.id,
-    actorName: req.user?.username,
+    actorName: req.user?.firstName || "Unknown",
     action: "subscription.created",
     entityType: "subscription",
     entityId: String(sub.id),
@@ -190,7 +190,7 @@ router.patch("/gyms/:gymId/subscriptions/:subscriptionId", requireBillingPermiss
 
 router.post("/gyms/:gymId/members/:memberId/setup-intent", requireBillingPermission("billing.create_subscription"), async (req, res): Promise<void> => {
   const gymId = parseGymId(req.params);
-  const memberId = parseInt(req.params.memberId, 10);
+  const memberId = parseInt(String(req.params.memberId), 10);
   if (!gymId || isNaN(memberId)) { res.status(400).json({ error: "Invalid IDs" }); return; }
 
   try {
@@ -203,7 +203,7 @@ router.post("/gyms/:gymId/members/:memberId/setup-intent", requireBillingPermiss
 
 router.get("/gyms/:gymId/members/:memberId/payment-methods", requireBillingRead(), async (req, res): Promise<void> => {
   const gymId = parseGymId(req.params);
-  const memberId = parseInt(req.params.memberId, 10);
+  const memberId = parseInt(String(req.params.memberId), 10);
   if (!gymId || isNaN(memberId)) { res.status(400).json({ error: "Invalid IDs" }); return; }
 
   try {
@@ -216,7 +216,7 @@ router.get("/gyms/:gymId/members/:memberId/payment-methods", requireBillingRead(
 
 router.post("/gyms/:gymId/members/:memberId/stripe-subscription", requireBillingPermission("billing.create_subscription"), async (req, res): Promise<void> => {
   const gymId = parseGymId(req.params);
-  const memberId = parseInt(req.params.memberId, 10);
+  const memberId = parseInt(String(req.params.memberId), 10);
   if (!gymId || isNaN(memberId)) { res.status(400).json({ error: "Invalid IDs" }); return; }
 
   const { planId, paymentMethodId } = req.body;
@@ -232,7 +232,7 @@ router.post("/gyms/:gymId/members/:memberId/stripe-subscription", requireBilling
 
 router.post("/gyms/:gymId/subscriptions/:subscriptionId/cancel", requireBillingPermission("billing.cancel_subscription"), async (req, res): Promise<void> => {
   const gymId = parseGymId(req.params);
-  const subId = parseInt(req.params.subscriptionId, 10);
+  const subId = parseInt(String(req.params.subscriptionId), 10);
   if (!gymId || isNaN(subId)) { res.status(400).json({ error: "Invalid IDs" }); return; }
 
   const { cancelAtPeriodEnd = true, reason } = req.body;
@@ -247,7 +247,7 @@ router.post("/gyms/:gymId/subscriptions/:subscriptionId/cancel", requireBillingP
 
 router.post("/gyms/:gymId/subscriptions/:subscriptionId/pause", requireBillingPermission("billing.pause_subscription"), async (req, res): Promise<void> => {
   const gymId = parseGymId(req.params);
-  const subId = parseInt(req.params.subscriptionId, 10);
+  const subId = parseInt(String(req.params.subscriptionId), 10);
   if (!gymId || isNaN(subId)) { res.status(400).json({ error: "Invalid IDs" }); return; }
 
   try {
@@ -260,7 +260,7 @@ router.post("/gyms/:gymId/subscriptions/:subscriptionId/pause", requireBillingPe
 
 router.post("/gyms/:gymId/subscriptions/:subscriptionId/resume", requireBillingPermission("billing.resume_subscription"), async (req, res): Promise<void> => {
   const gymId = parseGymId(req.params);
-  const subId = parseInt(req.params.subscriptionId, 10);
+  const subId = parseInt(String(req.params.subscriptionId), 10);
   if (!gymId || isNaN(subId)) { res.status(400).json({ error: "Invalid IDs" }); return; }
 
   try {
@@ -273,7 +273,7 @@ router.post("/gyms/:gymId/subscriptions/:subscriptionId/resume", requireBillingP
 
 router.post("/gyms/:gymId/members/:memberId/charge", requireBillingPermission("billing.create_charge"), async (req, res): Promise<void> => {
   const gymId = parseGymId(req.params);
-  const memberId = parseInt(req.params.memberId, 10);
+  const memberId = parseInt(String(req.params.memberId), 10);
   if (!gymId || isNaN(memberId)) { res.status(400).json({ error: "Invalid IDs" }); return; }
 
   const { amount, description, paymentMethodId } = req.body;
@@ -292,7 +292,7 @@ router.post("/gyms/:gymId/members/:memberId/charge", requireBillingPermission("b
 
 router.post("/gyms/:gymId/payments/:paymentId/refund", requireBillingPermission("billing.issue_refund"), async (req, res): Promise<void> => {
   const gymId = parseGymId(req.params);
-  const paymentId = parseInt(req.params.paymentId, 10);
+  const paymentId = parseInt(String(req.params.paymentId), 10);
   if (!gymId || isNaN(paymentId)) { res.status(400).json({ error: "Invalid IDs" }); return; }
 
   const { amount, reason } = req.body;
@@ -307,7 +307,7 @@ router.post("/gyms/:gymId/payments/:paymentId/refund", requireBillingPermission(
 
 router.get("/gyms/:gymId/members/:memberId/billing-history", requireBillingRead(), async (req, res): Promise<void> => {
   const gymId = parseGymId(req.params);
-  const memberId = parseInt(req.params.memberId, 10);
+  const memberId = parseInt(String(req.params.memberId), 10);
   if (!gymId || isNaN(memberId)) { res.status(400).json({ error: "Invalid IDs" }); return; }
 
   try {
