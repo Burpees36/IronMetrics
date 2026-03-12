@@ -4,6 +4,17 @@ import { db, membersTable, subscriptionsTable, invoicesTable, attendanceTable, l
 
 const router: IRouter = Router();
 
+function computeRSI(churnRate: number, avgRevPerMember: number, netGrowth: number, avgTenure: number) {
+  const churnNorm = Math.max(0, Math.min(100, 100 - churnRate * 10));
+  const revNorm = Math.min(100, (avgRevPerMember / 200) * 100);
+  const growthNorm = Math.max(0, Math.min(100, 50 + netGrowth * 5));
+  const tenureNorm = Math.min(100, (avgTenure / 24) * 100);
+  const weights = { churn: 0.35, rev: 0.25, growth: 0.2, tenure: 0.2 };
+  const score = churnNorm * weights.churn + revNorm * weights.rev + growthNorm * weights.growth + tenureNorm * weights.tenure;
+  const band = score >= 70 ? "Strong" : score >= 45 ? "Moderate" : "Fragile";
+  return { score: Math.round(score * 10) / 10, band };
+}
+
 function parseGymId(params: any): number | null {
   const raw = Array.isArray(params.gymId) ? params.gymId[0] : params.gymId;
   const id = parseInt(raw, 10);
@@ -50,8 +61,12 @@ router.get("/gyms/:gymId/reports/dashboard", async (req, res): Promise<void> => 
   );
   const atRiskCount = atRiskMembers[0]?.count ?? 0;
 
-  const rsiScore = Math.max(0, Math.min(100, 100 - churnRate * 2 + (mrr > 0 ? mrr / 200 : 0)));
-  const rsiBand = rsiScore >= 70 ? "Strong" : rsiScore >= 45 ? "Moderate" : "Fragile";
+  const avgRevPerMember = subs.length > 0 ? mrr / subs.length : 0;
+  const netGrowth = active - cancelled;
+  const avgTenure = 8.5;
+  const rsiResult = computeRSI(churnRate, avgRevPerMember, netGrowth, avgTenure);
+  const rsiScore = rsiResult.score;
+  const rsiBand = rsiResult.band;
 
   const paidInvoices = await db.select().from(invoicesTable).where(and(eq(invoicesTable.gymId, gymId), eq(invoicesTable.status, "paid")));
   const allInvoices = await db.select().from(invoicesTable).where(eq(invoicesTable.gymId, gymId));

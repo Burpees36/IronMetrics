@@ -4,7 +4,7 @@ import { useListLeads, useUpdateLead, getListLeadsQueryKey, getGetLeadInsightsQu
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { motion } from "framer-motion";
-import { Loader2, Search, Plus, Target, LayoutGrid, List, Filter, AlertTriangle, CalendarClock } from "lucide-react";
+import { Loader2, Search, Plus, Target, BarChart3, AlertTriangle, CalendarClock } from "lucide-react";
 import { PipelineBoard } from "@/components/leads/PipelineBoard";
 import { LeadDetailDrawer } from "@/components/leads/LeadDetailDrawer";
 import { SummaryStrip } from "@/components/leads/SummaryStrip";
@@ -136,10 +136,10 @@ export function Leads() {
           </div>
           <button
             onClick={() => setShowInsights(!showInsights)}
-            className={`p-2 rounded-lg border transition-colors ${showInsights ? "bg-primary/10 border-primary/30 text-primary" : "bg-card border-border text-muted-foreground hover:text-foreground"}`}
-            title="Toggle insights"
+            className={`hidden lg:flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-medium transition-all ${showInsights ? "bg-primary/15 border-primary/40 text-primary shadow-sm shadow-primary/10" : "bg-card border-border text-muted-foreground hover:text-primary hover:border-primary/30"}`}
           >
-            <Filter className="h-4 w-4" />
+            <BarChart3 className="h-4 w-4" />
+            <span>Insights</span>
           </button>
           <button
             onClick={() => setAddOpen(true)}

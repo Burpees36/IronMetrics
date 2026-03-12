@@ -28,8 +28,8 @@ export function SummaryStrip({ totalActive, staleCount, needsFollowUp, conversio
       label: "Stale",
       value: staleCount,
       icon: AlertTriangle,
-      color: staleCount > 0 ? "text-red-400" : "text-muted-foreground",
-      bgColor: staleCount > 0 ? "bg-red-500/10" : "bg-muted/30",
+      color: staleCount > 0 ? "text-amber-400" : "text-muted-foreground",
+      bgColor: staleCount > 0 ? "bg-amber-500/10" : "bg-muted/30",
     },
     {
       label: "Converted This Month",

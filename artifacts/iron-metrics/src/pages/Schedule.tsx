@@ -74,6 +74,7 @@ export function Schedule() {
     coachId: "none",
     description: "",
     type: "regular" as string,
+    repeatDays: [] as number[],
   });
 
   const createClassMutation = useCreateClass();
@@ -95,7 +96,7 @@ export function Schedule() {
   const members: Member[] = membersData?.members ?? [];
 
   function resetForm() {
-    setFormData({ name: "", date: "", startHour: "9", startMinute: "00", startAmPm: "AM", endHour: "10", endMinute: "00", endAmPm: "AM", capacity: "", coachId: "none", description: "", type: "regular" });
+    setFormData({ name: "", date: "", startHour: "9", startMinute: "00", startAmPm: "AM", endHour: "10", endMinute: "00", endAmPm: "AM", capacity: "", coachId: "none", description: "", type: "regular", repeatDays: [] });
   }
 
   function openCreateDialog() {
@@ -109,6 +110,15 @@ export function Schedule() {
     if (amPm === "AM" && h === 12) h = 0;
     if (amPm === "PM" && h !== 12) h += 12;
     return h;
+  }
+
+  function getDateForDayOfWeek(baseDate: string, dayIndex: number): string {
+    const base = new Date(baseDate + "T00:00:00");
+    const baseDay = base.getDay();
+    const diff = dayIndex - baseDay;
+    const target = new Date(base);
+    target.setDate(target.getDate() + diff);
+    return format(target, "yyyy-MM-dd");
   }
 
   function handleCreateClass(e: React.FormEvent) {
@@ -130,32 +140,69 @@ export function Schedule() {
       return;
     }
 
-    createClassMutation.mutate(
-      {
-        gymId: activeGymId,
-        data: {
-          name: formData.name,
-          startTime: startDate.toISOString(),
-          endTime: endDate.toISOString(),
-          capacity: parseInt(formData.capacity, 10),
-          type: formData.type as CreateClassBodyType,
-          description: formData.description || null,
-          coachId: formData.coachId && formData.coachId !== "none" ? parseInt(formData.coachId, 10) : null,
-        },
-      },
-      {
-        onSuccess: () => {
-          toast({ title: "Class Created", description: `${formData.name} has been scheduled.` });
-          queryClient.invalidateQueries({ queryKey: getListClassesQueryKey(activeGymId) });
-          setCreateOpen(false);
-          resetForm();
-        },
-        onError: (error: any) => {
-          const message = error?.data?.error || error?.message || "Failed to create class.";
-          toast({ title: "Error", description: message });
-        },
+    const datesToCreate: string[] = [formData.date];
+
+    if (formData.repeatDays.length > 0) {
+      for (const dayIdx of formData.repeatDays) {
+        const dateStr = getDateForDayOfWeek(formData.date, dayIdx);
+        if (dateStr !== formData.date && !datesToCreate.includes(dateStr)) {
+          datesToCreate.push(dateStr);
+        }
       }
-    );
+    }
+
+    let created = 0;
+    let failed = 0;
+    const total = datesToCreate.length;
+
+    for (const dateStr of datesToCreate) {
+      const dayStart = new Date(`${dateStr}T${String(startH).padStart(2, '0')}:${formData.startMinute}:00`);
+      const dayEnd = new Date(`${dateStr}T${String(endH).padStart(2, '0')}:${formData.endMinute}:00`);
+
+      createClassMutation.mutate(
+        {
+          gymId: activeGymId,
+          data: {
+            name: formData.name,
+            startTime: dayStart.toISOString(),
+            endTime: dayEnd.toISOString(),
+            capacity: parseInt(formData.capacity, 10),
+            type: formData.type as CreateClassBodyType,
+            description: formData.description || null,
+            coachId: formData.coachId && formData.coachId !== "none" ? parseInt(formData.coachId, 10) : null,
+          },
+        },
+        {
+          onSuccess: () => {
+            created++;
+            if (created + failed === total) {
+              queryClient.invalidateQueries({ queryKey: getListClassesQueryKey(activeGymId!) });
+              setCreateOpen(false);
+              resetForm();
+              if (total === 1) {
+                toast({ title: "Class Created", description: `${formData.name} has been scheduled.` });
+              } else {
+                toast({ title: "Classes Created", description: `${formData.name} scheduled for ${created} day${created > 1 ? "s" : ""}.` });
+              }
+            }
+          },
+          onError: (error: any) => {
+            failed++;
+            if (created + failed === total) {
+              queryClient.invalidateQueries({ queryKey: getListClassesQueryKey(activeGymId!) });
+              if (created > 0) {
+                setCreateOpen(false);
+                resetForm();
+                toast({ title: "Partially Created", description: `${created} of ${total} classes created. Some failed.` });
+              } else {
+                const message = error?.data?.error || error?.message || "Failed to create class.";
+                toast({ title: "Error", description: message });
+              }
+            }
+          },
+        }
+      );
+    }
   }
 
   function handleDeleteClass() {
@@ -409,6 +456,48 @@ export function Schedule() {
             <div className="space-y-2">
               <Label htmlFor="class-date">Date *</Label>
               <Input id="class-date" type="date" value={formData.date} onChange={(e) => setFormData(p => ({ ...p, date: e.target.value }))} required />
+            </div>
+            <div className="space-y-2">
+              <Label>Repeat on Days</Label>
+              <div className="flex items-center gap-1.5">
+                {[
+                  { label: "S", day: 0 },
+                  { label: "M", day: 1 },
+                  { label: "T", day: 2 },
+                  { label: "W", day: 3 },
+                  { label: "T", day: 4 },
+                  { label: "F", day: 5 },
+                  { label: "S", day: 6 },
+                ].map(({ label, day }) => {
+                  const selected = formData.repeatDays.includes(day);
+                  return (
+                    <button
+                      key={day}
+                      type="button"
+                      onClick={() => {
+                        setFormData(p => ({
+                          ...p,
+                          repeatDays: selected
+                            ? p.repeatDays.filter(d => d !== day)
+                            : [...p.repeatDays, day],
+                        }));
+                      }}
+                      className={`h-9 w-9 rounded-lg text-xs font-semibold transition-all ${
+                        selected
+                          ? "bg-primary text-primary-foreground shadow-sm"
+                          : "bg-muted/30 text-muted-foreground border border-border hover:bg-muted/50"
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                {formData.repeatDays.length > 0
+                  ? `Class will be created for the selected date plus ${formData.repeatDays.length} additional day${formData.repeatDays.length > 1 ? "s" : ""} in the same week.`
+                  : "Select days to repeat this class across the week."}
+              </p>
             </div>
             <div className="space-y-2">
               <Label>Start Time *</Label>
