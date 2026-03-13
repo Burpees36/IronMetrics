@@ -209,13 +209,8 @@ export function Schedule() {
     return h;
   }
 
-  function getDateForDayOfWeek(baseDate: string, dayIndex: number): string {
-    const base = new Date(baseDate + "T00:00:00");
-    const baseDay = base.getDay();
-    const diff = dayIndex - baseDay;
-    const target = new Date(base);
-    target.setDate(target.getDate() + diff);
-    return format(target, "yyyy-MM-dd");
+  function getDateForCalendarDay(calendarDayIndex: number): string {
+    return format(days[calendarDayIndex], "yyyy-MM-dd");
   }
 
   function handleCreateClass(e: React.FormEvent) {
@@ -235,8 +230,8 @@ export function Schedule() {
     }
     const datesToCreate: string[] = [formData.date];
     if (formData.repeatDays.length > 0) {
-      for (const dayIdx of formData.repeatDays) {
-        const dateStr = getDateForDayOfWeek(formData.date, dayIdx);
+      for (const calDayIdx of formData.repeatDays) {
+        const dateStr = getDateForCalendarDay(calDayIdx);
         if (dateStr !== formData.date && !datesToCreate.includes(dateStr)) {
           datesToCreate.push(dateStr);
         }
@@ -604,51 +599,84 @@ export function Schedule() {
                         />
                       ))}
 
-                      {dayClasses.map((cls: any) => {
-                        const start = new Date(cls.startTime);
-                        const end = new Date(cls.endTime);
-                        const startMin = getHours(start) * 60 + getMinutes(start);
-                        const endMin = getHours(end) * 60 + getMinutes(end);
-                        const topPx = ((startMin / 60) - CALENDAR_START_HOUR) * HOUR_HEIGHT;
-                        const heightPx = Math.max(((endMin - startMin) / 60) * HOUR_HEIGHT, 28);
-                        const colors = getClassColors(cls.type || "regular");
-                        const isTiny = heightPx < 48;
+                      {(() => {
+                        const positioned = dayClasses.map((cls: any) => {
+                          const start = new Date(cls.startTime);
+                          const end = new Date(cls.endTime);
+                          const startMin = getHours(start) * 60 + getMinutes(start);
+                          const endMin = getHours(end) * 60 + getMinutes(end);
+                          return { cls, start, end, startMin, endMin };
+                        });
 
-                        return (
-                          <div
-                            key={cls.id}
-                            className={`calendar-class-block absolute left-1 right-1 rounded-lg border cursor-pointer transition-all hover:scale-[1.02] hover:z-20 hover:shadow-lg group ${colors.bg} ${colors.border}`}
-                            style={{ top: topPx + 1, height: heightPx - 2 }}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setDetailClassId(cls.id);
-                            }}
-                          >
-                            <div className={`px-2 ${isTiny ? 'py-0.5' : 'py-1.5'} overflow-hidden h-full flex flex-col justify-center`}>
-                              <div className={`font-semibold truncate leading-tight ${colors.text} ${isTiny ? 'text-[10px]' : 'text-xs'}`}>
-                                {cls.name}
-                              </div>
-                              {!isTiny && (
-                                <>
-                                  <div className="text-[10px] text-muted-foreground truncate mt-0.5">
-                                    {format(start, 'h:mm a')} – {format(end, 'h:mm a')}
-                                  </div>
-                                  {heightPx >= 64 && (
-                                    <div className="flex items-center gap-2 mt-1">
-                                      {cls.coachName && (
-                                        <span className="text-[10px] text-muted-foreground/80 truncate">{cls.coachName}</span>
-                                      )}
-                                      <span className="text-[10px] text-muted-foreground/60 ml-auto shrink-0">
-                                        {cls.enrolled}/{cls.capacity}
-                                      </span>
+                        const columns: number[] = new Array(positioned.length).fill(0);
+                        const totalCols: number[] = new Array(positioned.length).fill(1);
+                        for (let i = 0; i < positioned.length; i++) {
+                          const overlapping = [i];
+                          for (let j = 0; j < i; j++) {
+                            if (positioned[j].endMin > positioned[i].startMin && positioned[j].startMin < positioned[i].endMin) {
+                              overlapping.push(j);
+                            }
+                          }
+                          if (overlapping.length > 1) {
+                            const usedCols = new Set(overlapping.filter(idx => idx !== i).map(idx => columns[idx]));
+                            let col = 0;
+                            while (usedCols.has(col)) col++;
+                            columns[i] = col;
+                            const maxCol = Math.max(...overlapping.map(idx => columns[idx])) + 1;
+                            for (const idx of overlapping) totalCols[idx] = Math.max(totalCols[idx], maxCol);
+                          }
+                        }
+
+                        return positioned.map(({ cls, start, end, startMin, endMin }, i) => {
+                          const topPx = ((startMin / 60) - CALENDAR_START_HOUR) * HOUR_HEIGHT;
+                          const heightPx = Math.max(((endMin - startMin) / 60) * HOUR_HEIGHT, 28);
+                          const colors = getClassColors(cls.type || "regular");
+                          const isTiny = heightPx < 48;
+                          const col = columns[i];
+                          const numCols = totalCols[i];
+                          const widthPct = numCols > 1 ? `calc(${100 / numCols}% - 6px)` : undefined;
+                          const leftPct = numCols > 1 ? `calc(${(col / numCols) * 100}% + 4px)` : undefined;
+
+                          return (
+                            <div
+                              key={cls.id}
+                              className={`calendar-class-block absolute rounded-lg border cursor-pointer transition-all hover:scale-[1.02] hover:z-20 hover:shadow-lg group ${colors.bg} ${colors.border}`}
+                              style={{
+                                top: topPx + 1,
+                                height: heightPx - 2,
+                                ...(numCols > 1 ? { left: leftPct, width: widthPct } : { left: 4, right: 4 }),
+                              }}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setDetailClassId(cls.id);
+                              }}
+                            >
+                              <div className={`px-2 ${isTiny ? 'py-0.5' : 'py-1.5'} overflow-hidden h-full flex flex-col justify-center`}>
+                                <div className={`font-semibold truncate leading-tight ${colors.text} ${isTiny ? 'text-[10px]' : 'text-xs'}`}>
+                                  {cls.name}
+                                </div>
+                                {!isTiny && (
+                                  <>
+                                    <div className="text-[10px] text-muted-foreground truncate mt-0.5">
+                                      {format(start, 'h:mm a')} – {format(end, 'h:mm a')}
                                     </div>
-                                  )}
-                                </>
-                              )}
+                                    {heightPx >= 64 && (
+                                      <div className="flex items-center gap-2 mt-1">
+                                        {cls.coachName && (
+                                          <span className="text-[10px] text-muted-foreground/80 truncate">{cls.coachName}</span>
+                                        )}
+                                        <span className="text-[10px] text-muted-foreground/60 ml-auto shrink-0">
+                                          {cls.enrolled}/{cls.capacity}
+                                        </span>
+                                      </div>
+                                    )}
+                                  </>
+                                )}
+                              </div>
                             </div>
-                          </div>
-                        );
-                      })}
+                          );
+                        });
+                      })()}
                     </div>
                   );
                 })}
@@ -657,7 +685,7 @@ export function Schedule() {
               {showNowLine && nowLineTop > 0 && nowLineTop < calendarHeight && (
                 <div
                   className="absolute pointer-events-none z-30"
-                  style={{ top: nowLineTop, left: 48, right: 0 }}
+                  style={{ top: nowLineTop, left: 56, right: 0 }}
                 >
                   <div className="relative flex items-center">
                     <div className="h-2.5 w-2.5 rounded-full bg-red-500 -ml-1 shadow-[0_0_6px_rgba(239,68,68,0.5)]" />
@@ -703,7 +731,7 @@ export function Schedule() {
             <div className="space-y-2">
               <Label>Repeat on Days</Label>
               <div className="flex items-center gap-1.5">
-                {[{ label: "S", day: 0 }, { label: "M", day: 1 }, { label: "T", day: 2 }, { label: "W", day: 3 }, { label: "T", day: 4 }, { label: "F", day: 5 }, { label: "S", day: 6 }].map(({ label, day }) => {
+                {[{ label: "M", day: 0 }, { label: "T", day: 1 }, { label: "W", day: 2 }, { label: "T", day: 3 }, { label: "F", day: 4 }, { label: "S", day: 5 }, { label: "S", day: 6 }].map(({ label, day }) => {
                   const selected = formData.repeatDays.includes(day);
                   return (
                     <button

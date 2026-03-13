@@ -2,205 +2,61 @@
 
 ## Overview
 
-**Iron Metrics** is a full production-grade gym management SaaS platform for CrossFit/functional fitness gyms. Built as a pnpm workspace monorepo using TypeScript.
+Iron Metrics is a full production-grade gym management SaaS platform designed for CrossFit and functional fitness gyms. It provides comprehensive tools for gym operations, including member management, billing, scheduling, programming, lead management, and an AI-powered assistant. The platform aims to streamline administrative tasks, enhance member engagement, and provide actionable intelligence for gym owners.
 
-## Stack
+## User Preferences
 
-- **Monorepo tool**: pnpm workspaces
-- **Node.js version**: 24
-- **Package manager**: pnpm
-- **TypeScript version**: 5.9
-- **API framework**: Express 5
-- **Frontend**: React + Vite + TailwindCSS v4 + shadcn/ui
-- **Database**: PostgreSQL + Drizzle ORM
-- **Validation**: Zod (`zod/v4`), `drizzle-zod`
-- **API codegen**: Orval (from OpenAPI spec)
-- **Auth**: Replit Auth (OIDC with PKCE)
-- **Payments**: Stripe (via Replit integration)
-- **Charts**: Recharts
-- **Routing**: wouter
-- **Animations**: Framer Motion
-- **Build**: esbuild (CJS bundle for API server), Vite (frontend)
+I prefer concise and direct communication. When making changes, please prioritize the most impactful modifications first. For any significant architectural or design decisions, ask for confirmation before proceeding. Ensure all code is well-documented and follows modern TypeScript practices. I prefer an iterative development approach, delivering functional pieces frequently.
 
-## Design System
+## System Architecture
 
-- **Theme**: Calm premium dark professional enterprise SaaS
-- **Background**: `hsl(220 20% 8%)`, Cards: `hsl(220 20% 11%)`
-- **Primary accent**: Amber/gold (#FBBF24)
-- **Font**: Inter (body), system display font
-- **Corners**: 2xl rounded (16px), glass-panel effect on cards
+Iron Metrics is built as a pnpm workspace monorepo using TypeScript.
 
-## Structure
+**Monorepo Structure:**
+- `artifacts/api-server/`: Express 5 API server.
+- `artifacts/iron-metrics/`: React + Vite frontend.
+- `lib/`: Shared libraries including OpenAPI spec, generated API clients, Drizzle ORM schema, and Replit Auth hooks.
 
-```text
-├── artifacts/
-│   ├── api-server/          # Express 5 API server (port 8080)
-│   │   ├── src/routes/      # All API route handlers
-│   │   ├── src/middlewares/  # Auth middleware
-│   │   └── src/lib/         # Auth session management
-│   └── iron-metrics/        # React + Vite frontend (previewPath: /)
-│       ├── src/pages/       # All pages (Dashboard, Intelligence, Members, MemberDetail, Schedule, Leads, Billing, Workouts, AiOperator, Settings, Resources)
-│       ├── src/components/  # UI components (shadcn/ui + custom)
-│       └── src/store/       # GymContext for active gym state
-├── lib/
-│   ├── api-spec/            # OpenAPI 3.1 spec + Orval codegen config
-│   ├── api-client-react/    # Generated React Query hooks (queries + mutations)
-│   ├── api-zod/             # Generated Zod schemas from OpenAPI
-│   ├── db/                  # Drizzle ORM schema + DB connection + seed
-│   └── replit-auth-web/     # useAuth() hook for Replit Auth
-└── scripts/                 # Utility scripts
-```
+**Technology Stack:**
+- **Node.js:** 24, with pnpm as the package manager.
+- **TypeScript:** 5.9.
+- **API:** Express 5.
+- **Frontend:** React, Vite, TailwindCSS v4, shadcn/ui.
+- **Database:** PostgreSQL with Drizzle ORM.
+- **Validation:** Zod (`zod/v4`).
+- **API Codegen:** Orval (from OpenAPI spec).
+- **Auth:** Replit Auth (OIDC with PKCE).
+- **UI/UX Design:** Calm, premium dark professional SaaS theme. Features `hsl(220 20% 8%)` background, `hsl(220 20% 11%)` cards with 2xl rounded corners and a glass-panel effect. Primary accent is amber/gold (`#FBBF24`). Font uses Inter for body text.
 
-## Database Schema
+**Key Features & Implementation:**
 
-All tables in `lib/db/src/schema/`:
-- **gyms** — Multi-tenant gym workspaces
-- **gym_staff** — Staff/coaches per gym with roles
-- **members** — Full member CRM with risk scoring (risk_tier, risk_score, attendance_count_30d)
-- **member_notes** — Notes on members by staff
-- **timeline_events** — Member lifecycle events
-- **leads** — Lead pipeline CRM (new → contacted → scheduled → trial → converted/lost) with followUpNote, lostReason, convertedAt fields
-- **lead_activities** — Lead activity timeline/audit log (type, description, metadata per lead)
-- **classes** — Class schedule with capacity tracking
-- **class_templates** — Reusable weekly schedule templates (gym-scoped)
-- **class_template_items** — Individual class slots within a template (weekday, time, class name, type, capacity, coach)
-- **attendance** — Check-in records linked to members/classes
-- **membership_plans** — Plan definitions with pricing (stripeProductId, stripePriceId)
-- **subscriptions** — Active member subscriptions (stripeSubscriptionId, cancelledAt, cancelReason)
-- **invoices** — Billing invoices (stripeInvoiceId, stripePaymentIntentId)
-- **payments** — Payment transactions with Stripe payment intent tracking
-- **refunds** — Refund records with Stripe refund ID
-- **billing_events** — Billing lifecycle events audit trail
-- **billing_audit_logs** — Production audit trail (actorUserId, action, entityType, beforeValue/afterValue, amount, source)
-- **billing_webhook_events** — Webhook event dedup + idempotency (stripeEventId UNIQUE, status, processingError)
-- **products** — Retail inventory
-- **sales** — POS transactions (items stored as JSON)
-- **workouts** — WOD/strength/hero workouts (field is `title`, NOT `name`) — legacy table, kept for backward compat
-- **workout_results** — Member results with Rx/PR tracking (now supports optional `programming_section_id`)
-- **programming_days** — Daily programming hub (gym_id, date, title, status [draft/published/archived], public_notes, coach_notes, track, created_by, updated_by)
-- **programming_sections** — Ordered sections within a programming day (day_id, order_index, section_type enum, title, instructions, movements, result_tracking_enabled, etc.)
-- **announcements** — Gym communications
-- **documents** — Waivers, agreements, consent forms
-- **ai_tasks** — AI operator task queue
-- **ai_generated_content** — AI-drafted outreach, briefs
-- **recommendation_cards** — Strategic recommendation cards with checklists per gym/period
-- **checklist_item_completions** — Checked/unchecked state for recommendation checklist items
-- **recommendation_learning_stats** — Learning loop stats (expected impact, confidence, sample size)
-- **recommendation_learning_events** — Individual learning events per recommendation execution
-- **outcome_snapshots** — Periodic snapshots of gym metrics for learning comparison
-- **owner_additional_actions** — Owner-logged actions classified against recommendation types
-- **knowledge_sources** — Knowledge base sources (YouTube channels, etc.)
-- **knowledge_documents** — Individual documents within a knowledge source
-- **knowledge_chunks** — Chunked content from documents with taxonomy tags
-- **knowledge_ingest_jobs** — Tracks ingestion job progress
-- **recommendation_chunk_audit** — Audit trail linking recommendations to knowledge chunks used
+- **Multi-tenancy:** `gyms` table for isolated workspaces.
+- **Member Management:** Full CRM, risk scoring, notes, lifecycle events, and CSV import.
+- **Lead Management:** Kanban-style pipeline with activity timelines, follow-up scheduling, and conversion flows.
+- **Class Scheduling:** Weekly calendar, capacity tracking, check-ins, templates, and cloning.
+- **Billing:** Comprehensive billing command center with plans, subscriptions, payments, refunds, and full Stripe integration. Billing audit logs and webhook idempotency are implemented.
+- **Programming Hub:** Daily programming interface with section-based workout builder and result logging.
+- **AI Operator:** Task queue for AI-generated content (outreach, owner briefs), with approval/dismissal workflows and email sending capabilities.
+- **Intelligence Hub:** Provides KPI dashboards, RSI scores, risk radar, and intervention recommendations.
+- **Settings:** Full administration panel for gym identity, staff/access management (RBAC), email/notifications, billing, security, branding, and integrations.
+- **Onboarding Wizard:** A 6-step guided setup process for new gyms, with progress persistence and auto-detection of completeness.
+- **Tenant Isolation:** Global `requireGymAccess` middleware enforces secure access to gym-scoped data.
+- **Rate Limiting:** Implemented using `express-rate-limit` for API protection.
+- **Error Handling:** React `ErrorBoundary` for graceful UI recovery.
+- **Data Integrity:** Drizzle numeric fields are handled as strings and parsed to floats. Backend returns parsed decimal dollars for subscription amounts.
 
-## Seeded Demo Data (Source of Truth)
+## External Dependencies
 
-- **Members**: 20 (17 active, 2 cancelled, 1 hold)
-- **MRR**: $2,470 (from 17 active subscriptions)
-- **Leads**: 8
-- **Classes**: 50
-- **Attendance**: 350 records
-- **Staff**: 5
-- **Plans**: 4 (Unlimited, 3x/Week, Open Gym, Drop-In)
-- **Products**: 6
-- **Workouts**: 4
-- **AI Tasks**: 11 (10 pending across outreach/onboarding/leads/billing/campaign/retention, 1 completed analysis)
-- **Announcements**: 3, Documents: 3
-
-## Frontend Pages
-
-All pages with real API data (no hardcoded values), fully interactive:
-1. **Dashboard** — KPI grid (active members, MRR, weekly attendance, at-risk count), revenue chart, member status breakdown, onboarding resume banner for incomplete setups
-2. **Intelligence Hub** — RSI score gauge, risk radar table, intervention cards + recommendation execution tracker with interactive checklists
-3. **Members** — Searchable member directory with status/risk filters, Add Member dialog, CSV Import flow (5-step: upload, map columns, preview/validate, confirm, results), row actions (view profile, edit, add note, change status), clickable rows to member detail, empty state with import CTA
-4. **Member Detail** — Full profile page with tabs (Overview, Billing, Notes, Timeline), edit dialog, status management (hold/cancel/reactivate), add notes, attendance history, subscription info. Billing tab: subscription management (start/pause/resume/cancel), payment methods, payment history, one-time charges
-5. **Schedule** — Weekly class calendar with create class dialog, class detail sheet with roster, check-in flow (member search + check-in), delete class with confirmation, Copy Last Week (clone previous week's classes with preview/confirmation), Save/Apply Templates (save week as named template, apply to any week), template management (view contents, rename, delete), empty schedule CTAs
-6. **Leads (Sales Pipeline)** — Kanban-style pipeline board (New, Contacted, Intro Scheduled, Converted, Lost), summary strip (active/stale/follow-up/converted counts), lead detail drawer with activity timeline, follow-up scheduling, contact logging, stale lead detection, convert-to-member flow with start date, sales insights panel (funnel, source performance, bottleneck callouts), smart filters (stage/stale/follow-up due), polished add-lead dialog
-7. **Billing** — 5-tab billing command center (Plans, Subscriptions, Payments, Refunds, Cancelled). MRR/Active/ARM/Failed/Collected summary cards. Subscription actions (pause/resume/cancel with reason). Cancelled members view with month picker and lost revenue tracking. Full Stripe integration
-8. **Programming Hub** — Premium daily programming interface with date navigation (day/week view), section-based workout builder (warm-up, strength, conditioning, etc.), slide-over create/edit panel, role-based views (staff vs. member), duplicate-day functionality, draft/published workflow, result logging for members, and onboarding empty states
-9. **AI Operator** — Fully functional: approve/dismiss/edit AI tasks, type filter tabs, edit modal for draft content, owner brief generation with rendered display modal, task count badges, error states, gym-branded email sending (Send Email button visible only when platform + gym email configured, contextual banner for missing config)
-10. **Settings** — Full administration center with sidebar navigation (8 sections): General (editable gym identity, contact/location, timezone with save/cancel/dirty state), Staff & Access (searchable/filterable staff list with clickable rows, detail drawer, role edit, activate/deactivate, remove with confirmation, role permissions reference), Email & Notifications (outbound identity config, notification defaults), Billing & Plan (subscription status, payment method, billing history — Stripe-ready shell), Security (account info, access controls, 2FA placeholder), Branding (logo upload, brand colors — placeholder), Integrations (Stripe/Resend connected, Wodify/SMS available), Danger Zone (deactivate/delete with typed confirmation)
-11. **Resources** — Operational playbooks for gym owners with expandable phases
-12. **Onboarding Wizard** — 6-step guided setup for new gyms (Gym Basics, Membership Plans, Staff/Coaches, Members w/ CSV import bridge, Schedule, Launch summary). Progress persisted in `gym_onboarding` table. Steps auto-detect completeness from real data. Resumable from Dashboard banner. New gym creation redirects here automatically.
-
-## Generated API Hooks (Mutations)
-
-All available mutation hooks from `@workspace/api-client-react`:
-- `useCreateMember`, `useUpdateMember`, `useAddMemberNote`
-- `useCreateLead`, `useUpdateLead`, `useConvertLeadToMember`, `useGetLeadInsights`, `useListLeadActivities`, `useCreateLeadActivity`
-- `useCreateClass`, `useUpdateClass`, `useDeleteClass`, `useCheckInToClass`
-- `useCreateMembershipPlan`, `useCreateSubscription`, `useUpdateSubscription`
-- `useCancelSubscription`, `usePauseSubscription`, `useResumeSubscription`
-- `useGetBillingSummary`, `useGetCancelledMembers`, `useListPayments`, `useListRefunds`
-- `useCreateSetupIntent`, `useListPaymentMethods`, `useCreateStripeSubscription`
-- `useCreateOneTimeCharge`, `useRefundPayment`, `useGetMemberBillingHistory`
-- `useCreateWorkout`, `useLogWorkoutResult`
-- `useInviteStaff`, `useUpdateStaff`, `useRemoveStaff`
-- `useCreateGym`, `useUpdateGym`
-- `useCreateProduct`, `useCreateSale`
-- `useCreateAnnouncement`, `useCreateDocument`
-- `useGenerateMemberOutreach`, `useGenerateOwnerBrief`, `useCreateAiTask`, `useUpdateAiTask`
-
-All mutations accept `{ gymId: number; data: BodyType<...> }` as mutate args.
-Use `getListMembersQueryKey(gymId)` etc. for cache invalidation.
-
-## API Routes
-
-All mounted at `/api` prefix:
-- `GET /api/healthz` — Health check
-- Auth: `/api/login`, `/api/callback`, `/api/logout`, `/api/auth/user`
-- Gyms: CRUD at `/api/gyms`, `/api/gyms/:gymId`
-- Members: `/api/gyms/:gymId/members` (list, create, get, update, notes, timeline, import/preview, import/confirm)
-- Leads: `/api/gyms/:gymId/leads` (CRUD + convert to member)
-- Staff: `/api/gyms/:gymId/staff` (CRUD)
-- Classes: `/api/gyms/:gymId/classes` (CRUD + checkin), `/api/gyms/:gymId/classes/copy-week` (copy + preview), `/api/gyms/:gymId/class-templates` (CRUD + apply + preview)
-- Attendance: `/api/gyms/:gymId/attendance`
-- Billing: Plans, subscriptions, invoices, payments, refunds, billing-summary, cancelled-members under `/api/gyms/:gymId/`
-- Stripe: setup-intent, payment-methods, stripe-subscription, charge, refund, billing-history under `/api/gyms/:gymId/members/:memberId/`
-- Stripe Webhook: `/api/stripe/webhook` (raw body, registered before express.json())
-- Retail: Products + sales POS under `/api/gyms/:gymId/`
-- Workouts: `/api/gyms/:gymId/workouts` + results
-- Communications: `/api/gyms/:gymId/announcements`
-- Documents: `/api/gyms/:gymId/documents`
-- Intelligence: RSI score, risk radar, interventions, cohorts, revenue forecast, overview
-- Recommendations: Execution state, checklist toggle, owner actions (CRUD)
-- Knowledge: Sources CRUD, documents, chunks, search, taxonomy, stats, ingest jobs, audit trail
-- AI: Tasks, outreach generation, owner brief generation, email-status, send-email (gym-branded)
-- Email: Platform holds single RESEND_API_KEY or SENDGRID_API_KEY; each gym configures fromEmail/fromName in Settings for branded sending. AI routes enforce gym access (owner or staff).
-- Reports: Dashboard stats, membership, revenue, attendance reports
-
-## Key Patterns
-
-- **api-zod exports**: `index.ts` only re-exports `./generated/api` (Zod schemas). TypeScript interfaces live at `@workspace/api-zod/types` subpath to avoid duplicate name conflicts between Zod schemas and TS interfaces.
-- **Express 5**: All async handlers use `Promise<void>` return type; early returns use `res.status().json(); return;`
-- **Numeric fields**: Drizzle stores `numeric()` as strings — always `parseFloat()` before sending JSON
-- **Auth**: `req.isAuthenticated()` and `req.user` from auth middleware; `useAuth()` hook on frontend
-- **Gym context**: Frontend uses `GymContext` to track `activeGymId`; stored in localStorage
-- **Auto-linking**: First login auto-links user to seeded gym as owner
-- **Vite proxy**: Frontend proxies `/api` requests to Express on port 8080
-- **Stripe**: Connected via Replit integration. Env vars: STRIPE_SECRET_KEY, STRIPE_PUBLISHABLE_KEY, STRIPE_ACCOUNT_ID. Webhook route registered before express.json() in app.ts. Stripe init on startup: runMigrations → getStripeSync → findOrCreateManagedWebhook → syncBackfill. Service in stripeService.ts, client in stripeClient.ts
-- **Billing audit**: All billing mutations log to `billing_audit_logs` via `billingAuditLogger.ts` (actor, action, before/after, amount, source)
-- **Webhook idempotency**: Webhooks deduped via `billing_webhook_events.stripe_event_id` UNIQUE constraint; duplicate events skipped
-- **Billing RBAC**: `billingRbac.ts` middleware checks gym_staff role. Permissions: owner/admin = full, front_desk = read+charge+subscribe, coach = none, analyst = read-only
-- **Billing metrics**: Centralized in `billingMetrics.ts` (computeBillingSummary, computeMRR, computeARM, getMonthWindow)
-- **Billing audit script**: `pnpm --filter @workspace/scripts run audit:billing` — prints MRR, ARM, data integrity warnings, webhook health
-- **Tenant isolation**: Global `requireGymAccess` middleware applied to all `/gyms/:gymId` routes in `routes/index.ts`. Verifies user is gym owner or active staff before any gym-scoped route executes. Returns 404 for non-existent gyms, 403 for unauthorized access. Logs denied access attempts.
-- **Rate limiting**: `express-rate-limit` — 120 req/min general API, 30 req/15min for auth. Returns JSON error messages.
-- **Capacity enforcement**: Check-in route blocks when `enrolled >= capacity` (409). Also prevents duplicate check-ins.
-- **Error boundary**: React `ErrorBoundary` wraps all protected page content in `ProtectedRoute`. Shows friendly recovery UI on crash.
-- **CSV import**: Client-side parsing with PapaParse, server-side validation + duplicate detection. Two endpoints: `import/preview` (validate + preview) and `import/confirm` (execute). Supports flexible date formats, phone normalization, auto column mapping. Max 5000 rows. Timeline events logged as "imported" type.
-- **Onboarding wizard**: `gym_onboarding` table tracks per-gym progress (completedSteps, skippedSteps, currentStep, isComplete). Step completeness computed from real data (has members? has plans? has staff? has classes?). Routes: `GET/PATCH /gyms/:gymId/onboarding`. New gym creation redirects to `/onboarding`. Dashboard shows resume banner when incomplete.
-- **No hardcoded metrics**: All dashboard/intelligence/AI operator values are computed from actual DB queries
-- **Loading states**: All pages handle three states: no gym selected, loading, error/empty
-- **Routing**: wouter with base path `import.meta.env.BASE_URL`; use relative paths in Links/navigate (e.g., `/members/${id}` not `${BASE_URL}members/${id}`)
-- **Subscription amounts**: Backend returns parsed decimal dollars (not cents) — do NOT divide by 100
-
-## Running
-
-- API Server: `pnpm --filter @workspace/api-server run dev` (workflow)
-- Frontend: `pnpm --filter @workspace/iron-metrics run dev` (workflow)
-- DB Push: `pnpm --filter @workspace/db run push`
-- Seed: Run `<tsx-path> lib/db/src/seed.ts` from workspace root
-- Codegen: `pnpm --filter @workspace/api-spec run codegen`
+- **Replit Auth:** For user authentication and authorization.
+- **Stripe:** For payment processing, subscriptions, invoices, and refunds. Integrated via Replit integration, uses `STRIPE_SECRET_KEY`, `STRIPE_PUBLISHABLE_KEY`, `STRIPE_ACCOUNT_ID`. Webhooks are managed.
+- **Resend/SendGrid:** For outbound email services (platform-wide key, gym-configured sender details).
+- **PostgreSQL:** Primary database.
+- **Vite:** Frontend build tool.
+- **TailwindCSS:** CSS framework.
+- **shadcn/ui:** UI component library.
+- **Recharts:** For charting and data visualization.
+- **Framer Motion:** For animations.
+- **Orval:** For API client code generation from OpenAPI spec.
+- **Zod:** For schema validation.
+- **PapaParse:** Client-side CSV parsing.
+- **express-rate-limit:** For API rate limiting.
