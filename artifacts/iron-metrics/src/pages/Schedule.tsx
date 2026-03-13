@@ -16,12 +16,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
-const CLASS_TYPE_COLORS: Record<string, { bg: string; accent: string; text: string; sub: string; dot: string; hoverBg: string }> = {
-  regular: { bg: "bg-sky-500/25", accent: "bg-sky-400", text: "text-sky-100", sub: "text-sky-200/80", dot: "bg-sky-400", hoverBg: "hover:bg-sky-500/35" },
-  personal_training: { bg: "bg-fuchsia-500/25", accent: "bg-fuchsia-400", text: "text-fuchsia-100", sub: "text-fuchsia-200/80", dot: "bg-fuchsia-400", hoverBg: "hover:bg-fuchsia-500/35" },
-  intro: { bg: "bg-lime-500/25", accent: "bg-lime-400", text: "text-lime-100", sub: "text-lime-200/80", dot: "bg-lime-400", hoverBg: "hover:bg-lime-500/35" },
-  specialty: { bg: "bg-orange-500/25", accent: "bg-orange-400", text: "text-orange-100", sub: "text-orange-200/80", dot: "bg-orange-400", hoverBg: "hover:bg-orange-500/35" },
-  open_gym: { bg: "bg-teal-500/25", accent: "bg-teal-400", text: "text-teal-100", sub: "text-teal-200/80", dot: "bg-teal-400", hoverBg: "hover:bg-teal-500/35" },
+const CLASS_TYPE_COLORS: Record<string, { solidBg: string; solidHover: string; accent: string; dot: string }> = {
+  regular: { solidBg: "#1e5a8a", solidHover: "#22679e", accent: "#38bdf8", dot: "bg-sky-400" },
+  personal_training: { solidBg: "#7a2481", solidHover: "#8e2b96", accent: "#e879f9", dot: "bg-fuchsia-400" },
+  intro: { solidBg: "#3d6b1e", solidHover: "#477c24", accent: "#a3e635", dot: "bg-lime-400" },
+  specialty: { solidBg: "#8a4a12", solidHover: "#9e5515", accent: "#fb923c", dot: "bg-orange-400" },
+  open_gym: { solidBg: "#1a5e5e", solidHover: "#1f6e6e", accent: "#2dd4bf", dot: "bg-teal-400" },
 };
 
 function getClassColors(type: string) {
@@ -614,7 +614,7 @@ export function Schedule() {
                           overlapDepth[i] = maxPriorDepth + 1;
                         }
 
-                        const INDENT = 14;
+                        const PEEK = 20;
                         const PAD = 2;
 
                         return items.map(({ cls, start, end, startMin, endMin }, i) => {
@@ -630,9 +630,10 @@ export function Schedule() {
                           const style: React.CSSProperties = {
                             top: topPx + 1,
                             height: heightPx - 2,
-                            left: PAD + depth * INDENT,
+                            left: PAD + depth * PEEK,
                             right: PAD,
                             zIndex: isFocused ? 50 : 10 + depth,
+                            backgroundColor: colors.solidBg,
                           };
 
                           const timeStr = `${format(start, 'h:mm a')} – ${format(end, 'h:mm a')}`;
@@ -642,36 +643,38 @@ export function Schedule() {
                             <div
                               key={cls.id}
                               title={fullTitle}
-                              className={`calendar-class-block absolute rounded-xl cursor-pointer transition-all duration-200 ${colors.bg} ${colors.hoverBg} hover:shadow-lg ${depth > 0 ? 'shadow-md shadow-black/20' : ''} overflow-hidden ${isFocused ? 'ring-2 ring-white/30 shadow-xl shadow-black/30' : ''}`}
+                              className={`calendar-class-block absolute rounded-xl cursor-pointer transition-all duration-200 hover:shadow-lg overflow-hidden ${isFocused ? 'ring-2 ring-white/40 shadow-xl shadow-black/40' : depth > 0 ? 'shadow-md shadow-black/30' : ''}`}
                               style={style}
+                              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = colors.solidHover; }}
+                              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = colors.solidBg; }}
                               onClick={(e) => {
                                 e.stopPropagation();
                                 setFocusedClassId(cls.id);
                                 setDetailClassId(cls.id);
                               }}
                             >
-                              <div className={`absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-full ${colors.accent}`} />
+                              <div className="absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-full" style={{ backgroundColor: colors.accent }} />
                               <div className={`pl-3 pr-2 ${isTiny ? 'py-1' : 'py-1.5'} overflow-hidden h-full flex flex-col ${isTiny ? 'justify-center' : 'justify-start'}`}>
-                                <div className={`font-semibold truncate leading-tight ${colors.text} ${isTiny ? 'text-[10px]' : 'text-[11px]'}`}>
+                                <div className={`font-semibold truncate leading-tight text-white ${isTiny ? 'text-[10px]' : 'text-[11px]'}`}>
                                   {cls.name}
                                 </div>
                                 {!isTiny && (
-                                  <div className={`text-[10px] ${colors.sub} truncate mt-0.5`}>
+                                  <div className="text-[10px] text-white/70 truncate mt-0.5">
                                     {format(start, 'h:mm')} - {format(end, 'h:mm a')}
                                   </div>
                                 )}
                                 {!isTiny && !isShort && (
                                   <div className="flex items-center gap-1.5 mt-1.5">
                                     {cls.coachName && (
-                                      <span className={`text-[10px] ${colors.sub} truncate`}>{cls.coachName}</span>
+                                      <span className="text-[10px] text-white/60 truncate">{cls.coachName}</span>
                                     )}
-                                    <span className="text-[10px] text-muted-foreground/40 ml-auto shrink-0 tabular-nums">
+                                    <span className="text-[10px] text-white/50 ml-auto shrink-0 tabular-nums">
                                       <Users className="inline h-3 w-3 mr-0.5 -mt-px" />{cls.enrolled}/{cls.capacity}
                                     </span>
                                   </div>
                                 )}
                                 {!isTiny && isShort && (
-                                  <span className="text-[10px] text-muted-foreground/40 mt-0.5 tabular-nums">
+                                  <span className="text-[10px] text-white/50 mt-0.5 tabular-nums">
                                     {cls.enrolled}/{cls.capacity}
                                   </span>
                                 )}
