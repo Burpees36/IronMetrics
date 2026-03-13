@@ -600,7 +600,7 @@ export function Schedule() {
                       ))}
 
                       {(() => {
-                        const positioned = dayClasses.map((cls: any) => {
+                        const items = dayClasses.map((cls: any) => {
                           const start = new Date(cls.startTime);
                           const end = new Date(cls.endTime);
                           const startMin = getHours(start) * 60 + getMinutes(start);
@@ -608,69 +608,110 @@ export function Schedule() {
                           return { cls, start, end, startMin, endMin };
                         });
 
-                        const columns: number[] = new Array(positioned.length).fill(0);
-                        const totalCols: number[] = new Array(positioned.length).fill(1);
-                        for (let i = 0; i < positioned.length; i++) {
-                          const overlapping = [i];
-                          for (let j = 0; j < i; j++) {
-                            if (positioned[j].endMin > positioned[i].startMin && positioned[j].startMin < positioned[i].endMin) {
-                              overlapping.push(j);
+                        const groups: number[][] = [];
+                        const groupCols: number[] = new Array(items.length).fill(0);
+                        const groupMaxCols: number[] = new Array(items.length).fill(1);
+
+                        for (let i = 0; i < items.length; i++) {
+                          let placed = false;
+                          for (const group of groups) {
+                            const overlapsGroup = group.some(j =>
+                              items[j].endMin > items[i].startMin && items[j].startMin < items[i].endMin
+                            );
+                            if (overlapsGroup) {
+                              const usedCols = new Set(group.map(j => groupCols[j]));
+                              let col = 0;
+                              while (usedCols.has(col)) col++;
+                              groupCols[i] = col;
+                              group.push(i);
+                              const maxCol = Math.max(...group.map(j => groupCols[j])) + 1;
+                              for (const j of group) groupMaxCols[j] = maxCol;
+                              placed = true;
+                              break;
                             }
                           }
-                          if (overlapping.length > 1) {
-                            const usedCols = new Set(overlapping.filter(idx => idx !== i).map(idx => columns[idx]));
-                            let col = 0;
-                            while (usedCols.has(col)) col++;
-                            columns[i] = col;
-                            const maxCol = Math.max(...overlapping.map(idx => columns[idx])) + 1;
-                            for (const idx of overlapping) totalCols[idx] = Math.max(totalCols[idx], maxCol);
+                          if (!placed) {
+                            groupCols[i] = 0;
+                            groupMaxCols[i] = 1;
+                            groups.push([i]);
                           }
                         }
 
-                        return positioned.map(({ cls, start, end, startMin, endMin }, i) => {
+                        for (const group of groups) {
+                          if (group.length <= 1) continue;
+                          for (const idx of group) {
+                            const directOverlaps = group.filter(j =>
+                              j !== idx && items[j].endMin > items[idx].startMin && items[j].startMin < items[idx].endMin
+                            );
+                            const localMax = Math.max(groupCols[idx], ...directOverlaps.map(j => groupCols[j])) + 1;
+                            groupMaxCols[idx] = Math.max(localMax, groupMaxCols[idx]);
+                          }
+                        }
+
+                        const PAD = 3;
+
+                        return items.map(({ cls, start, end, startMin, endMin }, i) => {
                           const topPx = ((startMin / 60) - CALENDAR_START_HOUR) * HOUR_HEIGHT;
-                          const heightPx = Math.max(((endMin - startMin) / 60) * HOUR_HEIGHT, 28);
+                          const heightPx = Math.max(((endMin - startMin) / 60) * HOUR_HEIGHT, 32);
                           const colors = getClassColors(cls.type || "regular");
-                          const isTiny = heightPx < 48;
-                          const col = columns[i];
-                          const numCols = totalCols[i];
-                          const widthPct = numCols > 1 ? `calc(${100 / numCols}% - 6px)` : undefined;
-                          const leftPct = numCols > 1 ? `calc(${(col / numCols) * 100}% + 4px)` : undefined;
+                          const col = groupCols[i];
+                          const numCols = groupMaxCols[i];
+                          const isOverlapping = numCols > 1;
+                          const isNarrow = isOverlapping && numCols >= 3;
+                          const isTiny = heightPx < 44;
+                          const isMedium = heightPx >= 44 && heightPx < 64;
+
+                          const style: React.CSSProperties = {
+                            top: topPx + 1,
+                            height: heightPx - 2,
+                          };
+
+                          if (isOverlapping) {
+                            const colWidth = 100 / numCols;
+                            style.left = `calc(${col * colWidth}% + ${PAD}px)`;
+                            style.width = `calc(${colWidth}% - ${PAD * 2}px)`;
+                          } else {
+                            style.left = PAD;
+                            style.right = PAD;
+                          }
+
+                          const timeStr = `${format(start, 'h:mm a')} – ${format(end, 'h:mm a')}`;
+                          const fullTitle = `${cls.name}\n${timeStr}${cls.coachName ? `\n${cls.coachName}` : ''}\n${cls.enrolled}/${cls.capacity}`;
 
                           return (
                             <div
                               key={cls.id}
-                              className={`calendar-class-block absolute rounded-lg border cursor-pointer transition-all hover:scale-[1.02] hover:z-20 hover:shadow-lg group ${colors.bg} ${colors.border}`}
-                              style={{
-                                top: topPx + 1,
-                                height: heightPx - 2,
-                                ...(numCols > 1 ? { left: leftPct, width: widthPct } : { left: 4, right: 4 }),
-                              }}
+                              title={fullTitle}
+                              className={`calendar-class-block absolute rounded-lg border cursor-pointer transition-all hover:brightness-125 hover:z-20 hover:shadow-lg ${colors.bg} ${colors.border}`}
+                              style={style}
                               onClick={(e) => {
                                 e.stopPropagation();
                                 setDetailClassId(cls.id);
                               }}
                             >
-                              <div className={`px-2 ${isTiny ? 'py-0.5' : 'py-1.5'} overflow-hidden h-full flex flex-col justify-center`}>
-                                <div className={`font-semibold truncate leading-tight ${colors.text} ${isTiny ? 'text-[10px]' : 'text-xs'}`}>
+                              <div className={`${isNarrow ? 'px-1' : 'px-2'} ${isTiny ? 'py-0.5' : 'py-1'} overflow-hidden h-full flex flex-col ${isTiny ? 'justify-center' : 'justify-start'}`}>
+                                <div className={`font-semibold truncate leading-tight ${colors.text} ${isNarrow || isTiny ? 'text-[10px]' : 'text-xs'}`}>
                                   {cls.name}
                                 </div>
                                 {!isTiny && (
-                                  <>
-                                    <div className="text-[10px] text-muted-foreground truncate mt-0.5">
-                                      {format(start, 'h:mm a')} – {format(end, 'h:mm a')}
-                                    </div>
-                                    {heightPx >= 64 && (
-                                      <div className="flex items-center gap-2 mt-1">
-                                        {cls.coachName && (
-                                          <span className="text-[10px] text-muted-foreground/80 truncate">{cls.coachName}</span>
-                                        )}
-                                        <span className="text-[10px] text-muted-foreground/60 ml-auto shrink-0">
-                                          {cls.enrolled}/{cls.capacity}
-                                        </span>
-                                      </div>
+                                  <div className={`${isNarrow ? 'text-[9px]' : 'text-[10px]'} text-muted-foreground truncate mt-0.5`}>
+                                    {isNarrow ? format(start, 'h:mm a') : timeStr}
+                                  </div>
+                                )}
+                                {!isTiny && !isMedium && !isNarrow && (
+                                  <div className="flex items-center gap-2 mt-1">
+                                    {cls.coachName && (
+                                      <span className="text-[10px] text-muted-foreground/80 truncate">{cls.coachName}</span>
                                     )}
-                                  </>
+                                    <span className="text-[10px] text-muted-foreground/60 ml-auto shrink-0">
+                                      {cls.enrolled}/{cls.capacity}
+                                    </span>
+                                  </div>
+                                )}
+                                {!isTiny && (isMedium || isNarrow) && (
+                                  <span className={`${isNarrow ? 'text-[9px]' : 'text-[10px]'} text-muted-foreground/60 mt-0.5`}>
+                                    {cls.enrolled}/{cls.capacity}
+                                  </span>
                                 )}
                               </div>
                             </div>
