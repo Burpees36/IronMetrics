@@ -5,6 +5,7 @@ import rateLimit, { type Options } from "express-rate-limit";
 import { authMiddleware } from "./middlewares/authMiddleware";
 import { WebhookHandlers } from "./webhookHandlers";
 import router from "./routes";
+import paymentUpdatePublicRouter from "./routes/payment-update-public";
 
 const app: Express = express();
 
@@ -65,6 +66,8 @@ const authLimiter = rateLimit({
 app.use("/api/login", authLimiter);
 app.use("/api/callback", authLimiter);
 app.use("/api", apiLimiter);
+
+app.use("/api", paymentUpdatePublicRouter);
 
 app.use(authMiddleware);
 

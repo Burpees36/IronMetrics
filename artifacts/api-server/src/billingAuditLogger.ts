@@ -14,7 +14,11 @@ export type AuditAction =
   | "payment_method.updated"
   | "payment.succeeded"
   | "payment.failed"
-  | "webhook.reconciliation";
+  | "webhook.reconciliation"
+  | "recovery.notification_sent"
+  | "recovery.resolved"
+  | "recovery.link_generated"
+  | "recovery.card_updated";
 
 export type AuditSource = "ui" | "webhook" | "system" | "api";
 

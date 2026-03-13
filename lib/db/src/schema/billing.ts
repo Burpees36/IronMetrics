@@ -1,4 +1,4 @@
-import { pgTable, text, serial, timestamp, integer, numeric, boolean } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, timestamp, integer, numeric, boolean, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { gymsTable } from "./gyms";
@@ -153,3 +153,46 @@ export const billingWebhookEventsTable = pgTable("billing_webhook_events", {
 export const insertBillingWebhookEventSchema = createInsertSchema(billingWebhookEventsTable).omit({ id: true, createdAt: true });
 export type InsertBillingWebhookEvent = z.infer<typeof insertBillingWebhookEventSchema>;
 export type BillingWebhookEvent = typeof billingWebhookEventsTable.$inferSelect;
+
+export const billingRecoveryTable = pgTable("billing_recovery", {
+  id: serial("id").primaryKey(),
+  gymId: integer("gym_id").notNull().references(() => gymsTable.id),
+  memberId: integer("member_id").notNull().references(() => membersTable.id),
+  subscriptionId: integer("subscription_id").notNull().references(() => subscriptionsTable.id),
+  stripeSubscriptionId: text("stripe_subscription_id"),
+  status: text("status").notNull().default("active"),
+  failedAttempts: integer("failed_attempts").notNull().default(1),
+  lastFailedAt: timestamp("last_failed_at", { withTimezone: true }).notNull().defaultNow(),
+  lastNotifiedAt: timestamp("last_notified_at", { withTimezone: true }),
+  graceDeadline: timestamp("grace_deadline", { withTimezone: true }),
+  amountDue: numeric("amount_due", { precision: 10, scale: 2 }),
+  cardLast4: text("card_last4"),
+  cardBrand: text("card_brand"),
+  resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+  resolvedReason: text("resolved_reason"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
+}, (table) => [
+  index("idx_billing_recovery_gym_status").on(table.gymId, table.status),
+  index("idx_billing_recovery_subscription_status").on(table.subscriptionId, table.status),
+  index("idx_billing_recovery_member").on(table.memberId),
+]);
+
+export type BillingRecovery = typeof billingRecoveryTable.$inferSelect;
+
+export const paymentUpdateTokensTable = pgTable("payment_update_tokens", {
+  id: serial("id").primaryKey(),
+  token: text("token").notNull().unique(),
+  gymId: integer("gym_id").notNull().references(() => gymsTable.id),
+  memberId: integer("member_id").notNull().references(() => membersTable.id),
+  subscriptionId: integer("subscription_id").notNull().references(() => subscriptionsTable.id),
+  recoveryId: integer("recovery_id").references(() => billingRecoveryTable.id),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  usedAt: timestamp("used_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  index("idx_payment_update_tokens_token").on(table.token),
+  index("idx_payment_update_tokens_expires_used").on(table.expiresAt, table.usedAt),
+]);
+
+export type PaymentUpdateToken = typeof paymentUpdateTokensTable.$inferSelect;

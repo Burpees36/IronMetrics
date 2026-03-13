@@ -8,14 +8,15 @@ import {
   useCancelSubscription, usePauseSubscription, useResumeSubscription,
   getGetMemberBillingHistoryQueryKey, getListSubscriptionsQueryKey,
 } from "@workspace/api-client-react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRoute, useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { motion } from "framer-motion";
 import {
   Loader2, ArrowLeft, UserCircle, Mail, Phone, Calendar, Shield,
   MapPin, StickyNote, Clock, Edit, Pause, XCircle, Play, AlertTriangle,
-  CheckCircle, Activity, CreditCard, Plus, DollarSign, Receipt, RefreshCw
+  CheckCircle, Activity, CreditCard, Plus, DollarSign, Receipt, RefreshCw,
+  Send, Copy
 } from "lucide-react";
 import { Link } from "wouter";
 import {
@@ -100,6 +101,63 @@ export function MemberDetail() {
   };
 
   const [pauseSubConfirm, setPauseSubConfirm] = useState<number | null>(null);
+  const [sendingRecoveryLink, setSendingRecoveryLink] = useState(false);
+
+  const BASE_URL_MD = import.meta.env.BASE_URL || "/";
+  const API_BASE_MD = `${BASE_URL_MD}api`.replace(/\/\//g, "/");
+
+  const { data: memberRecovery } = useQuery({
+    queryKey: ["member-recovery", activeGymId, memberId],
+    queryFn: async () => {
+      const res = await fetch(`${API_BASE_MD}/gyms/${activeGymId}/members/${memberId}/billing/recovery`, { credentials: "include" });
+      if (!res.ok) return null;
+      return res.json();
+    },
+    enabled: !!activeGymId && !!memberId && activeTab === "billing",
+  });
+
+  const handleSendRecoveryLink = async () => {
+    if (!memberRecovery?.id || !activeGymId) return;
+    setSendingRecoveryLink(true);
+    try {
+      const res = await fetch(`${API_BASE_MD}/gyms/${activeGymId}/billing/recovery/${memberRecovery.id}/send-link`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+      });
+      const data = await res.json();
+      if (data.emailSent) {
+        toast({ title: "Update link sent", description: "The member has been emailed a link to update their payment method." });
+      } else if (data.updateLink) {
+        toast({ title: "Link generated (email not sent)", description: data.error || "Email service may not be configured. Use Copy Link to share manually.", variant: "destructive" });
+      } else {
+        toast({ title: "Failed to send link", description: data.error || "An error occurred.", variant: "destructive" });
+      }
+    } catch {
+      toast({ title: "Failed to send link", variant: "destructive" });
+    } finally {
+      setSendingRecoveryLink(false);
+    }
+  };
+
+  const handleCopyRecoveryLink = async () => {
+    if (!memberRecovery?.id || !activeGymId) return;
+    try {
+      const res = await fetch(`${API_BASE_MD}/gyms/${activeGymId}/billing/recovery/generate-link`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ memberId: memberRecovery.memberId, subscriptionId: memberRecovery.subscriptionId }),
+      });
+      const data = await res.json();
+      if (data.updateLink) {
+        await navigator.clipboard.writeText(data.updateLink);
+        toast({ title: "Link copied", description: "Payment update link copied to clipboard." });
+      }
+    } catch {
+      toast({ title: "Failed to generate link", variant: "destructive" });
+    }
+  };
 
   const isBillingMutating = createChargeMutation.isPending || createStripeSubMutation.isPending || cancelSubMutation.isPending || pauseSubMutation.isPending || resumeSubMutation.isPending;
 
@@ -623,6 +681,42 @@ export function MemberDetail() {
             </button>
           </div>
 
+          {memberRecovery && (
+            <div className="p-4 bg-orange-500/5 border border-orange-500/20 rounded-2xl">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="h-9 w-9 bg-orange-500/10 rounded-lg flex items-center justify-center">
+                    <AlertTriangle className="h-5 w-5 text-orange-500" />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-semibold text-foreground">Payment Action Needed</h4>
+                    <p className="text-xs text-muted-foreground">
+                      {memberRecovery.failedAttempts} failed payment{memberRecovery.failedAttempts > 1 ? "s" : ""}
+                      {memberRecovery.amountDue ? ` — $${memberRecovery.amountDue.toFixed(2)} due` : ""}
+                      {memberRecovery.lastNotifiedAt ? ` — Last notified: ${new Date(memberRecovery.lastNotifiedAt).toLocaleDateString()}` : ""}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleSendRecoveryLink}
+                    disabled={sendingRecoveryLink}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-orange-500/10 text-orange-600 hover:bg-orange-500/20 transition-colors disabled:opacity-50"
+                  >
+                    {sendingRecoveryLink ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />}
+                    Send Update Link
+                  </button>
+                  <button
+                    onClick={handleCopyRecoveryLink}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-secondary text-muted-foreground hover:text-foreground hover:bg-secondary/80 transition-colors"
+                  >
+                    <Copy className="h-3 w-3" /> Copy Link
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <div className="bg-card border border-border rounded-2xl p-6 shadow-sm">
               <h3 className="text-lg font-semibold text-foreground flex items-center gap-2 mb-4">
@@ -652,6 +746,12 @@ export function MemberDetail() {
                         <div className="flex justify-between text-sm text-muted-foreground mb-3">
                           <span>Stripe ID</span>
                           <span className="text-foreground font-mono text-xs">{sub.stripeSubscriptionId.slice(0, 20)}...</span>
+                        </div>
+                      )}
+                      {sub.status === "past_due" && (
+                        <div className="flex items-center gap-1.5 my-2 p-2 bg-orange-500/5 rounded-lg border border-orange-500/20">
+                          <AlertTriangle className="h-3.5 w-3.5 text-orange-500" />
+                          <span className="text-xs font-medium text-orange-500">Payment action needed</span>
                         </div>
                       )}
                       <div className="flex gap-2 mt-3 pt-3 border-t border-border">

@@ -2,6 +2,7 @@ import { getStripeSync, getUncachableStripeClient } from "./stripeClient";
 import { db, subscriptionsTable, paymentsTable, refundsTable, invoicesTable, membersTable, billingWebhookEventsTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 import { billingAuditLogger } from "./billingAuditLogger";
+import { billingRecoveryService } from "./services/billing-recovery";
 import type Stripe from "stripe";
 
 async function claimEvent(stripeEventId: string, eventType: string): Promise<boolean> {
@@ -113,6 +114,15 @@ async function handleSubscriptionUpdated(sub: Stripe.Subscription): Promise<void
     await db.update(membersTable).set({ status: "active" }).where(eq(membersTable.id, existing.memberId));
   }
 
+  if (newStatus === "active" && (beforeStatus === "past_due" || existing.failedPayments > 0)) {
+    try {
+      await billingRecoveryService.resolveRecovery(existing.id, "subscription_reactivated");
+      await db.update(subscriptionsTable).set({ failedPayments: 0 }).where(eq(subscriptionsTable.id, existing.id));
+    } catch (err: any) {
+      console.error("[WEBHOOK] Error resolving billing recovery on sub update:", err.message);
+    }
+  }
+
   await billingAuditLogger.log({
     gymId: existing.gymId,
     memberId: existing.memberId,
@@ -198,6 +208,14 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice): Promise<v
     amount: amountPaid,
     source: "webhook",
   });
+
+  if (sub.failedPayments > 0) {
+    try {
+      await billingRecoveryService.resolveRecovery(sub.id, "payment_succeeded");
+    } catch (err: any) {
+      console.error("[WEBHOOK] Error resolving billing recovery:", err.message);
+    }
+  }
 }
 
 async function handleInvoicePaymentFailed(invoice: Stripe.Invoice): Promise<void> {
@@ -224,6 +242,31 @@ async function handleInvoicePaymentFailed(invoice: Stripe.Invoice): Promise<void
     source: "webhook",
     metadata: { attemptCount: sub.failedPayments + 1 },
   });
+
+  let cardLast4: string | null = null;
+  let cardBrand: string | null = null;
+  try {
+    const charge = inv.charge;
+    if (charge && typeof charge === "object" && charge.payment_method_details?.card) {
+      cardLast4 = charge.payment_method_details.card.last4 || null;
+      cardBrand = charge.payment_method_details.card.brand || null;
+    }
+  } catch {}
+
+  try {
+    await billingRecoveryService.handlePaymentFailure({
+      subscriptionId: sub.id,
+      gymId: sub.gymId,
+      memberId: sub.memberId,
+      stripeSubscriptionId: subId,
+      amountDue: (invoice.amount_due || 0) / 100,
+      cardLast4,
+      cardBrand,
+      stripeEventId: invoice.id,
+    });
+  } catch (err: any) {
+    console.error("[WEBHOOK] Error triggering billing recovery:", err.message);
+  }
 }
 
 async function handleChargeRefunded(charge: Stripe.Charge): Promise<void> {

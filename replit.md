@@ -34,7 +34,7 @@ Iron Metrics is built as a pnpm workspace monorepo using TypeScript.
 - **Member Management:** Full CRM, risk scoring, notes, lifecycle events, and CSV import.
 - **Lead Management:** Kanban-style pipeline with activity timelines, follow-up scheduling, and conversion flows.
 - **Class Scheduling:** Weekly calendar with RBAC-aware UI, capacity tracking, occupancy badges, check-ins with status management (reserved/checked_in/no_show/cancelled/waitlisted), edit class with notes fields, duplicate action, roster status dropdowns, templates with selective apply and usage tracking, copy-week, filter bar (type + coach), and Google Calendar-style overlap rendering.
-- **Billing:** Comprehensive billing command center with plans, subscriptions, payments, refunds, and full Stripe integration. Billing audit logs and webhook idempotency are implemented.
+- **Billing:** Comprehensive billing command center with plans, subscriptions, payments, refunds, and full Stripe integration. Billing audit logs and webhook idempotency are implemented. Includes billing recovery flow: automated failure emails on payment failures, secure card-update flow with Stripe SetupIntent (72h expiring tokens, single-use), staff recovery UI with send/copy link actions on Billing and MemberDetail pages, standalone UpdatePayment page for members, and webhook reconciliation that clears recovery state on successful payment.
 - **Programming Hub:** Daily programming interface with section-based workout builder and result logging.
 - **AI Operator:** Task queue for AI-generated content (outreach, owner briefs), with approval/dismissal workflows and email sending capabilities.
 - **Intelligence Hub:** Provides KPI dashboards, RSI scores, risk radar, and intervention recommendations.

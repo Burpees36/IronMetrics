@@ -2,6 +2,7 @@ interface EmailParams {
   to: string;
   subject: string;
   text: string;
+  html?: string;
   fromEmail?: string;
   fromName?: string;
 }
@@ -44,6 +45,7 @@ class ResendEmailService implements EmailService {
           to: [params.to],
           subject: params.subject,
           text: params.text,
+          ...(params.html ? { html: params.html } : {}),
         }),
       });
 
@@ -93,7 +95,10 @@ class SendGridEmailService implements EmailService {
           personalizations: [{ to: [{ email: params.to }] }],
           from: fromObj,
           subject: params.subject,
-          content: [{ type: "text/plain", value: params.text }],
+          content: [
+            ...(params.html ? [{ type: "text/html", value: params.html }] : []),
+            { type: "text/plain", value: params.text },
+          ],
         }),
       });
 

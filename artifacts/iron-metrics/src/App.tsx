@@ -25,6 +25,7 @@ import { Resources } from "@/pages/Resources";
 import { MemberDetail } from "@/pages/MemberDetail";
 import { Settings } from "@/pages/Settings";
 import { Onboarding } from "@/pages/Onboarding";
+import { UpdatePayment } from "@/pages/UpdatePayment";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -75,6 +76,7 @@ function Router() {
     <Switch>
       <Route path="/login" component={Login} />
       <Route path="/select-gym" component={GymSelect} />
+      <Route path="/update-payment" component={UpdatePayment} />
       
       {/* Protected Routes */}
       <Route path="/">

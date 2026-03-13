@@ -7,14 +7,14 @@ import {
   getListMembershipPlansQueryKey, getListSubscriptionsQueryKey, getGetBillingSummaryQueryKey,
   getListPaymentsQueryKey, getListRefundsQueryKey, getGetCancelledMembersQueryKey,
 } from "@workspace/api-client-react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
 import { motion } from "framer-motion";
 import {
   Loader2, CreditCard, DollarSign, Users, TrendingUp, Plus, AlertTriangle,
   UserMinus, ChevronLeft, ChevronRight, Pause, Play, XCircle, MoreHorizontal,
-  Receipt, RefreshCw, ArrowDownRight, Clock
+  Receipt, RefreshCw, ArrowDownRight, Clock, Send, Copy, Link as LinkIcon
 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
@@ -85,6 +85,70 @@ export function Billing() {
   const [cancelReason, setCancelReason] = useState("");
   const [cancelAtPeriodEnd, setCancelAtPeriodEnd] = useState(true);
   const [pauseConfirm, setPauseConfirm] = useState<{ subId: number; memberName: string } | null>(null);
+  const [sendingLinkId, setSendingLinkId] = useState<number | null>(null);
+
+  const BASE_URL = import.meta.env.BASE_URL || "/";
+  const API_BASE = `${BASE_URL}api`.replace(/\/\//g, "/");
+
+  const { data: recoveries } = useQuery({
+    queryKey: ["billing-recovery", activeGymId],
+    queryFn: async () => {
+      const res = await fetch(`${API_BASE}/gyms/${activeGymId}/billing/recovery`, { credentials: "include" });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: !!activeGymId,
+  });
+
+  const handleSendUpdateLink = async (recoveryId: number) => {
+    setSendingLinkId(recoveryId);
+    try {
+      const res = await fetch(`${API_BASE}/gyms/${activeGymId}/billing/recovery/${recoveryId}/send-link`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+      });
+      const data = await res.json();
+      if (data.emailSent) {
+        toast({ title: "Update link sent", description: "The member has been emailed a link to update their payment method." });
+      } else if (data.updateLink) {
+        toast({ title: "Link generated (email not sent)", description: data.error || "Email service may not be configured. Use Copy Link to share manually.", variant: "destructive" });
+      } else {
+        toast({ title: "Failed to send link", description: data.error || "An error occurred.", variant: "destructive" });
+      }
+    } catch {
+      toast({ title: "Failed to send link", variant: "destructive" });
+    } finally {
+      setSendingLinkId(null);
+    }
+  };
+
+  const handleCopyUpdateLink = async (recoveryId: number) => {
+    const recovery = recoveryBySubId.get(
+      [...recoveryBySubId.entries()].find(([, v]) => v.id === recoveryId)?.[0] ?? -1
+    ) || (recoveries as any[])?.find((r: any) => r.id === recoveryId);
+    if (!recovery) return;
+    try {
+      const res = await fetch(`${API_BASE}/gyms/${activeGymId}/billing/recovery/generate-link`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ memberId: recovery.memberId, subscriptionId: recovery.subscriptionId }),
+      });
+      const data = await res.json();
+      if (data.updateLink) {
+        await navigator.clipboard.writeText(data.updateLink);
+        toast({ title: "Link copied", description: "Payment update link copied to clipboard." });
+      }
+    } catch {
+      toast({ title: "Failed to generate link", variant: "destructive" });
+    }
+  };
+
+  const recoveryBySubId = new Map<number, any>();
+  (recoveries as any[] || []).forEach((r: any) => {
+    recoveryBySubId.set(r.subscriptionId, r);
+  });
 
   if (!activeGymId) {
     return (
@@ -332,6 +396,59 @@ export function Billing() {
         </motion.div>
       </div>
 
+      {(recoveries as any[] || []).length > 0 && (
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="bg-orange-500/5 border border-orange-500/20 rounded-2xl p-5 shadow-sm">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="h-8 w-8 bg-orange-500/10 rounded-lg flex items-center justify-center">
+              <AlertTriangle className="h-5 w-5 text-orange-500" />
+            </div>
+            <div>
+              <h3 className="text-base font-semibold text-foreground">Payment Action Needed</h3>
+              <p className="text-sm text-muted-foreground">{(recoveries as any[]).length} subscription{(recoveries as any[]).length > 1 ? "s" : ""} with failed payments</p>
+            </div>
+          </div>
+          <div className="space-y-3">
+            {(recoveries as any[]).map((r: any) => (
+              <div key={r.id} className="flex items-center justify-between p-3 bg-card border border-border rounded-xl">
+                <div className="flex items-center gap-3">
+                  <div className="h-9 w-9 rounded-full bg-orange-500/10 flex items-center justify-center">
+                    <CreditCard className="h-4 w-4 text-orange-500" />
+                  </div>
+                  <div>
+                    <button onClick={() => navigate(`/members/${r.memberId}`)} className="text-sm font-medium text-foreground hover:text-primary transition-colors">
+                      {r.memberName}
+                    </button>
+                    <p className="text-xs text-muted-foreground">
+                      {r.planName} &mdash; {r.failedAttempts} failed attempt{r.failedAttempts > 1 ? "s" : ""}
+                      {r.amountDue ? ` &mdash; $${r.amountDue.toFixed(2)} due` : ""}
+                    </p>
+                    {r.lastNotifiedAt && (
+                      <p className="text-xs text-muted-foreground">Last notified: {formatDate(r.lastNotifiedAt)}</p>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => handleSendUpdateLink(r.id)}
+                    disabled={sendingLinkId === r.id}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-orange-500/10 text-orange-600 hover:bg-orange-500/20 transition-colors disabled:opacity-50"
+                  >
+                    {sendingLinkId === r.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />}
+                    Send Link
+                  </button>
+                  <button
+                    onClick={() => handleCopyUpdateLink(r.id)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-secondary text-muted-foreground hover:text-foreground hover:bg-secondary/80 transition-colors"
+                  >
+                    <Copy className="h-3 w-3" /> Copy
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </motion.div>
+      )}
+
       <div className="flex gap-1 bg-card border border-border rounded-xl p-1">
         {tabs.map((tab) => (
           <button
@@ -467,6 +584,17 @@ export function Billing() {
                             <DropdownMenuItem onClick={() => handleResumeSub(sub.id)}>
                               <RefreshCw className="h-4 w-4 mr-2" /> Undo Cancel
                             </DropdownMenuItem>
+                          )}
+                          {(sub.status === "past_due" || sub.failedPayments > 0) && recoveryBySubId.has(sub.id) && (
+                            <>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem onClick={() => handleSendUpdateLink(recoveryBySubId.get(sub.id).id)} disabled={sendingLinkId === recoveryBySubId.get(sub.id)?.id}>
+                                <Send className="h-4 w-4 mr-2" /> Send Update Link
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handleCopyUpdateLink(recoveryBySubId.get(sub.id).id)}>
+                                <Copy className="h-4 w-4 mr-2" /> Copy Update Link
+                              </DropdownMenuItem>
+                            </>
                           )}
                         </DropdownMenuContent>
                       </DropdownMenu>
