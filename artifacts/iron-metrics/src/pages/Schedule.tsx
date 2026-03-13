@@ -17,11 +17,11 @@ import { Badge } from "@/components/ui/badge";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
 const CLASS_TYPE_COLORS: Record<string, { bg: string; accent: string; text: string; sub: string; dot: string; hoverBg: string }> = {
-  regular: { bg: "bg-blue-500/20", accent: "bg-blue-400", text: "text-blue-200", sub: "text-blue-300/70", dot: "bg-blue-400", hoverBg: "hover:bg-blue-500/30" },
-  personal_training: { bg: "bg-violet-500/20", accent: "bg-violet-400", text: "text-violet-200", sub: "text-violet-300/70", dot: "bg-violet-400", hoverBg: "hover:bg-violet-500/30" },
-  intro: { bg: "bg-emerald-500/20", accent: "bg-emerald-400", text: "text-emerald-200", sub: "text-emerald-300/70", dot: "bg-emerald-400", hoverBg: "hover:bg-emerald-500/30" },
-  specialty: { bg: "bg-amber-500/20", accent: "bg-amber-400", text: "text-amber-200", sub: "text-amber-300/70", dot: "bg-amber-400", hoverBg: "hover:bg-amber-500/30" },
-  open_gym: { bg: "bg-cyan-500/20", accent: "bg-cyan-400", text: "text-cyan-200", sub: "text-cyan-300/70", dot: "bg-cyan-400", hoverBg: "hover:bg-cyan-500/30" },
+  regular: { bg: "bg-sky-500/25", accent: "bg-sky-400", text: "text-sky-100", sub: "text-sky-200/80", dot: "bg-sky-400", hoverBg: "hover:bg-sky-500/35" },
+  personal_training: { bg: "bg-fuchsia-500/25", accent: "bg-fuchsia-400", text: "text-fuchsia-100", sub: "text-fuchsia-200/80", dot: "bg-fuchsia-400", hoverBg: "hover:bg-fuchsia-500/35" },
+  intro: { bg: "bg-lime-500/25", accent: "bg-lime-400", text: "text-lime-100", sub: "text-lime-200/80", dot: "bg-lime-400", hoverBg: "hover:bg-lime-500/35" },
+  specialty: { bg: "bg-orange-500/25", accent: "bg-orange-400", text: "text-orange-100", sub: "text-orange-200/80", dot: "bg-orange-400", hoverBg: "hover:bg-orange-500/35" },
+  open_gym: { bg: "bg-teal-500/25", accent: "bg-teal-400", text: "text-teal-100", sub: "text-teal-200/80", dot: "bg-teal-400", hoverBg: "hover:bg-teal-500/35" },
 };
 
 function getClassColors(type: string) {
@@ -63,6 +63,7 @@ export function Schedule() {
 
   const [createOpen, setCreateOpen] = useState(false);
   const [detailClassId, setDetailClassId] = useState<number | null>(null);
+  const [focusedClassId, setFocusedClassId] = useState<number | null>(null);
   const [deleteClassId, setDeleteClassId] = useState<number | null>(null);
   const [checkinClassId, setCheckinClassId] = useState<number | null>(null);
   const [memberSearch, setMemberSearch] = useState("");
@@ -581,6 +582,7 @@ export function Schedule() {
                       className={`relative border-r border-border/30 last:border-r-0 ${today ? "bg-primary/[0.03]" : ""}`}
                       onClick={(e) => {
                         if ((e.target as HTMLElement).closest('.calendar-class-block')) return;
+                        setFocusedClassId(null);
                         openCreateForDay(dayIndex);
                       }}
                     >
@@ -623,12 +625,14 @@ export function Schedule() {
                           const isTiny = heightPx < 44;
                           const isShort = heightPx >= 44 && heightPx < 72;
 
+                          const isFocused = focusedClassId === cls.id;
+
                           const style: React.CSSProperties = {
                             top: topPx + 1,
                             height: heightPx - 2,
                             left: PAD + depth * INDENT,
                             right: PAD,
-                            zIndex: 10 + depth,
+                            zIndex: isFocused ? 50 : 10 + depth,
                           };
 
                           const timeStr = `${format(start, 'h:mm a')} – ${format(end, 'h:mm a')}`;
@@ -638,10 +642,11 @@ export function Schedule() {
                             <div
                               key={cls.id}
                               title={fullTitle}
-                              className={`calendar-class-block absolute rounded-xl cursor-pointer transition-all duration-200 ${colors.bg} ${colors.hoverBg} hover:!z-30 hover:shadow-lg ${depth > 0 ? 'shadow-md shadow-black/20' : ''} overflow-hidden`}
+                              className={`calendar-class-block absolute rounded-xl cursor-pointer transition-all duration-200 ${colors.bg} ${colors.hoverBg} hover:shadow-lg ${depth > 0 ? 'shadow-md shadow-black/20' : ''} overflow-hidden ${isFocused ? 'ring-2 ring-white/30 shadow-xl shadow-black/30' : ''}`}
                               style={style}
                               onClick={(e) => {
                                 e.stopPropagation();
+                                setFocusedClassId(cls.id);
                                 setDetailClassId(cls.id);
                               }}
                             >
@@ -815,7 +820,7 @@ export function Schedule() {
         </DialogContent>
       </Dialog>
 
-      <Sheet open={!!detailClassId} onOpenChange={(open) => { if (!open) setDetailClassId(null); }}>
+      <Sheet open={!!detailClassId} onOpenChange={(open) => { if (!open) { setDetailClassId(null); setFocusedClassId(null); } }}>
         <SheetContent className="overflow-y-auto">
           <SheetHeader>
             <SheetTitle>{classDetail?.name || "Class Details"}</SheetTitle>
