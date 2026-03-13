@@ -16,12 +16,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
-const CLASS_TYPE_COLORS: Record<string, { bg: string; border: string; text: string; dot: string }> = {
-  regular: { bg: "bg-blue-500/15", border: "border-blue-500/30", text: "text-blue-300", dot: "bg-blue-400" },
-  personal_training: { bg: "bg-violet-500/15", border: "border-violet-500/30", text: "text-violet-300", dot: "bg-violet-400" },
-  intro: { bg: "bg-emerald-500/15", border: "border-emerald-500/30", text: "text-emerald-300", dot: "bg-emerald-400" },
-  specialty: { bg: "bg-amber-500/15", border: "border-amber-500/30", text: "text-amber-300", dot: "bg-amber-400" },
-  open_gym: { bg: "bg-cyan-500/15", border: "border-cyan-500/30", text: "text-cyan-300", dot: "bg-cyan-400" },
+const CLASS_TYPE_COLORS: Record<string, { bg: string; accent: string; text: string; sub: string; dot: string; hoverBg: string }> = {
+  regular: { bg: "bg-blue-500/20", accent: "bg-blue-400", text: "text-blue-200", sub: "text-blue-300/70", dot: "bg-blue-400", hoverBg: "hover:bg-blue-500/30" },
+  personal_training: { bg: "bg-violet-500/20", accent: "bg-violet-400", text: "text-violet-200", sub: "text-violet-300/70", dot: "bg-violet-400", hoverBg: "hover:bg-violet-500/30" },
+  intro: { bg: "bg-emerald-500/20", accent: "bg-emerald-400", text: "text-emerald-200", sub: "text-emerald-300/70", dot: "bg-emerald-400", hoverBg: "hover:bg-emerald-500/30" },
+  specialty: { bg: "bg-amber-500/20", accent: "bg-amber-400", text: "text-amber-200", sub: "text-amber-300/70", dot: "bg-amber-400", hoverBg: "hover:bg-amber-500/30" },
+  open_gym: { bg: "bg-cyan-500/20", accent: "bg-cyan-400", text: "text-cyan-200", sub: "text-cyan-300/70", dot: "bg-cyan-400", hoverBg: "hover:bg-cyan-500/30" },
 };
 
 function getClassColors(type: string) {
@@ -461,22 +461,47 @@ export function Schedule() {
   };
 
   return (
-    <div className="h-full flex flex-col gap-4">
+    <div className="h-full flex flex-col gap-3">
       <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0">
-        <div className="flex items-center gap-3">
-          <div className="h-8 w-8 bg-primary/20 rounded-lg flex items-center justify-center border border-primary/30">
-            <CalendarDays className="h-5 w-5 text-primary" />
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
+            <button onClick={handlePrevWeek} className="p-1.5 rounded-full text-muted-foreground hover:text-foreground hover:bg-white/5 transition-colors" aria-label="Previous week">
+              <ChevronLeft className="h-5 w-5" />
+            </button>
+            <button onClick={handleNextWeek} className="p-1.5 rounded-full text-muted-foreground hover:text-foreground hover:bg-white/5 transition-colors" aria-label="Next week">
+              <ChevronRight className="h-5 w-5" />
+            </button>
           </div>
           <div>
-            <h1 className="text-2xl md:text-3xl font-display font-bold text-foreground">Schedule</h1>
-            <p className="text-xs md:text-sm text-muted-foreground">Weekly calendar view</p>
+            <h1 className="text-xl md:text-2xl font-display font-bold text-foreground tracking-tight">
+              {format(currentWeekStart, 'MMMM yyyy')}
+            </h1>
+            <p className="text-[11px] text-muted-foreground/60">
+              {format(currentWeekStart, 'MMM d')} — {format(addDays(currentWeekStart, 6), 'MMM d')}
+            </p>
           </div>
+          <button onClick={goToday} className="px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary text-xs font-semibold hover:bg-primary/20 transition-colors">
+            Today
+          </button>
         </div>
         <div className="flex items-center gap-2 w-full sm:w-auto">
+          {usedTypes.length > 0 && (
+            <div className="hidden lg:flex items-center gap-3 mr-3">
+              {usedTypes.map((type) => {
+                const colors = getClassColors(type);
+                return (
+                  <div key={type} className="flex items-center gap-1.5">
+                    <div className={`h-2 w-2 rounded-full ${colors.dot}`} />
+                    <span className="text-[11px] text-muted-foreground/70">{typeLabels[type] || type}</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button className="flex items-center justify-center gap-2 px-3 py-2.5 border border-border hover:bg-secondary text-foreground rounded-xl font-medium transition-colors min-h-[44px]">
-                <MoreHorizontal className="h-5 w-5" />
+              <button className="flex items-center justify-center gap-2 px-3 py-2 border border-border/50 hover:bg-white/5 text-muted-foreground hover:text-foreground rounded-xl text-sm transition-colors">
+                <MoreHorizontal className="h-4 w-4" />
                 <span className="hidden sm:inline">Actions</span>
               </button>
             </DropdownMenuTrigger>
@@ -497,62 +522,30 @@ export function Schedule() {
           </DropdownMenu>
           <button
             onClick={openCreateDialog}
-            className="flex items-center justify-center gap-2 px-4 py-2.5 bg-primary text-primary-foreground hover:bg-primary/90 rounded-xl font-medium transition-colors shadow-lg shadow-primary/20 min-h-[44px] flex-1 sm:flex-initial"
+            className="flex items-center justify-center gap-2 px-4 py-2 bg-primary text-primary-foreground hover:bg-primary/90 rounded-xl text-sm font-semibold transition-colors shadow-lg shadow-primary/20 flex-1 sm:flex-initial"
           >
-            <Plus className="h-5 w-5" />
+            <Plus className="h-4 w-4" />
             <span>New Class</span>
           </button>
         </div>
       </header>
 
-      <div className="flex items-center justify-between shrink-0">
-        <div className="flex items-center gap-2">
-          <button onClick={handlePrevWeek} className="p-2 rounded-lg border border-border hover:bg-secondary transition-colors" aria-label="Previous week">
-            <ChevronLeft className="h-4 w-4" />
-          </button>
-          <button onClick={goToday} className="px-3 py-1.5 rounded-lg border border-border hover:bg-secondary transition-colors text-xs font-medium text-muted-foreground hover:text-foreground">
-            Today
-          </button>
-          <button onClick={handleNextWeek} className="p-2 rounded-lg border border-border hover:bg-secondary transition-colors" aria-label="Next week">
-            <ChevronRight className="h-4 w-4" />
-          </button>
-          <h2 className="text-sm md:text-base font-semibold text-foreground ml-2">
-            {format(currentWeekStart, 'MMM d')} — {format(addDays(currentWeekStart, 6), 'MMM d, yyyy')}
-          </h2>
-        </div>
-
-        {usedTypes.length > 0 && (
-          <div className="hidden md:flex items-center gap-3">
-            {usedTypes.map((type) => {
-              const colors = getClassColors(type);
-              return (
-                <div key={type} className="flex items-center gap-1.5">
-                  <div className={`h-2.5 w-2.5 rounded-full ${colors.dot}`} />
-                  <span className="text-xs text-muted-foreground">{typeLabels[type] || type}</span>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-
-      <div className="flex-1 bg-card border border-border rounded-2xl shadow-sm overflow-hidden flex flex-col min-h-0">
-        <div className="grid shrink-0 border-b border-border" style={{ gridTemplateColumns: '56px repeat(7, 1fr)' }}>
-          <div className="border-r border-border" />
+      <div className="flex-1 bg-card/50 border border-border/40 rounded-2xl overflow-hidden flex flex-col min-h-0 backdrop-blur-sm">
+        <div className="grid shrink-0 border-b border-border/40" style={{ gridTemplateColumns: '52px repeat(7, 1fr)' }}>
+          <div className="border-r border-border/30" />
           {days.map((day, i) => {
             const today = isToday(day);
             return (
               <div
                 key={i}
-                className={`py-2.5 px-1 text-center border-r border-border last:border-r-0 transition-colors ${today ? "bg-primary/5" : ""}`}
+                className={`py-3 px-1 text-center border-r border-border/30 last:border-r-0 transition-colors`}
               >
-                <div className={`text-[10px] font-semibold uppercase tracking-wide ${today ? "text-primary" : "text-muted-foreground"}`}>
-                  {format(day, 'EEE')}
+                <div className={`text-[11px] font-medium tracking-wider ${today ? "text-primary" : "text-muted-foreground/50"}`}>
+                  {format(day, 'EEE').toLowerCase()}
                 </div>
-                <div className={`text-lg font-bold leading-tight ${today ? "text-primary" : "text-foreground"}`}>
+                <div className={`mt-0.5 inline-flex items-center justify-center ${today ? "h-8 w-8 rounded-full bg-primary text-primary-foreground font-bold text-base" : "text-lg font-semibold text-foreground/80"}`}>
                   {format(day, 'd')}
                 </div>
-                {today && <div className="w-1.5 h-1.5 rounded-full bg-primary mx-auto mt-0.5" />}
               </div>
             );
           })}
@@ -565,15 +558,15 @@ export function Schedule() {
             </div>
           ) : (
             <div ref={calendarRef} className="relative" style={{ height: calendarHeight, minHeight: calendarHeight }}>
-              <div className="absolute inset-0 grid" style={{ gridTemplateColumns: '56px repeat(7, 1fr)' }}>
-                <div className="relative border-r border-border">
+              <div className="absolute inset-0 grid" style={{ gridTemplateColumns: '52px repeat(7, 1fr)' }}>
+                <div className="relative border-r border-border/30">
                   {hours.map((hour) => (
                     <div
                       key={hour}
-                      className="absolute right-2 -translate-y-1/2 text-[10px] text-muted-foreground/70 font-medium tabular-nums select-none"
+                      className="absolute right-3 -translate-y-1/2 text-[10px] text-muted-foreground/40 font-medium tabular-nums select-none"
                       style={{ top: (hour - CALENDAR_START_HOUR) * HOUR_HEIGHT }}
                     >
-                      {hour === 0 ? "12 AM" : hour < 12 ? `${hour} AM` : hour === 12 ? "12 PM" : `${hour - 12} PM`}
+                      {hour === 0 ? "12 am" : hour < 12 ? `${hour} am` : hour === 12 ? "12 pm" : `${hour - 12} pm`}
                     </div>
                   ))}
                 </div>
@@ -585,7 +578,7 @@ export function Schedule() {
                   return (
                     <div
                       key={dayIndex}
-                      className={`relative border-r border-border last:border-r-0 ${today ? "bg-primary/[0.02]" : ""}`}
+                      className={`relative border-r border-border/30 last:border-r-0 ${today ? "bg-primary/[0.03]" : ""}`}
                       onClick={(e) => {
                         if ((e.target as HTMLElement).closest('.calendar-class-block')) return;
                         openCreateForDay(dayIndex);
@@ -594,7 +587,7 @@ export function Schedule() {
                       {hours.map((hour) => (
                         <div
                           key={hour}
-                          className="absolute left-0 right-0 border-t border-border/30"
+                          className="absolute left-0 right-0 border-t border-border/20"
                           style={{ top: (hour - CALENDAR_START_HOUR) * HOUR_HEIGHT }}
                         />
                       ))}
@@ -619,15 +612,16 @@ export function Schedule() {
                           overlapDepth[i] = maxPriorDepth + 1;
                         }
 
-                        const INDENT = 16;
-                        const PAD = 3;
+                        const INDENT = 14;
+                        const PAD = 2;
 
                         return items.map(({ cls, start, end, startMin, endMin }, i) => {
                           const topPx = ((startMin / 60) - CALENDAR_START_HOUR) * HOUR_HEIGHT;
-                          const heightPx = Math.max(((endMin - startMin) / 60) * HOUR_HEIGHT, 32);
+                          const heightPx = Math.max(((endMin - startMin) / 60) * HOUR_HEIGHT, 34);
                           const colors = getClassColors(cls.type || "regular");
                           const depth = overlapDepth[i];
                           const isTiny = heightPx < 44;
+                          const isShort = heightPx >= 44 && heightPx < 72;
 
                           const style: React.CSSProperties = {
                             top: topPx + 1,
@@ -644,34 +638,35 @@ export function Schedule() {
                             <div
                               key={cls.id}
                               title={fullTitle}
-                              className={`calendar-class-block absolute rounded-lg border cursor-pointer transition-all hover:brightness-125 hover:!z-30 hover:shadow-xl ${colors.bg} ${colors.border} ${depth > 0 ? 'shadow-md' : ''}`}
+                              className={`calendar-class-block absolute rounded-xl cursor-pointer transition-all duration-200 ${colors.bg} ${colors.hoverBg} hover:!z-30 hover:shadow-lg ${depth > 0 ? 'shadow-md shadow-black/20' : ''} overflow-hidden`}
                               style={style}
                               onClick={(e) => {
                                 e.stopPropagation();
                                 setDetailClassId(cls.id);
                               }}
                             >
-                              <div className={`px-2 ${isTiny ? 'py-0.5' : 'py-1'} overflow-hidden h-full flex flex-col ${isTiny ? 'justify-center' : 'justify-start'}`}>
-                                <div className={`font-semibold truncate leading-tight ${colors.text} ${isTiny ? 'text-[10px]' : 'text-xs'}`}>
+                              <div className={`absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-full ${colors.accent}`} />
+                              <div className={`pl-3 pr-2 ${isTiny ? 'py-1' : 'py-1.5'} overflow-hidden h-full flex flex-col ${isTiny ? 'justify-center' : 'justify-start'}`}>
+                                <div className={`font-semibold truncate leading-tight ${colors.text} ${isTiny ? 'text-[10px]' : 'text-[11px]'}`}>
                                   {cls.name}
                                 </div>
                                 {!isTiny && (
-                                  <div className="text-[10px] text-muted-foreground truncate mt-0.5">
-                                    {timeStr}
+                                  <div className={`text-[10px] ${colors.sub} truncate mt-0.5`}>
+                                    {format(start, 'h:mm')} - {format(end, 'h:mm a')}
                                   </div>
                                 )}
-                                {heightPx >= 64 && (
-                                  <div className="flex items-center gap-2 mt-1">
+                                {!isTiny && !isShort && (
+                                  <div className="flex items-center gap-1.5 mt-1.5">
                                     {cls.coachName && (
-                                      <span className="text-[10px] text-muted-foreground/80 truncate">{cls.coachName}</span>
+                                      <span className={`text-[10px] ${colors.sub} truncate`}>{cls.coachName}</span>
                                     )}
-                                    <span className="text-[10px] text-muted-foreground/60 ml-auto shrink-0">
-                                      {cls.enrolled}/{cls.capacity}
+                                    <span className="text-[10px] text-muted-foreground/40 ml-auto shrink-0 tabular-nums">
+                                      <Users className="inline h-3 w-3 mr-0.5 -mt-px" />{cls.enrolled}/{cls.capacity}
                                     </span>
                                   </div>
                                 )}
-                                {!isTiny && heightPx < 64 && (
-                                  <span className="text-[10px] text-muted-foreground/60 mt-0.5">
+                                {!isTiny && isShort && (
+                                  <span className="text-[10px] text-muted-foreground/40 mt-0.5 tabular-nums">
                                     {cls.enrolled}/{cls.capacity}
                                   </span>
                                 )}
@@ -688,11 +683,11 @@ export function Schedule() {
               {showNowLine && nowLineTop > 0 && nowLineTop < calendarHeight && (
                 <div
                   className="absolute pointer-events-none z-30"
-                  style={{ top: nowLineTop, left: 56, right: 0 }}
+                  style={{ top: nowLineTop, left: 52, right: 0 }}
                 >
                   <div className="relative flex items-center">
-                    <div className="h-2.5 w-2.5 rounded-full bg-red-500 -ml-1 shadow-[0_0_6px_rgba(239,68,68,0.5)]" />
-                    <div className="flex-1 h-[2px] bg-red-500/60" />
+                    <div className="h-3 w-3 rounded-full bg-red-400 -ml-1.5 shadow-[0_0_8px_rgba(248,113,113,0.6)] ring-2 ring-red-400/20" />
+                    <div className="flex-1 h-[2px] bg-gradient-to-r from-red-400/70 to-red-400/20" />
                   </div>
                 </div>
               )}
