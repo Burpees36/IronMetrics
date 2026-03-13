@@ -130,7 +130,7 @@ export function LeadDetailDrawer({ lead, gymId, open, onClose, onMoveStage, onCo
 
   return (
     <Sheet open={open} onOpenChange={(v) => !v && onClose()}>
-      <SheetContent className="w-full sm:max-w-md bg-[hsl(220,20%,8%)] border-border p-0 overflow-y-auto">
+      <SheetContent className="w-full sm:max-w-md bg-background dark:bg-[hsl(220,20%,8%)] border-border p-0 overflow-y-auto">
         <div className="p-6 border-b border-border">
           <div className="flex items-start justify-between gap-3">
             <div>
@@ -145,7 +145,7 @@ export function LeadDetailDrawer({ lead, gymId, open, onClose, onMoveStage, onCo
                   </span>
                 )}
                 {isStale && (
-                  <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                  <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
                     <AlertTriangle className="h-3 w-3" />
                     Stale
                   </span>
@@ -191,8 +191,8 @@ export function LeadDetailDrawer({ lead, gymId, open, onClose, onMoveStage, onCo
           {lead.nextFollowUpDate && (
             <div className={`rounded-lg border p-3 ${overdue ? "border-red-500/30 bg-red-500/5" : "border-blue-500/30 bg-blue-500/5"}`}>
               <div className="flex items-center gap-2 text-sm">
-                <CalendarClock className={`h-4 w-4 ${overdue ? "text-red-400" : "text-blue-400"}`} />
-                <span className={overdue ? "text-red-400 font-medium" : "text-blue-400 font-medium"}>
+                <CalendarClock className={`h-4 w-4 ${overdue ? "text-red-600 dark:text-red-400" : "text-blue-600 dark:text-blue-400"}`} />
+                <span className={overdue ? "text-red-600 dark:text-red-400 font-medium" : "text-blue-600 dark:text-blue-400 font-medium"}>
                   Follow-up {formatRelativeDate(lead.nextFollowUpDate)}
                   {overdue && " — overdue"}
                 </span>
@@ -224,14 +224,14 @@ export function LeadDetailDrawer({ lead, gymId, open, onClose, onMoveStage, onCo
                 <>
                   <button
                     onClick={() => onConvert(lead)}
-                    className="flex items-center gap-2 px-3 py-2 rounded-lg border border-emerald-500/20 bg-emerald-500/5 text-xs font-medium text-emerald-400 hover:bg-emerald-500/10 transition-colors"
+                    className="flex items-center gap-2 px-3 py-2 rounded-lg border border-emerald-500/20 bg-emerald-500/5 text-xs font-medium text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10 transition-colors"
                   >
                     <UserCheck className="h-3.5 w-3.5" />
                     Convert
                   </button>
                   <button
                     onClick={() => onMoveStage(lead, "lost")}
-                    className="flex items-center gap-2 px-3 py-2 rounded-lg border border-red-500/20 bg-red-500/5 text-xs font-medium text-red-400/70 hover:bg-red-500/10 transition-colors"
+                    className="flex items-center gap-2 px-3 py-2 rounded-lg border border-red-500/20 bg-red-500/5 text-xs font-medium text-red-600/70 dark:text-red-400/70 hover:bg-red-500/10 transition-colors"
                   >
                     <X className="h-3.5 w-3.5" />
                     Mark Lost
@@ -301,7 +301,7 @@ export function LeadDetailDrawer({ lead, gymId, open, onClose, onMoveStage, onCo
                   <div className="flex gap-2">
                     <button onClick={() => setShowFollowUp(false)} className="px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors">Cancel</button>
                     {followUpDate && (
-                      <button onClick={() => { setFollowUpDate(""); handleScheduleFollowUp(); }} className="px-3 py-1.5 text-xs text-red-400 hover:text-red-300 transition-colors">Clear</button>
+                      <button onClick={() => { setFollowUpDate(""); handleScheduleFollowUp(); }} className="px-3 py-1.5 text-xs text-red-600 dark:text-red-400 hover:text-red-500 dark:hover:text-red-300 transition-colors">Clear</button>
                     )}
                     <button onClick={handleScheduleFollowUp} disabled={updateLeadMutation.isPending} className="px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-md font-medium hover:bg-primary/90 disabled:opacity-50 transition-colors">
                       {updateLeadMutation.isPending ? "Saving..." : "Save"}

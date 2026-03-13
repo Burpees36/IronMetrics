@@ -165,8 +165,8 @@ export function Leads() {
             onClick={() => setFilter(key as FilterType)}
             className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
               filter === key
-                ? key === "stale" ? "bg-amber-500/15 text-amber-400 border border-amber-500/30"
-                : key === "needs_follow_up" ? "bg-red-500/15 text-red-400 border border-red-500/30"
+                ? key === "stale" ? "bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30"
+                : key === "needs_follow_up" ? "bg-red-500/15 text-red-600 dark:text-red-400 border border-red-500/30"
                 : STAGE_CONFIG[key]
                   ? `${STAGE_CONFIG[key].bgClass} ${STAGE_CONFIG[key].color} border ${STAGE_CONFIG[key].borderClass}`
                   : "bg-primary/15 text-primary border border-primary/30"

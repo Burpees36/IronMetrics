@@ -54,7 +54,7 @@ export function ConvertLeadDialog({ lead, gymId, open, onClose, onInvalidate }: 
         <DialogHeader>
           <div className="flex items-center gap-3 mb-1">
             <div className="h-10 w-10 rounded-xl bg-emerald-500/10 flex items-center justify-center">
-              <UserCheck className="h-5 w-5 text-emerald-400" />
+              <UserCheck className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
             </div>
             <div>
               <DialogTitle>Convert to Member</DialogTitle>
@@ -67,7 +67,7 @@ export function ConvertLeadDialog({ lead, gymId, open, onClose, onInvalidate }: 
 
         <div className="space-y-4 py-2">
           <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-3">
-            <div className="flex items-center gap-2 text-sm text-emerald-400">
+            <div className="flex items-center gap-2 text-sm text-emerald-600 dark:text-emerald-400">
               <PartyPopper className="h-4 w-4" />
               <span className="font-medium">This will create a new member record</span>
             </div>

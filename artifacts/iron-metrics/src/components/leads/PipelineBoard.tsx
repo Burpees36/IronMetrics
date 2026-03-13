@@ -30,7 +30,7 @@ export function PipelineBoard({ leads, onSelectLead, onMoveStage, onConvert, onL
                 {stageLeads.length}
               </span>
             </div>
-            <div className={`flex-1 rounded-xl border border-border/50 bg-[hsl(220,20%,9%)] p-2 space-y-2 overflow-y-auto custom-scrollbar`}>
+            <div className={`flex-1 rounded-xl border border-border/50 bg-muted/30 dark:bg-[hsl(220,20%,9%)] p-2 space-y-2 overflow-y-auto custom-scrollbar`}>
               {stageLeads.length === 0 ? (
                 <div className="flex items-center justify-center h-20 text-xs text-muted-foreground/50">
                   No leads

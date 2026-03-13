@@ -79,7 +79,7 @@ export function SalesInsightsPanel({ gymId }: SalesInsightsPanelProps) {
               <div className="flex items-center gap-2">
                 <span className="text-muted-foreground">{s.total} leads</span>
                 {s.converted > 0 && (
-                  <span className="text-emerald-400">{s.rate}% conv.</span>
+                  <span className="text-emerald-600 dark:text-emerald-400">{s.rate}% conv.</span>
                 )}
               </div>
             </div>

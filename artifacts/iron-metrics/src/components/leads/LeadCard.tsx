@@ -25,12 +25,12 @@ export function LeadCard({ lead, index, onSelect, onMoveStage, onConvert, onLogC
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: Math.min(index * 0.03, 0.3) }}
       onClick={() => onSelect(lead)}
-      className={`group relative bg-[hsl(220,20%,11%)] border rounded-xl px-3.5 py-3 cursor-pointer transition-all hover:border-primary/30 hover:bg-[hsl(220,20%,13%)] ${
+      className={`group relative bg-card dark:bg-[hsl(220,20%,11%)] border rounded-xl px-3.5 py-3 cursor-pointer transition-all hover:border-primary/30 hover:bg-muted/50 dark:hover:bg-[hsl(220,20%,13%)] ${
         isStale ? "border-amber-500/30" : "border-border"
       } ${lead.stage === "lost" ? "opacity-60" : ""}`}
     >
       {isStale && (
-        <div className="absolute -top-1.5 -right-1.5 h-3 w-3 rounded-full bg-amber-400 border-2 border-[hsl(220,20%,11%)]" />
+        <div className="absolute -top-1.5 -right-1.5 h-3 w-3 rounded-full bg-amber-400 border-2 border-card dark:border-[hsl(220,20%,11%)]" />
       )}
 
       <div className="flex items-start justify-between gap-2 mb-2">
@@ -99,15 +99,15 @@ export function LeadCard({ lead, index, onSelect, onMoveStage, onConvert, onLogC
           {lead.nextFollowUpDate && (
             <span className={`inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded-md ${
               overdue
-                ? "bg-red-500/10 text-red-400"
-                : "bg-blue-500/10 text-blue-400"
+                ? "bg-red-500/10 text-red-600 dark:text-red-400"
+                : "bg-blue-500/10 text-blue-600 dark:text-blue-400"
             }`}>
               <CalendarClock className="h-3 w-3" />
               {formatRelativeDate(lead.nextFollowUpDate)}
             </span>
           )}
           {isStale && (
-            <span className="inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded-md bg-amber-500/10 text-amber-400">
+            <span className="inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded-md bg-amber-500/10 text-amber-600 dark:text-amber-400">
               <AlertTriangle className="h-3 w-3" />
               Stale
             </span>
