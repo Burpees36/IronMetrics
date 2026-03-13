@@ -147,6 +147,9 @@ export function Schedule() {
   const [copyWeekOpen, setCopyWeekOpen] = useState(false);
   const [copyWeekPreviewData, setCopyWeekPreviewData] = useState<{ toCreate: CopyWeekPreviewItem[]; toSkip: CopyWeekPreviewItem[]; warnings: string[] } | null>(null);
 
+  const [clearWeekOpen, setClearWeekOpen] = useState(false);
+  const [clearWeekPending, setClearWeekPending] = useState(false);
+
   const [templateManagerOpen, setTemplateManagerOpen] = useState(false);
   const [saveTemplateOpen, setSaveTemplateOpen] = useState(false);
   const [templateName, setTemplateName] = useState("");
@@ -557,6 +560,30 @@ export function Schedule() {
     );
   }
 
+  function handleClearWeek() {
+    if (!activeGymId) return;
+    setClearWeekPending(true);
+    fetch(`/api/gyms/${activeGymId}/classes/clear-week`, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ weekStart: currentWeekStart.toISOString().split("T")[0] }),
+      credentials: "include",
+    }).then(async (res) => {
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        queryClient.invalidateQueries({ queryKey: getListClassesQueryKey(activeGymId) });
+        setClearWeekOpen(false);
+        toast({ title: "Week Cleared", description: data.message || "All classes removed." });
+      } else {
+        toast({ title: "Error", description: data.error || "Failed to clear week." });
+      }
+    }).catch(() => {
+      toast({ title: "Error", description: "Network error. Please try again." });
+    }).finally(() => {
+      setClearWeekPending(false);
+    });
+  }
+
   function handleSaveTemplate(e: React.FormEvent) {
     e.preventDefault();
     if (!activeGymId || !templateName.trim()) return;
@@ -753,6 +780,11 @@ export function Schedule() {
                 <DropdownMenuItem onClick={() => setTemplateManagerOpen(true)}>
                   <LayoutTemplate className="h-4 w-4 mr-2" />
                   Manage Templates
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => setClearWeekOpen(true)} disabled={!hasClassesThisWeek} className="text-destructive focus:text-destructive">
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Clear Week
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -1671,6 +1703,23 @@ export function Schedule() {
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={handleDeleteTemplate} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
               {deleteTemplateMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={clearWeekOpen} onOpenChange={(open) => { if (!open) setClearWeekOpen(false); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Clear Entire Week</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete all {classes?.length || 0} class{(classes?.length || 0) !== 1 ? "es" : ""} scheduled for the week of {format(currentWeekStart, 'MMM d')} — {format(addDays(currentWeekStart, 6), 'MMM d, yyyy')}, along with all associated attendance records and roster entries. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={clearWeekPending}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleClearWeek} disabled={clearWeekPending} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              {clearWeekPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Clear Week"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

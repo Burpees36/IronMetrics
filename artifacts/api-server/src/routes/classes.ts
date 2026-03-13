@@ -133,6 +133,44 @@ router.patch("/gyms/:gymId/classes/:classId", requireScheduleManage(), async (re
   res.json(gymClass);
 });
 
+router.delete("/gyms/:gymId/classes/clear-week", requireScheduleManage(), async (req, res): Promise<void> => {
+  const gymId = parseGymId(req.params);
+  if (!gymId) { res.status(400).json({ error: "Invalid gym ID" }); return; }
+
+  const { weekStart } = req.body;
+  if (!weekStart) { res.status(400).json({ error: "weekStart is required" }); return; }
+
+  const start = new Date(weekStart);
+  if (isNaN(start.getTime())) { res.status(400).json({ error: "Invalid weekStart date" }); return; }
+
+  const end = new Date(start);
+  end.setDate(end.getDate() + 7);
+
+  const weekClasses = await db
+    .select()
+    .from(classesTable)
+    .where(
+      and(
+        eq(classesTable.gymId, gymId),
+        gte(classesTable.startTime, start),
+        lt(classesTable.startTime, end)
+      )
+    );
+
+  if (weekClasses.length === 0) {
+    res.json({ deleted: 0, message: "No classes found for this week." });
+    return;
+  }
+
+  const classIds = weekClasses.map((c) => c.id);
+  const { inArray } = await import("drizzle-orm");
+
+  await db.delete(attendanceTable).where(inArray(attendanceTable.classId, classIds));
+  await db.delete(classesTable).where(inArray(classesTable.id, classIds));
+
+  res.json({ deleted: classIds.length, message: `${classIds.length} class${classIds.length > 1 ? "es" : ""} and all associated attendance records removed.` });
+});
+
 router.delete("/gyms/:gymId/classes/:classId", requireScheduleManage(), async (req, res): Promise<void> => {
   const gymId = parseGymId(req.params);
   const classId = parseClassId(req.params);
