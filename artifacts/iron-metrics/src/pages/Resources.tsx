@@ -12,6 +12,7 @@ import {
   ClipboardCheck,
   Target,
   Heart,
+  Filter,
 } from "lucide-react";
 
 interface ResourcePhase {
@@ -27,6 +28,68 @@ interface Resource {
   icon: typeof BookOpen;
   category: string;
   phases: ResourcePhase[];
+}
+
+const CATEGORY_COLORS: Record<string, { bg: string; text: string; badge: string; border: string; icon: string; filterActive: string; accent: string }> = {
+  "Retention": {
+    bg: "bg-emerald-500/10",
+    text: "text-emerald-400",
+    badge: "bg-emerald-500/15 text-emerald-400",
+    border: "border-emerald-500/20",
+    icon: "bg-emerald-500/15 text-emerald-400",
+    filterActive: "bg-emerald-500 text-white",
+    accent: "bg-emerald-500/50",
+  },
+  "Acquisition": {
+    bg: "bg-blue-500/10",
+    text: "text-blue-400",
+    badge: "bg-blue-500/15 text-blue-400",
+    border: "border-blue-500/20",
+    icon: "bg-blue-500/15 text-blue-400",
+    filterActive: "bg-blue-500 text-white",
+    accent: "bg-blue-500/50",
+  },
+  "Revenue Expansion": {
+    bg: "bg-amber-500/10",
+    text: "text-amber-400",
+    badge: "bg-amber-500/15 text-amber-400",
+    border: "border-amber-500/20",
+    icon: "bg-amber-500/15 text-amber-400",
+    filterActive: "bg-amber-500 text-white",
+    accent: "bg-amber-500/50",
+  },
+  "Community Depth": {
+    bg: "bg-violet-500/10",
+    text: "text-violet-400",
+    badge: "bg-violet-500/15 text-violet-400",
+    border: "border-violet-500/20",
+    icon: "bg-violet-500/15 text-violet-400",
+    filterActive: "bg-violet-500 text-white",
+    accent: "bg-violet-500/50",
+  },
+  "Coaching & Programming": {
+    bg: "bg-cyan-500/10",
+    text: "text-cyan-400",
+    badge: "bg-cyan-500/15 text-cyan-400",
+    border: "border-cyan-500/20",
+    icon: "bg-cyan-500/15 text-cyan-400",
+    filterActive: "bg-cyan-500 text-white",
+    accent: "bg-cyan-500/50",
+  },
+};
+
+const DEFAULT_COLOR = {
+  bg: "bg-primary/10",
+  text: "text-primary",
+  badge: "bg-primary/15 text-primary",
+  border: "border-primary/20",
+  icon: "bg-primary/15 text-primary",
+  filterActive: "bg-primary text-primary-foreground",
+  accent: "bg-primary/50",
+};
+
+function getCategoryColor(category: string) {
+  return CATEGORY_COLORS[category] || DEFAULT_COLOR;
 }
 
 const RESOURCES: Resource[] = [
@@ -377,9 +440,12 @@ const RESOURCES: Resource[] = [
   },
 ];
 
+const CATEGORY_ORDER = ["Retention", "Acquisition", "Revenue Expansion", "Community Depth", "Coaching & Programming"];
+
 function ResourceCard({ resource }: { resource: Resource }) {
   const [isOpen, setIsOpen] = useState(false);
   const [openPhases, setOpenPhases] = useState<Set<number>>(new Set());
+  const colors = getCategoryColor(resource.category);
 
   const togglePhase = (index: number) => {
     setOpenPhases((prev) => {
@@ -393,26 +459,21 @@ function ResourceCard({ resource }: { resource: Resource }) {
   const Icon = resource.icon;
 
   return (
-    <div className="bg-card border border-border rounded-2xl overflow-hidden transition-colors hover:border-primary/30">
+    <div className={`bg-card border rounded-2xl overflow-hidden transition-colors hover:border-opacity-60 ${colors.border}`}>
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full px-6 py-5 flex items-start gap-4 text-left"
+        className="w-full px-5 py-4 md:px-6 md:py-5 flex items-start gap-4 text-left"
       >
-        <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0 mt-0.5">
-          <Icon className="h-5 w-5 text-primary" />
+        <div className={`h-10 w-10 rounded-xl flex items-center justify-center shrink-0 mt-0.5 ${colors.icon}`}>
+          <Icon className="h-5 w-5" />
         </div>
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-1">
-            <h3 className="text-lg font-semibold text-foreground">{resource.title}</h3>
-            <span className="px-2.5 py-0.5 rounded-full bg-primary/10 text-primary text-xs font-medium">
-              {resource.category}
-            </span>
-          </div>
-          <p className="text-sm text-muted-foreground line-clamp-2">{resource.subtitle}</p>
+          <h3 className="text-base md:text-lg font-semibold text-foreground">{resource.title}</h3>
+          <p className="text-sm text-muted-foreground line-clamp-2 mt-1">{resource.subtitle}</p>
         </div>
         <div className="shrink-0 mt-1">
           {isOpen ? (
-            <ChevronDown className="h-5 w-5 text-muted-foreground" />
+            <ChevronDown className={`h-5 w-5 ${colors.text}`} />
           ) : (
             <ChevronRight className="h-5 w-5 text-muted-foreground" />
           )}
@@ -428,15 +489,15 @@ function ResourceCard({ resource }: { resource: Resource }) {
             transition={{ duration: 0.3 }}
             className="overflow-hidden"
           >
-            <div className="px-6 pb-6 space-y-3">
+            <div className="px-5 pb-5 md:px-6 md:pb-6 space-y-3">
               {resource.phases.map((phase, index) => (
                 <div key={index} className="border border-border/50 rounded-xl overflow-hidden bg-background/50">
                   <button
                     onClick={() => togglePhase(index)}
                     className="w-full px-4 py-3 flex items-center gap-3 text-left hover:bg-white/5 transition-colors"
                   >
-                    <div className="h-6 w-6 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-                      <span className="text-xs font-bold text-primary">{index + 1}</span>
+                    <div className={`h-6 w-6 rounded-lg flex items-center justify-center shrink-0 ${colors.icon}`}>
+                      <span className="text-xs font-bold">{index + 1}</span>
                     </div>
                     <div className="flex-1 min-w-0">
                       <h4 className="text-sm font-semibold text-foreground">{phase.title}</h4>
@@ -461,7 +522,7 @@ function ResourceCard({ resource }: { resource: Resource }) {
                         <div className="px-4 pb-4 space-y-2">
                           {phase.details.map((detail, di) => (
                             <div key={di} className="flex items-start gap-2.5 text-sm text-foreground/80">
-                              <div className="h-1.5 w-1.5 rounded-full bg-primary/50 shrink-0 mt-2" />
+                              <div className={`h-1.5 w-1.5 rounded-full shrink-0 mt-2 ${colors.accent}`} />
                               <span>{detail}</span>
                             </div>
                           ))}
@@ -482,43 +543,55 @@ function ResourceCard({ resource }: { resource: Resource }) {
 export function Resources() {
   const [filter, setFilter] = useState<string | null>(null);
 
-  const categories = Array.from(new Set(RESOURCES.map((r) => r.category)));
+  const categories = CATEGORY_ORDER.filter((cat) =>
+    RESOURCES.some((r) => r.category === cat)
+  );
+
   const filtered = filter ? RESOURCES.filter((r) => r.category === filter) : RESOURCES;
+
+  const groupedResources = filter
+    ? [{ category: filter, resources: filtered }]
+    : categories.map((cat) => ({
+        category: cat,
+        resources: RESOURCES.filter((r) => r.category === cat),
+      }));
 
   return (
     <div className="space-y-8 pb-10">
       <header>
         <div className="flex items-center gap-3 mb-1">
-          <div className="h-8 w-8 bg-primary/20 rounded-lg flex items-center justify-center">
+          <div className="h-8 w-8 bg-primary/20 rounded-lg flex items-center justify-center border border-primary/30">
             <BookOpen className="h-5 w-5 text-primary" />
           </div>
-          <h1 className="text-3xl font-display font-bold text-foreground">Resources</h1>
+          <h1 className="text-2xl md:text-3xl font-display font-bold text-foreground">Resources</h1>
         </div>
-        <p className="text-muted-foreground mt-1">
-          Playbooks and guides for running a stronger gym — from onboarding to coaching development. Reference these anytime to build or refine your systems.
+        <p className="text-muted-foreground mt-1 text-sm md:text-base">
+          Playbooks and guides for running a stronger gym — from onboarding to coaching development.
         </p>
       </header>
 
       <div className="flex flex-wrap gap-2">
         <button
           onClick={() => setFilter(null)}
-          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
             filter === null
-              ? "bg-primary text-primary-foreground"
+              ? "bg-primary text-primary-foreground shadow-sm"
               : "bg-white/5 text-muted-foreground hover:bg-white/10 hover:text-foreground border border-border"
           }`}
         >
+          <Filter className="h-3 w-3" />
           All ({RESOURCES.length})
         </button>
         {categories.map((cat) => {
           const count = RESOURCES.filter((r) => r.category === cat).length;
+          const colors = getCategoryColor(cat);
           return (
             <button
               key={cat}
               onClick={() => setFilter(filter === cat ? null : cat)}
               className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
                 filter === cat
-                  ? "bg-primary text-primary-foreground"
+                  ? `${colors.filterActive} shadow-sm`
                   : "bg-white/5 text-muted-foreground hover:bg-white/10 hover:text-foreground border border-border"
               }`}
             >
@@ -528,10 +601,26 @@ export function Resources() {
         })}
       </div>
 
-      <div className="space-y-3">
-        {filtered.map((resource) => (
-          <ResourceCard key={resource.id} resource={resource} />
-        ))}
+      <div className="space-y-10">
+        {groupedResources.map(({ category, resources }) => {
+          const colors = getCategoryColor(category);
+          return (
+            <section key={category}>
+              <div className="flex items-center gap-3 mb-4">
+                <div className={`h-1 w-8 rounded-full ${colors.accent}`} />
+                <h2 className={`text-lg font-bold ${colors.text}`}>{category}</h2>
+                <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${colors.badge}`}>
+                  {resources.length} {resources.length === 1 ? "playbook" : "playbooks"}
+                </span>
+              </div>
+              <div className="space-y-3">
+                {resources.map((resource) => (
+                  <ResourceCard key={resource.id} resource={resource} />
+                ))}
+              </div>
+            </section>
+          );
+        })}
       </div>
     </div>
   );
