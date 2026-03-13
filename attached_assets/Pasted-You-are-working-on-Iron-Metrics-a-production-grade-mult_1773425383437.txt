@@ -1,0 +1,194 @@
+You are working on Iron Metrics, a production-grade multi-tenant gym operating system replacing Wodify.
+
+Your task is to implement the next roadmap item completely and safely:
+
+FEATURE SET
+1. Payment failure notifications
+2. Update payment method flow
+3. Grace-period-aware billing recovery workflow
+4. Full automated tests
+5. Final implementation report
+
+CONTEXT / NON-NEGOTIABLES
+- This app is multi-tenant. Every action must remain gym-scoped and secure.
+- Billing reliability is business-critical.
+- The system already has Stripe integration, webhook reconciliation, billing audit logs, RBAC, and email capability via Resend / provider abstraction.
+- Build this to production grade, not demo grade.
+- Do not break existing billing flows.
+- Keep code clean, typed, auditable, and maintainable.
+
+PRODUCT REQUIREMENTS
+A. PAYMENT FAILURE NOTIFICATIONS
+When Stripe reports a failed invoice/payment through webhook handling:
+- Create or update an internal billing recovery state for that member/subscription.
+- Send a branded payment failure email to the member.
+- Include:
+  - gym name / branding where available
+  - clear explanation that payment failed
+  - amount due if available
+  - last 4 / card brand if safely available and already stored from Stripe context
+  - CTA button/link to update payment method
+  - support contact path if configured
+- Do not spam:
+  - send only one notification per failure event / retry stage as appropriate
+  - webhook processing must remain idempotent
+- Log the action in billing audit logs
+- Create a staff-visible alert/task/state so staff can see which members need billing recovery attention
+- Preserve Stripe as source of truth for payment status, but maintain internal recovery metadata for app UX
+
+B. UPDATE PAYMENT METHOD FLOW
+Implement a secure Stripe-based update card flow using SetupIntent / Stripe customer billing update best practices.
+
+Requirements:
+- Staff can trigger “Send update card link” from billing/member UI
+- Optional: staff can also open/generate the flow while assisting the member
+- Member receives a secure time-bound link/tokenized route to update payment method
+- The route must validate tenant/gym/member association and expiration
+- On successful update:
+  - attach/update default payment method on the correct Stripe customer/subscription context
+  - persist any needed local metadata
+  - clear or reduce billing recovery state as appropriate
+  - create billing audit log entry
+  - show clear success/failure UI
+- Handle expired/invalid tokens gracefully
+- Do not expose internal IDs or sensitive billing data in URLs
+- Do not allow cross-gym access
+
+C. GRACE PERIOD / RECOVERY WORKFLOW
+Implement a production-safe recovery model:
+- Failed payment does NOT immediately equal hard cancellation
+- Support configurable or sensible grace-period behavior before cancellation/past-due escalation
+- If existing subscription lifecycle already moves to past_due, preserve Stripe truth but improve app workflow:
+  - member flagged as “payment action needed”
+  - staff sees actionable state
+  - cancellation logic should not be made harsher
+- If a subscription deletion/cancellation webhook happens, do not blindly hard-delete or lose recovery context
+- Add clear internal statuses/fields if needed, but keep schema minimal and coherent
+
+D. ADMIN / STAFF UX
+Add or improve UI in the appropriate billing/member areas:
+- badge/status for payment action needed
+- failed payment history/recovery indicator
+- button: Send update card link
+- button/state: Copy payment update link if appropriate for admins/staff
+- visibility of last notification sent, if available
+- clean loading/error/success states
+- respect existing RBAC:
+  - owners/admins: full billing recovery actions
+  - front desk: only if existing permissions allow
+  - coaches: no billing actions
+  - analysts: read-only
+Use the project’s existing design system and keep UX polished, simple, and trustworthy.
+
+E. EMAIL / TEMPLATE REQUIREMENTS
+Create production-ready transactional email templates for:
+1. Payment failed
+2. Payment method updated successfully (optional but recommended)
+3. Final warning before stronger delinquency state (only if consistent with current system)
+
+Email requirements:
+- plain language
+- professional tone
+- gym-branded
+- mobile-friendly
+- resilient fallback if branding fields are missing
+- no broken links if support info missing
+
+F. SECURITY / RELIABILITY REQUIREMENTS
+- Webhooks must remain idempotent
+- Any new tokens/links must be cryptographically secure and expire
+- Store only what is needed
+- Prevent replay attacks
+- Validate gym/member/subscription ownership everywhere
+- Add structured logging where useful
+- Do not leak secrets or sensitive card data
+- Use Stripe-recommended flows, not homemade payment handling
+- Preserve auditability for every important mutation or notification send
+
+G. DATA / SCHEMA
+Review whether a small schema addition is needed. If needed, add the smallest correct set of fields/tables, for example to support:
+- billing recovery state
+- secure payment update tokens/requests
+- notification history / sent timestamp
+- grace period dates / recovery deadlines
+Requirements:
+- add indexes where appropriate
+- use proper timestamps/date types
+- write migrations
+- do not create redundant tables if existing structures can be extended cleanly
+
+H. API / BACKEND IMPLEMENTATION
+Implement all required endpoints/services/jobs cleanly, likely including:
+- webhook handler extensions for failed payment recovery
+- endpoint to generate/send payment update link
+- endpoint to validate/consume update token
+- endpoint(s) to create SetupIntent / billing portal style session as appropriate
+- success/failure completion handling
+- internal service layer separation
+- audit log integration
+- RBAC middleware
+Do not duplicate logic already present elsewhere; refactor shared billing logic if needed.
+
+I. FRONTEND IMPLEMENTATION
+Implement or update the relevant screens/components:
+- billing page
+- member detail billing section if applicable
+- recovery state badges/cards
+- payment update flow page
+- success/error/expired states
+Use existing query/mutation patterns, optimistic updates only where safe, and clear cache invalidation.
+
+J. TESTING — REQUIRED
+After implementation, run the full relevant test suite and add/update tests for all major paths.
+
+You must add tests for:
+1. webhook idempotency on repeated failed payment events
+2. failed payment creates proper internal recovery state
+3. payment failure email send path
+4. no duplicate emails for duplicate webhook events
+5. RBAC on send-update-link endpoint
+6. token expiration / invalid token handling
+7. cross-gym access rejection
+8. successful payment method update flow
+9. audit log creation
+10. UI states for action-needed / sending / sent / success / expired / error
+11. any migration/schema tests if applicable
+
+Run all relevant commands, including:
+- typecheck
+- lint
+- backend tests
+- frontend tests
+- build if available
+
+If tests fail, fix them before finishing.
+
+K. OUTPUT FORMAT — FINAL REPORT REQUIRED
+When done, provide a complete implementation report with these exact sections:
+
+1. Summary
+2. Files Changed
+3. Schema Changes
+4. Backend Changes
+5. Frontend Changes
+6. Email / Notification Changes
+7. Security / Reliability Notes
+8. Tests Added / Updated
+9. Commands Run
+10. Test Results
+11. Follow-Up Risks or Recommendations
+
+The report must be concrete and specific, not vague.
+
+SUCCESS CRITERIA
+This work is only complete if:
+- failed payments trigger a production-grade recovery workflow
+- members can securely update cards
+- staff can initiate/support recovery
+- notifications are idempotent and auditable
+- RBAC and multi-tenant security are preserved
+- tests pass
+- final report is produced
+
+Before coding, inspect the existing billing, webhook, audit log, RBAC, email provider, and member/billing UI code so the implementation fits the current architecture.
+Prefer extending existing patterns over inventing new ones.
