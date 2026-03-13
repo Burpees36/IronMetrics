@@ -1,12 +1,12 @@
 import React, { useState, useMemo, useRef, useEffect } from "react";
 import { useGym } from "@/store/GymContext";
+import { useUserRole } from "@/components/programming/useUserRole";
 import { useListClasses, useCreateClass, useGetClass, useDeleteClass, useCheckInToClass, useUpdateClass, useListMembers, useListStaff, getListClassesQueryKey, getGetClassQueryKey, usePreviewCopyWeek, useCopyWeek, useListClassTemplates, useCreateClassTemplate, useGetClassTemplate, useDeleteClassTemplate, useUpdateClassTemplate, usePreviewApplyTemplate, useApplyClassTemplate, getListClassTemplatesQueryKey } from "@workspace/api-client-react";
 import type { StaffMember, CreateClassBodyType, Member, ClassTemplate, CopyWeekPreviewItem } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { format, startOfWeek, addDays, addWeeks, subWeeks, isSameDay, isToday, endOfWeek, getHours, getMinutes } from "date-fns";
-import { motion } from "framer-motion";
-import { Loader2, Plus, Clock, Users, Trash2, Search, UserCheck, X, ChevronLeft, ChevronRight, Copy, FileText, MoreHorizontal, Save, Play, Pencil, AlertTriangle, CalendarPlus, LayoutTemplate, CalendarDays } from "lucide-react";
+import { Loader2, Plus, Users, Trash2, Search, UserCheck, X, ChevronLeft, ChevronRight, Copy, FileText, MoreHorizontal, Save, Play, Pencil, AlertTriangle, LayoutTemplate, CalendarDays, Filter, BookOpen, UserMinus, Check, XCircle, ArrowUpDown } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogAction, AlertDialogCancel } from "@/components/ui/alert-dialog";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
@@ -14,7 +14,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Textarea } from "@/components/ui/textarea";
 
 const CLASS_TYPE_COLORS: Record<string, { solidBg: string; solidHover: string; accent: string; dot: string }> = {
   regular: { solidBg: "#1e5a8a", solidHover: "#22679e", accent: "#38bdf8", dot: "bg-sky-400" },
@@ -32,12 +33,40 @@ const HOUR_HEIGHT = 64;
 const CALENDAR_START_HOUR = 5;
 const CALENDAR_END_HOUR = 22;
 
+function OccupancyBadge({ enrolled, capacity, waitlistCount }: { enrolled: number; capacity: number; waitlistCount?: number }) {
+  const pct = capacity > 0 ? (enrolled / capacity) * 100 : 0;
+  const isFull = enrolled >= capacity;
+  const hasWaitlist = (waitlistCount || 0) > 0;
+
+  if (hasWaitlist) return <span className="text-[9px] font-bold text-orange-400 bg-orange-400/15 px-1.5 py-0.5 rounded-full">WAITLIST</span>;
+  if (isFull) return <span className="text-[9px] font-bold text-red-400 bg-red-400/15 px-1.5 py-0.5 rounded-full">FULL</span>;
+  if (pct >= 80) return <span className="text-[9px] font-semibold text-amber-400 bg-amber-400/10 px-1.5 py-0.5 rounded-full">{enrolled}/{capacity}</span>;
+  return <span className="text-[9px] text-white/50 tabular-nums">{enrolled}/{capacity}</span>;
+}
+
+function AttendanceStatusBadge({ status }: { status: string }) {
+  const config: Record<string, { label: string; cls: string }> = {
+    reserved: { label: "Reserved", cls: "bg-sky-400/15 text-sky-400 border-sky-400/30" },
+    checked_in: { label: "Checked In", cls: "bg-green-400/15 text-green-400 border-green-400/30" },
+    present: { label: "Present", cls: "bg-green-400/15 text-green-400 border-green-400/30" },
+    no_show: { label: "No Show", cls: "bg-red-400/15 text-red-400 border-red-400/30" },
+    cancelled: { label: "Cancelled", cls: "bg-zinc-400/15 text-zinc-400 border-zinc-400/30" },
+    waitlisted: { label: "Waitlisted", cls: "bg-orange-400/15 text-orange-400 border-orange-400/30" },
+  };
+  const c = config[status] || config.reserved;
+  return <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full border ${c.cls}`}>{c.label}</span>;
+}
+
 export function Schedule() {
   const { activeGymId } = useGym();
+  const { role, isStaff, isLoading: roleLoading } = useUserRole();
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const calendarRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+  const canManage = role === "gym_owner" || role === "admin" || role === "owner";
+  const canOperate = canManage || role === "coach" || role === "head_coach" || role === "front_desk";
 
   const [weekOffset, setWeekOffset] = useState(0);
   const currentWeekStart = useMemo(() => {
@@ -62,11 +91,15 @@ export function Schedule() {
   const activeStaff = useMemo(() => (staffList || []).filter((s) => s.isActive), [staffList]);
 
   const [createOpen, setCreateOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [editClassData, setEditClassData] = useState<any>(null);
   const [detailClassId, setDetailClassId] = useState<number | null>(null);
   const [focusedClassId, setFocusedClassId] = useState<number | null>(null);
   const [deleteClassId, setDeleteClassId] = useState<number | null>(null);
   const [checkinClassId, setCheckinClassId] = useState<number | null>(null);
   const [memberSearch, setMemberSearch] = useState("");
+  const [typeFilter, setTypeFilter] = useState<string>("all");
+  const [coachFilter, setCoachFilter] = useState<string>("all");
 
   const [formData, setFormData] = useState({
     name: "",
@@ -82,6 +115,28 @@ export function Schedule() {
     description: "",
     type: "regular" as string,
     repeatDays: [] as number[],
+    memberNotes: "",
+    staffNotes: "",
+    isBookable: true,
+    waitlistEnabled: false,
+  });
+
+  const [editFormData, setEditFormData] = useState({
+    name: "",
+    startHour: "9",
+    startMinute: "00",
+    startAmPm: "AM",
+    endHour: "10",
+    endMinute: "00",
+    endAmPm: "AM",
+    capacity: "",
+    coachId: "none",
+    description: "",
+    type: "regular",
+    memberNotes: "",
+    staffNotes: "",
+    isBookable: true,
+    waitlistEnabled: false,
   });
 
   const createClassMutation = useCreateClass();
@@ -97,6 +152,7 @@ export function Schedule() {
   const [templateName, setTemplateName] = useState("");
   const [applyTemplateId, setApplyTemplateId] = useState<number | null>(null);
   const [applyTemplatePreviewData, setApplyTemplatePreviewData] = useState<{ toCreate: CopyWeekPreviewItem[]; toSkip: CopyWeekPreviewItem[]; warnings: string[] } | null>(null);
+  const [applySelectedItems, setApplySelectedItems] = useState<Set<number>>(new Set());
   const [renameTemplateId, setRenameTemplateId] = useState<number | null>(null);
   const [renameTemplateName, setRenameTemplateName] = useState("");
   const [deleteTemplateId, setDeleteTemplateId] = useState<number | null>(null);
@@ -137,11 +193,22 @@ export function Schedule() {
   );
   const members: Member[] = membersData?.members ?? [];
 
+  const filteredClasses = useMemo(() => {
+    if (!classes) return [];
+    return classes.filter((cls: any) => {
+      if (typeFilter !== "all" && (cls.type || "regular") !== typeFilter) return false;
+      if (coachFilter !== "all") {
+        if (coachFilter === "unassigned" && cls.coachId) return false;
+        if (coachFilter !== "unassigned" && String(cls.coachId) !== coachFilter) return false;
+      }
+      return true;
+    });
+  }, [classes, typeFilter, coachFilter]);
+
   const classesByDay = useMemo(() => {
     const map: Record<number, any[]> = {};
     for (let i = 0; i < 7; i++) map[i] = [];
-    if (!classes) return map;
-    for (const cls of classes) {
+    for (const cls of filteredClasses) {
       const clsDate = new Date(cls.startTime);
       for (let i = 0; i < 7; i++) {
         if (isSameDay(clsDate, days[i])) {
@@ -154,7 +221,7 @@ export function Schedule() {
       map[i].sort((a: any, b: any) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
     }
     return map;
-  }, [classes, days]);
+  }, [filteredClasses, days]);
 
   const [nowMinutes, setNowMinutes] = useState(() => {
     const now = new Date();
@@ -187,10 +254,11 @@ export function Schedule() {
   }, [classes]);
 
   function resetForm() {
-    setFormData({ name: "", date: "", startHour: "9", startMinute: "00", startAmPm: "AM", endHour: "10", endMinute: "00", endAmPm: "AM", capacity: "", coachId: "none", description: "", type: "regular", repeatDays: [] });
+    setFormData({ name: "", date: "", startHour: "9", startMinute: "00", startAmPm: "AM", endHour: "10", endMinute: "00", endAmPm: "AM", capacity: "", coachId: "none", description: "", type: "regular", repeatDays: [], memberNotes: "", staffNotes: "", isBookable: true, waitlistEnabled: false });
   }
 
   function openCreateForDay(dayIndex: number) {
+    if (!canManage) return;
     resetForm();
     setFormData(p => ({ ...p, date: format(days[dayIndex], 'yyyy-MM-dd') }));
     setCreateOpen(true);
@@ -210,8 +278,88 @@ export function Schedule() {
     return h;
   }
 
+  function from24Hour(h: number): { hour: string; amPm: string } {
+    if (h === 0) return { hour: "12", amPm: "AM" };
+    if (h < 12) return { hour: String(h), amPm: "AM" };
+    if (h === 12) return { hour: "12", amPm: "PM" };
+    return { hour: String(h - 12), amPm: "PM" };
+  }
+
   function getDateForCalendarDay(calendarDayIndex: number): string {
     return format(days[calendarDayIndex], "yyyy-MM-dd");
+  }
+
+  function openEditDialog(cls: any) {
+    if (!canManage) return;
+    const start = new Date(cls.startTime);
+    const end = new Date(cls.endTime);
+    const startH = from24Hour(start.getHours());
+    const endH = from24Hour(end.getHours());
+    setEditClassData(cls);
+    setEditFormData({
+      name: cls.name || "",
+      startHour: startH.hour,
+      startMinute: String(start.getMinutes()).padStart(2, '0'),
+      startAmPm: startH.amPm,
+      endHour: endH.hour,
+      endMinute: String(end.getMinutes()).padStart(2, '0'),
+      endAmPm: endH.amPm,
+      capacity: String(cls.capacity),
+      coachId: cls.coachId ? String(cls.coachId) : "none",
+      description: cls.description || "",
+      type: cls.type || "regular",
+      memberNotes: cls.memberNotes || "",
+      staffNotes: cls.staffNotes || "",
+      isBookable: cls.isBookable !== false,
+      waitlistEnabled: cls.waitlistEnabled || false,
+    });
+    setEditOpen(true);
+  }
+
+  function handleEditClass(e: React.FormEvent) {
+    e.preventDefault();
+    if (!activeGymId || !editClassData) return;
+    const startH = to24Hour(editFormData.startHour, editFormData.startAmPm);
+    const endH = to24Hour(editFormData.endHour, editFormData.endAmPm);
+    const origStart = new Date(editClassData.startTime);
+    const dateStr = format(origStart, 'yyyy-MM-dd');
+    const startDate = new Date(`${dateStr}T${String(startH).padStart(2, '0')}:${editFormData.startMinute}:00`);
+    const endDate = new Date(`${dateStr}T${String(endH).padStart(2, '0')}:${editFormData.endMinute}:00`);
+    if (isNaN(startDate.getTime()) || isNaN(endDate.getTime()) || endDate <= startDate) {
+      toast({ title: "Invalid Time", description: "End time must be after start time." });
+      return;
+    }
+    updateClassMutation.mutate(
+      {
+        gymId: activeGymId,
+        classId: editClassData.id,
+        data: {
+          name: editFormData.name,
+          type: editFormData.type,
+          startTime: startDate.toISOString(),
+          endTime: endDate.toISOString(),
+          capacity: parseInt(editFormData.capacity, 10),
+          coachId: editFormData.coachId !== "none" ? parseInt(editFormData.coachId, 10) : null,
+          description: editFormData.description || null,
+          memberNotes: editFormData.memberNotes || null,
+          staffNotes: editFormData.staffNotes || null,
+          isBookable: editFormData.isBookable,
+          waitlistEnabled: editFormData.waitlistEnabled,
+        } as any,
+      },
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: getListClassesQueryKey(activeGymId) });
+          if (detailClassId) queryClient.invalidateQueries({ queryKey: getGetClassQueryKey(activeGymId, detailClassId) });
+          setEditOpen(false);
+          setEditClassData(null);
+          toast({ title: "Class Updated", description: "Changes saved successfully." });
+        },
+        onError: (error: any) => {
+          toast({ title: "Error", description: error?.data?.error || "Failed to update class." });
+        },
+      }
+    );
   }
 
   function handleCreateClass(e: React.FormEvent) {
@@ -339,6 +487,44 @@ export function Schedule() {
     );
   }
 
+  function handleUpdateAttendanceStatus(attendanceId: number, newStatus: string) {
+    if (!activeGymId || !detailClassId) return;
+    fetch(`/api/gyms/${activeGymId}/classes/${detailClassId}/attendance/${attendanceId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: newStatus }),
+      credentials: "include",
+    }).then(async (res) => {
+      if (res.ok) {
+        toast({ title: "Status Updated" });
+        queryClient.invalidateQueries({ queryKey: getGetClassQueryKey(activeGymId, detailClassId!) });
+        queryClient.invalidateQueries({ queryKey: getListClassesQueryKey(activeGymId) });
+      } else {
+        const data = await res.json().catch(() => ({}));
+        toast({ title: "Error", description: data.error || "Failed to update status." });
+      }
+    });
+  }
+
+  function handleDuplicateClass(classId: number) {
+    if (!activeGymId) return;
+    fetch(`/api/gyms/${activeGymId}/classes/${classId}/duplicate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+      credentials: "include",
+    }).then(async (res) => {
+      if (res.ok) {
+        toast({ title: "Class Duplicated", description: "A copy has been created." });
+        queryClient.invalidateQueries({ queryKey: getListClassesQueryKey(activeGymId) });
+        setDetailClassId(null);
+      } else {
+        const data = await res.json().catch(() => ({}));
+        toast({ title: "Error", description: data.error || "Failed to duplicate class." });
+      }
+    });
+  }
+
   function handlePrevWeek() { setWeekOffset(w => w - 1); }
   function handleNextWeek() { setWeekOffset(w => w + 1); }
   function goToday() { setWeekOffset(0); }
@@ -394,7 +580,11 @@ export function Schedule() {
     previewApplyMutation.mutate(
       { gymId: activeGymId, templateId, data: { targetWeek: currentWeekStart.toISOString().split("T")[0] } },
       {
-        onSuccess: (data) => { setApplyTemplatePreviewData(data as any); },
+        onSuccess: (data) => {
+          setApplyTemplatePreviewData(data as any);
+          const createItems = (data as any).toCreate || [];
+          setApplySelectedItems(new Set(createItems.map((_: any, i: number) => i)));
+        },
         onError: (error: any) => { toast({ title: "Error", description: error?.data?.error || "Failed to preview." }); },
       }
     );
@@ -403,12 +593,13 @@ export function Schedule() {
   function handleApplyTemplateConfirm() {
     if (!activeGymId || !applyTemplateId) return;
     applyTemplateMutation.mutate(
-      { gymId: activeGymId, templateId: applyTemplateId, data: { targetWeek: currentWeekStart.toISOString().split("T")[0] } },
+      { gymId: activeGymId, templateId: applyTemplateId, data: { targetWeek: currentWeekStart.toISOString().split("T")[0] } } as any,
       {
         onSuccess: (data: any) => {
           queryClient.invalidateQueries({ queryKey: getListClassesQueryKey(activeGymId) });
           setApplyTemplateId(null);
           setApplyTemplatePreviewData(null);
+          setApplySelectedItems(new Set());
           setTemplateManagerOpen(false);
           toast({ title: "Template Applied", description: data.message });
         },
@@ -461,11 +652,13 @@ export function Schedule() {
     open_gym: "Open Gym",
   };
 
+  const hasActiveFilters = typeFilter !== "all" || coachFilter !== "all";
+
   return (
     <div className="h-full flex flex-col gap-3">
       <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0">
         <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1">
             <button onClick={handlePrevWeek} className="p-1.5 rounded-full text-muted-foreground hover:text-foreground hover:bg-white/5 transition-colors" aria-label="Previous week">
               <ChevronLeft className="h-5 w-5" />
             </button>
@@ -499,35 +692,81 @@ export function Schedule() {
               })}
             </div>
           )}
+
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button className="flex items-center justify-center gap-2 px-3 py-2 border border-border/50 hover:bg-white/5 text-muted-foreground hover:text-foreground rounded-xl text-sm transition-colors">
-                <MoreHorizontal className="h-4 w-4" />
-                <span className="hidden sm:inline">Actions</span>
+              <button className={`flex items-center justify-center gap-2 px-3 py-2 border rounded-xl text-sm transition-colors ${hasActiveFilters ? "border-primary/50 bg-primary/10 text-primary" : "border-border/50 hover:bg-white/5 text-muted-foreground hover:text-foreground"}`}>
+                <Filter className="h-4 w-4" />
+                <span className="hidden sm:inline">Filter</span>
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56">
-              <DropdownMenuItem onClick={handleCopyWeekPreview}>
-                <Copy className="h-4 w-4 mr-2" />
-                Copy Last Week
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setSaveTemplateOpen(true)} disabled={!hasClassesThisWeek}>
-                <Save className="h-4 w-4 mr-2" />
-                Save Week as Template
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setTemplateManagerOpen(true)}>
-                <LayoutTemplate className="h-4 w-4 mr-2" />
-                Manage Templates
-              </DropdownMenuItem>
+              <div className="px-3 py-2">
+                <label className="text-xs font-medium text-muted-foreground">Class Type</label>
+                <Select value={typeFilter} onValueChange={setTypeFilter}>
+                  <SelectTrigger className="mt-1 h-8 text-xs"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Types</SelectItem>
+                    {Object.entries(typeLabels).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="px-3 py-2">
+                <label className="text-xs font-medium text-muted-foreground">Coach</label>
+                <Select value={coachFilter} onValueChange={setCoachFilter}>
+                  <SelectTrigger className="mt-1 h-8 text-xs"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Coaches</SelectItem>
+                    <SelectItem value="unassigned">Unassigned</SelectItem>
+                    {activeStaff.map((s) => <SelectItem key={s.id} value={String(s.id)}>{s.firstName} {s.lastName}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              {hasActiveFilters && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={() => { setTypeFilter("all"); setCoachFilter("all"); }}>
+                    <X className="h-4 w-4 mr-2" /> Clear Filters
+                  </DropdownMenuItem>
+                </>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
-          <button
-            onClick={openCreateDialog}
-            className="flex items-center justify-center gap-2 px-4 py-2 bg-primary text-primary-foreground hover:bg-primary/90 rounded-xl text-sm font-semibold transition-colors shadow-lg shadow-primary/20 flex-1 sm:flex-initial"
-          >
-            <Plus className="h-4 w-4" />
-            <span>New Class</span>
-          </button>
+
+          {canManage && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button className="flex items-center justify-center gap-2 px-3 py-2 border border-border/50 hover:bg-white/5 text-muted-foreground hover:text-foreground rounded-xl text-sm transition-colors">
+                  <MoreHorizontal className="h-4 w-4" />
+                  <span className="hidden sm:inline">Actions</span>
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuItem onClick={handleCopyWeekPreview}>
+                  <Copy className="h-4 w-4 mr-2" />
+                  Copy Last Week
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setSaveTemplateOpen(true)} disabled={!hasClassesThisWeek}>
+                  <Save className="h-4 w-4 mr-2" />
+                  Save Week as Template
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setTemplateManagerOpen(true)}>
+                  <LayoutTemplate className="h-4 w-4 mr-2" />
+                  Manage Templates
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+
+          {canManage && (
+            <button
+              onClick={openCreateDialog}
+              className="flex items-center justify-center gap-2 px-4 py-2 bg-primary text-primary-foreground hover:bg-primary/90 rounded-xl text-sm font-semibold transition-colors shadow-lg shadow-primary/20 flex-1 sm:flex-initial"
+            >
+              <Plus className="h-4 w-4" />
+              <span>New Class</span>
+            </button>
+          )}
         </div>
       </header>
 
@@ -579,11 +818,11 @@ export function Schedule() {
                   return (
                     <div
                       key={dayIndex}
-                      className={`relative border-r border-border/30 last:border-r-0 ${today ? "bg-primary/[0.03]" : ""}`}
+                      className={`relative border-r border-border/30 last:border-r-0 ${today ? "bg-primary/[0.03]" : ""} ${canManage ? "cursor-pointer" : ""}`}
                       onClick={(e) => {
                         if ((e.target as HTMLElement).closest('.calendar-class-block')) return;
                         setFocusedClassId(null);
-                        openCreateForDay(dayIndex);
+                        if (canManage) openCreateForDay(dayIndex);
                       }}
                     >
                       {hours.map((hour) => (
@@ -626,6 +865,7 @@ export function Schedule() {
                           const isShort = heightPx >= 44 && heightPx < 72;
 
                           const isFocused = focusedClassId === cls.id;
+                          const isFull = cls.enrolled >= cls.capacity;
 
                           const style: React.CSSProperties = {
                             top: topPx + 1,
@@ -643,7 +883,7 @@ export function Schedule() {
                             <div
                               key={cls.id}
                               title={fullTitle}
-                              className={`calendar-class-block absolute rounded-xl cursor-pointer transition-all duration-200 hover:shadow-lg overflow-hidden ${isFocused ? 'ring-2 ring-white/40 shadow-xl shadow-black/40' : depth > 0 ? 'shadow-md shadow-black/30' : ''}`}
+                              className={`calendar-class-block absolute rounded-xl cursor-pointer transition-all duration-200 hover:shadow-lg overflow-hidden group ${isFocused ? 'ring-2 ring-white/40 shadow-xl shadow-black/40' : depth > 0 ? 'shadow-md shadow-black/30' : ''}`}
                               style={style}
                               onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = colors.solidHover; }}
                               onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = colors.solidBg; }}
@@ -655,8 +895,11 @@ export function Schedule() {
                             >
                               <div className="absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-full" style={{ backgroundColor: colors.accent }} />
                               <div className={`pl-3 pr-2 ${isTiny ? 'py-1' : 'py-1.5'} overflow-hidden h-full flex flex-col ${isTiny ? 'justify-center' : 'justify-start'}`}>
-                                <div className={`font-semibold truncate leading-tight text-white ${isTiny ? 'text-[10px]' : 'text-[11px]'}`}>
-                                  {cls.name}
+                                <div className="flex items-center gap-1">
+                                  <span className={`font-semibold truncate leading-tight text-white ${isTiny ? 'text-[10px]' : 'text-[11px]'}`}>
+                                    {cls.name}
+                                  </span>
+                                  {!isTiny && <OccupancyBadge enrolled={cls.enrolled} capacity={cls.capacity} waitlistCount={cls.waitlistCount} />}
                                 </div>
                                 {!isTiny && (
                                   <div className="text-[10px] text-white/70 truncate mt-0.5">
@@ -664,19 +907,14 @@ export function Schedule() {
                                   </div>
                                 )}
                                 {!isTiny && !isShort && (
-                                  <div className="flex items-center gap-1.5 mt-1.5">
+                                  <div className="flex items-center gap-1.5 mt-1">
                                     {cls.coachName && (
                                       <span className="text-[10px] text-white/60 truncate">{cls.coachName}</span>
                                     )}
-                                    <span className="text-[10px] text-white/50 ml-auto shrink-0 tabular-nums">
-                                      <Users className="inline h-3 w-3 mr-0.5 -mt-px" />{cls.enrolled}/{cls.capacity}
-                                    </span>
+                                    {!cls.coachId && (
+                                      <span className="text-[9px] text-white/30 italic">No coach</span>
+                                    )}
                                   </div>
-                                )}
-                                {!isTiny && isShort && (
-                                  <span className="text-[10px] text-white/50 mt-0.5 tabular-nums">
-                                    {cls.enrolled}/{cls.capacity}
-                                  </span>
                                 )}
                               </div>
                             </div>
@@ -704,8 +942,7 @@ export function Schedule() {
         </div>
       </div>
 
-      {/* === ALL DIALOGS (unchanged) === */}
-
+      {/* ===== CREATE CLASS DIALOG ===== */}
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader>
@@ -823,6 +1060,120 @@ export function Schedule() {
         </DialogContent>
       </Dialog>
 
+      {/* ===== EDIT CLASS DIALOG ===== */}
+      <Dialog open={editOpen} onOpenChange={(open) => { if (!open) { setEditOpen(false); setEditClassData(null); } }}>
+        <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Edit Class</DialogTitle>
+            <DialogDescription>
+              {editClassData && (editClassData.enrolled > 0)
+                ? `${editClassData.enrolled} member${editClassData.enrolled > 1 ? "s" : ""} currently enrolled. Changes may affect them.`
+                : "Update class details."}
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleEditClass} className="space-y-4">
+            <div className="space-y-2">
+              <Label>Name *</Label>
+              <Input value={editFormData.name} onChange={(e) => setEditFormData(p => ({ ...p, name: e.target.value }))} required />
+            </div>
+            <div className="space-y-2">
+              <Label>Type</Label>
+              <Select value={editFormData.type} onValueChange={(v) => setEditFormData(p => ({ ...p, type: v }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="regular">Regular</SelectItem>
+                  <SelectItem value="personal_training">Personal Training</SelectItem>
+                  <SelectItem value="intro">Intro</SelectItem>
+                  <SelectItem value="specialty">Specialty</SelectItem>
+                  <SelectItem value="open_gym">Open Gym</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Start Time *</Label>
+              <div className="flex items-center gap-2">
+                <Select value={editFormData.startHour} onValueChange={(v) => setEditFormData(p => ({ ...p, startHour: v }))}>
+                  <SelectTrigger className="w-[70px]"><SelectValue /></SelectTrigger>
+                  <SelectContent>{Array.from({ length: 12 }, (_, i) => i + 1).map(h => <SelectItem key={h} value={String(h)}>{h}</SelectItem>)}</SelectContent>
+                </Select>
+                <span className="text-muted-foreground font-bold">:</span>
+                <Select value={editFormData.startMinute} onValueChange={(v) => setEditFormData(p => ({ ...p, startMinute: v }))}>
+                  <SelectTrigger className="w-[70px]"><SelectValue /></SelectTrigger>
+                  <SelectContent>{["00", "15", "30", "45"].map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent>
+                </Select>
+                <Select value={editFormData.startAmPm} onValueChange={(v) => setEditFormData(p => ({ ...p, startAmPm: v }))}>
+                  <SelectTrigger className="w-[72px]"><SelectValue /></SelectTrigger>
+                  <SelectContent><SelectItem value="AM">AM</SelectItem><SelectItem value="PM">PM</SelectItem></SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>End Time *</Label>
+              <div className="flex items-center gap-2">
+                <Select value={editFormData.endHour} onValueChange={(v) => setEditFormData(p => ({ ...p, endHour: v }))}>
+                  <SelectTrigger className="w-[70px]"><SelectValue /></SelectTrigger>
+                  <SelectContent>{Array.from({ length: 12 }, (_, i) => i + 1).map(h => <SelectItem key={h} value={String(h)}>{h}</SelectItem>)}</SelectContent>
+                </Select>
+                <span className="text-muted-foreground font-bold">:</span>
+                <Select value={editFormData.endMinute} onValueChange={(v) => setEditFormData(p => ({ ...p, endMinute: v }))}>
+                  <SelectTrigger className="w-[70px]"><SelectValue /></SelectTrigger>
+                  <SelectContent>{["00", "15", "30", "45"].map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent>
+                </Select>
+                <Select value={editFormData.endAmPm} onValueChange={(v) => setEditFormData(p => ({ ...p, endAmPm: v }))}>
+                  <SelectTrigger className="w-[72px]"><SelectValue /></SelectTrigger>
+                  <SelectContent><SelectItem value="AM">AM</SelectItem><SelectItem value="PM">PM</SelectItem></SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label>Capacity *</Label>
+                <Input type="number" min="1" value={editFormData.capacity} onChange={(e) => setEditFormData(p => ({ ...p, capacity: e.target.value }))} required />
+              </div>
+              <div className="space-y-2">
+                <Label>Coach</Label>
+                <Select value={editFormData.coachId} onValueChange={(v) => setEditFormData(p => ({ ...p, coachId: v }))}>
+                  <SelectTrigger><SelectValue placeholder="Select coach" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">No Coach</SelectItem>
+                    {activeStaff.map((s) => <SelectItem key={s.id} value={String(s.id)}>{s.firstName} {s.lastName}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Description</Label>
+              <Input value={editFormData.description} onChange={(e) => setEditFormData(p => ({ ...p, description: e.target.value }))} />
+            </div>
+            <div className="space-y-2">
+              <Label>Member-Visible Notes</Label>
+              <Textarea value={editFormData.memberNotes} onChange={(e) => setEditFormData(p => ({ ...p, memberNotes: e.target.value }))} placeholder="Visible to members (e.g., bring a towel, workout preview)" rows={2} />
+            </div>
+            <div className="space-y-2">
+              <Label>Staff Notes (internal)</Label>
+              <Textarea value={editFormData.staffNotes} onChange={(e) => setEditFormData(p => ({ ...p, staffNotes: e.target.value }))} placeholder="Only visible to staff" rows={2} />
+            </div>
+            <div className="flex items-center gap-6">
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={editFormData.isBookable} onChange={(e) => setEditFormData(p => ({ ...p, isBookable: e.target.checked }))} className="rounded border-border" />
+                Bookable
+              </label>
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={editFormData.waitlistEnabled} onChange={(e) => setEditFormData(p => ({ ...p, waitlistEnabled: e.target.checked }))} className="rounded border-border" />
+                Enable Waitlist
+              </label>
+            </div>
+            <DialogFooter>
+              <button type="button" onClick={() => { setEditOpen(false); setEditClassData(null); }} className="px-4 py-2 rounded-lg border border-border text-muted-foreground hover:bg-secondary transition-colors">Cancel</button>
+              <button type="submit" disabled={updateClassMutation.isPending} className="px-4 py-2 bg-primary text-primary-foreground rounded-lg font-medium hover:bg-primary/90 transition-colors disabled:opacity-50">
+                {updateClassMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save Changes"}
+              </button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* ===== CLASS DETAIL SHEET ===== */}
       <Sheet open={!!detailClassId} onOpenChange={(open) => { if (!open) { setDetailClassId(null); setFocusedClassId(null); } }}>
         <SheetContent className="overflow-y-auto">
           <SheetHeader>
@@ -834,9 +1185,11 @@ export function Schedule() {
           ) : classDetail ? (
             <div className="mt-6 space-y-6">
               <div className="space-y-3">
-                <div className="flex items-center gap-2">
-                  <Badge variant="outline">{classDetail.type}</Badge>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Badge variant="outline">{typeLabels[classDetail.type] || classDetail.type}</Badge>
                   <Badge variant={classDetail.status === "scheduled" ? "default" : "secondary"}>{classDetail.status}</Badge>
+                  {classDetail.enrolled >= classDetail.capacity && <Badge variant="destructive">Full</Badge>}
+                  {(classDetail as any).waitlistCount > 0 && <Badge variant="outline" className="border-orange-400/50 text-orange-400">{(classDetail as any).waitlistCount} waitlisted</Badge>}
                 </div>
                 <div className="grid grid-cols-2 gap-3 text-sm">
                   <div>
@@ -847,60 +1200,129 @@ export function Schedule() {
                     <span className="text-muted-foreground">End</span>
                     <p className="font-medium">{format(new Date(classDetail.endTime), 'MMM d, h:mm a')}</p>
                   </div>
-                  <div className="col-span-2">
-                    <span className="text-muted-foreground">Coach</span>
-                    <div className="mt-1">
-                      <Select value={classDetail.coachId ? String(classDetail.coachId) : "none"} onValueChange={handleAssignCoach} disabled={updateClassMutation.isPending}>
-                        <SelectTrigger className="w-full"><SelectValue placeholder="Assign Coach" /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="none">No Coach</SelectItem>
-                          {activeStaff.map((s) => <SelectItem key={s.id} value={String(s.id)}>{s.firstName} {s.lastName}</SelectItem>)}
-                        </SelectContent>
-                      </Select>
+                  {canManage ? (
+                    <div className="col-span-2">
+                      <span className="text-muted-foreground">Coach</span>
+                      <div className="mt-1">
+                        <Select value={classDetail.coachId ? String(classDetail.coachId) : "none"} onValueChange={handleAssignCoach} disabled={updateClassMutation.isPending}>
+                          <SelectTrigger className="w-full"><SelectValue placeholder="Assign Coach" /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">No Coach</SelectItem>
+                            {activeStaff.map((s) => <SelectItem key={s.id} value={String(s.id)}>{s.firstName} {s.lastName}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                      </div>
                     </div>
-                  </div>
+                  ) : (
+                    <div className="col-span-2">
+                      <span className="text-muted-foreground">Coach</span>
+                      <p className="font-medium">{classDetail.coachName || "No coach assigned"}</p>
+                    </div>
+                  )}
                   <div>
                     <span className="text-muted-foreground">Capacity</span>
                     <p className="font-medium">{classDetail.enrolled} / {classDetail.capacity}</p>
                   </div>
                 </div>
                 {classDetail.description && <p className="text-sm text-muted-foreground">{classDetail.description}</p>}
+                {(classDetail as any).memberNotes && (
+                  <div className="p-3 rounded-lg bg-primary/5 border border-primary/10">
+                    <p className="text-xs font-medium text-primary mb-1">Notes</p>
+                    <p className="text-sm text-foreground">{(classDetail as any).memberNotes}</p>
+                  </div>
+                )}
+                {canManage && (classDetail as any).staffNotes && (
+                  <div className="p-3 rounded-lg bg-muted/30 border border-border">
+                    <p className="text-xs font-medium text-muted-foreground mb-1">Staff Notes (internal)</p>
+                    <p className="text-sm text-foreground">{(classDetail as any).staffNotes}</p>
+                  </div>
+                )}
               </div>
+
+              {/* Roster */}
               <div>
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="font-semibold text-foreground">Roster</h3>
-                  <button onClick={() => setCheckinClassId(classDetail.id)} className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors">
-                    <UserCheck className="h-3.5 w-3.5" /> Check In
-                  </button>
+                  {canOperate && (
+                    <button onClick={() => setCheckinClassId(classDetail.id)} className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors">
+                      <UserCheck className="h-3.5 w-3.5" /> Check In
+                    </button>
+                  )}
                 </div>
                 {classDetail.roster?.length ? (
                   <div className="space-y-2">
-                    {classDetail.roster.map((att) => (
+                    {classDetail.roster.map((att: any) => (
                       <div key={att.id} className="flex items-center justify-between p-3 rounded-lg border border-border bg-background">
-                        <span className="text-sm font-medium">{att.memberName}</span>
-                        <Badge variant={att.status === "present" ? "default" : "secondary"} className="text-xs">{att.status}</Badge>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium">{att.memberName}</span>
+                          <AttendanceStatusBadge status={att.status} />
+                        </div>
+                        {canOperate && (
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <button className="p-1 rounded hover:bg-muted/50 text-muted-foreground"><ArrowUpDown className="h-3.5 w-3.5" /></button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-44">
+                              {att.status !== "checked_in" && att.status !== "present" && (
+                                <DropdownMenuItem onClick={() => handleUpdateAttendanceStatus(att.id, "checked_in")}>
+                                  <Check className="h-3.5 w-3.5 mr-2 text-green-400" /> Check In
+                                </DropdownMenuItem>
+                              )}
+                              {att.status !== "no_show" && (
+                                <DropdownMenuItem onClick={() => handleUpdateAttendanceStatus(att.id, "no_show")}>
+                                  <XCircle className="h-3.5 w-3.5 mr-2 text-red-400" /> No Show
+                                </DropdownMenuItem>
+                              )}
+                              {att.status !== "cancelled" && (
+                                <DropdownMenuItem onClick={() => handleUpdateAttendanceStatus(att.id, "cancelled")}>
+                                  <UserMinus className="h-3.5 w-3.5 mr-2 text-zinc-400" /> Cancel
+                                </DropdownMenuItem>
+                              )}
+                              {att.status === "waitlisted" && (
+                                <DropdownMenuItem onClick={() => handleUpdateAttendanceStatus(att.id, "reserved")}>
+                                  <BookOpen className="h-3.5 w-3.5 mr-2 text-sky-400" /> Move to Reserved
+                                </DropdownMenuItem>
+                              )}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        )}
                       </div>
                     ))}
                   </div>
                 ) : (
-                  <p className="text-sm text-muted-foreground text-center py-6">No members checked in yet.</p>
+                  <div className="text-center py-8 border border-dashed border-border/50 rounded-xl">
+                    <Users className="h-8 w-8 text-muted-foreground/30 mx-auto mb-2" />
+                    <p className="text-sm text-muted-foreground">No members yet.</p>
+                    {canOperate && <p className="text-xs text-muted-foreground/60 mt-1">Use the Check In button to add members.</p>}
+                  </div>
                 )}
               </div>
-              <div className="pt-2 border-t border-border">
-                <button onClick={() => setDeleteClassId(classDetail.id)} className="flex items-center gap-2 px-4 py-2 text-destructive hover:bg-destructive/10 rounded-lg text-sm font-medium transition-colors w-full justify-center">
-                  <Trash2 className="h-4 w-4" /> Delete Class
-                </button>
-              </div>
+
+              {/* Actions */}
+              {canManage && (
+                <div className="pt-3 border-t border-border space-y-2">
+                  <button onClick={() => openEditDialog(classDetail)} className="flex items-center gap-2 px-4 py-2 hover:bg-white/5 rounded-lg text-sm font-medium transition-colors w-full justify-center border border-border">
+                    <Pencil className="h-4 w-4" /> Edit Class
+                  </button>
+                  <button onClick={() => handleDuplicateClass(classDetail.id)} className="flex items-center gap-2 px-4 py-2 hover:bg-white/5 rounded-lg text-sm font-medium transition-colors w-full justify-center border border-border text-muted-foreground">
+                    <Copy className="h-4 w-4" /> Duplicate Class
+                  </button>
+                  <button onClick={() => setDeleteClassId(classDetail.id)} className="flex items-center gap-2 px-4 py-2 text-destructive hover:bg-destructive/10 rounded-lg text-sm font-medium transition-colors w-full justify-center">
+                    <Trash2 className="h-4 w-4" /> Delete Class
+                  </button>
+                </div>
+              )}
             </div>
           ) : null}
         </SheetContent>
       </Sheet>
 
+      {/* ===== DELETE CLASS CONFIRM ===== */}
       <AlertDialog open={!!deleteClassId} onOpenChange={(open) => { if (!open) setDeleteClassId(null); }}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Class</AlertDialogTitle>
-            <AlertDialogDescription>Are you sure you want to delete this class? This action cannot be undone.</AlertDialogDescription>
+            <AlertDialogDescription>Are you sure you want to delete this class? This action cannot be undone. All roster entries will be removed.</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
@@ -911,6 +1333,7 @@ export function Schedule() {
         </AlertDialogContent>
       </AlertDialog>
 
+      {/* ===== CHECK IN MEMBER DIALOG ===== */}
       <Dialog open={!!checkinClassId} onOpenChange={(open) => { if (!open) { setCheckinClassId(null); setMemberSearch(""); } }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
@@ -932,13 +1355,17 @@ export function Schedule() {
                   <UserCheck className="h-4 w-4 text-muted-foreground" />
                 </button>
               )) : (
-                <p className="text-sm text-muted-foreground text-center py-6">{memberSearch ? "No members found." : "Type to search members."}</p>
+                <div className="text-center py-8">
+                  <Search className="h-6 w-6 text-muted-foreground/30 mx-auto mb-2" />
+                  <p className="text-sm text-muted-foreground">{memberSearch ? "No members found." : "Type to search members."}</p>
+                </div>
               )}
             </div>
           </div>
         </DialogContent>
       </Dialog>
 
+      {/* ===== COPY WEEK DIALOG ===== */}
       <Dialog open={copyWeekOpen} onOpenChange={(open) => { if (!open) { setCopyWeekOpen(false); setCopyWeekPreviewData(null); } }}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
@@ -983,7 +1410,10 @@ export function Schedule() {
                 </div>
               )}
               {copyWeekPreviewData.toCreate.length === 0 && copyWeekPreviewData.toSkip.length === 0 && (
-                <p className="text-sm text-muted-foreground text-center py-4">No classes found in last week to copy.</p>
+                <div className="text-center py-8">
+                  <CalendarDays className="h-8 w-8 text-muted-foreground/30 mx-auto mb-2" />
+                  <p className="text-sm text-muted-foreground">No classes found in last week to copy.</p>
+                </div>
               )}
             </div>
           ) : null}
@@ -996,6 +1426,7 @@ export function Schedule() {
         </DialogContent>
       </Dialog>
 
+      {/* ===== SAVE TEMPLATE DIALOG ===== */}
       <Dialog open={saveTemplateOpen} onOpenChange={(open) => { if (!open) { setSaveTemplateOpen(false); setTemplateName(""); } }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
@@ -1017,6 +1448,7 @@ export function Schedule() {
         </DialogContent>
       </Dialog>
 
+      {/* ===== TEMPLATE MANAGER SHEET ===== */}
       <Sheet open={templateManagerOpen} onOpenChange={(open) => { if (!open) { setTemplateManagerOpen(false); setApplyTemplateId(null); setApplyTemplatePreviewData(null); } }}>
         <SheetContent className="overflow-y-auto sm:max-w-lg">
           <SheetHeader>
@@ -1037,12 +1469,16 @@ export function Schedule() {
               </div>
             ) : (
               <div className="space-y-3">
-                {templates.map((tmpl) => (
+                {templates.map((tmpl: any) => (
                   <div key={tmpl.id} className="p-4 rounded-xl border border-border space-y-3">
                     <div className="flex items-center justify-between">
                       <div>
                         <h4 className="text-sm font-semibold text-foreground">{tmpl.name}</h4>
-                        <p className="text-xs text-muted-foreground">{format(new Date(tmpl.createdAt), 'MMM d, yyyy')}</p>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <span className="text-xs text-muted-foreground">{format(new Date(tmpl.createdAt), 'MMM d, yyyy')}</span>
+                          {tmpl.totalClasses > 0 && <span className="text-xs text-muted-foreground/60">{tmpl.totalClasses} classes</span>}
+                          {tmpl.usedCount > 0 && <span className="text-xs text-muted-foreground/60">Used {tmpl.usedCount}x</span>}
+                        </div>
                       </div>
                       <div className="flex items-center gap-1">
                         <button onClick={() => handleApplyTemplatePreview(tmpl.id)} className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-primary-foreground rounded-lg text-xs font-medium hover:bg-primary/90 transition-colors"><Play className="h-3.5 w-3.5" />Apply</button>
@@ -1054,12 +1490,36 @@ export function Schedule() {
                     {viewTemplateId === tmpl.id && viewTemplateDetail && (viewTemplateDetail as any).items && (
                       <div className="border-t border-border pt-3 space-y-1.5">
                         <p className="text-xs font-semibold text-muted-foreground mb-2">{((viewTemplateDetail as any).items || []).length} classes in template:</p>
-                        {((viewTemplateDetail as any).items || []).map((item: any, i: number) => (
-                          <div key={i} className="flex items-center justify-between p-2 rounded-lg bg-muted/30 text-sm">
-                            <div><span className="font-medium">{item.className}</span><span className="text-xs text-muted-foreground ml-2">{WEEKDAY_NAMES[item.weekday]} {item.startTime} - {item.endTime}</span></div>
-                            <Badge variant="outline" className="text-xs">{item.type}</Badge>
-                          </div>
-                        ))}
+                        {(() => {
+                          const items = [...((viewTemplateDetail as any).items || [])].sort((a: any, b: any) => {
+                            if (a.weekday !== b.weekday) return a.weekday - b.weekday;
+                            if (a.startTime !== b.startTime) return a.startTime.localeCompare(b.startTime);
+                            return a.className.localeCompare(b.className);
+                          });
+                          let lastDay = -1;
+                          return items.map((item: any, i: number) => {
+                            const showDayHeader = item.weekday !== lastDay;
+                            lastDay = item.weekday;
+                            return (
+                              <React.Fragment key={i}>
+                                {showDayHeader && (
+                                  <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider pt-2 first:pt-0">{WEEKDAY_NAMES[item.weekday]}</div>
+                                )}
+                                <div className="flex items-center justify-between p-2 rounded-lg bg-muted/30 text-sm">
+                                  <div className="flex items-center gap-2">
+                                    <div className={`h-2 w-2 rounded-full ${getClassColors(item.type).dot}`} />
+                                    <span className="font-medium">{item.className}</span>
+                                    <span className="text-xs text-muted-foreground">{item.startTime} - {item.endTime}</span>
+                                  </div>
+                                  <div className="flex items-center gap-1.5">
+                                    {item.coachName && <span className="text-xs text-muted-foreground/60">{item.coachName}</span>}
+                                    <span className="text-xs text-muted-foreground/40">{item.capacity}p</span>
+                                  </div>
+                                </div>
+                              </React.Fragment>
+                            );
+                          });
+                        })()}
                       </div>
                     )}
                   </div>
@@ -1070,11 +1530,12 @@ export function Schedule() {
         </SheetContent>
       </Sheet>
 
-      <Dialog open={!!applyTemplateId && !!applyTemplatePreviewData} onOpenChange={(open) => { if (!open) { setApplyTemplateId(null); setApplyTemplatePreviewData(null); } }}>
+      {/* ===== APPLY TEMPLATE PREVIEW DIALOG ===== */}
+      <Dialog open={!!applyTemplateId && !!applyTemplatePreviewData} onOpenChange={(open) => { if (!open) { setApplyTemplateId(null); setApplyTemplatePreviewData(null); setApplySelectedItems(new Set()); } }}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>Apply Template</DialogTitle>
-            <DialogDescription>Apply template to the week of {format(currentWeekStart, 'MMM d, yyyy')}.</DialogDescription>
+            <DialogDescription>Apply template to the week of {format(currentWeekStart, 'MMM d, yyyy')}. Deselect any classes you don't want to create.</DialogDescription>
           </DialogHeader>
           {previewApplyMutation.isPending ? (
             <div className="flex items-center justify-center py-8"><Loader2 className="h-6 w-6 text-primary animate-spin" /></div>
@@ -1087,19 +1548,65 @@ export function Schedule() {
                   ))}
                 </div>
               )}
+
               {applyTemplatePreviewData.toCreate.length > 0 && (
                 <div>
-                  <h4 className="text-sm font-semibold text-foreground mb-2">Classes to create ({applyTemplatePreviewData.toCreate.length})</h4>
+                  <div className="flex items-center justify-between mb-2">
+                    <h4 className="text-sm font-semibold text-foreground">Classes to create ({applySelectedItems.size} of {applyTemplatePreviewData.toCreate.length} selected)</h4>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (applySelectedItems.size === applyTemplatePreviewData.toCreate.length) {
+                          setApplySelectedItems(new Set());
+                        } else {
+                          setApplySelectedItems(new Set(applyTemplatePreviewData.toCreate.map((_, i) => i)));
+                        }
+                      }}
+                      className="text-xs text-primary hover:underline"
+                    >
+                      {applySelectedItems.size === applyTemplatePreviewData.toCreate.length ? "Deselect All" : "Select All"}
+                    </button>
+                  </div>
                   <div className="space-y-1.5">
-                    {applyTemplatePreviewData.toCreate.map((item, i) => (
-                      <div key={i} className="flex items-center justify-between p-2.5 rounded-lg border border-border bg-green-500/5">
-                        <div><span className="text-sm font-medium">{item.name}</span><span className="text-xs text-muted-foreground ml-2">{WEEKDAY_NAMES[item.weekday!]} {item.startTime} - {item.endTime}</span></div>
-                        <Badge variant="outline" className="text-xs bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/30">New</Badge>
-                      </div>
-                    ))}
+                    {(() => {
+                      const sorted = applyTemplatePreviewData.toCreate.map((item, origIdx) => ({ item, origIdx })).sort((a, b) => {
+                        if ((a.item.weekday || 0) !== (b.item.weekday || 0)) return (a.item.weekday || 0) - (b.item.weekday || 0);
+                        return (a.item.startTime || "").localeCompare(b.item.startTime || "");
+                      });
+                      let lastDay = -1;
+                      return sorted.map(({ item, origIdx }) => {
+                        const showDayHeader = (item.weekday || 0) !== lastDay;
+                        lastDay = item.weekday || 0;
+                        const isSelected = applySelectedItems.has(origIdx);
+                        return (
+                          <React.Fragment key={origIdx}>
+                            {showDayHeader && (
+                              <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider pt-2 first:pt-0">{WEEKDAY_NAMES[item.weekday || 0]}</div>
+                            )}
+                            <label className={`flex items-center gap-3 p-2.5 rounded-lg border cursor-pointer transition-all ${isSelected ? "border-primary/40 bg-green-500/5" : "border-border opacity-50"}`}>
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={() => {
+                                  const next = new Set(applySelectedItems);
+                                  if (isSelected) next.delete(origIdx); else next.add(origIdx);
+                                  setApplySelectedItems(next);
+                                }}
+                                className="rounded border-border"
+                              />
+                              <div className="flex-1 flex items-center justify-between">
+                                <div><span className="text-sm font-medium">{item.name}</span><span className="text-xs text-muted-foreground ml-2">{item.startTime} - {item.endTime}</span></div>
+                                <Badge variant="outline" className="text-xs bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/30">New</Badge>
+                              </div>
+                            </label>
+                          </React.Fragment>
+                        );
+                      });
+                    })()}
                   </div>
                 </div>
               )}
+
               {applyTemplatePreviewData.toSkip.length > 0 && (
                 <div>
                   <h4 className="text-sm font-semibold text-muted-foreground mb-2">Skipped duplicates ({applyTemplatePreviewData.toSkip.length})</h4>
@@ -1113,20 +1620,25 @@ export function Schedule() {
                   </div>
                 </div>
               )}
+
               {applyTemplatePreviewData.toCreate.length === 0 && applyTemplatePreviewData.toSkip.length === 0 && (
-                <p className="text-sm text-muted-foreground text-center py-4">This template has no items.</p>
+                <div className="text-center py-8">
+                  <LayoutTemplate className="h-8 w-8 text-muted-foreground/30 mx-auto mb-2" />
+                  <p className="text-sm text-muted-foreground">This template has no items.</p>
+                </div>
               )}
             </div>
           ) : null}
           <DialogFooter>
-            <button type="button" onClick={() => { setApplyTemplateId(null); setApplyTemplatePreviewData(null); }} className="px-4 py-2 rounded-lg border border-border text-muted-foreground hover:bg-secondary transition-colors">Cancel</button>
-            <button type="button" onClick={handleApplyTemplateConfirm} disabled={applyTemplateMutation.isPending || !applyTemplatePreviewData || applyTemplatePreviewData.toCreate.length === 0} className="px-4 py-2 bg-primary text-primary-foreground rounded-lg font-medium hover:bg-primary/90 transition-colors disabled:opacity-50">
-              {applyTemplateMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : `Apply ${applyTemplatePreviewData?.toCreate.length || 0} Classes`}
+            <button type="button" onClick={() => { setApplyTemplateId(null); setApplyTemplatePreviewData(null); setApplySelectedItems(new Set()); }} className="px-4 py-2 rounded-lg border border-border text-muted-foreground hover:bg-secondary transition-colors">Cancel</button>
+            <button type="button" onClick={handleApplyTemplateConfirm} disabled={applyTemplateMutation.isPending || !applyTemplatePreviewData || applySelectedItems.size === 0} className="px-4 py-2 bg-primary text-primary-foreground rounded-lg font-medium hover:bg-primary/90 transition-colors disabled:opacity-50">
+              {applyTemplateMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : `Apply ${applySelectedItems.size} Classes`}
             </button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
+      {/* ===== RENAME TEMPLATE ===== */}
       <Dialog open={!!renameTemplateId} onOpenChange={(open) => { if (!open) { setRenameTemplateId(null); setRenameTemplateName(""); } }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
@@ -1148,6 +1660,7 @@ export function Schedule() {
         </DialogContent>
       </Dialog>
 
+      {/* ===== DELETE TEMPLATE CONFIRM ===== */}
       <AlertDialog open={!!deleteTemplateId} onOpenChange={(open) => { if (!open) setDeleteTemplateId(null); }}>
         <AlertDialogContent>
           <AlertDialogHeader>

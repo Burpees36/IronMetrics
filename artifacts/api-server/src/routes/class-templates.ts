@@ -1,7 +1,8 @@
 import { Router, type IRouter } from "express";
-import { eq, and, gte, lt, desc } from "drizzle-orm";
+import { eq, and, gte, lt, desc, sql } from "drizzle-orm";
 import { db, classesTable, classTemplatesTable, classTemplateItemsTable, gymStaffTable } from "@workspace/db";
 import { addDays, startOfWeek, format } from "date-fns";
+import { requireScheduleManage } from "../middlewares/scheduleRbac";
 
 const router: IRouter = Router();
 
@@ -56,7 +57,7 @@ function isDuplicate(
   });
 }
 
-router.post("/gyms/:gymId/classes/copy-week", async (req, res): Promise<void> => {
+router.post("/gyms/:gymId/classes/copy-week", requireScheduleManage(), async (req, res): Promise<void> => {
   const gymId = parseGymId(req.params);
   if (!gymId) { res.status(400).json({ error: "Invalid gym ID" }); return; }
 
@@ -147,7 +148,7 @@ router.post("/gyms/:gymId/classes/copy-week", async (req, res): Promise<void> =>
   res.json({ created, skipped, warnings, message: `${created.length} classes created, ${skipped.length} skipped.` });
 });
 
-router.post("/gyms/:gymId/classes/copy-week/preview", async (req, res): Promise<void> => {
+router.post("/gyms/:gymId/classes/copy-week/preview", requireScheduleManage(), async (req, res): Promise<void> => {
   const gymId = parseGymId(req.params);
   if (!gymId) { res.status(400).json({ error: "Invalid gym ID" }); return; }
 
@@ -254,7 +255,7 @@ router.get("/gyms/:gymId/class-templates/:templateId", async (req, res): Promise
   res.json({ ...template, items });
 });
 
-router.post("/gyms/:gymId/class-templates", async (req, res): Promise<void> => {
+router.post("/gyms/:gymId/class-templates", requireScheduleManage(), async (req, res): Promise<void> => {
   const gymId = parseGymId(req.params);
   if (!gymId) { res.status(400).json({ error: "Invalid gym ID" }); return; }
 
@@ -282,10 +283,14 @@ router.post("/gyms/:gymId/class-templates", async (req, res): Promise<void> => {
     return;
   }
 
+  const userId = req.user?.id || null;
+
   const [template] = await db.insert(classTemplatesTable).values({
     gymId,
     name,
     description: description || null,
+    createdBy: userId,
+    totalClasses: sourceClasses.length,
   }).returning();
 
   const items = [];
@@ -308,7 +313,7 @@ router.post("/gyms/:gymId/class-templates", async (req, res): Promise<void> => {
   res.status(201).json({ ...template, items });
 });
 
-router.patch("/gyms/:gymId/class-templates/:templateId", async (req, res): Promise<void> => {
+router.patch("/gyms/:gymId/class-templates/:templateId", requireScheduleManage(), async (req, res): Promise<void> => {
   const gymId = parseGymId(req.params);
   const templateId = parseInt(req.params.templateId, 10);
   if (!gymId || isNaN(templateId)) { res.status(400).json({ error: "Invalid IDs" }); return; }
@@ -328,7 +333,7 @@ router.patch("/gyms/:gymId/class-templates/:templateId", async (req, res): Promi
   res.json(template);
 });
 
-router.delete("/gyms/:gymId/class-templates/:templateId", async (req, res): Promise<void> => {
+router.delete("/gyms/:gymId/class-templates/:templateId", requireScheduleManage(), async (req, res): Promise<void> => {
   const gymId = parseGymId(req.params);
   const templateId = parseInt(req.params.templateId, 10);
   if (!gymId || isNaN(templateId)) { res.status(400).json({ error: "Invalid IDs" }); return; }
@@ -339,12 +344,12 @@ router.delete("/gyms/:gymId/class-templates/:templateId", async (req, res): Prom
   res.sendStatus(204);
 });
 
-router.post("/gyms/:gymId/class-templates/:templateId/apply", async (req, res): Promise<void> => {
+router.post("/gyms/:gymId/class-templates/:templateId/apply", requireScheduleManage(), async (req, res): Promise<void> => {
   const gymId = parseGymId(req.params);
   const templateId = parseInt(req.params.templateId, 10);
   if (!gymId || isNaN(templateId)) { res.status(400).json({ error: "Invalid IDs" }); return; }
 
-  const { targetWeek } = req.body;
+  const { targetWeek, selectedItemIds } = req.body;
   if (!targetWeek) { res.status(400).json({ error: "targetWeek is required" }); return; }
 
   const [template] = await db
@@ -354,10 +359,15 @@ router.post("/gyms/:gymId/class-templates/:templateId/apply", async (req, res): 
 
   if (!template) { res.status(404).json({ error: "Template not found" }); return; }
 
-  const items = await db
+  let items = await db
     .select()
     .from(classTemplateItemsTable)
     .where(eq(classTemplateItemsTable.templateId, templateId));
+
+  if (selectedItemIds && Array.isArray(selectedItemIds) && selectedItemIds.length > 0) {
+    const selectedSet = new Set(selectedItemIds);
+    items = items.filter((item) => selectedSet.has(item.id));
+  }
 
   const target = getWeekBounds(targetWeek);
 
@@ -416,10 +426,17 @@ router.post("/gyms/:gymId/class-templates/:templateId/apply", async (req, res): 
     allTargetClasses.push(newClass);
   }
 
+  await db.update(classTemplatesTable)
+    .set({
+      usedCount: sql`COALESCE(${classTemplatesTable.usedCount}, 0) + 1`,
+      lastUsedAt: new Date(),
+    })
+    .where(eq(classTemplatesTable.id, templateId));
+
   res.json({ created, skipped, warnings, message: `${created.length} classes created, ${skipped.length} skipped.` });
 });
 
-router.post("/gyms/:gymId/class-templates/:templateId/apply/preview", async (req, res): Promise<void> => {
+router.post("/gyms/:gymId/class-templates/:templateId/apply/preview", requireScheduleManage(), async (req, res): Promise<void> => {
   const gymId = parseGymId(req.params);
   const templateId = parseInt(req.params.templateId, 10);
   if (!gymId || isNaN(templateId)) { res.status(400).json({ error: "Invalid IDs" }); return; }

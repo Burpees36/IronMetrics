@@ -33,7 +33,7 @@ Iron Metrics is built as a pnpm workspace monorepo using TypeScript.
 - **Multi-tenancy:** `gyms` table for isolated workspaces.
 - **Member Management:** Full CRM, risk scoring, notes, lifecycle events, and CSV import.
 - **Lead Management:** Kanban-style pipeline with activity timelines, follow-up scheduling, and conversion flows.
-- **Class Scheduling:** Weekly calendar, capacity tracking, check-ins, templates, and cloning.
+- **Class Scheduling:** Weekly calendar with RBAC-aware UI, capacity tracking, occupancy badges, check-ins with status management (reserved/checked_in/no_show/cancelled/waitlisted), edit class with notes fields, duplicate action, roster status dropdowns, templates with selective apply and usage tracking, copy-week, filter bar (type + coach), and Google Calendar-style overlap rendering.
 - **Billing:** Comprehensive billing command center with plans, subscriptions, payments, refunds, and full Stripe integration. Billing audit logs and webhook idempotency are implemented.
 - **Programming Hub:** Daily programming interface with section-based workout builder and result logging.
 - **AI Operator:** Task queue for AI-generated content (outreach, owner briefs), with approval/dismissal workflows and email sending capabilities.

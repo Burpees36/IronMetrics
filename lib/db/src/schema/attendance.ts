@@ -13,7 +13,8 @@ export const attendanceTable = pgTable("attendance", {
   classId: integer("class_id").references(() => classesTable.id),
   className: text("class_name"),
   checkinTime: timestamp("checkin_time", { withTimezone: true }).notNull().defaultNow(),
-  status: text("status").notNull().default("present"),
+  status: text("status").notNull().default("reserved"),
+  waitlistPosition: integer("waitlist_position"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

@@ -6,6 +6,10 @@ export const classTemplatesTable = pgTable("class_templates", {
   gymId: integer("gym_id").notNull().references(() => gymsTable.id),
   name: text("name").notNull(),
   description: text("description"),
+  createdBy: text("created_by"),
+  totalClasses: integer("total_classes").notNull().default(0),
+  usedCount: integer("used_count").notNull().default(0),
+  lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });
