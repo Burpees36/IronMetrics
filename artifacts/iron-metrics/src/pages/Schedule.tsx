@@ -608,72 +608,34 @@ export function Schedule() {
                           return { cls, start, end, startMin, endMin };
                         });
 
-                        const groups: number[][] = [];
-                        const groupCols: number[] = new Array(items.length).fill(0);
-                        const groupMaxCols: number[] = new Array(items.length).fill(1);
-
+                        const overlapDepth: number[] = new Array(items.length).fill(0);
                         for (let i = 0; i < items.length; i++) {
-                          let placed = false;
-                          for (const group of groups) {
-                            const overlapsGroup = group.some(j =>
-                              items[j].endMin > items[i].startMin && items[j].startMin < items[i].endMin
-                            );
-                            if (overlapsGroup) {
-                              const usedCols = new Set(group.map(j => groupCols[j]));
-                              let col = 0;
-                              while (usedCols.has(col)) col++;
-                              groupCols[i] = col;
-                              group.push(i);
-                              const maxCol = Math.max(...group.map(j => groupCols[j])) + 1;
-                              for (const j of group) groupMaxCols[j] = maxCol;
-                              placed = true;
-                              break;
+                          let maxPriorDepth = -1;
+                          for (let j = 0; j < i; j++) {
+                            if (items[j].endMin > items[i].startMin && items[j].startMin < items[i].endMin) {
+                              maxPriorDepth = Math.max(maxPriorDepth, overlapDepth[j]);
                             }
                           }
-                          if (!placed) {
-                            groupCols[i] = 0;
-                            groupMaxCols[i] = 1;
-                            groups.push([i]);
-                          }
+                          overlapDepth[i] = maxPriorDepth + 1;
                         }
 
-                        for (const group of groups) {
-                          if (group.length <= 1) continue;
-                          for (const idx of group) {
-                            const directOverlaps = group.filter(j =>
-                              j !== idx && items[j].endMin > items[idx].startMin && items[j].startMin < items[idx].endMin
-                            );
-                            const localMax = Math.max(groupCols[idx], ...directOverlaps.map(j => groupCols[j])) + 1;
-                            groupMaxCols[idx] = Math.max(localMax, groupMaxCols[idx]);
-                          }
-                        }
-
+                        const INDENT = 16;
                         const PAD = 3;
 
                         return items.map(({ cls, start, end, startMin, endMin }, i) => {
                           const topPx = ((startMin / 60) - CALENDAR_START_HOUR) * HOUR_HEIGHT;
                           const heightPx = Math.max(((endMin - startMin) / 60) * HOUR_HEIGHT, 32);
                           const colors = getClassColors(cls.type || "regular");
-                          const col = groupCols[i];
-                          const numCols = groupMaxCols[i];
-                          const isOverlapping = numCols > 1;
-                          const isNarrow = isOverlapping && numCols >= 3;
+                          const depth = overlapDepth[i];
                           const isTiny = heightPx < 44;
-                          const isMedium = heightPx >= 44 && heightPx < 64;
 
                           const style: React.CSSProperties = {
                             top: topPx + 1,
                             height: heightPx - 2,
+                            left: PAD + depth * INDENT,
+                            right: PAD,
+                            zIndex: 10 + depth,
                           };
-
-                          if (isOverlapping) {
-                            const colWidth = 100 / numCols;
-                            style.left = `calc(${col * colWidth}% + ${PAD}px)`;
-                            style.width = `calc(${colWidth}% - ${PAD * 2}px)`;
-                          } else {
-                            style.left = PAD;
-                            style.right = PAD;
-                          }
 
                           const timeStr = `${format(start, 'h:mm a')} – ${format(end, 'h:mm a')}`;
                           const fullTitle = `${cls.name}\n${timeStr}${cls.coachName ? `\n${cls.coachName}` : ''}\n${cls.enrolled}/${cls.capacity}`;
@@ -682,23 +644,23 @@ export function Schedule() {
                             <div
                               key={cls.id}
                               title={fullTitle}
-                              className={`calendar-class-block absolute rounded-lg border cursor-pointer transition-all hover:brightness-125 hover:z-20 hover:shadow-lg ${colors.bg} ${colors.border}`}
+                              className={`calendar-class-block absolute rounded-lg border cursor-pointer transition-all hover:brightness-125 hover:!z-30 hover:shadow-xl ${colors.bg} ${colors.border} ${depth > 0 ? 'shadow-md' : ''}`}
                               style={style}
                               onClick={(e) => {
                                 e.stopPropagation();
                                 setDetailClassId(cls.id);
                               }}
                             >
-                              <div className={`${isNarrow ? 'px-1' : 'px-2'} ${isTiny ? 'py-0.5' : 'py-1'} overflow-hidden h-full flex flex-col ${isTiny ? 'justify-center' : 'justify-start'}`}>
-                                <div className={`font-semibold truncate leading-tight ${colors.text} ${isNarrow || isTiny ? 'text-[10px]' : 'text-xs'}`}>
+                              <div className={`px-2 ${isTiny ? 'py-0.5' : 'py-1'} overflow-hidden h-full flex flex-col ${isTiny ? 'justify-center' : 'justify-start'}`}>
+                                <div className={`font-semibold truncate leading-tight ${colors.text} ${isTiny ? 'text-[10px]' : 'text-xs'}`}>
                                   {cls.name}
                                 </div>
                                 {!isTiny && (
-                                  <div className={`${isNarrow ? 'text-[9px]' : 'text-[10px]'} text-muted-foreground truncate mt-0.5`}>
-                                    {isNarrow ? format(start, 'h:mm a') : timeStr}
+                                  <div className="text-[10px] text-muted-foreground truncate mt-0.5">
+                                    {timeStr}
                                   </div>
                                 )}
-                                {!isTiny && !isMedium && !isNarrow && (
+                                {heightPx >= 64 && (
                                   <div className="flex items-center gap-2 mt-1">
                                     {cls.coachName && (
                                       <span className="text-[10px] text-muted-foreground/80 truncate">{cls.coachName}</span>
@@ -708,8 +670,8 @@ export function Schedule() {
                                     </span>
                                   </div>
                                 )}
-                                {!isTiny && (isMedium || isNarrow) && (
-                                  <span className={`${isNarrow ? 'text-[9px]' : 'text-[10px]'} text-muted-foreground/60 mt-0.5`}>
+                                {!isTiny && heightPx < 64 && (
+                                  <span className="text-[10px] text-muted-foreground/60 mt-0.5">
                                     {cls.enrolled}/{cls.capacity}
                                   </span>
                                 )}
