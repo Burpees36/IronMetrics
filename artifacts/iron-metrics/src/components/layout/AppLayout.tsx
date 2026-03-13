@@ -4,9 +4,10 @@ import { useAuth } from "@workspace/replit-auth-web";
 import { 
   Dumbbell, LayoutDashboard, BrainCircuit, Users, CalendarDays, 
   Target, CreditCard, Activity, Bot, LogOut, Loader2, Menu, X, BookOpen,
-  ShoppingBag, MessagesSquare, FileText, BarChart3, Settings
+  ShoppingBag, MessagesSquare, FileText, BarChart3, Settings, Sun, Moon
 } from "lucide-react";
 import { useGym } from "@/store/GymContext";
+import { useTheme } from "@/store/ThemeContext";
 import { useGetGym } from "@workspace/api-client-react";
 import { motion } from "framer-motion";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -37,6 +38,19 @@ const BOTTOM_NAV_ITEMS = [
   { name: "Schedule", href: "/schedule", icon: CalendarDays },
   { name: "AI", href: "/ai-operator", icon: Bot },
 ];
+
+function ThemeToggleButton({ className = "" }: { className?: string }) {
+  const { theme, toggleTheme } = useTheme();
+  return (
+    <button
+      onClick={toggleTheme}
+      className={`p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors ${className}`}
+      aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+    >
+      {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+    </button>
+  );
+}
 
 function SidebarContent({ location, gym, gymLoading, user, logout, onNavigate }: {
   location: string;
@@ -71,7 +85,7 @@ function SidebarContent({ location, gym, gymLoading, user, logout, onNavigate }:
                     flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200
                     ${isActive 
                       ? "bg-primary/10 text-primary font-medium" 
-                      : "text-muted-foreground hover:bg-white/5 hover:text-foreground"}
+                      : "text-muted-foreground hover:bg-secondary hover:text-foreground"}
                   `}>
                     <item.icon className={`h-5 w-5 ${isActive ? "text-primary" : ""}`} />
                     <span className="text-sm">{item.name}</span>
@@ -89,8 +103,12 @@ function SidebarContent({ location, gym, gymLoading, user, logout, onNavigate }:
         </div>
       </div>
 
-      <div className="p-4 border-t border-border/50">
-        <div className="flex items-center gap-3 px-3 py-2 rounded-xl bg-white/5 border border-white/10">
+      <div className="p-4 border-t border-border/50 space-y-2">
+        <div className="flex items-center justify-between px-3">
+          <span className="text-xs text-muted-foreground">Theme</span>
+          <ThemeToggleButton />
+        </div>
+        <div className="flex items-center gap-3 px-3 py-2 rounded-xl bg-secondary border border-border">
           <div className="h-8 w-8 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold text-sm">
             {user?.firstName?.[0] || user?.email?.[0] || "U"}
           </div>

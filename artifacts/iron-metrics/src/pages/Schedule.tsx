@@ -454,7 +454,7 @@ export function Schedule() {
   function handleCheckIn(memberId: number) {
     if (!activeGymId || !checkinClassId) return;
     checkInMutation.mutate(
-      { gymId: activeGymId, classId: checkinClassId, data: { memberId, status: "present" } },
+      { gymId: activeGymId, classId: checkinClassId, data: { memberId, status: "checked_in" } },
       {
         onSuccess: () => {
           toast({ title: "Checked In", description: "Member has been checked in." });
@@ -659,10 +659,10 @@ export function Schedule() {
       <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0">
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-1">
-            <button onClick={handlePrevWeek} className="p-1.5 rounded-full text-muted-foreground hover:text-foreground hover:bg-white/5 transition-colors" aria-label="Previous week">
+            <button onClick={handlePrevWeek} className="p-1.5 rounded-full text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors" aria-label="Previous week">
               <ChevronLeft className="h-5 w-5" />
             </button>
-            <button onClick={handleNextWeek} className="p-1.5 rounded-full text-muted-foreground hover:text-foreground hover:bg-white/5 transition-colors" aria-label="Next week">
+            <button onClick={handleNextWeek} className="p-1.5 rounded-full text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors" aria-label="Next week">
               <ChevronRight className="h-5 w-5" />
             </button>
           </div>
@@ -695,7 +695,7 @@ export function Schedule() {
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button className={`flex items-center justify-center gap-2 px-3 py-2 border rounded-xl text-sm transition-colors ${hasActiveFilters ? "border-primary/50 bg-primary/10 text-primary" : "border-border/50 hover:bg-white/5 text-muted-foreground hover:text-foreground"}`}>
+              <button className={`flex items-center justify-center gap-2 px-3 py-2 border rounded-xl text-sm transition-colors ${hasActiveFilters ? "border-primary/50 bg-primary/10 text-primary" : "border-border/50 hover:bg-secondary text-muted-foreground hover:text-foreground"}`}>
                 <Filter className="h-4 w-4" />
                 <span className="hidden sm:inline">Filter</span>
               </button>
@@ -736,7 +736,7 @@ export function Schedule() {
           {canManage && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button className="flex items-center justify-center gap-2 px-3 py-2 border border-border/50 hover:bg-white/5 text-muted-foreground hover:text-foreground rounded-xl text-sm transition-colors">
+                <button className="flex items-center justify-center gap-2 px-3 py-2 border border-border/50 hover:bg-secondary text-muted-foreground hover:text-foreground rounded-xl text-sm transition-colors">
                   <MoreHorizontal className="h-4 w-4" />
                   <span className="hidden sm:inline">Actions</span>
                 </button>
@@ -883,7 +883,7 @@ export function Schedule() {
                             <div
                               key={cls.id}
                               title={fullTitle}
-                              className={`calendar-class-block absolute rounded-xl cursor-pointer transition-all duration-200 hover:shadow-lg overflow-hidden group ${isFocused ? 'ring-2 ring-white/40 shadow-xl shadow-black/40' : depth > 0 ? 'shadow-md shadow-black/30' : ''}`}
+                              className={`calendar-class-block absolute rounded-xl cursor-pointer transition-all duration-200 hover:shadow-lg overflow-hidden group ${isFocused ? 'ring-2 ring-border shadow-xl shadow-black/10 dark:shadow-black/40' : depth > 0 ? 'shadow-md shadow-black/10 dark:shadow-black/30' : ''}`}
                               style={style}
                               onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = colors.solidHover; }}
                               onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = colors.solidBg; }}
@@ -1301,10 +1301,10 @@ export function Schedule() {
               {/* Actions */}
               {canManage && (
                 <div className="pt-3 border-t border-border space-y-2">
-                  <button onClick={() => openEditDialog(classDetail)} className="flex items-center gap-2 px-4 py-2 hover:bg-white/5 rounded-lg text-sm font-medium transition-colors w-full justify-center border border-border">
+                  <button onClick={() => openEditDialog(classDetail)} className="flex items-center gap-2 px-4 py-2 hover:bg-secondary rounded-lg text-sm font-medium transition-colors w-full justify-center border border-border">
                     <Pencil className="h-4 w-4" /> Edit Class
                   </button>
-                  <button onClick={() => handleDuplicateClass(classDetail.id)} className="flex items-center gap-2 px-4 py-2 hover:bg-white/5 rounded-lg text-sm font-medium transition-colors w-full justify-center border border-border text-muted-foreground">
+                  <button onClick={() => handleDuplicateClass(classDetail.id)} className="flex items-center gap-2 px-4 py-2 hover:bg-secondary rounded-lg text-sm font-medium transition-colors w-full justify-center border border-border text-muted-foreground">
                     <Copy className="h-4 w-4" /> Duplicate Class
                   </button>
                   <button onClick={() => setDeleteClassId(classDetail.id)} className="flex items-center gap-2 px-4 py-2 text-destructive hover:bg-destructive/10 rounded-lg text-sm font-medium transition-colors w-full justify-center">
@@ -1347,7 +1347,7 @@ export function Schedule() {
             </div>
             <div className="max-h-64 overflow-y-auto space-y-1">
               {members.length ? members.map((member) => (
-                <button key={member.id} onClick={() => handleCheckIn(member.id)} disabled={checkInMutation.isPending} className="flex items-center justify-between w-full p-3 rounded-lg border border-border hover:border-primary/50 hover:bg-white/5 transition-all text-left">
+                <button key={member.id} onClick={() => handleCheckIn(member.id)} disabled={checkInMutation.isPending} className="flex items-center justify-between w-full p-3 rounded-lg border border-border hover:border-primary/50 hover:bg-secondary transition-all text-left">
                   <div>
                     <p className="text-sm font-medium">{member.firstName} {member.lastName}</p>
                     <p className="text-xs text-muted-foreground">{member.email}</p>

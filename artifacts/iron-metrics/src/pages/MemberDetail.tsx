@@ -317,7 +317,7 @@ export function MemberDetail() {
     <div className="space-y-6 pb-10">
       <div className="flex items-center gap-3">
         <Link href="/members">
-          <button className="p-2 text-muted-foreground hover:text-foreground transition-colors rounded-lg hover:bg-white/5">
+          <button className="p-2 text-muted-foreground hover:text-foreground transition-colors rounded-lg hover:bg-secondary">
             <ArrowLeft className="h-5 w-5" />
           </button>
         </Link>
@@ -389,7 +389,7 @@ export function MemberDetail() {
           <div className="flex flex-wrap gap-2 shrink-0">
             <button
               onClick={handleEditOpen}
-              className="flex items-center gap-2 px-3 py-2 bg-white/5 border border-border rounded-xl text-sm font-medium text-foreground hover:bg-white/10 transition-colors"
+              className="flex items-center gap-2 px-3 py-2 bg-secondary border border-border rounded-xl text-sm font-medium text-foreground hover:bg-secondary transition-colors"
             >
               <Edit className="h-4 w-4" /> Edit
             </button>
@@ -429,7 +429,7 @@ export function MemberDetail() {
             className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors flex-1 justify-center ${
               activeTab === tab.key
                 ? "bg-primary/10 text-primary"
-                : "text-muted-foreground hover:text-foreground hover:bg-white/5"
+                : "text-muted-foreground hover:text-foreground hover:bg-secondary"
             }`}
           >
             <tab.icon className="h-4 w-4" />
@@ -500,19 +500,19 @@ export function MemberDetail() {
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="bg-card border border-border rounded-2xl p-6 shadow-sm lg:col-span-2">
             <h3 className="text-lg font-semibold text-foreground mb-4">Member Stats</h3>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="text-center p-4 bg-white/5 rounded-xl">
+              <div className="text-center p-4 bg-secondary rounded-xl">
                 <p className="text-2xl font-bold text-foreground">{member.attendanceCount30d ?? 0}</p>
                 <p className="text-xs text-muted-foreground mt-1">Visits (30d)</p>
               </div>
-              <div className="text-center p-4 bg-white/5 rounded-xl">
+              <div className="text-center p-4 bg-secondary rounded-xl">
                 <p className="text-2xl font-bold text-foreground">{member.riskScore ?? "-"}</p>
                 <p className="text-xs text-muted-foreground mt-1">Risk Score</p>
               </div>
-              <div className="text-center p-4 bg-white/5 rounded-xl">
+              <div className="text-center p-4 bg-secondary rounded-xl">
                 <p className="text-2xl font-bold text-foreground">{member.lastVisitDate ? new Date(member.lastVisitDate).toLocaleDateString() : "-"}</p>
                 <p className="text-xs text-muted-foreground mt-1">Last Visit</p>
               </div>
-              <div className="text-center p-4 bg-white/5 rounded-xl">
+              <div className="text-center p-4 bg-secondary rounded-xl">
                 <p className="text-2xl font-bold text-foreground">{member.tags?.length || 0}</p>
                 <p className="text-xs text-muted-foreground mt-1">Tags</p>
               </div>
@@ -589,7 +589,7 @@ export function MemberDetail() {
                       {event.description && (
                         <p className="text-xs text-muted-foreground mt-1">{event.description}</p>
                       )}
-                      <span className="inline-block mt-1 px-2 py-0.5 bg-white/5 rounded text-[10px] text-muted-foreground font-medium uppercase">{event.type}</span>
+                      <span className="inline-block mt-1 px-2 py-0.5 bg-secondary rounded text-[10px] text-muted-foreground font-medium uppercase">{event.type}</span>
                     </div>
                   </div>
                 ))}
@@ -617,7 +617,7 @@ export function MemberDetail() {
             <button
               disabled={isBillingMutating}
               onClick={() => setChargeOpen(true)}
-              className="flex items-center gap-2 px-4 py-2.5 bg-white/5 border border-border rounded-xl text-sm font-medium text-foreground hover:bg-white/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex items-center gap-2 px-4 py-2.5 bg-secondary border border-border rounded-xl text-sm font-medium text-foreground hover:bg-secondary transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <DollarSign className="h-4 w-4" /> One-Time Charge
             </button>
@@ -728,7 +728,7 @@ export function MemberDetail() {
                   </thead>
                   <tbody className="divide-y divide-border">
                     {bPayments.map((p: any) => (
-                      <tr key={p.id} className="hover:bg-white/5 transition-colors">
+                      <tr key={p.id} className="hover:bg-secondary transition-colors">
                         <td className="px-6 py-4 text-muted-foreground">{formatDate(p.createdAt)}</td>
                         <td className="px-6 py-4 text-foreground">{p.description || "—"}</td>
                         <td className="px-6 py-4 text-foreground font-medium">${p.amount}</td>
@@ -764,7 +764,7 @@ export function MemberDetail() {
                   </thead>
                   <tbody className="divide-y divide-border">
                     {bInvoices.map((inv: any) => (
-                      <tr key={inv.id} className="hover:bg-white/5 transition-colors">
+                      <tr key={inv.id} className="hover:bg-secondary transition-colors">
                         <td className="px-6 py-4 text-muted-foreground">{formatDate(inv.createdAt || inv.dueDate)}</td>
                         <td className="px-6 py-4 text-foreground font-medium">${inv.amount}</td>
                         <td className="px-6 py-4">
@@ -864,7 +864,7 @@ export function MemberDetail() {
             </div>
           </div>
           <AlertDialogFooter>
-            <AlertDialogCancel className="bg-transparent border-border hover:bg-white/5">Keep Subscription</AlertDialogCancel>
+            <AlertDialogCancel className="bg-transparent border-border hover:bg-secondary">Keep Subscription</AlertDialogCancel>
             <AlertDialogAction onClick={handleCancelMemberSub} disabled={cancelSubMutation.isPending} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
               {cancelSubMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
               Cancel Subscription
@@ -880,7 +880,7 @@ export function MemberDetail() {
             <AlertDialogDescription>This will pause billing for this member. No invoices will be generated until the subscription is resumed.</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel className="bg-transparent border-border hover:bg-white/5">Keep Active</AlertDialogCancel>
+            <AlertDialogCancel className="bg-transparent border-border hover:bg-secondary">Keep Active</AlertDialogCancel>
             <AlertDialogAction onClick={confirmPauseMemberSub} disabled={pauseSubMutation.isPending} className="bg-yellow-600 text-white hover:bg-yellow-700">
               {pauseSubMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
               Pause Subscription
@@ -957,7 +957,7 @@ export function MemberDetail() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel className="bg-transparent border-border hover:bg-white/5">Cancel</AlertDialogCancel>
+            <AlertDialogCancel className="bg-transparent border-border hover:bg-secondary">Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleStatusChange}
               className={statusAction === "active" ? "bg-emerald-600 hover:bg-emerald-700" : statusAction === "hold" ? "bg-yellow-600 hover:bg-yellow-700" : "bg-destructive hover:bg-destructive/90"}

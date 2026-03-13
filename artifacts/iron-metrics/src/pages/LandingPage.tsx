@@ -4,8 +4,9 @@ import { motion, useInView } from "framer-motion";
 import {
   Dumbbell, BrainCircuit, ShieldCheck, LayoutDashboard, UserX,
   ArrowRight, Check, Menu, X, Zap, BarChart3, Users, ChevronRight,
-  Github, Twitter, Linkedin, Mail
+  Github, Twitter, Linkedin, Mail, Sun, Moon
 } from "lucide-react";
+import { useTheme } from "@/store/ThemeContext";
 
 function Section({ children, className = "", delay = 0, id }: { children: React.ReactNode; className?: string; delay?: number; id?: string }) {
   const ref = React.useRef(null);
@@ -29,6 +30,7 @@ function Navbar() {
   const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [, setLocation] = useLocation();
+  const { theme, toggleTheme } = useTheme();
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 20);
@@ -49,7 +51,7 @@ function Navbar() {
   };
 
   return (
-    <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${scrolled ? "bg-background/80 backdrop-blur-xl border-b border-white/5 shadow-lg shadow-black/20" : "bg-transparent"}`}>
+    <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${scrolled ? "bg-background/80 backdrop-blur-xl border-b border-border shadow-lg shadow-black/5 dark:shadow-black/20" : "bg-transparent"}`}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16 sm:h-20">
           <div className="flex items-center gap-3">
@@ -74,6 +76,13 @@ function Navbar() {
           </div>
 
           <div className="hidden md:flex items-center gap-3">
+            <button
+              onClick={toggleTheme}
+              className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+              aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+            >
+              {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+            </button>
             <button
               onClick={() => setLocation("/login")}
               className="text-sm text-muted-foreground hover:text-foreground transition-colors px-4 py-2"
@@ -102,22 +111,29 @@ function Navbar() {
           initial={{ opacity: 0, height: 0 }}
           animate={{ opacity: 1, height: "auto" }}
           exit={{ opacity: 0, height: 0 }}
-          className="md:hidden bg-background/95 backdrop-blur-xl border-b border-white/5"
+          className="md:hidden bg-background/95 backdrop-blur-xl border-b border-border"
         >
           <div className="px-4 py-4 space-y-2">
             {navLinks.map((link) => (
               <button
                 key={link.label}
                 onClick={() => handleNavClick(link.href)}
-                className="block w-full text-left text-sm text-muted-foreground hover:text-foreground py-2 px-3 rounded-lg hover:bg-white/5 transition-colors"
+                className="block w-full text-left text-sm text-muted-foreground hover:text-foreground py-2 px-3 rounded-lg hover:bg-secondary transition-colors"
               >
                 {link.label}
               </button>
             ))}
-            <div className="pt-2 border-t border-white/5 space-y-2">
+            <div className="pt-2 border-t border-border space-y-2">
+              <button
+                onClick={toggleTheme}
+                className="flex w-full items-center gap-2 text-sm text-muted-foreground hover:text-foreground py-2 px-3 rounded-lg hover:bg-secondary transition-colors"
+              >
+                {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+                {theme === "dark" ? "Light Mode" : "Dark Mode"}
+              </button>
               <button
                 onClick={() => setLocation("/login")}
-                className="block w-full text-left text-sm text-muted-foreground hover:text-foreground py-2 px-3 rounded-lg hover:bg-white/5 transition-colors"
+                className="block w-full text-left text-sm text-muted-foreground hover:text-foreground py-2 px-3 rounded-lg hover:bg-secondary transition-colors"
               >
                 Log In
               </button>
@@ -197,7 +213,7 @@ function Hero() {
               const el = document.querySelector("#features");
               if (el) el.scrollIntoView({ behavior: "smooth" });
             }}
-            className="flex items-center gap-2 px-8 py-4 rounded-xl font-semibold text-lg text-foreground border border-white/10 hover:border-white/20 hover:bg-white/5 transition-all duration-200"
+            className="flex items-center gap-2 px-8 py-4 rounded-xl font-semibold text-lg text-foreground border border-border hover:border-primary/30 hover:bg-secondary transition-all duration-200"
           >
             See Features
           </button>
@@ -210,7 +226,7 @@ function Hero() {
           className="mt-16 sm:mt-20 relative max-w-4xl mx-auto"
         >
           <div className="glass-panel rounded-2xl p-3 sm:p-4">
-            <div className="bg-background/80 rounded-xl p-4 sm:p-6 border border-white/5">
+            <div className="bg-background/80 rounded-xl p-4 sm:p-6 border border-border">
               <div className="flex items-center gap-3 mb-4">
                 <div className="flex gap-1.5">
                   <div className="w-3 h-3 rounded-full bg-red-500/60" />
@@ -228,7 +244,7 @@ function Hero() {
                   <div key={stat.label} className="glass-panel rounded-lg p-3 sm:p-4">
                     <p className="text-xs text-muted-foreground mb-1">{stat.label}</p>
                     <p className="text-lg sm:text-2xl font-display font-bold">{stat.value}</p>
-                    <p className="text-xs text-green-400">{stat.change}</p>
+                    <p className="text-xs text-green-600 dark:text-green-400">{stat.change}</p>
                   </div>
                 ))}
               </div>
@@ -262,7 +278,7 @@ function Hero() {
 
 function TrustBar() {
   return (
-    <Section className="py-16 sm:py-20 border-y border-white/5">
+    <Section className="py-16 sm:py-20 border-y border-border">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
         <p className="text-sm text-muted-foreground uppercase tracking-widest mb-8">
           Trusted by forward-thinking gym owners
@@ -531,7 +547,7 @@ function Pricing() {
                 className={`w-full py-3 rounded-xl font-semibold text-sm transition-all duration-200 ${
                   plan.highlighted
                     ? "bg-primary text-primary-foreground shadow-[0_0_20px_rgba(251,191,36,0.2)] hover:shadow-[0_0_30px_rgba(251,191,36,0.4)] hover:-translate-y-0.5"
-                    : "border border-white/10 text-foreground hover:bg-white/5 hover:border-white/20"
+                    : "border border-border text-foreground hover:bg-secondary hover:border-primary/30"
                 }`}
               >
                 {plan.cta}
@@ -574,7 +590,7 @@ function ClosingCTA() {
 
 function Footer() {
   return (
-    <footer className="border-t border-white/5 py-12 sm:py-16">
+    <footer className="border-t border-border py-12 sm:py-16">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-8 mb-12">
           <div>
@@ -621,13 +637,13 @@ function Footer() {
             </ul>
           </div>
         </div>
-        <div className="flex flex-col sm:flex-row items-center justify-between pt-8 border-t border-white/5 gap-4">
+        <div className="flex flex-col sm:flex-row items-center justify-between pt-8 border-t border-border gap-4">
           <p className="text-sm text-muted-foreground">
             &copy; {new Date().getFullYear()} Iron Metrics. All rights reserved.
           </p>
           <div className="flex items-center gap-4">
             {[Twitter, Linkedin, Github, Mail].map((Icon, i) => (
-              <span key={i} className="p-2 text-muted-foreground hover:text-foreground hover:bg-white/5 rounded-lg transition-colors cursor-pointer">
+              <span key={i} className="p-2 text-muted-foreground hover:text-foreground hover:bg-secondary rounded-lg transition-colors cursor-pointer">
                 <Icon className="h-4 w-4" />
               </span>
             ))}

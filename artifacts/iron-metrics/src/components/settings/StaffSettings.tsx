@@ -189,7 +189,7 @@ export function StaffSettings({ gymId }: Props) {
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: i * 0.03 }}
                   onClick={() => setDetailStaff(s)}
-                  className="flex items-center gap-4 px-4 sm:px-6 py-4 hover:bg-white/5 transition-colors cursor-pointer group"
+                  className="flex items-center gap-4 px-4 sm:px-6 py-4 hover:bg-secondary transition-colors cursor-pointer group"
                 >
                   <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center text-sm font-bold text-muted-foreground shrink-0">
                     {s.firstName?.[0]}{s.lastName?.[0]}

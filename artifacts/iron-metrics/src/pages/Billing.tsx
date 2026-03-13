@@ -340,7 +340,7 @@ export function Billing() {
             className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${
               activeTab === tab.key
                 ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20"
-                : "text-muted-foreground hover:text-foreground hover:bg-white/5"
+                : "text-muted-foreground hover:text-foreground hover:bg-secondary"
             }`}
           >
             <tab.icon className="h-4 w-4" />
@@ -374,7 +374,7 @@ export function Billing() {
               </thead>
               <tbody className="divide-y divide-border">
                 {plans?.map((plan: any, i: number) => (
-                  <motion.tr key={plan.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }} className="hover:bg-white/5 transition-colors">
+                  <motion.tr key={plan.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }} className="hover:bg-secondary transition-colors">
                     <td className="px-6 py-4 font-semibold text-foreground">{plan.name}</td>
                     <td className="px-6 py-4 text-foreground">${plan.price}</td>
                     <td className="px-6 py-4 text-muted-foreground capitalize">{plan.billingInterval || "monthly"}</td>
@@ -417,7 +417,7 @@ export function Billing() {
               </thead>
               <tbody className="divide-y divide-border">
                 {subscriptions?.map((sub: any, i: number) => (
-                  <motion.tr key={sub.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: Math.min(i * 0.03, 0.3) }} className="hover:bg-white/5 transition-colors">
+                  <motion.tr key={sub.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: Math.min(i * 0.03, 0.3) }} className="hover:bg-secondary transition-colors">
                     <td className="px-6 py-4">
                       <button onClick={() => navigate(`/members/${sub.memberId}`)} className="font-medium text-foreground hover:text-primary transition-colors text-left">
                         {sub.memberName}
@@ -439,7 +439,7 @@ export function Billing() {
                     <td className="px-6 py-4">
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <button className="p-1.5 rounded-lg hover:bg-white/10 transition-colors">
+                          <button className="p-1.5 rounded-lg hover:bg-secondary transition-colors">
                             <MoreHorizontal className="h-4 w-4 text-muted-foreground" />
                           </button>
                         </DropdownMenuTrigger>
@@ -505,7 +505,7 @@ export function Billing() {
                 </thead>
                 <tbody className="divide-y divide-border">
                   {(payments as any[])?.map((p: any) => (
-                    <tr key={p.id} className="hover:bg-white/5 transition-colors">
+                    <tr key={p.id} className="hover:bg-secondary transition-colors">
                       <td className="px-6 py-4 text-muted-foreground">{formatDate(p.createdAt)}</td>
                       <td className="px-6 py-4 font-medium text-foreground">{p.memberName}</td>
                       <td className="px-6 py-4 text-muted-foreground">{p.description || "—"}</td>
@@ -550,7 +550,7 @@ export function Billing() {
                 </thead>
                 <tbody className="divide-y divide-border">
                   {(refunds as any[])?.map((r: any) => (
-                    <tr key={r.id} className="hover:bg-white/5 transition-colors">
+                    <tr key={r.id} className="hover:bg-secondary transition-colors">
                       <td className="px-6 py-4 text-muted-foreground">{formatDate(r.createdAt)}</td>
                       <td className="px-6 py-4 font-medium text-foreground">{r.memberName}</td>
                       <td className="px-6 py-4 text-destructive font-medium">-${r.amount}</td>
@@ -581,11 +581,11 @@ export function Billing() {
                 <p className="text-sm text-muted-foreground">Members who cancelled during this period.</p>
               </div>
               <div className="flex items-center gap-3">
-                <button onClick={prevMonth} className="p-2 rounded-lg hover:bg-white/10 transition-colors">
+                <button onClick={prevMonth} className="p-2 rounded-lg hover:bg-secondary transition-colors">
                   <ChevronLeft className="h-4 w-4 text-muted-foreground" />
                 </button>
                 <span className="text-sm font-medium text-foreground min-w-[140px] text-center">{monthLabel}</span>
-                <button onClick={nextMonth} className="p-2 rounded-lg hover:bg-white/10 transition-colors">
+                <button onClick={nextMonth} className="p-2 rounded-lg hover:bg-secondary transition-colors">
                   <ChevronRight className="h-4 w-4 text-muted-foreground" />
                 </button>
               </div>
@@ -644,7 +644,7 @@ export function Billing() {
                       </thead>
                       <tbody className="divide-y divide-border">
                         {(cancelledData as any)?.cancelledMembers?.map((m: any) => (
-                          <tr key={m.id} className="hover:bg-white/5 transition-colors cursor-pointer" onClick={() => navigate(`/members/${m.id}`)}>
+                          <tr key={m.id} className="hover:bg-secondary transition-colors cursor-pointer" onClick={() => navigate(`/members/${m.id}`)}>
                             <td className="px-4 py-3 font-medium text-foreground">{m.firstName} {m.lastName}</td>
                             <td className="px-4 py-3 text-muted-foreground">{m.email}</td>
                             <td className="px-4 py-3 text-muted-foreground">{m.membershipType || "—"}</td>

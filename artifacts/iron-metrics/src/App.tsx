@@ -8,6 +8,7 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import NotFound from "@/pages/not-found";
 
 import { GymProvider, useGym } from "@/store/GymContext";
+import { ThemeProvider } from "@/store/ThemeContext";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { LandingPage } from "@/pages/LandingPage";
 import { Login } from "@/pages/Login";
@@ -109,16 +110,18 @@ function Router() {
 
 function App() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <GymProvider>
-        <TooltipProvider>
-          <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-            <Router />
-          </WouterRouter>
-          <Toaster />
-        </TooltipProvider>
-      </GymProvider>
-    </QueryClientProvider>
+    <ThemeProvider>
+      <QueryClientProvider client={queryClient}>
+        <GymProvider>
+          <TooltipProvider>
+            <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+              <Router />
+            </WouterRouter>
+            <Toaster />
+          </TooltipProvider>
+        </GymProvider>
+      </QueryClientProvider>
+    </ThemeProvider>
   );
 }
 

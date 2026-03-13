@@ -227,7 +227,7 @@ export function Intelligence() {
                       </thead>
                       <tbody className="divide-y divide-border">
                         {topRisks.map((risk: any) => (
-                          <tr key={risk.memberId} className="hover:bg-white/5 transition-colors">
+                          <tr key={risk.memberId} className="hover:bg-secondary transition-colors">
                             <td className="px-6 py-4 font-medium text-foreground">{risk.memberName}</td>
                             <td className="px-6 py-4">
                               <div className="flex items-center gap-2">
@@ -302,7 +302,7 @@ export function Intelligence() {
                       ))}
                     </div>
 
-                    <button className="w-full py-3 bg-white/5 hover:bg-white/10 text-foreground font-medium rounded-xl transition-colors border border-white/10 min-h-[44px]">
+                    <button className="w-full py-3 bg-secondary hover:bg-accent text-foreground font-medium rounded-xl transition-colors border border-border min-h-[44px]">
                       Execute Intervention
                     </button>
                   </motion.div>
@@ -362,7 +362,7 @@ export function Intelligence() {
                                   checked: !item.checked,
                                 });
                               }}
-                              className="w-full flex items-start gap-2 text-left py-1 px-1 rounded hover:bg-white/5 transition-colors group"
+                              className="w-full flex items-start gap-2 text-left py-1 px-1 rounded hover:bg-secondary transition-colors group"
                             >
                               {item.checked ? (
                                 <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0 mt-0.5" />

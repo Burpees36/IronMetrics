@@ -364,7 +364,7 @@ export function Members() {
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: Math.min(i * 0.05, 0.5) }}
-                className="p-4 active:bg-white/5 transition-colors"
+                className="p-4 active:bg-secondary transition-colors"
               >
                 <div className="flex items-center gap-3">
                   <Link href={`/members/${member.id}`} className="h-10 w-10 bg-muted rounded-full overflow-hidden flex items-center justify-center shrink-0">
@@ -418,7 +418,7 @@ export function Members() {
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: Math.min(i * 0.05, 0.5) }}
-                    className="hover:bg-white/5 transition-colors group cursor-pointer"
+                    className="hover:bg-secondary transition-colors group cursor-pointer"
                     onClick={() => navigate(`/members/${member.id}`)}
                   >
                     <td className="px-6 py-4">

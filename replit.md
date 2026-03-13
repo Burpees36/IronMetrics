@@ -26,7 +26,7 @@ Iron Metrics is built as a pnpm workspace monorepo using TypeScript.
 - **Validation:** Zod (`zod/v4`).
 - **API Codegen:** Orval (from OpenAPI spec).
 - **Auth:** Replit Auth (OIDC with PKCE).
-- **UI/UX Design:** Calm, premium dark professional SaaS theme. Features `hsl(220 20% 8%)` background, `hsl(220 20% 11%)` cards with 2xl rounded corners and a glass-panel effect. Primary accent is amber/gold (`#FBBF24`). Font uses Inter for body text.
+- **UI/UX Design:** Premium SaaS theme with light/dark mode toggle. Dark mode uses `hsl(224 35% 6%)` background, `hsl(224 35% 9%)` cards; light mode uses `hsl(210 20% 98%)` background with white cards. Both modes use 2xl rounded corners and a glass-panel effect. Primary accent is amber/gold. Theme is managed by `ThemeProvider` context (`src/store/ThemeContext.tsx`), persisted to `localStorage` key `iron-metrics-theme`, and respects `prefers-color-scheme` on first visit. An inline script in `index.html` prevents flash on load. Toggle is in the landing page navbar (desktop + mobile) and the authenticated sidebar.
 
 **Key Features & Implementation:**
 

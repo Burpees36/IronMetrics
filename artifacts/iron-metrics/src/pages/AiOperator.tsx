@@ -473,7 +473,7 @@ export function AiOperator() {
                       </p>
 
                       {task.aiContent && (
-                        <div className="mb-3 md:mb-4 p-3 md:p-4 rounded-lg bg-white/5 border border-white/10 text-xs md:text-sm font-mono text-foreground/80 relative whitespace-pre-wrap">
+                        <div className="mb-3 md:mb-4 p-3 md:p-4 rounded-lg bg-secondary border border-border text-xs md:text-sm font-mono text-foreground/80 relative whitespace-pre-wrap">
                           <div className="absolute -top-3 left-4 bg-background px-2 text-[10px] text-primary uppercase font-bold flex items-center gap-1">
                             <Sparkles className="h-3 w-3" /> Draft Content
                           </div>
@@ -577,7 +577,7 @@ export function AiOperator() {
                       </p>
 
                       {task.aiContent && (
-                        <div className="p-3 md:p-4 rounded-lg bg-white/5 border border-white/10 text-xs md:text-sm font-mono text-foreground/60 relative whitespace-pre-wrap">
+                        <div className="p-3 md:p-4 rounded-lg bg-secondary border border-border text-xs md:text-sm font-mono text-foreground/60 relative whitespace-pre-wrap">
                           <div className="absolute -top-3 left-4 bg-background/50 px-2 text-[10px] text-muted-foreground uppercase font-bold flex items-center gap-1">
                             {task.status === 'sent' ? <><MailCheck className="h-3 w-3" /> Sent Content</> : <><FileText className="h-3 w-3" /> Final Content</>}
                           </div>

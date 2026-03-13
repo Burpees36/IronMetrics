@@ -494,7 +494,7 @@ function ResourceCard({ resource }: { resource: Resource }) {
                 <div key={index} className="border border-border/50 rounded-xl overflow-hidden bg-background/50">
                   <button
                     onClick={() => togglePhase(index)}
-                    className="w-full px-4 py-3 flex items-center gap-3 text-left hover:bg-white/5 transition-colors"
+                    className="w-full px-4 py-3 flex items-center gap-3 text-left hover:bg-secondary transition-colors"
                   >
                     <div className={`h-6 w-6 rounded-lg flex items-center justify-center shrink-0 ${colors.icon}`}>
                       <span className="text-xs font-bold">{index + 1}</span>
@@ -576,7 +576,7 @@ export function Resources() {
           className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
             filter === null
               ? "bg-primary text-primary-foreground shadow-sm"
-              : "bg-white/5 text-muted-foreground hover:bg-white/10 hover:text-foreground border border-border"
+              : "bg-secondary text-muted-foreground hover:bg-secondary hover:text-foreground border border-border"
           }`}
         >
           <Filter className="h-3 w-3" />
@@ -592,7 +592,7 @@ export function Resources() {
               className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
                 filter === cat
                   ? `${colors.filterActive} shadow-sm`
-                  : "bg-white/5 text-muted-foreground hover:bg-white/10 hover:text-foreground border border-border"
+                  : "bg-secondary text-muted-foreground hover:bg-secondary hover:text-foreground border border-border"
               }`}
             >
               {cat} ({count})
