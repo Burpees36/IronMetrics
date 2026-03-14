@@ -131,6 +131,44 @@ export function buildPaymentUpdatedEmail(params: {
   };
 }
 
+export function buildGraceExpiredEmail(params: {
+  memberName: string;
+  amountDue: number;
+  updateLink: string;
+  branding: GymBranding;
+}): { subject: string; html: string; text: string } {
+  const { memberName, amountDue, updateLink, branding } = params;
+
+  const body = `
+    <h2 style="margin:0 0 8px;font-size:18px;font-weight:600;color:#991b1b;">Final Notice: Payment Required</h2>
+    <p style="margin:0 0 16px;font-size:15px;color:#374151;">Hi ${memberName},</p>
+    <div style="padding:16px;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;margin:0 0 16px;">
+      <p style="margin:0;font-size:15px;color:#991b1b;">
+        Your payment of <strong>$${amountDue.toFixed(2)}</strong> is now significantly overdue. Your membership at ${branding.name} may be suspended if this is not resolved promptly.
+      </p>
+    </div>
+    <p style="margin:0 0 24px;font-size:15px;color:#374151;">
+      Please update your payment method immediately to keep your membership active:
+    </p>
+    <div style="text-align:center;margin:24px 0;">
+      <a href="${updateLink}" style="display:inline-block;padding:14px 32px;background:#dc2626;color:#ffffff;font-size:15px;font-weight:600;text-decoration:none;border-radius:8px;">
+        Update Payment Method Now
+      </a>
+    </div>
+    <p style="margin:24px 0 0;font-size:13px;color:#9ca3af;">
+      This link expires in 72 hours. If you have questions or need assistance, please contact us directly.
+    </p>
+  `;
+
+  const text = `FINAL NOTICE: Hi ${memberName},\n\nYour payment of $${amountDue.toFixed(2)} for your membership at ${branding.name} is significantly overdue. Your membership may be suspended.\n\nUpdate your payment method now: ${updateLink}\n\nThis link expires in 72 hours.\n\n${branding.name}`;
+
+  return {
+    subject: `FINAL NOTICE: Payment overdue for your ${branding.name} membership`,
+    html: wrapEmail(params.branding, body),
+    text,
+  };
+}
+
 export async function sendBillingEmail(params: {
   to: string;
   subject: string;

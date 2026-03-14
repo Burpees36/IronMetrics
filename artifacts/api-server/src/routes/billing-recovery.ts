@@ -22,6 +22,7 @@ router.get("/gyms/:gymId/billing/recovery", requireBillingPermission("billing.re
     const recoveries = await billingRecoveryService.getActiveRecoveries(gymId);
     res.json(recoveries);
   } catch (err: any) {
+    console.error(`[billing-recovery] Error fetching recoveries for gym ${gymId}:`, err.message);
     res.status(500).json({ error: "Failed to fetch recovery data" });
   }
 });
@@ -35,6 +36,7 @@ router.get("/gyms/:gymId/members/:memberId/billing/recovery", requireBillingPerm
     const recovery = await billingRecoveryService.getMemberRecovery(memberId, gymId);
     res.json(recovery);
   } catch (err: any) {
+    console.error(`[billing-recovery] Error fetching member recovery: gym=${gymId}, member=${memberId}:`, err.message);
     res.status(500).json({ error: "Failed to fetch recovery data" });
   }
 });
@@ -74,7 +76,8 @@ router.post("/gyms/:gymId/billing/recovery/:recoveryId/send-link", requireBillin
       error: result.error,
     });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    console.error(`[billing-recovery] Error sending link for recovery ${recoveryId}:`, err.message);
+    res.status(500).json({ error: "Failed to send recovery link" });
   }
 });
 
@@ -120,7 +123,65 @@ router.post("/gyms/:gymId/billing/recovery/generate-link", requireBillingPermiss
 
     res.json({ updateLink, expiresAt });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    console.error(`[billing-recovery] Error generating link for gym ${gymId}:`, err.message);
+    res.status(500).json({ error: "Failed to generate recovery link" });
+  }
+});
+
+router.post("/gyms/:gymId/billing/recovery/evaluate-grace", requireBillingPermission("billing.create_subscription"), async (req, res): Promise<void> => {
+  const gymId = parseGymId(req.params);
+  if (!gymId) { res.status(400).json({ error: "Invalid gym ID" }); return; }
+
+  try {
+    const result = await billingRecoveryService.evaluateGraceDeadlines(gymId);
+    res.json({
+      success: true,
+      escalated: result.escalated,
+      errors: result.errors,
+    });
+  } catch (err: any) {
+    console.error(`[billing-recovery] Error evaluating grace deadlines:`, err.message);
+    res.status(500).json({ error: "Failed to evaluate grace deadlines" });
+  }
+});
+
+router.post("/gyms/:gymId/billing/recovery/maintenance", requireBillingPermission("billing.create_subscription"), async (req, res): Promise<void> => {
+  const gymId = parseGymId(req.params);
+  if (!gymId) { res.status(400).json({ error: "Invalid gym ID" }); return; }
+
+  try {
+    const [tokensDeleted, recoveriesArchived] = await Promise.all([
+      paymentUpdateTokenService.cleanupExpiredTokens(gymId),
+      billingRecoveryService.archiveOldResolvedRecoveries(gymId),
+    ]);
+
+    const graceResult = await billingRecoveryService.evaluateGraceDeadlines(gymId);
+
+    await billingAuditLogger.log({
+      gymId,
+      actorUserId: req.user?.id,
+      actorName: req.user?.firstName && req.user?.lastName ? `${req.user.firstName} ${req.user.lastName}` : undefined,
+      action: "maintenance.tokens_cleaned",
+      entityType: "system",
+      source: "ui",
+      metadata: {
+        tokensDeleted,
+        recoveriesArchived,
+        graceEscalated: graceResult.escalated,
+        graceErrors: graceResult.errors,
+      },
+    });
+
+    res.json({
+      success: true,
+      tokensDeleted,
+      recoveriesArchived,
+      graceEscalated: graceResult.escalated,
+      graceErrors: graceResult.errors,
+    });
+  } catch (err: any) {
+    console.error(`[billing-recovery] Error running maintenance:`, err.message);
+    res.status(500).json({ error: "Maintenance task failed" });
   }
 });
 

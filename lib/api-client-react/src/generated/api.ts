@@ -24,6 +24,8 @@ import type {
   Attendance,
   AttendanceReport,
   AuthUser,
+  BillingMaintenanceResponse,
+  BillingRecovery,
   BillingSummary,
   CancelSubscriptionBody,
   CancelledMembersResponse,
@@ -31,6 +33,7 @@ import type {
   ClassTemplate,
   ClassTemplateDetail,
   CohortData,
+  CompletePaymentUpdateBody,
   ConvertLeadToMemberBody,
   CopyWeekBody,
   CopyWeekPreview,
@@ -47,6 +50,7 @@ import type {
   CreateMemberNoteBody,
   CreateMembershipPlanBody,
   CreateOneTimeChargeBody,
+  CreatePaymentUpdateSetupIntentBody,
   CreateProductBody,
   CreateProgrammingDayBody,
   CreateProgrammingSectionBody,
@@ -61,9 +65,12 @@ import type {
   EmailStatusResponse,
   GenerateAiTasksResponse,
   GenerateOutreachBody,
+  GenerateRecoveryLinkBody,
+  GenerateRecoveryLinkResponse,
   GetCancelledMembersParams,
   GetMemberBillingHistory200,
   GetStripePublishableKey200,
+  GraceEvaluationResponse,
   Gym,
   GymClass,
   GymClassDetail,
@@ -93,6 +100,9 @@ import type {
   MembershipPlan,
   MembershipReport,
   PaymentRecord,
+  PaymentUpdateCompleteResponse,
+  PaymentUpdateSetupIntent,
+  PaymentUpdateValidation,
   Product,
   ProgrammingDayWithSections,
   ProgrammingSection,
@@ -104,6 +114,7 @@ import type {
   RevenueReport,
   Sale,
   SendEmailResponse,
+  SendRecoveryLinkResponse,
   StaffMember,
   Subscription,
   SuccessResponse,
@@ -118,6 +129,7 @@ import type {
   UpdateProgrammingSectionBody,
   UpdateStaffBody,
   UpdateSubscriptionBody,
+  ValidatePaymentUpdateTokenParams,
   Workout,
   WorkoutResult,
 } from "./api.schemas";
@@ -5685,6 +5697,840 @@ export function useGetBillingSummary<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * @summary List active billing recovery records
+ */
+export const getListBillingRecoveriesUrl = (gymId: number) => {
+  return `/api/gyms/${gymId}/billing/recovery`;
+};
+
+export const listBillingRecoveries = async (
+  gymId: number,
+  options?: RequestInit,
+): Promise<BillingRecovery[]> => {
+  return customFetch<BillingRecovery[]>(getListBillingRecoveriesUrl(gymId), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListBillingRecoveriesQueryKey = (gymId: number) => {
+  return [`/api/gyms/${gymId}/billing/recovery`] as const;
+};
+
+export const getListBillingRecoveriesQueryOptions = <
+  TData = Awaited<ReturnType<typeof listBillingRecoveries>>,
+  TError = ErrorType<unknown>,
+>(
+  gymId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listBillingRecoveries>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListBillingRecoveriesQueryKey(gymId);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listBillingRecoveries>>
+  > = ({ signal }) =>
+    listBillingRecoveries(gymId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!gymId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof listBillingRecoveries>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListBillingRecoveriesQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listBillingRecoveries>>
+>;
+export type ListBillingRecoveriesQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List active billing recovery records
+ */
+
+export function useListBillingRecoveries<
+  TData = Awaited<ReturnType<typeof listBillingRecoveries>>,
+  TError = ErrorType<unknown>,
+>(
+  gymId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listBillingRecoveries>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListBillingRecoveriesQueryOptions(gymId, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Get billing recovery for a specific member
+ */
+export const getGetMemberBillingRecoveryUrl = (
+  gymId: number,
+  memberId: number,
+) => {
+  return `/api/gyms/${gymId}/members/${memberId}/billing/recovery`;
+};
+
+export const getMemberBillingRecovery = async (
+  gymId: number,
+  memberId: number,
+  options?: RequestInit,
+): Promise<BillingRecovery | null> => {
+  return customFetch<BillingRecovery | null>(
+    getGetMemberBillingRecoveryUrl(gymId, memberId),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetMemberBillingRecoveryQueryKey = (
+  gymId: number,
+  memberId: number,
+) => {
+  return [`/api/gyms/${gymId}/members/${memberId}/billing/recovery`] as const;
+};
+
+export const getGetMemberBillingRecoveryQueryOptions = <
+  TData = Awaited<ReturnType<typeof getMemberBillingRecovery>>,
+  TError = ErrorType<unknown>,
+>(
+  gymId: number,
+  memberId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getMemberBillingRecovery>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ??
+    getGetMemberBillingRecoveryQueryKey(gymId, memberId);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getMemberBillingRecovery>>
+  > = ({ signal }) =>
+    getMemberBillingRecovery(gymId, memberId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!(gymId && memberId),
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getMemberBillingRecovery>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetMemberBillingRecoveryQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getMemberBillingRecovery>>
+>;
+export type GetMemberBillingRecoveryQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get billing recovery for a specific member
+ */
+
+export function useGetMemberBillingRecovery<
+  TData = Awaited<ReturnType<typeof getMemberBillingRecovery>>,
+  TError = ErrorType<unknown>,
+>(
+  gymId: number,
+  memberId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getMemberBillingRecovery>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetMemberBillingRecoveryQueryOptions(
+    gymId,
+    memberId,
+    options,
+  );
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Send payment update link to member
+ */
+export const getSendRecoveryLinkUrl = (gymId: number, recoveryId: number) => {
+  return `/api/gyms/${gymId}/billing/recovery/${recoveryId}/send-link`;
+};
+
+export const sendRecoveryLink = async (
+  gymId: number,
+  recoveryId: number,
+  options?: RequestInit,
+): Promise<SendRecoveryLinkResponse> => {
+  return customFetch<SendRecoveryLinkResponse>(
+    getSendRecoveryLinkUrl(gymId, recoveryId),
+    {
+      ...options,
+      method: "POST",
+    },
+  );
+};
+
+export const getSendRecoveryLinkMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof sendRecoveryLink>>,
+    TError,
+    { gymId: number; recoveryId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof sendRecoveryLink>>,
+  TError,
+  { gymId: number; recoveryId: number },
+  TContext
+> => {
+  const mutationKey = ["sendRecoveryLink"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof sendRecoveryLink>>,
+    { gymId: number; recoveryId: number }
+  > = (props) => {
+    const { gymId, recoveryId } = props ?? {};
+
+    return sendRecoveryLink(gymId, recoveryId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SendRecoveryLinkMutationResult = NonNullable<
+  Awaited<ReturnType<typeof sendRecoveryLink>>
+>;
+
+export type SendRecoveryLinkMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Send payment update link to member
+ */
+export const useSendRecoveryLink = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof sendRecoveryLink>>,
+    TError,
+    { gymId: number; recoveryId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof sendRecoveryLink>>,
+  TError,
+  { gymId: number; recoveryId: number },
+  TContext
+> => {
+  return useMutation(getSendRecoveryLinkMutationOptions(options));
+};
+
+/**
+ * @summary Generate payment update link without sending email
+ */
+export const getGenerateRecoveryLinkUrl = (gymId: number) => {
+  return `/api/gyms/${gymId}/billing/recovery/generate-link`;
+};
+
+export const generateRecoveryLink = async (
+  gymId: number,
+  generateRecoveryLinkBody: GenerateRecoveryLinkBody,
+  options?: RequestInit,
+): Promise<GenerateRecoveryLinkResponse> => {
+  return customFetch<GenerateRecoveryLinkResponse>(
+    getGenerateRecoveryLinkUrl(gymId),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(generateRecoveryLinkBody),
+    },
+  );
+};
+
+export const getGenerateRecoveryLinkMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof generateRecoveryLink>>,
+    TError,
+    { gymId: number; data: BodyType<GenerateRecoveryLinkBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof generateRecoveryLink>>,
+  TError,
+  { gymId: number; data: BodyType<GenerateRecoveryLinkBody> },
+  TContext
+> => {
+  const mutationKey = ["generateRecoveryLink"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof generateRecoveryLink>>,
+    { gymId: number; data: BodyType<GenerateRecoveryLinkBody> }
+  > = (props) => {
+    const { gymId, data } = props ?? {};
+
+    return generateRecoveryLink(gymId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type GenerateRecoveryLinkMutationResult = NonNullable<
+  Awaited<ReturnType<typeof generateRecoveryLink>>
+>;
+export type GenerateRecoveryLinkMutationBody =
+  BodyType<GenerateRecoveryLinkBody>;
+export type GenerateRecoveryLinkMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Generate payment update link without sending email
+ */
+export const useGenerateRecoveryLink = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof generateRecoveryLink>>,
+    TError,
+    { gymId: number; data: BodyType<GenerateRecoveryLinkBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof generateRecoveryLink>>,
+  TError,
+  { gymId: number; data: BodyType<GenerateRecoveryLinkBody> },
+  TContext
+> => {
+  return useMutation(getGenerateRecoveryLinkMutationOptions(options));
+};
+
+/**
+ * @summary Evaluate and escalate expired grace periods
+ */
+export const getEvaluateGraceDeadlinesUrl = (gymId: number) => {
+  return `/api/gyms/${gymId}/billing/recovery/evaluate-grace`;
+};
+
+export const evaluateGraceDeadlines = async (
+  gymId: number,
+  options?: RequestInit,
+): Promise<GraceEvaluationResponse> => {
+  return customFetch<GraceEvaluationResponse>(
+    getEvaluateGraceDeadlinesUrl(gymId),
+    {
+      ...options,
+      method: "POST",
+    },
+  );
+};
+
+export const getEvaluateGraceDeadlinesMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof evaluateGraceDeadlines>>,
+    TError,
+    { gymId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof evaluateGraceDeadlines>>,
+  TError,
+  { gymId: number },
+  TContext
+> => {
+  const mutationKey = ["evaluateGraceDeadlines"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof evaluateGraceDeadlines>>,
+    { gymId: number }
+  > = (props) => {
+    const { gymId } = props ?? {};
+
+    return evaluateGraceDeadlines(gymId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type EvaluateGraceDeadlinesMutationResult = NonNullable<
+  Awaited<ReturnType<typeof evaluateGraceDeadlines>>
+>;
+
+export type EvaluateGraceDeadlinesMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Evaluate and escalate expired grace periods
+ */
+export const useEvaluateGraceDeadlines = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof evaluateGraceDeadlines>>,
+    TError,
+    { gymId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof evaluateGraceDeadlines>>,
+  TError,
+  { gymId: number },
+  TContext
+> => {
+  return useMutation(getEvaluateGraceDeadlinesMutationOptions(options));
+};
+
+/**
+ * @summary Run billing maintenance tasks (cleanup tokens, archive old recoveries, evaluate grace)
+ */
+export const getRunBillingMaintenanceUrl = (gymId: number) => {
+  return `/api/gyms/${gymId}/billing/recovery/maintenance`;
+};
+
+export const runBillingMaintenance = async (
+  gymId: number,
+  options?: RequestInit,
+): Promise<BillingMaintenanceResponse> => {
+  return customFetch<BillingMaintenanceResponse>(
+    getRunBillingMaintenanceUrl(gymId),
+    {
+      ...options,
+      method: "POST",
+    },
+  );
+};
+
+export const getRunBillingMaintenanceMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof runBillingMaintenance>>,
+    TError,
+    { gymId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof runBillingMaintenance>>,
+  TError,
+  { gymId: number },
+  TContext
+> => {
+  const mutationKey = ["runBillingMaintenance"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof runBillingMaintenance>>,
+    { gymId: number }
+  > = (props) => {
+    const { gymId } = props ?? {};
+
+    return runBillingMaintenance(gymId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RunBillingMaintenanceMutationResult = NonNullable<
+  Awaited<ReturnType<typeof runBillingMaintenance>>
+>;
+
+export type RunBillingMaintenanceMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Run billing maintenance tasks (cleanup tokens, archive old recoveries, evaluate grace)
+ */
+export const useRunBillingMaintenance = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof runBillingMaintenance>>,
+    TError,
+    { gymId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof runBillingMaintenance>>,
+  TError,
+  { gymId: number },
+  TContext
+> => {
+  return useMutation(getRunBillingMaintenanceMutationOptions(options));
+};
+
+/**
+ * @summary Validate a payment update token (public, no auth)
+ */
+export const getValidatePaymentUpdateTokenUrl = (
+  params: ValidatePaymentUpdateTokenParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/payment-update/validate?${stringifiedParams}`
+    : `/api/payment-update/validate`;
+};
+
+export const validatePaymentUpdateToken = async (
+  params: ValidatePaymentUpdateTokenParams,
+  options?: RequestInit,
+): Promise<PaymentUpdateValidation> => {
+  return customFetch<PaymentUpdateValidation>(
+    getValidatePaymentUpdateTokenUrl(params),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getValidatePaymentUpdateTokenQueryKey = (
+  params?: ValidatePaymentUpdateTokenParams,
+) => {
+  return [`/api/payment-update/validate`, ...(params ? [params] : [])] as const;
+};
+
+export const getValidatePaymentUpdateTokenQueryOptions = <
+  TData = Awaited<ReturnType<typeof validatePaymentUpdateToken>>,
+  TError = ErrorType<unknown>,
+>(
+  params: ValidatePaymentUpdateTokenParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof validatePaymentUpdateToken>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getValidatePaymentUpdateTokenQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof validatePaymentUpdateToken>>
+  > = ({ signal }) =>
+    validatePaymentUpdateToken(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof validatePaymentUpdateToken>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ValidatePaymentUpdateTokenQueryResult = NonNullable<
+  Awaited<ReturnType<typeof validatePaymentUpdateToken>>
+>;
+export type ValidatePaymentUpdateTokenQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Validate a payment update token (public, no auth)
+ */
+
+export function useValidatePaymentUpdateToken<
+  TData = Awaited<ReturnType<typeof validatePaymentUpdateToken>>,
+  TError = ErrorType<unknown>,
+>(
+  params: ValidatePaymentUpdateTokenParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof validatePaymentUpdateToken>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getValidatePaymentUpdateTokenQueryOptions(
+    params,
+    options,
+  );
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Create Stripe SetupIntent for payment update (public, no auth)
+ */
+export const getCreatePaymentUpdateSetupIntentUrl = () => {
+  return `/api/payment-update/setup-intent`;
+};
+
+export const createPaymentUpdateSetupIntent = async (
+  createPaymentUpdateSetupIntentBody: CreatePaymentUpdateSetupIntentBody,
+  options?: RequestInit,
+): Promise<PaymentUpdateSetupIntent> => {
+  return customFetch<PaymentUpdateSetupIntent>(
+    getCreatePaymentUpdateSetupIntentUrl(),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(createPaymentUpdateSetupIntentBody),
+    },
+  );
+};
+
+export const getCreatePaymentUpdateSetupIntentMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createPaymentUpdateSetupIntent>>,
+    TError,
+    { data: BodyType<CreatePaymentUpdateSetupIntentBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createPaymentUpdateSetupIntent>>,
+  TError,
+  { data: BodyType<CreatePaymentUpdateSetupIntentBody> },
+  TContext
+> => {
+  const mutationKey = ["createPaymentUpdateSetupIntent"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createPaymentUpdateSetupIntent>>,
+    { data: BodyType<CreatePaymentUpdateSetupIntentBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return createPaymentUpdateSetupIntent(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreatePaymentUpdateSetupIntentMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createPaymentUpdateSetupIntent>>
+>;
+export type CreatePaymentUpdateSetupIntentMutationBody =
+  BodyType<CreatePaymentUpdateSetupIntentBody>;
+export type CreatePaymentUpdateSetupIntentMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Create Stripe SetupIntent for payment update (public, no auth)
+ */
+export const useCreatePaymentUpdateSetupIntent = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createPaymentUpdateSetupIntent>>,
+    TError,
+    { data: BodyType<CreatePaymentUpdateSetupIntentBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createPaymentUpdateSetupIntent>>,
+  TError,
+  { data: BodyType<CreatePaymentUpdateSetupIntentBody> },
+  TContext
+> => {
+  return useMutation(getCreatePaymentUpdateSetupIntentMutationOptions(options));
+};
+
+/**
+ * @summary Complete payment method update (public, no auth)
+ */
+export const getCompletePaymentUpdateUrl = () => {
+  return `/api/payment-update/complete`;
+};
+
+export const completePaymentUpdate = async (
+  completePaymentUpdateBody: CompletePaymentUpdateBody,
+  options?: RequestInit,
+): Promise<PaymentUpdateCompleteResponse> => {
+  return customFetch<PaymentUpdateCompleteResponse>(
+    getCompletePaymentUpdateUrl(),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(completePaymentUpdateBody),
+    },
+  );
+};
+
+export const getCompletePaymentUpdateMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof completePaymentUpdate>>,
+    TError,
+    { data: BodyType<CompletePaymentUpdateBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof completePaymentUpdate>>,
+  TError,
+  { data: BodyType<CompletePaymentUpdateBody> },
+  TContext
+> => {
+  const mutationKey = ["completePaymentUpdate"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof completePaymentUpdate>>,
+    { data: BodyType<CompletePaymentUpdateBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return completePaymentUpdate(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CompletePaymentUpdateMutationResult = NonNullable<
+  Awaited<ReturnType<typeof completePaymentUpdate>>
+>;
+export type CompletePaymentUpdateMutationBody =
+  BodyType<CompletePaymentUpdateBody>;
+export type CompletePaymentUpdateMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Complete payment method update (public, no auth)
+ */
+export const useCompletePaymentUpdate = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof completePaymentUpdate>>,
+    TError,
+    { data: BodyType<CompletePaymentUpdateBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof completePaymentUpdate>>,
+  TError,
+  { data: BodyType<CompletePaymentUpdateBody> },
+  TContext
+> => {
+  return useMutation(getCompletePaymentUpdateMutationOptions(options));
+};
 
 /**
  * @summary List retail products

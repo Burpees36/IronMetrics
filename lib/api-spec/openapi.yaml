@@ -1607,6 +1607,212 @@ paths:
               schema:
                 $ref: "#/components/schemas/BillingSummary"
 
+  # BILLING RECOVERY
+  /gyms/{gymId}/billing/recovery:
+    get:
+      operationId: listBillingRecoveries
+      tags: [billing]
+      summary: List active billing recovery records
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Active recovery records
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/BillingRecovery"
+
+  /gyms/{gymId}/members/{memberId}/billing/recovery:
+    get:
+      operationId: getMemberBillingRecovery
+      tags: [billing]
+      summary: Get billing recovery for a specific member
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: memberId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Member recovery record or null
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/BillingRecovery"
+                  - type: "null"
+
+  /gyms/{gymId}/billing/recovery/{recoveryId}/send-link:
+    post:
+      operationId: sendRecoveryLink
+      tags: [billing]
+      summary: Send payment update link to member
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: recoveryId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Link send result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SendRecoveryLinkResponse"
+
+  /gyms/{gymId}/billing/recovery/generate-link:
+    post:
+      operationId: generateRecoveryLink
+      tags: [billing]
+      summary: Generate payment update link without sending email
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GenerateRecoveryLinkBody"
+      responses:
+        "200":
+          description: Generated link
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenerateRecoveryLinkResponse"
+
+  /gyms/{gymId}/billing/recovery/evaluate-grace:
+    post:
+      operationId: evaluateGraceDeadlines
+      tags: [billing]
+      summary: Evaluate and escalate expired grace periods
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Grace evaluation result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GraceEvaluationResponse"
+
+  /gyms/{gymId}/billing/recovery/maintenance:
+    post:
+      operationId: runBillingMaintenance
+      tags: [billing]
+      summary: Run billing maintenance tasks (cleanup tokens, archive old recoveries, evaluate grace)
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Maintenance result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BillingMaintenanceResponse"
+
+  # PUBLIC PAYMENT UPDATE
+  /payment-update/validate:
+    get:
+      operationId: validatePaymentUpdateToken
+      tags: [billing]
+      summary: Validate a payment update token (public, no auth)
+      parameters:
+        - name: token
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Token validation result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaymentUpdateValidation"
+
+  /payment-update/setup-intent:
+    post:
+      operationId: createPaymentUpdateSetupIntent
+      tags: [billing]
+      summary: Create Stripe SetupIntent for payment update (public, no auth)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                token:
+                  type: string
+              required:
+                - token
+      responses:
+        "200":
+          description: Setup intent created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaymentUpdateSetupIntent"
+
+  /payment-update/complete:
+    post:
+      operationId: completePaymentUpdate
+      tags: [billing]
+      summary: Complete payment method update (public, no auth)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                token:
+                  type: string
+                paymentMethodId:
+                  type: string
+              required:
+                - token
+                - paymentMethodId
+      responses:
+        "200":
+          description: Payment update result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaymentUpdateCompleteResponse"
+
   # RETAIL / POS
   /gyms/{gymId}/products:
     get:
@@ -5148,3 +5354,173 @@ components:
         - byDayOfWeek
         - byHour
         - trend
+
+    BillingRecovery:
+      type: object
+      properties:
+        id:
+          type: integer
+        gymId:
+          type: integer
+        memberId:
+          type: integer
+        subscriptionId:
+          type: integer
+        stripeSubscriptionId:
+          type: ["string", "null"]
+        status:
+          type: string
+          enum: [active, grace_expired, resolved]
+        failedAttempts:
+          type: integer
+        lastFailedAt:
+          type: string
+          format: date-time
+        lastNotifiedAt:
+          type: ["string", "null"]
+          format: date-time
+        graceDeadline:
+          type: ["string", "null"]
+          format: date-time
+        amountDue:
+          type: ["number", "null"]
+        cardLast4:
+          type: ["string", "null"]
+        cardBrand:
+          type: ["string", "null"]
+        resolvedAt:
+          type: ["string", "null"]
+          format: date-time
+        resolvedReason:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+        memberName:
+          type: ["string", "null"]
+        planName:
+          type: ["string", "null"]
+        memberEmail:
+          type: ["string", "null"]
+      required:
+        - id
+        - gymId
+        - memberId
+        - subscriptionId
+        - status
+        - failedAttempts
+        - lastFailedAt
+        - createdAt
+
+    SendRecoveryLinkResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        updateLink:
+          type: ["string", "null"]
+        emailSent:
+          type: boolean
+        error:
+          type: ["string", "null"]
+      required:
+        - success
+        - emailSent
+
+    GenerateRecoveryLinkBody:
+      type: object
+      properties:
+        memberId:
+          type: integer
+        subscriptionId:
+          type: integer
+      required:
+        - memberId
+        - subscriptionId
+
+    GenerateRecoveryLinkResponse:
+      type: object
+      properties:
+        updateLink:
+          type: string
+        expiresAt:
+          type: string
+          format: date-time
+      required:
+        - updateLink
+        - expiresAt
+
+    GraceEvaluationResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        escalated:
+          type: integer
+        errors:
+          type: integer
+      required:
+        - success
+        - escalated
+        - errors
+
+    BillingMaintenanceResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        tokensDeleted:
+          type: integer
+        recoveriesArchived:
+          type: integer
+        graceEscalated:
+          type: integer
+        graceErrors:
+          type: integer
+      required:
+        - success
+        - tokensDeleted
+        - recoveriesArchived
+        - graceEscalated
+        - graceErrors
+
+    PaymentUpdateValidation:
+      type: object
+      properties:
+        valid:
+          type: boolean
+        error:
+          type: ["string", "null"]
+        gymName:
+          type: ["string", "null"]
+        gymLogoUrl:
+          type: ["string", "null"]
+        memberName:
+          type: ["string", "null"]
+      required:
+        - valid
+
+    PaymentUpdateSetupIntent:
+      type: object
+      properties:
+        clientSecret:
+          type: string
+        publishableKey:
+          type: string
+      required:
+        - clientSecret
+        - publishableKey
+
+    PaymentUpdateCompleteResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        cardLast4:
+          type: string
+        cardBrand:
+          type: string
+      required:
+        - success
+        - cardLast4
+        - cardBrand

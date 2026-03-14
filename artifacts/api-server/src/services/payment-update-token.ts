@@ -1,8 +1,9 @@
 import crypto from "crypto";
-import { db, paymentUpdateTokensTable, billingRecoveryTable, subscriptionsTable, membersTable, gymsTable } from "@workspace/db";
-import { eq, and, isNull, gt } from "drizzle-orm";
+import { db, paymentUpdateTokensTable, subscriptionsTable, membersTable, gymsTable } from "@workspace/db";
+import { eq, and, isNull, gt, lt, or } from "drizzle-orm";
 
 const TOKEN_EXPIRY_HOURS = 72;
+const TOKEN_RETENTION_DAYS = 30;
 
 export class PaymentUpdateTokenService {
   generateToken(): string {
@@ -42,12 +43,15 @@ export class PaymentUpdateTokenService {
       expiresAt,
     });
 
+    console.log(`[payment-token] Token created for member=${params.memberId} sub=${params.subscriptionId} gym=${params.gymId}, expires=${expiresAt.toISOString()}`);
+
     return { token, expiresAt };
   }
 
   async validateToken(token: string): Promise<{
     valid: boolean;
     error?: string;
+    errorCode?: "invalid" | "used" | "expired";
     data?: {
       id: number;
       gymId: number;
@@ -56,21 +60,25 @@ export class PaymentUpdateTokenService {
       recoveryId: number | null;
     };
   }> {
+    if (!token || typeof token !== "string" || token.length < 32) {
+      return { valid: false, error: "Invalid or expired link. Please contact your gym for a new update link.", errorCode: "invalid" };
+    }
+
     const [record] = await db
       .select()
       .from(paymentUpdateTokensTable)
       .where(eq(paymentUpdateTokensTable.token, token));
 
     if (!record) {
-      return { valid: false, error: "Invalid or expired link. Please contact your gym for a new update link." };
+      return { valid: false, error: "Invalid or expired link. Please contact your gym for a new update link.", errorCode: "invalid" };
     }
 
     if (record.usedAt) {
-      return { valid: false, error: "This link has already been used. Please contact your gym if you need to update your payment method again." };
+      return { valid: false, error: "This link has already been used. Please contact your gym if you need to update your payment method again.", errorCode: "used" };
     }
 
     if (new Date() > record.expiresAt) {
-      return { valid: false, error: "This link has expired. Please contact your gym for a new update link." };
+      return { valid: false, error: "This link has expired. Please contact your gym for a new update link.", errorCode: "expired" };
     }
 
     return {
@@ -120,6 +128,30 @@ export class PaymentUpdateTokenService {
       memberName: `${member.firstName} ${member.lastName}`,
       memberEmail: member.email,
     };
+  }
+
+  async cleanupExpiredTokens(gymId: number): Promise<number> {
+    const cutoff = new Date(Date.now() - TOKEN_RETENTION_DAYS * 24 * 60 * 60 * 1000);
+
+    const deleted = await db
+      .delete(paymentUpdateTokensTable)
+      .where(
+        and(
+          eq(paymentUpdateTokensTable.gymId, gymId),
+          lt(paymentUpdateTokensTable.expiresAt, cutoff),
+          or(
+            isNull(paymentUpdateTokensTable.usedAt),
+            lt(paymentUpdateTokensTable.usedAt, cutoff)
+          )
+        )
+      )
+      .returning({ id: paymentUpdateTokensTable.id });
+
+    if (deleted.length > 0) {
+      console.log(`[payment-token] Cleaned up ${deleted.length} expired/used tokens older than ${TOKEN_RETENTION_DAYS} days`);
+    }
+
+    return deleted.length;
   }
 }
 

@@ -1594,6 +1594,104 @@ export interface AttendanceReport {
   trend: AttendanceReportTrendItem[];
 }
 
+export type BillingRecoveryStatus =
+  (typeof BillingRecoveryStatus)[keyof typeof BillingRecoveryStatus];
+
+export const BillingRecoveryStatus = {
+  active: "active",
+  grace_expired: "grace_expired",
+  resolved: "resolved",
+} as const;
+
+export interface BillingRecovery {
+  id: number;
+  gymId: number;
+  memberId: number;
+  subscriptionId: number;
+  /** @nullable */
+  stripeSubscriptionId?: string | null;
+  status: BillingRecoveryStatus;
+  failedAttempts: number;
+  lastFailedAt: string;
+  /** @nullable */
+  lastNotifiedAt?: string | null;
+  /** @nullable */
+  graceDeadline?: string | null;
+  /** @nullable */
+  amountDue?: number | null;
+  /** @nullable */
+  cardLast4?: string | null;
+  /** @nullable */
+  cardBrand?: string | null;
+  /** @nullable */
+  resolvedAt?: string | null;
+  /** @nullable */
+  resolvedReason?: string | null;
+  createdAt: string;
+  /** @nullable */
+  memberName?: string | null;
+  /** @nullable */
+  planName?: string | null;
+  /** @nullable */
+  memberEmail?: string | null;
+}
+
+export interface SendRecoveryLinkResponse {
+  success: boolean;
+  /** @nullable */
+  updateLink?: string | null;
+  emailSent: boolean;
+  /** @nullable */
+  error?: string | null;
+}
+
+export interface GenerateRecoveryLinkBody {
+  memberId: number;
+  subscriptionId: number;
+}
+
+export interface GenerateRecoveryLinkResponse {
+  updateLink: string;
+  expiresAt: string;
+}
+
+export interface GraceEvaluationResponse {
+  success: boolean;
+  escalated: number;
+  errors: number;
+}
+
+export interface BillingMaintenanceResponse {
+  success: boolean;
+  tokensDeleted: number;
+  recoveriesArchived: number;
+  graceEscalated: number;
+  graceErrors: number;
+}
+
+export interface PaymentUpdateValidation {
+  valid: boolean;
+  /** @nullable */
+  error?: string | null;
+  /** @nullable */
+  gymName?: string | null;
+  /** @nullable */
+  gymLogoUrl?: string | null;
+  /** @nullable */
+  memberName?: string | null;
+}
+
+export interface PaymentUpdateSetupIntent {
+  clientSecret: string;
+  publishableKey: string;
+}
+
+export interface PaymentUpdateCompleteResponse {
+  success: boolean;
+  cardLast4: string;
+  cardBrand: string;
+}
+
 export type ListMembersParams = {
   status?: string;
   search?: string;
@@ -1683,6 +1781,19 @@ export type RefundPaymentBody = {
 export type GetCancelledMembersParams = {
   month?: number;
   year?: number;
+};
+
+export type ValidatePaymentUpdateTokenParams = {
+  token: string;
+};
+
+export type CreatePaymentUpdateSetupIntentBody = {
+  token: string;
+};
+
+export type CompletePaymentUpdateBody = {
+  token: string;
+  paymentMethodId: string;
 };
 
 export type ListWorkoutsParams = {

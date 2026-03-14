@@ -1732,6 +1732,172 @@ export const GetBillingSummaryResponse = zod.object({
 });
 
 /**
+ * @summary List active billing recovery records
+ */
+export const ListBillingRecoveriesParams = zod.object({
+  gymId: zod.coerce.number(),
+});
+
+export const ListBillingRecoveriesResponseItem = zod.object({
+  id: zod.number(),
+  gymId: zod.number(),
+  memberId: zod.number(),
+  subscriptionId: zod.number(),
+  stripeSubscriptionId: zod.string().nullish(),
+  status: zod.enum(["active", "grace_expired", "resolved"]),
+  failedAttempts: zod.number(),
+  lastFailedAt: zod.date(),
+  lastNotifiedAt: zod.date().nullish(),
+  graceDeadline: zod.date().nullish(),
+  amountDue: zod.number().nullish(),
+  cardLast4: zod.string().nullish(),
+  cardBrand: zod.string().nullish(),
+  resolvedAt: zod.date().nullish(),
+  resolvedReason: zod.string().nullish(),
+  createdAt: zod.date(),
+  memberName: zod.string().nullish(),
+  planName: zod.string().nullish(),
+  memberEmail: zod.string().nullish(),
+});
+export const ListBillingRecoveriesResponse = zod.array(
+  ListBillingRecoveriesResponseItem,
+);
+
+/**
+ * @summary Get billing recovery for a specific member
+ */
+export const GetMemberBillingRecoveryParams = zod.object({
+  gymId: zod.coerce.number(),
+  memberId: zod.coerce.number(),
+});
+
+export const GetMemberBillingRecoveryResponse = zod.union([
+  zod.object({
+    id: zod.number(),
+    gymId: zod.number(),
+    memberId: zod.number(),
+    subscriptionId: zod.number(),
+    stripeSubscriptionId: zod.string().nullish(),
+    status: zod.enum(["active", "grace_expired", "resolved"]),
+    failedAttempts: zod.number(),
+    lastFailedAt: zod.date(),
+    lastNotifiedAt: zod.date().nullish(),
+    graceDeadline: zod.date().nullish(),
+    amountDue: zod.number().nullish(),
+    cardLast4: zod.string().nullish(),
+    cardBrand: zod.string().nullish(),
+    resolvedAt: zod.date().nullish(),
+    resolvedReason: zod.string().nullish(),
+    createdAt: zod.date(),
+    memberName: zod.string().nullish(),
+    planName: zod.string().nullish(),
+    memberEmail: zod.string().nullish(),
+  }),
+  zod.null(),
+]);
+
+/**
+ * @summary Send payment update link to member
+ */
+export const SendRecoveryLinkParams = zod.object({
+  gymId: zod.coerce.number(),
+  recoveryId: zod.coerce.number(),
+});
+
+export const SendRecoveryLinkResponse = zod.object({
+  success: zod.boolean(),
+  updateLink: zod.string().nullish(),
+  emailSent: zod.boolean(),
+  error: zod.string().nullish(),
+});
+
+/**
+ * @summary Generate payment update link without sending email
+ */
+export const GenerateRecoveryLinkParams = zod.object({
+  gymId: zod.coerce.number(),
+});
+
+export const GenerateRecoveryLinkBody = zod.object({
+  memberId: zod.number(),
+  subscriptionId: zod.number(),
+});
+
+export const GenerateRecoveryLinkResponse = zod.object({
+  updateLink: zod.string(),
+  expiresAt: zod.date(),
+});
+
+/**
+ * @summary Evaluate and escalate expired grace periods
+ */
+export const EvaluateGraceDeadlinesParams = zod.object({
+  gymId: zod.coerce.number(),
+});
+
+export const EvaluateGraceDeadlinesResponse = zod.object({
+  success: zod.boolean(),
+  escalated: zod.number(),
+  errors: zod.number(),
+});
+
+/**
+ * @summary Run billing maintenance tasks (cleanup tokens, archive old recoveries, evaluate grace)
+ */
+export const RunBillingMaintenanceParams = zod.object({
+  gymId: zod.coerce.number(),
+});
+
+export const RunBillingMaintenanceResponse = zod.object({
+  success: zod.boolean(),
+  tokensDeleted: zod.number(),
+  recoveriesArchived: zod.number(),
+  graceEscalated: zod.number(),
+  graceErrors: zod.number(),
+});
+
+/**
+ * @summary Validate a payment update token (public, no auth)
+ */
+export const ValidatePaymentUpdateTokenQueryParams = zod.object({
+  token: zod.coerce.string(),
+});
+
+export const ValidatePaymentUpdateTokenResponse = zod.object({
+  valid: zod.boolean(),
+  error: zod.string().nullish(),
+  gymName: zod.string().nullish(),
+  gymLogoUrl: zod.string().nullish(),
+  memberName: zod.string().nullish(),
+});
+
+/**
+ * @summary Create Stripe SetupIntent for payment update (public, no auth)
+ */
+export const CreatePaymentUpdateSetupIntentBody = zod.object({
+  token: zod.string(),
+});
+
+export const CreatePaymentUpdateSetupIntentResponse = zod.object({
+  clientSecret: zod.string(),
+  publishableKey: zod.string(),
+});
+
+/**
+ * @summary Complete payment method update (public, no auth)
+ */
+export const CompletePaymentUpdateBody = zod.object({
+  token: zod.string(),
+  paymentMethodId: zod.string(),
+});
+
+export const CompletePaymentUpdateResponse = zod.object({
+  success: zod.boolean(),
+  cardLast4: zod.string(),
+  cardBrand: zod.string(),
+});
+
+/**
  * @summary List retail products
  */
 export const ListProductsParams = zod.object({

@@ -12,12 +12,16 @@ const router: IRouter = Router();
 
 router.get("/payment-update/validate", async (req, res): Promise<void> => {
   const token = req.query.token as string;
-  if (!token) { res.status(400).json({ error: "Token required" }); return; }
+  if (!token) {
+    res.status(400).json({ valid: false, error: "Token required" });
+    return;
+  }
 
   try {
     const validation = await paymentUpdateTokenService.validateToken(token);
 
     if (!validation.valid) {
+      console.log(`[payment-update] Token validation failed: code=${validation.errorCode}, ip=${req.ip}`);
       res.status(400).json({ valid: false, error: validation.error });
       return;
     }
@@ -30,17 +34,22 @@ router.get("/payment-update/validate", async (req, res): Promise<void> => {
       memberName: context?.memberName,
     });
   } catch (err: any) {
+    console.error("[payment-update] Error validating token:", err.message);
     res.status(500).json({ valid: false, error: "An error occurred validating your link." });
   }
 });
 
 router.post("/payment-update/setup-intent", async (req, res): Promise<void> => {
   const { token } = req.body;
-  if (!token) { res.status(400).json({ error: "Token required" }); return; }
+  if (!token) {
+    res.status(400).json({ error: "Token required" });
+    return;
+  }
 
   try {
     const validation = await paymentUpdateTokenService.validateToken(token);
     if (!validation.valid || !validation.data) {
+      console.log(`[payment-update] Setup-intent rejected: code=${validation.errorCode}, ip=${req.ip}`);
       res.status(400).json({ error: validation.error });
       return;
     }
@@ -54,6 +63,7 @@ router.post("/payment-update/setup-intent", async (req, res): Promise<void> => {
       publishableKey,
     });
   } catch (err: any) {
+    console.error("[payment-update] Error creating setup intent:", err.message);
     res.status(500).json({ error: "Failed to initialize payment form. Please try again." });
   }
 });
@@ -68,6 +78,7 @@ router.post("/payment-update/complete", async (req, res): Promise<void> => {
   try {
     const validation = await paymentUpdateTokenService.validateToken(token);
     if (!validation.valid || !validation.data) {
+      console.log(`[payment-update] Complete rejected: code=${validation.errorCode}, ip=${req.ip}`);
       res.status(400).json({ error: validation.error });
       return;
     }
@@ -76,16 +87,24 @@ router.post("/payment-update/complete", async (req, res): Promise<void> => {
 
     const consumed = await paymentUpdateTokenService.markUsed(tokenId);
     if (!consumed) {
+      console.warn(`[payment-update] Token replay attempt: tokenId=${tokenId}, ip=${req.ip}`);
       res.status(400).json({ error: "This link has already been used or expired. Please contact your gym for a new update link." });
       return;
     }
 
+    console.log(`[payment-update] Token consumed: tokenId=${tokenId}, member=${memberId}, sub=${subscriptionId}`);
+
     const [member] = await db.select().from(membersTable).where(
       and(eq(membersTable.id, memberId), eq(membersTable.gymId, gymId))
     );
-    if (!member) { res.status(404).json({ error: "Member not found" }); return; }
+    if (!member) {
+      console.warn(`[payment-update] Member not found: id=${memberId}, gym=${gymId}`);
+      res.status(404).json({ error: "Member not found" });
+      return;
+    }
 
     if (!member.stripeCustomerId) {
+      console.warn(`[payment-update] Member ${memberId} has no Stripe customer ID`);
       res.status(400).json({ error: "Member does not have a Stripe customer account. Please contact your gym." });
       return;
     }
@@ -97,7 +116,11 @@ router.post("/payment-update/complete", async (req, res): Promise<void> => {
         eq(subscriptionsTable.memberId, memberId)
       )
     );
-    if (!sub) { res.status(404).json({ error: "Subscription not found" }); return; }
+    if (!sub) {
+      console.warn(`[payment-update] Subscription ownership mismatch: sub=${subscriptionId}, member=${memberId}, gym=${gymId}`);
+      res.status(404).json({ error: "Subscription not found" });
+      return;
+    }
 
     const stripe = await getUncachableStripeClient();
 
@@ -137,6 +160,8 @@ router.post("/payment-update/complete", async (req, res): Promise<void> => {
       afterValue: { brand: cardBrand, last4: cardLast4 },
     });
 
+    console.log(`[payment-update] Card updated successfully: member=${memberId}, card=${cardBrand} ${cardLast4}`);
+
     const [gym] = await db.select().from(gymsTable).where(eq(gymsTable.id, gymId));
     if (gym) {
       const email = buildPaymentUpdatedEmail({
@@ -164,7 +189,7 @@ router.post("/payment-update/complete", async (req, res): Promise<void> => {
           email: gym.email,
           phone: gym.phone,
         },
-      }).catch((err) => console.error("[billing-recovery] Failed to send confirmation email:", err));
+      }).catch((err) => console.error("[payment-update] Failed to send confirmation email:", err.message));
     }
 
     if (sub.stripeSubscriptionId) {
@@ -178,10 +203,11 @@ router.post("/payment-update/complete", async (req, res): Promise<void> => {
           const invoice = await stripe.invoices.retrieve(latestInvoiceId);
           if (invoice.status === "open") {
             await stripe.invoices.pay(latestInvoiceId);
+            console.log(`[payment-update] Retried invoice payment: ${latestInvoiceId}`);
           }
         }
       } catch (retryErr: any) {
-        console.warn("[billing-recovery] Could not retry invoice payment:", retryErr.message);
+        console.warn("[payment-update] Could not retry invoice payment:", retryErr.message);
       }
     }
 

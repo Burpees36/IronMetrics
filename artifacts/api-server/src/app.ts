@@ -63,8 +63,18 @@ const authLimiter = rateLimit({
   validate: { ip: false, trustProxy: false },
 } as Partial<Options>);
 
+const paymentUpdateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 15,
+  standardHeaders: "draft-7",
+  legacyHeaders: false,
+  message: { error: "Too many requests. Please try again later." },
+  validate: { ip: false, trustProxy: false },
+} as Partial<Options>);
+
 app.use("/api/login", authLimiter);
 app.use("/api/callback", authLimiter);
+app.use("/api/payment-update", paymentUpdateLimiter);
 app.use("/api", apiLimiter);
 
 app.use("/api", paymentUpdatePublicRouter);

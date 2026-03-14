@@ -18,7 +18,11 @@ export type AuditAction =
   | "recovery.notification_sent"
   | "recovery.resolved"
   | "recovery.link_generated"
-  | "recovery.card_updated";
+  | "recovery.card_updated"
+  | "recovery.grace_expired"
+  | "recovery.final_warning_sent"
+  | "maintenance.tokens_cleaned"
+  | "maintenance.recoveries_archived";
 
 export type AuditSource = "ui" | "webhook" | "system" | "api";
 

@@ -1,8 +1,15 @@
 import { db, billingRecoveryTable, subscriptionsTable, membersTable, gymsTable } from "@workspace/db";
-import { eq, and, isNull } from "drizzle-orm";
+import { eq, and, lt, isNull, inArray } from "drizzle-orm";
 import { billingAuditLogger } from "../billingAuditLogger";
 import { paymentUpdateTokenService } from "./payment-update-token";
-import { buildPaymentFailedEmail, buildPaymentUpdatedEmail, sendBillingEmail } from "./billing-email";
+import { buildPaymentFailedEmail, buildGraceExpiredEmail, sendBillingEmail } from "./billing-email";
+
+export const BILLING_RECOVERY_CONFIG = {
+  GRACE_PERIOD_DAYS: 14,
+  MIN_NOTIFICATION_INTERVAL_MS: 4 * 60 * 60 * 1000,
+  TOKEN_EXPIRY_HOURS: 72,
+  RESOLVED_RETENTION_DAYS: 90,
+} as const;
 
 function getUpdateCardUrl(token: string): string {
   const domain = process.env.REPLIT_DOMAINS?.split(",")[0] || process.env.REPLIT_DEV_DOMAIN || "localhost";
@@ -36,7 +43,6 @@ export class BillingRecoveryService {
       const timeSinceLastNotification = existing.lastNotifiedAt
         ? Date.now() - existing.lastNotifiedAt.getTime()
         : Infinity;
-      const MIN_NOTIFICATION_INTERVAL = 4 * 60 * 60 * 1000;
 
       await db
         .update(billingRecoveryTable)
@@ -51,12 +57,12 @@ export class BillingRecoveryService {
 
       recoveryId = existing.id;
 
-      if (timeSinceLastNotification < MIN_NOTIFICATION_INTERVAL) {
+      if (timeSinceLastNotification < BILLING_RECOVERY_CONFIG.MIN_NOTIFICATION_INTERVAL_MS) {
         console.log(`[billing-recovery] Skipping duplicate notification for recovery ${existing.id}, last sent ${Math.round(timeSinceLastNotification / 60000)}m ago`);
         return;
       }
     } else {
-      const graceDeadline = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
+      const graceDeadline = new Date(Date.now() + BILLING_RECOVERY_CONFIG.GRACE_PERIOD_DAYS * 24 * 60 * 60 * 1000);
       const [newRecovery] = await db
         .insert(billingRecoveryTable)
         .values({
@@ -75,6 +81,7 @@ export class BillingRecoveryService {
         .returning();
 
       recoveryId = newRecovery.id;
+      console.log(`[billing-recovery] Created recovery ${recoveryId} for subscription ${params.subscriptionId}, grace deadline: ${graceDeadline.toISOString()}`);
     }
 
     await this.sendRecoveryNotification(recoveryId, params.gymId, params.memberId, params.subscriptionId);
@@ -91,13 +98,22 @@ export class BillingRecoveryService {
       .from(billingRecoveryTable)
       .where(eq(billingRecoveryTable.id, recoveryId));
 
-    if (!recovery) return { success: false, error: "Recovery record not found" };
+    if (!recovery) {
+      console.warn(`[billing-recovery] Recovery ${recoveryId} not found for notification`);
+      return { success: false, error: "Recovery record not found" };
+    }
 
     const [member] = await db.select().from(membersTable).where(eq(membersTable.id, memberId));
-    if (!member) return { success: false, error: "Member not found" };
+    if (!member) {
+      console.warn(`[billing-recovery] Member ${memberId} not found for recovery ${recoveryId}`);
+      return { success: false, error: "Member not found" };
+    }
 
     const [gym] = await db.select().from(gymsTable).where(eq(gymsTable.id, gymId));
-    if (!gym) return { success: false, error: "Gym not found" };
+    if (!gym) {
+      console.warn(`[billing-recovery] Gym ${gymId} not found for recovery ${recoveryId}`);
+      return { success: false, error: "Gym not found" };
+    }
 
     const { token, expiresAt } = await paymentUpdateTokenService.createToken({
       gymId,
@@ -142,6 +158,9 @@ export class BillingRecoveryService {
         .update(billingRecoveryTable)
         .set({ lastNotifiedAt: new Date() })
         .where(eq(billingRecoveryTable.id, recoveryId));
+      console.log(`[billing-recovery] Notification sent for recovery ${recoveryId}, email=${member.email}`);
+    } else {
+      console.warn(`[billing-recovery] Email send failed for recovery ${recoveryId}: ${result.error}`);
     }
 
     await billingAuditLogger.log({
@@ -151,7 +170,12 @@ export class BillingRecoveryService {
       entityType: "billing_recovery",
       entityId: String(recoveryId),
       source: "system",
-      metadata: { emailSent: result.success, token: token.substring(0, 8) + "..." },
+      metadata: {
+        emailSent: result.success,
+        emailError: result.error || null,
+        token: token.substring(0, 8) + "...",
+        emailSkippedReason: result.success ? null : result.error,
+      },
     });
 
     return { token, updateLink, success: result.success, error: result.error };
@@ -164,7 +188,7 @@ export class BillingRecoveryService {
       .where(
         and(
           eq(billingRecoveryTable.subscriptionId, subscriptionId),
-          eq(billingRecoveryTable.status, "active")
+          inArray(billingRecoveryTable.status, ["active", "grace_expired"])
         )
       );
 
@@ -179,6 +203,8 @@ export class BillingRecoveryService {
       })
       .where(eq(billingRecoveryTable.id, recovery.id));
 
+    console.log(`[billing-recovery] Resolved recovery ${recovery.id} for subscription ${subscriptionId}, reason=${reason}`);
+
     await billingAuditLogger.log({
       gymId: recovery.gymId,
       memberId: recovery.memberId,
@@ -186,8 +212,140 @@ export class BillingRecoveryService {
       entityType: "billing_recovery",
       entityId: String(recovery.id),
       source: "system",
-      metadata: { reason },
+      metadata: { reason, previousStatus: recovery.status },
     });
+  }
+
+  async evaluateGraceDeadlines(gymId: number): Promise<{
+    escalated: number;
+    errors: number;
+  }> {
+    const now = new Date();
+    const expiredRecoveries = await db
+      .select({
+        id: billingRecoveryTable.id,
+        gymId: billingRecoveryTable.gymId,
+        memberId: billingRecoveryTable.memberId,
+        subscriptionId: billingRecoveryTable.subscriptionId,
+        failedAttempts: billingRecoveryTable.failedAttempts,
+        amountDue: billingRecoveryTable.amountDue,
+        cardLast4: billingRecoveryTable.cardLast4,
+        cardBrand: billingRecoveryTable.cardBrand,
+        graceDeadline: billingRecoveryTable.graceDeadline,
+      })
+      .from(billingRecoveryTable)
+      .where(
+        and(
+          eq(billingRecoveryTable.gymId, gymId),
+          eq(billingRecoveryTable.status, "active"),
+          lt(billingRecoveryTable.graceDeadline, now)
+        )
+      );
+
+    let escalated = 0;
+    let errors = 0;
+
+    for (const recovery of expiredRecoveries) {
+      try {
+        await db
+          .update(billingRecoveryTable)
+          .set({ status: "grace_expired" })
+          .where(eq(billingRecoveryTable.id, recovery.id));
+
+        await billingAuditLogger.log({
+          gymId: recovery.gymId,
+          memberId: recovery.memberId,
+          action: "recovery.grace_expired",
+          entityType: "billing_recovery",
+          entityId: String(recovery.id),
+          source: "system",
+          metadata: {
+            graceDeadline: recovery.graceDeadline?.toISOString(),
+            failedAttempts: recovery.failedAttempts,
+            amountDue: recovery.amountDue,
+          },
+        });
+
+        const [member] = await db.select().from(membersTable).where(eq(membersTable.id, recovery.memberId));
+        const [gym] = await db.select().from(gymsTable).where(eq(gymsTable.id, recovery.gymId));
+
+        if (member && gym) {
+          const { token } = await paymentUpdateTokenService.createToken({
+            gymId: recovery.gymId,
+            memberId: recovery.memberId,
+            subscriptionId: recovery.subscriptionId,
+            recoveryId: recovery.id,
+          });
+
+          const updateLink = getUpdateCardUrl(token);
+          const branding = {
+            name: gym.name,
+            fromEmail: gym.fromEmail,
+            fromName: gym.fromName,
+            logoUrl: gym.logoUrl,
+            email: gym.email,
+            phone: gym.phone,
+          };
+
+          const email = buildGraceExpiredEmail({
+            memberName: `${member.firstName} ${member.lastName}`,
+            amountDue: recovery.amountDue ? parseFloat(recovery.amountDue) : 0,
+            updateLink,
+            branding,
+          });
+
+          const emailResult = await sendBillingEmail({
+            to: member.email,
+            ...email,
+            branding,
+          });
+
+          await billingAuditLogger.log({
+            gymId: recovery.gymId,
+            memberId: recovery.memberId,
+            action: "recovery.final_warning_sent",
+            entityType: "billing_recovery",
+            entityId: String(recovery.id),
+            source: "system",
+            metadata: {
+              emailSent: emailResult.success,
+              emailError: emailResult.error || null,
+            },
+          });
+
+          console.log(`[billing-recovery] Grace expired for recovery ${recovery.id}, final warning sent=${emailResult.success}`);
+        }
+
+        escalated++;
+      } catch (err: any) {
+        console.error(`[billing-recovery] Error escalating recovery ${recovery.id}:`, err.message);
+        errors++;
+      }
+    }
+
+    console.log(`[billing-recovery] Grace deadline evaluation complete: ${escalated} escalated, ${errors} errors, ${expiredRecoveries.length} total expired`);
+    return { escalated, errors };
+  }
+
+  async archiveOldResolvedRecoveries(gymId: number): Promise<number> {
+    const cutoff = new Date(Date.now() - BILLING_RECOVERY_CONFIG.RESOLVED_RETENTION_DAYS * 24 * 60 * 60 * 1000);
+
+    const deleted = await db
+      .delete(billingRecoveryTable)
+      .where(
+        and(
+          eq(billingRecoveryTable.gymId, gymId),
+          inArray(billingRecoveryTable.status, ["resolved"]),
+          lt(billingRecoveryTable.resolvedAt, cutoff)
+        )
+      )
+      .returning({ id: billingRecoveryTable.id });
+
+    if (deleted.length > 0) {
+      console.log(`[billing-recovery] Archived ${deleted.length} resolved recovery records older than ${BILLING_RECOVERY_CONFIG.RESOLVED_RETENTION_DAYS} days`);
+    }
+
+    return deleted.length;
   }
 
   async getActiveRecoveries(gymId: number): Promise<any[]> {
@@ -202,6 +360,7 @@ export class BillingRecoveryService {
         failedAttempts: billingRecoveryTable.failedAttempts,
         lastFailedAt: billingRecoveryTable.lastFailedAt,
         lastNotifiedAt: billingRecoveryTable.lastNotifiedAt,
+        graceDeadline: billingRecoveryTable.graceDeadline,
         amountDue: billingRecoveryTable.amountDue,
         cardLast4: billingRecoveryTable.cardLast4,
         cardBrand: billingRecoveryTable.cardBrand,
@@ -216,7 +375,7 @@ export class BillingRecoveryService {
       .where(
         and(
           eq(billingRecoveryTable.gymId, gymId),
-          eq(billingRecoveryTable.status, "active")
+          inArray(billingRecoveryTable.status, ["active", "grace_expired"])
         )
       );
 
@@ -234,7 +393,7 @@ export class BillingRecoveryService {
         and(
           eq(billingRecoveryTable.memberId, memberId),
           eq(billingRecoveryTable.gymId, gymId),
-          eq(billingRecoveryTable.status, "active")
+          inArray(billingRecoveryTable.status, ["active", "grace_expired"])
         )
       );
 
