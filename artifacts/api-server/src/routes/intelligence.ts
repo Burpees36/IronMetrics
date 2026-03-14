@@ -1,20 +1,84 @@
+/**
+ * @module intelligence
+ * Business intelligence and analytics routes for gym performance.
+ *
+ * Provides five analytical endpoints:
+ *   - RSI (Retention Strength Index) — composite health score
+ *   - Risk Radar — per-member churn risk profiles
+ *   - Interventions — prioritized action recommendations
+ *   - Cohort Analysis — monthly join-cohort retention curves
+ *   - Revenue Forecast — MRR projections with upside/downside scenarios
+ *   - Overview — aggregated dashboard combining RSI, risk, interventions, and forecast
+ *
+ * Known limitations:
+ *   - Several magic numbers are hardcoded rather than configurable (see inline notes).
+ *   - `avgTenure` is hardcoded to 8.5 months instead of being calculated from member data.
+ *   - RSI trends (trend30d, trend90d) are static values (2.3, 5.1) rather than computed
+ *     from historical snapshots.
+ *   - Revenue per member in risk profiles is hardcoded to $150/month.
+ *   - Cohort retention rates at 30d/60d use fixed percentages (90%, 85%) rather than
+ *     actual attendance/cancellation data.
+ */
 import { Router, type IRouter } from "express";
 import { eq, and, count, sql, desc } from "drizzle-orm";
 import { db, membersTable, subscriptionsTable, attendanceTable, leadsTable } from "@workspace/db";
 
 const router: IRouter = Router();
 
+/**
+ * Parses the gymId route parameter into a number.
+ * Handles the case where params may be an array (Express quirk with merged params).
+ *
+ * @param params - Express route params object.
+ * @returns Parsed gym ID or null if invalid.
+ */
 function parseGymId(params: any): number | null {
   const raw = Array.isArray(params.gymId) ? params.gymId[0] : params.gymId;
   const id = parseInt(raw, 10);
   return isNaN(id) ? null : id;
 }
 
+/**
+ * Computes the Retention Strength Index (RSI) — a composite score (0–100) indicating
+ * overall gym health from a retention and revenue perspective.
+ *
+ * The RSI is a weighted average of four normalized components:
+ *
+ * @param churnRate       - Percentage of total members who have cancelled.
+ *                          Normalized: 100 - (churnRate * 10), clamped to [0, 100].
+ *                          A 10% churn rate yields a normalized score of 0.
+ *
+ * @param avgRevPerMember - Average monthly revenue per active subscription.
+ *                          Normalized: (avgRevPerMember / 200) * 100, capped at 100.
+ *                          Magic number 200 represents a "full score" revenue target of $200/member.
+ *
+ * @param netGrowth       - Net member growth (active minus cancelled).
+ *                          Normalized: 50 + (netGrowth * 5), clamped to [0, 100].
+ *                          A net growth of 0 yields a neutral score of 50.
+ *
+ * @param avgTenure       - Average member tenure in months.
+ *                          Normalized: (avgTenure / 24) * 100, capped at 100.
+ *                          Magic number 24 means tenure ≥ 24 months scores 100.
+ *
+ * Weights:
+ *   - Churn rate:           35% (heaviest — churn is the strongest health signal)
+ *   - Avg revenue/member:   25% (revenue sustainability)
+ *   - Net member growth:    20% (growth trajectory)
+ *   - Avg tenure:           20% (member loyalty/stickiness)
+ *
+ * Health bands:
+ *   - "Strong":   score ≥ 70
+ *   - "Moderate": score ≥ 45
+ *   - "Fragile":  score < 45
+ *
+ * @returns RSI score, band label, raw component values, and a detailed breakdown.
+ */
 function computeRSI(churnRate: number, avgRevPerMember: number, netGrowth: number, avgTenure: number) {
-  const churnNorm = Math.max(0, Math.min(100, 100 - churnRate * 10));
-  const revNorm = Math.min(100, (avgRevPerMember / 200) * 100);
-  const growthNorm = Math.max(0, Math.min(100, 50 + netGrowth * 5));
-  const tenureNorm = Math.min(100, (avgTenure / 24) * 100);
+  // Normalize each component to a 0–100 scale
+  const churnNorm = Math.max(0, Math.min(100, 100 - churnRate * 10));           // 10% churn → 0 score
+  const revNorm = Math.min(100, (avgRevPerMember / 200) * 100);                 // $200/member → full score
+  const growthNorm = Math.max(0, Math.min(100, 50 + netGrowth * 5));            // 0 growth → neutral 50
+  const tenureNorm = Math.min(100, (avgTenure / 24) * 100);                     // 24 months → full score
 
   const weights = { churn: 0.35, rev: 0.25, growth: 0.2, tenure: 0.2 };
   const score = churnNorm * weights.churn + revNorm * weights.rev + growthNorm * weights.growth + tenureNorm * weights.tenure;
@@ -33,6 +97,22 @@ function computeRSI(churnRate: number, avgRevPerMember: number, netGrowth: numbe
   };
 }
 
+/**
+ * Fetches core gym metrics used as inputs to the RSI and other analytics.
+ *
+ * Queries:
+ *   - Active, cancelled, and total member counts
+ *   - Churn rate as (cancelled / total) * 100
+ *   - Total and average revenue from active subscriptions
+ *   - Net growth (active - cancelled)
+ *
+ * Known weakness: `avgTenure` is hardcoded to 8.5 months rather than being
+ * calculated from actual member join dates. This should be computed as:
+ *   avg(now - joinDate) across active members.
+ *
+ * @param gymId - The gym to query metrics for.
+ * @returns Aggregate metrics for the gym.
+ */
 async function getGymMetrics(gymId: number) {
   const [activeCount] = await db.select({ count: count() }).from(membersTable).where(and(eq(membersTable.gymId, gymId), eq(membersTable.status, "active")));
   const [cancelledCount] = await db.select({ count: count() }).from(membersTable).where(and(eq(membersTable.gymId, gymId), eq(membersTable.status, "cancelled")));
@@ -47,18 +127,53 @@ async function getGymMetrics(gymId: number) {
   const totalRev = subs.reduce((sum, s) => sum + parseFloat(s.amount || "0"), 0);
   const avgRev = subs.length > 0 ? totalRev / subs.length : 0;
   const netGrowth = active - cancelled;
-  const avgTenure = 8.5;
+  const avgTenure = 8.5; // Hardcoded — should be computed from member joinDate data
 
   return { active, cancelled, total, churnRate, totalRev, avgRev, netGrowth, avgTenure, subs };
 }
 
+/**
+ * Builds per-member churn risk profiles for all active members in a gym.
+ *
+ * Risk scoring formula:
+ *   riskScore = attendanceDecay * 60 + lowAttendancePenalty
+ *
+ *   - attendanceDecay: min(1, daysSinceLastVisit / 30)
+ *     → Linearly increases from 0 to 1 over 30 days of inactivity.
+ *     → Magic number 30 = days until "fully decayed" attendance.
+ *
+ *   - The decay is multiplied by 60 (magic number) to weight it as the
+ *     primary risk factor (up to 60 points out of 100).
+ *
+ *   - lowAttendancePenalty: 25 points if attendanceCount30d < 3
+ *     → Magic number 25 = penalty for fewer than 3 visits in 30 days.
+ *     → Magic number 3 = minimum acceptable monthly visit frequency.
+ *
+ *   - If the member already has a stored riskScore, that takes precedence.
+ *
+ * Risk tiers:
+ *   - "critical": score ≥ 80
+ *   - "high":     score ≥ 60
+ *   - "moderate": score ≥ 35
+ *   - "low":      score ≥ 15
+ *   - "healthy":  score < 15
+ *
+ * Known weakness: `sub` (monthly subscription value) is hardcoded to $150
+ * instead of being looked up from the member's actual subscription amount.
+ *
+ * @param gymId - The gym to generate risk profiles for.
+ * @returns Array of risk profiles sorted by riskScore descending (highest risk first).
+ */
 async function getRiskProfiles(gymId: number) {
   const members = await db.select().from(membersTable).where(and(eq(membersTable.gymId, gymId), eq(membersTable.status, "active")));
 
   return members.map((m) => {
     const now = new Date();
+    // Calculate days since last gym visit; default to 999 if no visit recorded
     const daysSinceLastVisit = m.lastVisitDate ? Math.floor((now.getTime() - new Date(m.lastVisitDate).getTime()) / (1000 * 60 * 60 * 24)) : 999;
+    // Attendance decay: linearly 0→1 over 30 days of no visits
     const attendanceDecay = Math.min(1, daysSinceLastVisit / 30);
+    // Risk score: decay contributes up to 60 pts, low attendance adds 25 pts
     const riskScore = m.riskScore ? parseFloat(m.riskScore) : Math.min(100, attendanceDecay * 60 + (m.attendanceCount30d !== null && m.attendanceCount30d < 3 ? 25 : 0));
     const riskTier = riskScore >= 80 ? "critical" : riskScore >= 60 ? "high" : riskScore >= 35 ? "moderate" : riskScore >= 15 ? "low" : "healthy";
 
@@ -67,6 +182,7 @@ async function getRiskProfiles(gymId: number) {
     if (m.attendanceCount30d !== null && m.attendanceCount30d < 3) signals.push("Low attendance (<3/month)");
     if (attendanceDecay > 0.5) signals.push("Attendance declining");
 
+    // Hardcoded monthly subscription value — should come from actual subscription data
     const sub = 150;
     return {
       memberId: m.id,
@@ -86,6 +202,25 @@ async function getRiskProfiles(gymId: number) {
   }).sort((a, b) => b.riskScore - a.riskScore);
 }
 
+/**
+ * Generates a prioritized list of intervention recommendations for a gym.
+ *
+ * Builds five static intervention templates whose dynamic fields (counts,
+ * revenue figures) are populated from live database queries:
+ *   1. Retention outreach — targets members in "critical" or "high" risk tiers
+ *   2. Billing recovery — targets subscriptions with "past_due" status
+ *   3. Onboarding improvement — generic best-practice recommendation
+ *   4. Lead follow-up — based on open lead count
+ *   5. Referral campaign — generic growth recommendation
+ *
+ * Known weakness: `expectedRevenue` for at-risk members and leads uses
+ * a hardcoded $150/member value (magic number) rather than actual subscription amounts.
+ * The intervention scores (92, 85, 78, 72, 65) are static priority values
+ * rather than dynamically computed from gym data.
+ *
+ * @param gymId - The gym to generate interventions for.
+ * @returns Array of intervention objects sorted by static priority score.
+ */
 async function getInterventions(gymId: number) {
   const [atRiskResult] = await db.select({ count: count() }).from(membersTable).where(
     and(eq(membersTable.gymId, gymId), eq(membersTable.status, "active"),
@@ -105,7 +240,7 @@ async function getInterventions(gymId: number) {
       impact: "high",
       urgency: "immediate" as const,
       score: 92,
-      expectedRevenue: atRiskCount * 150,
+      expectedRevenue: atRiskCount * 150, // $150/member hardcoded
       affectedMembers: atRiskCount,
       actions: ["Review risk radar for critical-tier members", "Draft personalized check-in messages", "Schedule 1:1 calls with top at-risk members", "Track response and re-engagement within 7 days"],
       status: "pending",
@@ -144,7 +279,7 @@ async function getInterventions(gymId: number) {
       impact: "medium",
       urgency: "this_week" as const,
       score: 72,
-      expectedRevenue: (openLeadCount?.count ?? 0) * 150,
+      expectedRevenue: (openLeadCount?.count ?? 0) * 150, // $150/lead hardcoded
       affectedMembers: null,
       actions: ["Review lead pipeline for stale entries", "Send follow-up emails or texts", "Offer free trial or No Sweat Intro", "Remove or archive truly cold leads"],
       status: "pending",
@@ -167,6 +302,14 @@ async function getInterventions(gymId: number) {
   return interventions;
 }
 
+/**
+ * GET /gyms/:gymId/intelligence/rsi
+ * Returns the Retention Strength Index for a gym.
+ *
+ * Known weakness: `trend30d` (2.3) and `trend90d` (5.1) are hardcoded static
+ * values. In a production system these would be computed by comparing the
+ * current RSI against historical snapshots stored in the database.
+ */
 router.get("/gyms/:gymId/intelligence/rsi", async (req, res): Promise<void> => {
   const gymId = parseGymId(req.params);
   if (!gymId) { res.status(400).json({ error: "Invalid gym ID" }); return; }
@@ -176,8 +319,8 @@ router.get("/gyms/:gymId/intelligence/rsi", async (req, res): Promise<void> => {
 
   res.json({
     ...rsi,
-    trend30d: 2.3,
-    trend90d: 5.1,
+    trend30d: 2.3,  // Hardcoded — should be computed from historical RSI snapshots
+    trend90d: 5.1,  // Hardcoded — should be computed from historical RSI snapshots
     insight: rsi.band === "Strong"
       ? "Your gym is showing strong retention. Keep focus on onboarding quality."
       : rsi.band === "Moderate"
@@ -186,6 +329,7 @@ router.get("/gyms/:gymId/intelligence/rsi", async (req, res): Promise<void> => {
   });
 });
 
+/** GET /gyms/:gymId/intelligence/risk-radar — returns per-member risk profiles. */
 router.get("/gyms/:gymId/intelligence/risk-radar", async (req, res): Promise<void> => {
   const gymId = parseGymId(req.params);
   if (!gymId) { res.status(400).json({ error: "Invalid gym ID" }); return; }
@@ -194,6 +338,7 @@ router.get("/gyms/:gymId/intelligence/risk-radar", async (req, res): Promise<voi
   res.json(profiles);
 });
 
+/** GET /gyms/:gymId/intelligence/interventions — returns prioritized action items. */
 router.get("/gyms/:gymId/intelligence/interventions", async (req, res): Promise<void> => {
   const gymId = parseGymId(req.params);
   if (!gymId) { res.status(400).json({ error: "Invalid gym ID" }); return; }
@@ -202,6 +347,15 @@ router.get("/gyms/:gymId/intelligence/interventions", async (req, res): Promise<
   res.json(interventions);
 });
 
+/**
+ * GET /gyms/:gymId/intelligence/cohorts
+ * Returns monthly cohort retention analysis for the last 8 months.
+ *
+ * Groups members by their join month and calculates retention rates.
+ * Known weakness: 30-day and 60-day retention rates use fixed multipliers
+ * (0.9 and 0.85) rather than actual retention data. The avgRevenue per
+ * cohort member uses a hardcoded $145 instead of real subscription amounts.
+ */
 router.get("/gyms/:gymId/intelligence/cohorts", async (req, res): Promise<void> => {
   const gymId = parseGymId(req.params);
   if (!gymId) { res.status(400).json({ error: "Invalid gym ID" }); return; }
@@ -209,6 +363,7 @@ router.get("/gyms/:gymId/intelligence/cohorts", async (req, res): Promise<void> 
   const members = await db.select().from(membersTable).where(eq(membersTable.gymId, gymId));
 
   const now = new Date();
+  // Build 8 monthly buckets (current month and 7 prior months)
   const monthBuckets: Record<string, typeof members> = {};
   for (let i = 7; i >= 0; i--) {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
@@ -216,6 +371,7 @@ router.get("/gyms/:gymId/intelligence/cohorts", async (req, res): Promise<void> 
     monthBuckets[key] = [];
   }
 
+  // Assign members to their join-month bucket
   for (const m of members) {
     if (!m.joinDate) continue;
     const joinMonth = new Date(m.joinDate).toISOString().slice(0, 7);
@@ -232,21 +388,33 @@ router.get("/gyms/:gymId/intelligence/cohorts", async (req, res): Promise<void> 
     return {
       cohortMonth: month,
       startingMembers: starting,
-      retained30d: starting > 0 ? Math.round(starting * 0.9) : 0,
-      retained60d: starting > 0 ? Math.round(starting * 0.85) : 0,
+      retained30d: starting > 0 ? Math.round(starting * 0.9) : 0,   // Hardcoded 90% retention estimate
+      retained60d: starting > 0 ? Math.round(starting * 0.85) : 0,  // Hardcoded 85% retention estimate
       retained90d: stillActive,
       retained180d: stillActive,
       retained365d: 0,
-      retentionRate30d: starting > 0 ? 90 : 0,
+      retentionRate30d: starting > 0 ? 90 : 0,  // Hardcoded 90%
       retentionRate90d: retRate,
       retentionRate365d: 0,
-      avgRevenue: starting > 0 ? Math.round((cohortMembers.reduce((s, m) => s + 145, 0) / starting) * 100) / 100 : 0,
+      avgRevenue: starting > 0 ? Math.round((cohortMembers.reduce((s, m) => s + 145, 0) / starting) * 100) / 100 : 0, // $145 hardcoded
     };
   });
 
   res.json(cohorts);
 });
 
+/**
+ * GET /gyms/:gymId/intelligence/revenue-forecast
+ * Projects MRR (Monthly Recurring Revenue) forward at 3, 6, and 12 months.
+ *
+ * Uses fixed growth/decline multipliers applied to current MRR:
+ *   - Expected: +5% (3m), +10% (6m), +18% (12m)
+ *   - Upside:  +12% (3m), +22% (6m), +35% (12m)
+ *   - Downside: -8% (3m), -15% (6m), -22% (12m)
+ *
+ * These multipliers are hardcoded assumptions — a more sophisticated model
+ * would incorporate historical growth rates, seasonal patterns, and churn trends.
+ */
 router.get("/gyms/:gymId/intelligence/revenue-forecast", async (req, res): Promise<void> => {
   const gymId = parseGymId(req.params);
   if (!gymId) { res.status(400).json({ error: "Invalid gym ID" }); return; }
@@ -279,6 +447,11 @@ router.get("/gyms/:gymId/intelligence/revenue-forecast", async (req, res): Promi
   });
 });
 
+/**
+ * GET /gyms/:gymId/intelligence/overview
+ * Aggregated intelligence dashboard — combines RSI, top risks, top interventions,
+ * and revenue forecast into a single response for the overview page.
+ */
 router.get("/gyms/:gymId/intelligence/overview", async (req, res): Promise<void> => {
   const gymId = parseGymId(req.params);
   if (!gymId) { res.status(400).json({ error: "Invalid gym ID" }); return; }
@@ -287,8 +460,8 @@ router.get("/gyms/:gymId/intelligence/overview", async (req, res): Promise<void>
   const rsi = computeRSI(metrics.churnRate, metrics.avgRev, metrics.netGrowth, metrics.avgTenure);
   const rsiData = {
     ...rsi,
-    trend30d: 2.3,
-    trend90d: 5.1,
+    trend30d: 2.3,  // Hardcoded — see RSI endpoint note
+    trend90d: 5.1,  // Hardcoded — see RSI endpoint note
     insight: rsi.band === "Strong"
       ? "Your gym is showing strong retention. Keep focus on onboarding quality."
       : rsi.band === "Moderate"

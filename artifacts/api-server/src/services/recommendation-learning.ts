@@ -1,3 +1,35 @@
+/**
+ * @module recommendation-learning
+ * Adaptive recommendation learning system for gym intelligence.
+ *
+ * Implements a lightweight Bayesian-like learning mechanism that adjusts
+ * recommendation quality scores based on observed outcomes. The system:
+ *
+ *   1. Tracks recommendation "cards" — each card represents a suggested
+ *      intervention with an execution checklist (e.g., "Reach out to at-risk members").
+ *
+ *   2. Measures "execution strength" — the fraction of checklist items the
+ *      gym owner has completed. A threshold (MIN_EXECUTION_STRENGTH = 0.6)
+ *      gates whether a recommendation's outcome is attributable to the
+ *      recommendation itself (i.e., if the owner didn't follow through,
+ *      the recommendation shouldn't be penalized).
+ *
+ *   3. Updates learning stats using a weighted moving average:
+ *      - `learningRate` controls how quickly new observations shift the
+ *        expected impact. Per-gym learning is faster (0.06 base) than
+ *        global learning (0.03 base) to allow gym-specific adaptation.
+ *      - `qualityWeight` scales the learning rate by roster size, clamped
+ *        to [0.2, 1.0] via: max(0.2, min(1, rosterSize / 100)). Smaller
+ *        gyms contribute less to confidence since their sample is noisier.
+ *      - `confidenceGain` increases confidence per observation, scaled by
+ *        execution strength and quality weight. Confidence asymptotes at 0.99.
+ *
+ *   4. The update formula (weighted moving average / exponential smoothing):
+ *        newExpectedImpact = oldExpectedImpact * (1 - learningRate) + impactScore * learningRate
+ *      This is analogous to Bayesian posterior updating with a fixed prior
+ *      weight, allowing the system to gradually converge on each
+ *      recommendation type's true effectiveness for a given gym.
+ */
 import { and, asc, eq, inArray, desc } from "drizzle-orm";
 import {
   db,
@@ -9,19 +41,43 @@ import {
   outcomeSnapshotsTable,
 } from "@workspace/db";
 
+/**
+ * Minimum execution strength (fraction of checklist completed) required
+ * before a recommendation's outcome is considered attributable to the
+ * recommendation. Below this threshold, outcome data is too noisy to learn from.
+ */
 const MIN_EXECUTION_STRENGTH = 0.6;
 
+/**
+ * Returns the first day of the month for the given date (or today) as "YYYY-MM-DD".
+ * Used as the period key for grouping recommendations and outcomes by month.
+ */
 export function getPeriodStart(inputDate?: Date): string {
   const d = inputDate ? new Date(inputDate) : new Date();
   d.setDate(1);
   return d.toISOString().slice(0, 10);
 }
 
+/**
+ * Generates a deterministic, URL-safe ID for a checklist item.
+ * Combines the recommendation type, item index, and a sanitized slug
+ * of the item text (truncated to 32 chars) to produce a stable identifier.
+ */
 function getItemId(recommendationType: string, item: string, index: number): string {
   const clean = item.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
   return `${recommendationType}-${index}-${clean.slice(0, 32)}`;
 }
 
+/**
+ * Persists recommendation cards for a gym/period if they don't already exist.
+ * Each card stores its execution checklist and the baseline forecast at the
+ * time of generation, enabling before/after outcome comparisons.
+ *
+ * @param gymId             - Target gym.
+ * @param periodStart       - Month period key (e.g., "2026-03-01").
+ * @param recommendations   - Array of intervention recommendations with checklists.
+ * @param baselineForecast  - Snapshot of gym metrics at recommendation time.
+ */
 export async function ensureRecommendationCards(
   gymId: number,
   periodStart: string,
@@ -60,6 +116,17 @@ export async function ensureRecommendationCards(
   }
 }
 
+/**
+ * Retrieves the current execution state of all recommendation cards for a
+ * gym/period. Joins checklist items with their completion records to build
+ * a full picture of what the owner has done.
+ *
+ * Computes `executionStrength` as: checkedItems / totalItems (0 to 1).
+ *
+ * @param gymId       - Target gym.
+ * @param periodStart - Optional month key; defaults to current month.
+ * @returns Array of card objects with enriched checklist and execution metrics.
+ */
 export async function getRecommendationExecutionState(gymId: number, periodStart?: string) {
   const period = periodStart ?? getPeriodStart();
   const cards = await db
@@ -96,6 +163,7 @@ export async function getRecommendationExecutionState(gymId: number, periodStart
 
     const checkedItems = checklist.filter((item) => item.checked).length;
     const totalItems = checklist.length;
+    // Execution strength: fraction of checklist completed (0 = nothing done, 1 = all done)
     const executionStrength = totalItems === 0 ? 0 : checkedItems / totalItems;
 
     return {
@@ -114,6 +182,16 @@ export async function getRecommendationExecutionState(gymId: number, periodStart
   });
 }
 
+/**
+ * Toggles a single checklist item's completion state. Upserts the completion
+ * record so the same item can be checked/unchecked multiple times.
+ *
+ * @param gymId            - Gym owning the recommendation (for authorization).
+ * @param recommendationId - The recommendation card ID.
+ * @param itemId           - The checklist item ID to toggle.
+ * @param checked          - New checked state.
+ * @param note             - Optional note from the gym owner.
+ */
 export async function toggleChecklistItem(
   gymId: number,
   recommendationId: number,
@@ -159,6 +237,12 @@ export async function toggleChecklistItem(
   }
 }
 
+/**
+ * Keyword-based classifier for owner-logged actions.
+ * Maps free-text actions to known intervention categories using simple
+ * keyword matching. Returns the category with the most keyword hits, or
+ * null if no keywords match.
+ */
 const INTERVENTION_KEYWORDS: Record<string, string[]> = {
   retention: ["retain", "keep", "churn", "at-risk", "save", "loyalty", "re-engage"],
   onboarding: ["onboard", "new member", "welcome", "intro", "first visit", "nsi", "ramp"],
@@ -185,6 +269,11 @@ function classifyAction(text: string): string | null {
   return bestMatch;
 }
 
+/**
+ * Logs a free-text action taken by the gym owner. The action is auto-classified
+ * into an intervention category via keyword matching. These actions supplement
+ * the structured checklist and capture ad-hoc efforts.
+ */
 export async function logOwnerAction(gymId: number, periodStart: string, text: string) {
   const classifiedType = classifyAction(text);
 
@@ -196,6 +285,9 @@ export async function logOwnerAction(gymId: number, periodStart: string, text: s
   return action;
 }
 
+/**
+ * Retrieves paginated owner actions for a gym, ordered newest first.
+ */
 export async function getOwnerActions(gymId: number, limit: number = 50, offset: number = 0) {
   return db
     .select()
@@ -206,6 +298,31 @@ export async function getOwnerActions(gymId: number, limit: number = 50, offset:
     .offset(offset);
 }
 
+/**
+ * Updates (or creates) the learning stats for a recommendation type.
+ *
+ * Uses a Bayesian-like weighted moving average to update expected impact:
+ *
+ *   learningRate = baseLR * qualityWeight
+ *     - baseLR: 0.06 for per-gym stats, 0.03 for global stats
+ *       (per-gym learns faster to capture gym-specific patterns)
+ *     - qualityWeight: max(0.2, min(1, rosterSize / 100))
+ *       (larger gyms produce more reliable signal, capped at 100 members)
+ *
+ *   newExpectedImpact = old * (1 - learningRate) + impactScore * learningRate
+ *     → Exponential smoothing: blends prior belief with new observation.
+ *     → A high learningRate means new data shifts expectations faster.
+ *
+ *   confidenceGain = 0.03 * executionStrength * qualityWeight
+ *     → Confidence only grows when the owner actually executed (high execution strength).
+ *     → Capped at 0.99 to never reach full certainty.
+ *
+ * @param recommendationType - The category of recommendation (e.g., "retention", "onboarding").
+ * @param gymId              - Gym ID for per-gym stats, or null for global stats.
+ * @param impactScore        - Observed outcome metric (higher = better outcome).
+ * @param executionStrength  - Fraction of checklist completed (0 to 1).
+ * @param rosterSize         - Current active member count (used for quality weighting).
+ */
 export async function upsertLearningStat(
   recommendationType: string,
   gymId: number | null,
@@ -225,11 +342,15 @@ export async function upsertLearningStat(
     .from(recommendationLearningStatsTable)
     .where(conditions);
 
+  // Quality weight: scales learning by gym size — small gyms (< 20 members) get min 0.2
   const qualityWeight = Math.max(0.2, Math.min(1, rosterSize / 100));
+  // Per-gym learning rate is 2x global to allow faster adaptation
   const learningRate = gymId ? 0.06 * qualityWeight : 0.03 * qualityWeight;
+  // Confidence grows proportional to execution strength and data quality
   const confidenceGain = 0.03 * executionStrength * qualityWeight;
 
   if (!existing) {
+    // First observation: seed with initial values
     await db.insert(recommendationLearningStatsTable).values({
       recommendationType,
       gymId,
@@ -240,6 +361,7 @@ export async function upsertLearningStat(
     return;
   }
 
+  // Weighted moving average update (exponential smoothing)
   const newExpectedImpact = Number(existing.expectedImpact) * (1 - learningRate) + impactScore * learningRate;
   const newConfidence = Math.min(0.99, Number(existing.confidence) + confidenceGain);
 

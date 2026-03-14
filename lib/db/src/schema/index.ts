@@ -1,3 +1,12 @@
+/**
+ * @module schema
+ * Barrel file for the database schema layer.
+ *
+ * The schema is organized into domain-specific modules, each defining
+ * its own Drizzle ORM table declarations, Zod insert schemas, and
+ * TypeScript types. This file re-exports everything so consumers can
+ * import from "@workspace/db" without knowing the internal file structure.
+ */
 export * from "./auth";
 export * from "./gyms";
 export * from "./members";

@@ -1,3 +1,24 @@
+/**
+ * @module app
+ * Express application entry point for the API server.
+ *
+ * Sets up the full middleware pipeline in a specific order:
+ *   1. Stripe webhook (raw body, before JSON parsing)
+ *   2. CORS, cookie parsing, JSON/URL-encoded body parsing
+ *   3. Rate limiters (auth, payment-update, general API)
+ *   4. Public routes (payment update — no auth required)
+ *   5. Authentication middleware (all subsequent routes require auth)
+ *   6. Protected API routes (gym-scoped, role-checked)
+ *   7. Global error handler
+ *
+ * The Stripe webhook route is intentionally mounted before body-parsing
+ * middleware because Stripe signature verification requires the raw
+ * request body as a Buffer.
+ *
+ * Known weakness: CORS is configured with `origin: true`, which reflects
+ * any requesting origin. In production this should be locked down to a
+ * whitelist of allowed origins.
+ */
 import express, { type Express } from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
@@ -9,8 +30,14 @@ import paymentUpdatePublicRouter from "./routes/payment-update-public";
 
 const app: Express = express();
 
+// Trust the first proxy hop (required for rate limiting behind a reverse proxy)
 app.set("trust proxy", 1);
 
+/**
+ * Stripe webhook endpoint — mounted before JSON body parsing.
+ * Uses express.raw() so the body arrives as a Buffer for signature verification.
+ * Stripe sends a `stripe-signature` header that is validated against the raw payload.
+ */
 app.post(
   "/api/stripe/webhook",
   express.raw({ type: "application/json" }),
@@ -23,6 +50,7 @@ app.post(
     }
 
     try {
+      // If multiple signature headers are present, use the first one
       const sig = Array.isArray(signature) ? signature[0] : signature;
 
       if (!Buffer.isBuffer(req.body)) {
@@ -40,11 +68,17 @@ app.post(
   }
 );
 
+// --- Global middleware ---
+// Known weakness: `origin: true` mirrors any origin, making CORS effectively open.
+// Should be restricted to known frontend domains in production.
 app.use(cors({ credentials: true, origin: true }));
 app.use(cookieParser());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// --- Rate limiters ---
+
+/** General API rate limiter: 120 requests per 60-second window. */
 const apiLimiter = rateLimit({
   windowMs: 60 * 1000,
   limit: 120,
@@ -54,6 +88,7 @@ const apiLimiter = rateLimit({
   validate: { ip: false, trustProxy: false },
 } as Partial<Options>);
 
+/** Auth route limiter: 30 attempts per 15-minute window (brute-force protection). */
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   limit: 30,
@@ -63,6 +98,7 @@ const authLimiter = rateLimit({
   validate: { ip: false, trustProxy: false },
 } as Partial<Options>);
 
+/** Payment update limiter: 15 requests per 15-minute window (tighter for sensitive ops). */
 const paymentUpdateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   limit: 15,
@@ -72,17 +108,22 @@ const paymentUpdateLimiter = rateLimit({
   validate: { ip: false, trustProxy: false },
 } as Partial<Options>);
 
+// Apply rate limiters to their respective route prefixes
 app.use("/api/login", authLimiter);
 app.use("/api/callback", authLimiter);
 app.use("/api/payment-update", paymentUpdateLimiter);
 app.use("/api", apiLimiter);
 
+// Public routes that do not require authentication (e.g., payment update links)
 app.use("/api", paymentUpdatePublicRouter);
 
+// Authentication middleware — everything below this point requires a valid session
 app.use(authMiddleware);
 
+// Protected API routes — gym-scoped routes are further guarded by requireGymAccess
 app.use("/api", router);
 
+/** Global error handler — catches unhandled errors from any route or middleware. */
 app.use((err: any, _req: any, res: any, _next: any) => {
   console.error("Unhandled error:", err);
   res.status(500).json({ error: "Internal server error" });
