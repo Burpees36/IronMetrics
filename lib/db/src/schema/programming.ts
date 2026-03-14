@@ -1,4 +1,4 @@
-import { pgTable, text, serial, timestamp, integer, boolean, pgEnum } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, timestamp, integer, boolean, pgEnum, date, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { gymsTable } from "./gyms";
@@ -19,7 +19,7 @@ export const sectionTypeEnum = pgEnum("section_type", [
 export const programmingDaysTable = pgTable("programming_days", {
   id: serial("id").primaryKey(),
   gymId: integer("gym_id").notNull().references(() => gymsTable.id),
-  date: text("date").notNull(),
+  date: date("date", { mode: "string" }).notNull(),
   title: text("title").notNull(),
   status: programmingDayStatusEnum("status").notNull().default("draft"),
   publicNotes: text("public_notes"),
@@ -29,7 +29,10 @@ export const programmingDaysTable = pgTable("programming_days", {
   updatedBy: text("updated_by"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
-});
+}, (table) => [
+  index("idx_programming_days_gym").on(table.gymId),
+  index("idx_programming_days_gym_date").on(table.gymId, table.date),
+]);
 
 export const insertProgrammingDaySchema = createInsertSchema(programmingDaysTable).omit({ id: true, createdAt: true, updatedAt: true });
 export type InsertProgrammingDay = z.infer<typeof insertProgrammingDaySchema>;

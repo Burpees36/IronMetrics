@@ -1,4 +1,4 @@
-import { pgTable, text, serial, timestamp, integer, boolean } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, timestamp, integer, boolean, date, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { gymsTable } from "./gyms";
@@ -14,7 +14,7 @@ export const leadsTable = pgTable("leads", {
   source: text("source"),
   assignedToId: integer("assigned_to_id"),
   lastContactDate: timestamp("last_contact_date", { withTimezone: true }),
-  nextFollowUpDate: text("next_follow_up_date"),
+  nextFollowUpDate: date("next_follow_up_date", { mode: "string" }),
   followUpNote: text("follow_up_note"),
   lostReason: text("lost_reason"),
   notes: text("notes"),
@@ -22,7 +22,10 @@ export const leadsTable = pgTable("leads", {
   convertedAt: timestamp("converted_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
-});
+}, (table) => [
+  index("idx_leads_gym").on(table.gymId),
+  index("idx_leads_gym_stage").on(table.gymId, table.stage),
+]);
 
 export const leadActivitiesTable = pgTable("lead_activities", {
   id: serial("id").primaryKey(),
@@ -32,7 +35,10 @@ export const leadActivitiesTable = pgTable("lead_activities", {
   description: text("description").notNull(),
   metadata: text("metadata"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+}, (table) => [
+  index("idx_lead_activities_lead").on(table.leadId),
+  index("idx_lead_activities_gym").on(table.gymId),
+]);
 
 export const insertLeadSchema = createInsertSchema(leadsTable).omit({ id: true, createdAt: true, updatedAt: true });
 export type InsertLead = z.infer<typeof insertLeadSchema>;

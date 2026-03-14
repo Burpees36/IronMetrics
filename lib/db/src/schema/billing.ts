@@ -1,4 +1,4 @@
-import { pgTable, text, serial, timestamp, integer, numeric, boolean, index } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, timestamp, integer, numeric, boolean, index, date } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { gymsTable } from "./gyms";
@@ -30,8 +30,8 @@ export const subscriptionsTable = pgTable("subscriptions", {
   planId: integer("plan_id").notNull().references(() => membershipPlansTable.id),
   planName: text("plan_name").notNull(),
   status: text("status").notNull().default("active"),
-  currentPeriodStart: text("current_period_start"),
-  currentPeriodEnd: text("current_period_end"),
+  currentPeriodStart: date("current_period_start", { mode: "string" }),
+  currentPeriodEnd: date("current_period_end", { mode: "string" }),
   amount: numeric("amount", { precision: 10, scale: 2 }).notNull(),
   failedPayments: integer("failed_payments").notNull().default(0),
   stripeSubscriptionId: text("stripe_subscription_id"),
@@ -40,7 +40,11 @@ export const subscriptionsTable = pgTable("subscriptions", {
   cancelReason: text("cancel_reason"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
-});
+}, (table) => [
+  index("idx_subscriptions_gym").on(table.gymId),
+  index("idx_subscriptions_member").on(table.memberId),
+  index("idx_subscriptions_gym_status").on(table.gymId, table.status),
+]);
 
 export const insertSubscriptionSchema = createInsertSchema(subscriptionsTable).omit({ id: true, createdAt: true, updatedAt: true });
 export type InsertSubscription = z.infer<typeof insertSubscriptionSchema>;
@@ -53,7 +57,7 @@ export const invoicesTable = pgTable("invoices", {
   memberName: text("member_name").notNull(),
   amount: numeric("amount", { precision: 10, scale: 2 }).notNull(),
   status: text("status").notNull().default("unpaid"),
-  dueDate: text("due_date"),
+  dueDate: date("due_date", { mode: "string" }),
   paidAt: timestamp("paid_at", { withTimezone: true }),
   description: text("description"),
   stripeInvoiceId: text("stripe_invoice_id"),

@@ -1,4 +1,4 @@
-import { pgTable, text, serial, timestamp, integer, numeric, boolean } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, timestamp, integer, numeric, boolean, date, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { gymsTable } from "./gyms";
@@ -12,8 +12,8 @@ export const membersTable = pgTable("members", {
   phone: text("phone"),
   status: text("status").notNull().default("active"),
   membershipType: text("membership_type"),
-  joinDate: text("join_date"),
-  birthDate: text("birth_date"),
+  joinDate: date("join_date", { mode: "string" }),
+  birthDate: date("birth_date", { mode: "string" }),
   profileImageUrl: text("profile_image_url"),
   tags: text("tags").array().notNull().default([]),
   riskScore: numeric("risk_score"),
@@ -29,7 +29,10 @@ export const membersTable = pgTable("members", {
   stripeCustomerId: text("stripe_customer_id"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
-});
+}, (table) => [
+  index("idx_members_gym").on(table.gymId),
+  index("idx_members_gym_status").on(table.gymId, table.status),
+]);
 
 export const insertMemberSchema = createInsertSchema(membersTable).omit({ id: true, createdAt: true, updatedAt: true });
 export type InsertMember = z.infer<typeof insertMemberSchema>;
@@ -43,7 +46,10 @@ export const memberNotesTable = pgTable("member_notes", {
   authorName: text("author_name").notNull(),
   authorId: text("author_id"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+}, (table) => [
+  index("idx_member_notes_member").on(table.memberId),
+  index("idx_member_notes_gym").on(table.gymId),
+]);
 
 export const insertMemberNoteSchema = createInsertSchema(memberNotesTable).omit({ id: true, createdAt: true });
 export type InsertMemberNote = z.infer<typeof insertMemberNoteSchema>;
@@ -59,7 +65,11 @@ export const timelineEventsTable = pgTable("timeline_events", {
   date: timestamp("date", { withTimezone: true }).notNull().defaultNow(),
   metadata: text("metadata"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+}, (table) => [
+  index("idx_timeline_events_member").on(table.memberId),
+  index("idx_timeline_events_gym").on(table.gymId),
+  index("idx_timeline_events_member_date").on(table.memberId, table.date),
+]);
 
 export const insertTimelineEventSchema = createInsertSchema(timelineEventsTable).omit({ id: true, createdAt: true });
 export type InsertTimelineEvent = z.infer<typeof insertTimelineEventSchema>;

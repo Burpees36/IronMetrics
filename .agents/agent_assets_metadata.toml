@@ -6,3 +6,9 @@ id = "yniQHRatN8Rov3SdKQZ-w"
 uri = "file://IRON_METRICS_ANALYSIS.md"
 type = "text"
 title = "Iron Metrics: Production Readiness & Competitive Gap Analysis"
+
+[[outputs]]
+id = "uDZct7OovkIeg-Ps4ESW3"
+uri = "file://.local/tasks/cs499-code-review-script.md"
+type = "text"
+title = "CS 499 Code Review Script — Iron Metrics"

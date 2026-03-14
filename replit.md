@@ -45,6 +45,8 @@ Iron Metrics is built as a pnpm workspace monorepo using TypeScript.
 - **Testing:** Vitest for API server unit tests (`pnpm --filter @workspace/api-server run test`). Tests cover billing email builders, recovery config, and token generation/validation.
 - **Error Handling:** React `ErrorBoundary` for graceful UI recovery.
 - **Data Integrity:** Drizzle numeric fields are handled as strings and parsed to floats. Backend returns parsed decimal dollars for subscription amounts.
+- **Database Indexes:** Foreign key columns across all tables have B-tree indexes for query performance (attendance, members, member_notes, timeline_events, leads, lead_activities, workouts, workout_results, programming_days, subscriptions). Composite indexes on common query patterns (e.g., gym+status, gym+date, member+date).
+- **Date Columns:** All date-only fields use PostgreSQL `date` type with `mode: "string"` in Drizzle, returning/accepting YYYY-MM-DD strings in the API (joinDate, birthDate, workoutDate, nextFollowUpDate, currentPeriodStart/End, dueDate, programming date).
 
 ## External Dependencies
 
