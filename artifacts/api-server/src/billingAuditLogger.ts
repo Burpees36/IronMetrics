@@ -22,7 +22,8 @@ export type AuditAction =
   | "recovery.grace_expired"
   | "recovery.final_warning_sent"
   | "maintenance.tokens_cleaned"
-  | "maintenance.recoveries_archived";
+  | "maintenance.recoveries_archived"
+  | "maintenance.scheduled_run";
 
 export type AuditSource = "ui" | "webhook" | "system" | "api";
 

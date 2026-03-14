@@ -1,5 +1,6 @@
 import { initStripe } from "./stripeClient";
 import app from "./app";
+import { startBillingMaintenanceScheduler } from "./schedulers/billing-maintenance";
 
 const rawPort = process.env["PORT"];
 
@@ -24,4 +25,5 @@ try {
 
 app.listen(port, () => {
   console.log(`Server listening on port ${port}`);
+  startBillingMaintenanceScheduler();
 });
