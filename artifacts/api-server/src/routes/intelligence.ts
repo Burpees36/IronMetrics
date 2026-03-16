@@ -113,7 +113,7 @@ export function computeRSI(churnRate: number, avgRevPerMember: number, netGrowth
  * @param gymId - The gym to query metrics for.
  * @returns Aggregate metrics for the gym.
  */
-async function getGymMetrics(gymId: number) {
+export async function getGymMetrics(gymId: number) {
   const [activeCount] = await db.select({ count: count() }).from(membersTable).where(and(eq(membersTable.gymId, gymId), eq(membersTable.status, "active")));
   const [cancelledCount] = await db.select({ count: count() }).from(membersTable).where(and(eq(membersTable.gymId, gymId), eq(membersTable.status, "cancelled")));
   const [totalCount] = await db.select({ count: count() }).from(membersTable).where(eq(membersTable.gymId, gymId));
@@ -174,7 +174,7 @@ export function getRiskTier(riskScore: number): string {
   return riskScore >= 80 ? "critical" : riskScore >= 60 ? "high" : riskScore >= 35 ? "moderate" : riskScore >= 15 ? "low" : "healthy";
 }
 
-async function getRiskProfiles(gymId: number) {
+export async function getRiskProfiles(gymId: number) {
   const members = await db.select().from(membersTable).where(and(eq(membersTable.gymId, gymId), eq(membersTable.status, "active")));
 
   return members.map((m) => {
@@ -228,7 +228,7 @@ async function getRiskProfiles(gymId: number) {
  * @param gymId - The gym to generate interventions for.
  * @returns Array of intervention objects sorted by static priority score.
  */
-async function getInterventions(gymId: number) {
+export async function getInterventions(gymId: number) {
   const [atRiskResult] = await db.select({ count: count() }).from(membersTable).where(
     and(eq(membersTable.gymId, gymId), eq(membersTable.status, "active"),
       sql`(${membersTable.riskTier} = 'critical' OR ${membersTable.riskTier} = 'high')`)

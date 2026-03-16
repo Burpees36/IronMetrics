@@ -12,9 +12,11 @@ vi.mock("drizzle-orm", () => ({
 
 let mockClasses: any[] = [];
 let insertedClass: any = null;
+let insertedAttendance: any = null;
 let updatedClass: any = null;
 let mockStaff: any[] = [];
 let mockAttendance: any[] = [];
+let mockMembers: any[] = [];
 
 vi.mock("@workspace/db", () => {
   function resolveField(colRef: any): string {
@@ -47,7 +49,8 @@ vi.mock("@workspace/db", () => {
             then(resolve: any) {
               let data = tn === "classes" ? mockClasses :
                          tn === "gym_staff" ? mockStaff :
-                         tn === "attendance" ? mockAttendance : [];
+                         tn === "attendance" ? mockAttendance :
+                         tn === "members" ? mockMembers : [];
               resolve(data.filter(r => matchesCondition(r, cond)));
             },
           };
@@ -56,9 +59,11 @@ vi.mock("@workspace/db", () => {
       };
     },
     insert(table: any) {
+      const tn = table._name;
       return {
         values(val: any) {
-          insertedClass = val;
+          if (tn === "classes") insertedClass = val;
+          if (tn === "attendance") insertedAttendance = val;
           return {
             returning() {
               return { then(resolve: any) { resolve([{ id: 1, ...val }]); } };
@@ -96,6 +101,7 @@ vi.mock("@workspace/db", () => {
     classesTable: makeTable("classes"),
     attendanceTable: makeTable("attendance"),
     gymStaffTable: makeTable("gym_staff"),
+    membersTable: makeTable("members"),
   };
 });
 
@@ -150,7 +156,9 @@ describe("Classes route handlers", () => {
     mockClasses = [];
     mockStaff = [];
     mockAttendance = [];
+    mockMembers = [];
     insertedClass = null;
+    insertedAttendance = null;
     updatedClass = null;
     const mod = await import("../routes/classes");
     router = mod.default;
@@ -233,6 +241,132 @@ describe("Classes route handlers", () => {
       const { req, res } = makeReqRes({ params: { gymId: "1", classId: "999" } });
       await handler(req, res);
       expect(res.status).toHaveBeenCalledWith(404);
+    });
+  });
+
+  describe("POST /gyms/:gymId/classes/:classId/checkin", () => {
+    it("checks in a member and returns 201", async () => {
+      mockMembers = [{ id: 10, gymId: 1, firstName: "John", lastName: "Doe" }];
+      mockClasses = [{ id: 5, gymId: 1, name: "WOD", capacity: 20, enrolled: 5, waitlistEnabled: false }];
+      mockAttendance = [];
+      const handler = findHandler(router, "post", "/checkin");
+      if (!handler) return;
+      const { req, res } = makeReqRes({ params: { gymId: "1", classId: "5" }, body: { memberId: 10 } });
+      await handler(req, res);
+      expect(res.status).toHaveBeenCalledWith(201);
+    });
+
+    it("returns 404 when member not found", async () => {
+      mockMembers = [];
+      mockClasses = [{ id: 5, gymId: 1, name: "WOD", capacity: 20, enrolled: 5 }];
+      const handler = findHandler(router, "post", "/checkin");
+      if (!handler) return;
+      const { req, res } = makeReqRes({ params: { gymId: "1", classId: "5" }, body: { memberId: 999 } });
+      await handler(req, res);
+      expect(res.status).toHaveBeenCalledWith(404);
+    });
+
+    it("returns 404 when class not found", async () => {
+      mockMembers = [{ id: 10, gymId: 1, firstName: "John", lastName: "Doe" }];
+      mockClasses = [];
+      const handler = findHandler(router, "post", "/checkin");
+      if (!handler) return;
+      const { req, res } = makeReqRes({ params: { gymId: "1", classId: "5" }, body: { memberId: 10 } });
+      await handler(req, res);
+      expect(res.status).toHaveBeenCalledWith(404);
+    });
+
+    it("returns 409 when member already checked in", async () => {
+      mockMembers = [{ id: 10, gymId: 1, firstName: "John", lastName: "Doe" }];
+      mockClasses = [{ id: 5, gymId: 1, name: "WOD", capacity: 20, enrolled: 5 }];
+      mockAttendance = [{ id: 1, classId: 5, memberId: 10, status: "checked_in" }];
+      const handler = findHandler(router, "post", "/checkin");
+      if (!handler) return;
+      const { req, res } = makeReqRes({ params: { gymId: "1", classId: "5" }, body: { memberId: 10 } });
+      await handler(req, res);
+      expect(res.status).toHaveBeenCalledWith(409);
+    });
+
+    it("returns 409 when class is full", async () => {
+      mockMembers = [{ id: 10, gymId: 1, firstName: "John", lastName: "Doe" }];
+      mockClasses = [{ id: 5, gymId: 1, name: "WOD", capacity: 5, enrolled: 5, waitlistEnabled: false }];
+      mockAttendance = [];
+      const handler = findHandler(router, "post", "/checkin");
+      if (!handler) return;
+      const { req, res } = makeReqRes({ params: { gymId: "1", classId: "5" }, body: { memberId: 10 } });
+      await handler(req, res);
+      expect(res.status).toHaveBeenCalledWith(409);
+    });
+
+    it("returns 400 for invalid IDs", async () => {
+      const handler = findHandler(router, "post", "/checkin");
+      if (!handler) return;
+      const { req, res } = makeReqRes({ params: { gymId: "abc", classId: "xyz" }, body: {} });
+      await handler(req, res);
+      expect(res.status).toHaveBeenCalledWith(400);
+    });
+  });
+
+  describe("POST /gyms/:gymId/classes/:classId/book", () => {
+    it("books a member into a class and returns 201", async () => {
+      mockMembers = [{ id: 10, gymId: 1, firstName: "Jane", lastName: "Doe" }];
+      mockClasses = [{ id: 5, gymId: 1, name: "Yoga", capacity: 20, enrolled: 3, isBookable: true, waitlistEnabled: false }];
+      mockAttendance = [];
+      const handler = findHandler(router, "post", "/book");
+      if (!handler) return;
+      const { req, res } = makeReqRes({ params: { gymId: "1", classId: "5" }, body: { memberId: 10 } });
+      await handler(req, res);
+      expect(res.status).toHaveBeenCalledWith(201);
+    });
+
+    it("returns 400 when memberId is missing", async () => {
+      const handler = findHandler(router, "post", "/book");
+      if (!handler) return;
+      const { req, res } = makeReqRes({ params: { gymId: "1", classId: "5" }, body: {} });
+      await handler(req, res);
+      expect(res.status).toHaveBeenCalledWith(400);
+    });
+
+    it("returns 404 when member not found", async () => {
+      mockMembers = [];
+      mockClasses = [{ id: 5, gymId: 1, name: "Yoga", capacity: 20, enrolled: 3, isBookable: true }];
+      const handler = findHandler(router, "post", "/book");
+      if (!handler) return;
+      const { req, res } = makeReqRes({ params: { gymId: "1", classId: "5" }, body: { memberId: 999 } });
+      await handler(req, res);
+      expect(res.status).toHaveBeenCalledWith(404);
+    });
+
+    it("returns 400 when class is not bookable", async () => {
+      mockMembers = [{ id: 10, gymId: 1, firstName: "Jane", lastName: "Doe" }];
+      mockClasses = [{ id: 5, gymId: 1, name: "WOD", capacity: 20, enrolled: 3, isBookable: false }];
+      const handler = findHandler(router, "post", "/book");
+      if (!handler) return;
+      const { req, res } = makeReqRes({ params: { gymId: "1", classId: "5" }, body: { memberId: 10 } });
+      await handler(req, res);
+      expect(res.status).toHaveBeenCalledWith(400);
+    });
+
+    it("returns 409 when already booked", async () => {
+      mockMembers = [{ id: 10, gymId: 1, firstName: "Jane", lastName: "Doe" }];
+      mockClasses = [{ id: 5, gymId: 1, name: "Yoga", capacity: 20, enrolled: 3, isBookable: true }];
+      mockAttendance = [{ id: 1, classId: 5, memberId: 10, status: "reserved" }];
+      const handler = findHandler(router, "post", "/book");
+      if (!handler) return;
+      const { req, res } = makeReqRes({ params: { gymId: "1", classId: "5" }, body: { memberId: 10 } });
+      await handler(req, res);
+      expect(res.status).toHaveBeenCalledWith(409);
+    });
+
+    it("returns 409 when class is full and no waitlist", async () => {
+      mockMembers = [{ id: 10, gymId: 1, firstName: "Jane", lastName: "Doe" }];
+      mockClasses = [{ id: 5, gymId: 1, name: "Yoga", capacity: 5, enrolled: 5, isBookable: true, waitlistEnabled: false }];
+      mockAttendance = [];
+      const handler = findHandler(router, "post", "/book");
+      if (!handler) return;
+      const { req, res } = makeReqRes({ params: { gymId: "1", classId: "5" }, body: { memberId: 10 } });
+      await handler(req, res);
+      expect(res.status).toHaveBeenCalledWith(409);
     });
   });
 });
