@@ -82,7 +82,16 @@ router.get("/gyms/:gymId/reports/dashboard", async (req, res): Promise<void> => 
 
   const avgRevPerMember = subs.length > 0 ? mrr / subs.length : 0;
   const netGrowth = active - cancelled;
-  const avgTenure = 8.5;
+
+  const allMembersForTenure = await db.select().from(membersTable).where(eq(membersTable.gymId, gymId));
+  const tenures = allMembersForTenure
+    .filter(m => m.joinDate)
+    .map(m => {
+      const end = m.status === "cancelled" && m.updatedAt ? new Date(m.updatedAt) : now;
+      const start = new Date(m.joinDate!);
+      return Math.max(0, (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24 * 30));
+    });
+  const avgTenure = tenures.length > 0 ? Math.round((tenures.reduce((s, t) => s + t, 0) / tenures.length) * 10) / 10 : 0;
   const rsiResult = computeRSI(churnRate, avgRevPerMember, netGrowth, avgTenure);
   const rsiScore = rsiResult.score;
   const rsiBand = rsiResult.band;
@@ -91,13 +100,20 @@ router.get("/gyms/:gymId/reports/dashboard", async (req, res): Promise<void> => 
   const allInvoices = await db.select().from(invoicesTable).where(eq(invoicesTable.gymId, gymId));
   const collectionRate = allInvoices.length > 0 ? Math.round((paidInvoices.length / allInvoices.length) * 1000) / 10 : 100;
 
+  const invoicesByMonth: Record<string, number> = {};
+  for (const inv of paidInvoices) {
+    if (!inv.paidAt) continue;
+    const monthKey = new Date(inv.paidAt).toISOString().slice(0, 7);
+    invoicesByMonth[monthKey] = (invoicesByMonth[monthKey] ?? 0) + parseFloat(inv.amount || "0");
+  }
+
   const months = [];
   for (let i = 11; i >= 0; i--) {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    const scale = 1 - (i * 0.02);
+    const monthKey = d.toISOString().slice(0, 7);
     months.push({
-      month: d.toISOString().slice(0, 7),
-      revenue: Math.round(mrr * scale),
+      month: monthKey,
+      revenue: Math.round(invoicesByMonth[monthKey] ?? 0),
       members: Math.max(1, active - i),
     });
   }
@@ -173,6 +189,16 @@ router.get("/gyms/:gymId/reports/membership", async (req, res): Promise<void> =>
 
   const netGrowth = active - cancelled;
 
+  const allMembersForTenure = await db.select().from(membersTable).where(eq(membersTable.gymId, gymId));
+  const tenureValues = allMembersForTenure
+    .filter(m => m.joinDate)
+    .map(m => {
+      const end = m.status === "cancelled" && m.updatedAt ? new Date(m.updatedAt) : now;
+      const start = new Date(m.joinDate!);
+      return Math.max(0, (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24 * 30));
+    });
+  const avgTenureMonths = tenureValues.length > 0 ? Math.round((tenureValues.reduce((s, t) => s + t, 0) / tenureValues.length) * 10) / 10 : 0;
+
   const months = [];
   for (let i = 5; i >= 0; i--) {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
@@ -193,7 +219,7 @@ router.get("/gyms/:gymId/reports/membership", async (req, res): Promise<void> =>
     churnedThisMonth: cancelled,
     netGrowth,
     churnRate,
-    avgTenureMonths: 8.5,
+    avgTenureMonths,
     byPlan,
     growthByMonth: months,
   });
@@ -214,16 +240,33 @@ router.get("/gyms/:gymId/reports/revenue", async (req, res): Promise<void> => {
   const collectionRate = allInvoices.length > 0 ? Math.round((paidInvoices.length / allInvoices.length) * 1000) / 10 : 100;
 
   const avgRevenuePerMember = Math.round(mrr / activeMemberCount);
-  const ltv = Math.round(avgRevenuePerMember * 8.5);
 
+  const allMembersRev = await db.select().from(membersTable).where(eq(membersTable.gymId, gymId));
   const now = new Date();
+  const tenuresRev = allMembersRev
+    .filter(m => m.joinDate)
+    .map(m => {
+      const end = m.status === "cancelled" && m.updatedAt ? new Date(m.updatedAt) : now;
+      const start = new Date(m.joinDate!);
+      return Math.max(0, (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24 * 30));
+    });
+  const avgTenureRev = tenuresRev.length > 0 ? tenuresRev.reduce((s, t) => s + t, 0) / tenuresRev.length : 0;
+  const ltv = Math.round(avgRevenuePerMember * avgTenureRev);
+
+  const invoicesByMonthRev: Record<string, number> = {};
+  for (const inv of paidInvoices) {
+    if (!inv.paidAt) continue;
+    const monthKey = new Date(inv.paidAt).toISOString().slice(0, 7);
+    invoicesByMonthRev[monthKey] = (invoicesByMonthRev[monthKey] ?? 0) + parseFloat(inv.amount || "0");
+  }
+
   const byMonth = [];
   for (let i = 11; i >= 0; i--) {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    const scale = 1 - (i * 0.02);
-    const membership = Math.round(mrr * scale);
+    const monthKey = d.toISOString().slice(0, 7);
+    const membership = Math.round(invoicesByMonthRev[monthKey] ?? 0);
     const retail = 0;
-    byMonth.push({ month: d.toISOString().slice(0, 7), membership, retail, total: membership + retail });
+    byMonth.push({ month: monthKey, membership, retail, total: membership + retail });
   }
 
   res.json({

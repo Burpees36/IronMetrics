@@ -136,6 +136,7 @@ router.post("/gyms/:gymId/ai/generate-outreach", async (req, res): Promise<void>
   res.json({
     ...content,
     confidence: parseFloat(content.confidence),
+    confidenceIsDefault: true,
   });
 });
 
@@ -200,6 +201,7 @@ router.post("/gyms/:gymId/ai/generate-brief", async (req, res): Promise<void> =>
   res.json({
     ...content,
     confidence: parseFloat(content.confidence),
+    confidenceIsDefault: true,
   });
 });
 

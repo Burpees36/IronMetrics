@@ -21,42 +21,53 @@ vi.mock("framer-motion", () => ({
 }));
 
 const icon = (name: string) => (props: any) => <span data-testid={`icon-${name}`} {...props}>{name}</span>;
-vi.mock("lucide-react", () => ({
-  Loader2: (props: any) => <span data-testid="loader" {...props}>Loading</span>,
-  Search: icon("Search"),
-  Plus: icon("Plus"),
-  Filter: icon("Filter"),
-  MoreHorizontal: icon("MoreHorizontal"),
-  UserCircle: icon("UserCircle"),
-  Upload: icon("Upload"),
-  FileSpreadsheet: icon("FileSpreadsheet"),
-  ChevronDown: icon("ChevronDown"),
-  ChevronUp: icon("ChevronUp"),
-  X: icon("X"),
-  Edit: icon("Edit"),
-  Trash2: icon("Trash2"),
-  Eye: icon("Eye"),
-  Mail: icon("Mail"),
-  Phone: icon("Phone"),
-  AlertTriangle: icon("AlertTriangle"),
-  Users: icon("Users"),
-  ArrowUpDown: icon("ArrowUpDown"),
-  Check: icon("Check"),
-  Info: icon("Info"),
-  Star: icon("Star"),
-  Calendar: icon("Calendar"),
-  MapPin: icon("MapPin"),
-  Tag: icon("Tag"),
-  UserPlus: icon("UserPlus"),
-  Download: icon("Download"),
-  RefreshCw: icon("RefreshCw"),
-  Settings: icon("Settings"),
-  Bell: icon("Bell"),
-  Copy: icon("Copy"),
-  ExternalLink: icon("ExternalLink"),
-  CircleAlert: icon("CircleAlert"),
-  TriangleAlert: icon("TriangleAlert"),
-}));
+vi.mock("lucide-react", async (importOriginal) => {
+  const actual = await importOriginal<Record<string, any>>();
+  const mocks: Record<string, any> = {
+    Loader2: (props: any) => <span data-testid="loader" {...props}>Loading</span>,
+    Search: icon("Search"),
+    Plus: icon("Plus"),
+    Filter: icon("Filter"),
+    MoreHorizontal: icon("MoreHorizontal"),
+    UserCircle: icon("UserCircle"),
+    Upload: icon("Upload"),
+    FileSpreadsheet: icon("FileSpreadsheet"),
+    ChevronDown: icon("ChevronDown"),
+    ChevronUp: icon("ChevronUp"),
+    X: icon("X"),
+    Edit: icon("Edit"),
+    Trash2: icon("Trash2"),
+    Eye: icon("Eye"),
+    Mail: icon("Mail"),
+    Phone: icon("Phone"),
+    AlertTriangle: icon("AlertTriangle"),
+    Users: icon("Users"),
+    ArrowUpDown: icon("ArrowUpDown"),
+    Check: icon("Check"),
+    Info: icon("Info"),
+    Star: icon("Star"),
+    Calendar: icon("Calendar"),
+    MapPin: icon("MapPin"),
+    Tag: icon("Tag"),
+    UserPlus: icon("UserPlus"),
+    Download: icon("Download"),
+    RefreshCw: icon("RefreshCw"),
+    Settings: icon("Settings"),
+    Bell: icon("Bell"),
+    Copy: icon("Copy"),
+    ExternalLink: icon("ExternalLink"),
+    CircleAlert: icon("CircleAlert"),
+    TriangleAlert: icon("TriangleAlert"),
+  };
+
+  return new Proxy(actual, {
+    get(target, prop: string) {
+      if (prop in mocks) return mocks[prop];
+      if (prop in target) return target[prop];
+      return (props: any) => <span {...props} />;
+    },
+  });
+});
 
 vi.mock("@/hooks/use-mobile", () => ({
   useIsMobile: () => false,
@@ -79,24 +90,51 @@ vi.mock("@/components/ui/label", () => ({ Label: make("label") }));
 vi.mock("@/components/ui/checkbox", () => ({ Checkbox: (props: any) => <input type="checkbox" {...props} /> }));
 vi.mock("@/components/ui/badge", () => ({ Badge: make("span") }));
 vi.mock("@/components/ui/select", () => ({
-  Select: noop, SelectContent: make("div"), SelectItem: make("div"), SelectTrigger: make("div"), SelectValue: () => <span />,
+  Select: ({ children }: any) => <div>{children}</div>,
+  SelectContent: make("div"),
+  SelectItem: make("div"),
+  SelectTrigger: make("div"),
+  SelectValue: () => <span />,
 }));
 vi.mock("@/components/ui/dialog", () => ({
-  Dialog: noop, DialogContent: make("div"), DialogHeader: make("div"), DialogTitle: make("h2"),
-  DialogDescription: make("p"), DialogFooter: make("div"), DialogTrigger: noop, DialogClose: noop,
+  Dialog: ({ children }: any) => <div>{children}</div>,
+  DialogContent: make("div"),
+  DialogHeader: make("div"),
+  DialogTitle: make("h2"),
+  DialogDescription: make("p"),
+  DialogFooter: make("div"),
+  DialogTrigger: noop,
+  DialogClose: noop,
 }));
 vi.mock("@/components/ui/sheet", () => ({
-  Sheet: noop, SheetContent: make("div"), SheetHeader: make("div"), SheetTitle: make("h2"),
-  SheetDescription: make("p"), SheetFooter: make("div"), SheetTrigger: noop, SheetClose: noop,
+  Sheet: ({ children }: any) => <div>{children}</div>,
+  SheetContent: make("div"),
+  SheetHeader: make("div"),
+  SheetTitle: make("h2"),
+  SheetDescription: make("p"),
+  SheetFooter: make("div"),
+  SheetTrigger: noop,
+  SheetClose: noop,
 }));
 vi.mock("@/components/ui/dropdown-menu", () => ({
-  DropdownMenu: noop, DropdownMenuContent: make("div"), DropdownMenuItem: make("button"),
-  DropdownMenuTrigger: noop, DropdownMenuSeparator: () => <hr />,
+  DropdownMenu: ({ children }: any) => <div>{children}</div>,
+  DropdownMenuContent: ({ children }: any) => <div>{children}</div>,
+  DropdownMenuItem: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+  DropdownMenuTrigger: noop,
+  DropdownMenuSeparator: () => <hr />,
 }));
 vi.mock("@/components/ui/alert-dialog", () => ({
-  AlertDialog: noop, AlertDialogAction: make("button"), AlertDialogCancel: make("button"),
-  AlertDialogContent: make("div"), AlertDialogDescription: make("p"), AlertDialogFooter: make("div"),
-  AlertDialogHeader: make("div"), AlertDialogTitle: make("h2"), AlertDialogTrigger: noop,
+  AlertDialog: ({ children }: any) => <div>{children}</div>,
+  AlertDialogAction: make("button"),
+  AlertDialogCancel: make("button"),
+  AlertDialogContent: make("div"),
+  AlertDialogDescription: make("p"),
+  AlertDialogFooter: make("div"),
+  AlertDialogHeader: make("div"),
+  AlertDialogTitle: make("h2"),
+  AlertDialogTrigger: noop,
+}));
+
 }));
 
 const mockUseGym = vi.fn();
@@ -105,11 +143,15 @@ vi.mock("@/store/GymContext", () => ({
 }));
 
 const mockUseListMembers = vi.fn();
+const mockCreateMutate = vi.fn();
+const mockUpdateMutate = vi.fn();
+const mockNoteMutate = vi.fn();
+
 vi.mock("@workspace/api-client-react", () => ({
   useListMembers: (...args: any[]) => mockUseListMembers(...args),
-  useCreateMember: () => ({ mutateAsync: vi.fn(), isPending: false }),
-  useUpdateMember: () => ({ mutateAsync: vi.fn(), isPending: false }),
-  useAddMemberNote: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useCreateMember: () => ({ mutateAsync: mockCreateMutate, isPending: false }),
+  useUpdateMember: () => ({ mutateAsync: mockUpdateMutate, isPending: false }),
+  useAddMemberNote: () => ({ mutateAsync: mockNoteMutate, isPending: false }),
   useQueryClient: () => ({ invalidateQueries: vi.fn() }),
   getListMembersQueryKey: (gymId: number) => ["members", gymId],
 }));
@@ -199,23 +241,25 @@ describe("Members Page", () => {
     });
     await importAndRender();
     await waitFor(() => {
-      expect(document.body).toBeDefined();
+      expect(document.body.textContent?.toLowerCase()).toMatch(/no|empty|add|import|member/);
     });
   });
 
-  it("renders search input", async () => {
+  it("renders search functionality", async () => {
     mockUseListMembers.mockReturnValue({ data: MOCK_MEMBERS, isLoading: false, error: null });
     await importAndRender();
     await waitFor(() => {
-      expect(document.querySelector("input")).toBeDefined();
+      const searchInput = document.querySelector("input");
+      expect(searchInput).toBeDefined();
     });
   });
 
-  it("shows risk tier for at-risk members", async () => {
+  it("shows risk information for high-risk members", async () => {
     mockUseListMembers.mockReturnValue({ data: MOCK_MEMBERS, isLoading: false, error: null });
     await importAndRender();
     await waitFor(() => {
-      expect(document.body.textContent?.toLowerCase()).toContain("high");
+      const text = document.body.textContent?.toLowerCase() || "";
+      expect(text).toContain("high");
     });
   });
 

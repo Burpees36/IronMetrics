@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import React from "react";
 
@@ -21,11 +21,11 @@ vi.mock("framer-motion", () => ({
 }));
 
 vi.mock("recharts", () => ({
-  ResponsiveContainer: ({ children }: any) => <div>{children}</div>,
-  AreaChart: ({ children }: any) => <div>{children}</div>,
-  Area: () => <div />,
-  BarChart: ({ children }: any) => <div>{children}</div>,
-  Bar: () => <div />,
+  ResponsiveContainer: ({ children }: any) => <div data-testid="responsive-container">{children}</div>,
+  AreaChart: ({ children }: any) => <div data-testid="area-chart">{children}</div>,
+  Area: () => <div data-testid="area" />,
+  BarChart: ({ children }: any) => <div data-testid="bar-chart">{children}</div>,
+  Bar: () => <div data-testid="bar" />,
   XAxis: () => <div />,
   YAxis: () => <div />,
   Tooltip: () => <div />,
@@ -58,6 +58,7 @@ vi.mock("lucide-react", () => ({
   X: icon("X"),
   RefreshCw: icon("RefreshCw"),
   MessageSquare: icon("MessageSquare"),
+  Shield: icon("Shield"),
 }));
 
 vi.mock("@/components/ui/button", () => ({
@@ -78,6 +79,11 @@ vi.mock("@/store/GymContext", () => ({
 }));
 
 vi.mock("@/hooks/use-mobile", () => ({
+  useIsMobile: () => false,
+}));
+
+// Mock both potential import paths if they exist or just ensure consistency
+vi.mock("@/hooks/useIsMobile", () => ({
   useIsMobile: () => false,
 }));
 
@@ -149,7 +155,7 @@ describe("Intelligence Page", () => {
     mockUseGetIntelligenceOverview.mockReturnValue({ data: MOCK_INTELLIGENCE, isLoading: false, error: null });
     await importAndRender();
     await waitFor(() => {
-      expect(document.body.textContent).toContain("74.3");
+      expect(screen.getByText("74.3")).toBeDefined();
     });
   });
 
@@ -157,7 +163,7 @@ describe("Intelligence Page", () => {
     mockUseGetIntelligenceOverview.mockReturnValue({ data: MOCK_INTELLIGENCE, isLoading: false, error: null });
     await importAndRender();
     await waitFor(() => {
-      expect(document.body.textContent).toContain("Strong");
+      expect(screen.getByText("Strong")).toBeDefined();
     });
   });
 
@@ -178,6 +184,37 @@ describe("Intelligence Page", () => {
     });
   });
 
+  it("shows at-risk members in risk radar", async () => {
+    mockUseGetIntelligenceOverview.mockReturnValue({ data: MOCK_INTELLIGENCE, isLoading: false, error: null });
+    await importAndRender();
+    const riskRadarTab = screen.queryByText(/Risk Radar/i) || screen.queryByText(/radar/i);
+    if (riskRadarTab) fireEvent.click(riskRadarTab);
+    await waitFor(() => {
+      expect(screen.getByText(/John Doe/)).toBeDefined();
+    });
+  });
+
+  it("displays total revenue at risk", async () => {
+    mockUseGetIntelligenceOverview.mockReturnValue({ data: MOCK_INTELLIGENCE, isLoading: false, error: null });
+    await importAndRender();
+    const riskRadarTab = screen.queryByText(/Risk Radar/i) || screen.queryByText(/radar/i);
+    if (riskRadarTab) fireEvent.click(riskRadarTab);
+    await waitFor(() => {
+      const riskText = document.body.textContent;
+      expect(riskText).toContain("270");
+    });
+  });
+
+  it("renders intervention recommendations", async () => {
+    mockUseGetIntelligenceOverview.mockReturnValue({ data: MOCK_INTELLIGENCE, isLoading: false, error: null });
+    await importAndRender();
+    const interventionsTab = screen.queryByText(/Interventions/i) || screen.queryByText(/actions/i);
+    if (interventionsTab) fireEvent.click(interventionsTab);
+    await waitFor(() => {
+      expect(screen.getByText(/Reach out to at-risk members/)).toBeDefined();
+    });
+  });
+
   it("handles no gym selected gracefully", async () => {
     mockUseGym.mockReturnValue({ activeGymId: null });
     mockUseGetIntelligenceOverview.mockReturnValue({ data: undefined, isLoading: false, error: null });
@@ -194,4 +231,15 @@ describe("Intelligence Page", () => {
       expect(document.body.textContent).toContain("Intelligence");
     });
   });
+
+  it("renders risk tier badges for at-risk members", async () => {
+    mockUseGetIntelligenceOverview.mockReturnValue({ data: MOCK_INTELLIGENCE, isLoading: false, error: null });
+    await importAndRender();
+    const riskRadarTab = screen.queryByText(/Risk Radar/i) || screen.queryByText(/radar/i);
+    if (riskRadarTab) fireEvent.click(riskRadarTab);
+    await waitFor(() => {
+      expect(screen.getByText(/critical/i)).toBeDefined();
+    });
+  });
 });
+

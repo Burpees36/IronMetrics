@@ -10,18 +10,13 @@
  *   - Revenue Forecast — MRR projections with upside/downside scenarios
  *   - Overview — aggregated dashboard combining RSI, risk, interventions, and forecast
  *
- * Known limitations:
- *   - Several magic numbers are hardcoded rather than configurable (see inline notes).
- *   - `avgTenure` is hardcoded to 8.5 months instead of being calculated from member data.
- *   - RSI trends (trend30d, trend90d) are static values (2.3, 5.1) rather than computed
- *     from historical snapshots.
- *   - Revenue per member in risk profiles is hardcoded to $150/month.
- *   - Cohort retention rates at 30d/60d use fixed percentages (90%, 85%) rather than
- *     actual attendance/cancellation data.
+ * All metrics are computed from real gym data (member join dates, subscription
+ * amounts, invoice history, etc.). When insufficient historical data exists,
+ * endpoints return null values with appropriate flags.
  */
 import { Router, type IRouter } from "express";
-import { eq, and, count, sql, desc } from "drizzle-orm";
-import { db, membersTable, subscriptionsTable, attendanceTable, leadsTable } from "@workspace/db";
+import { eq, and, count, sql, desc, gte } from "drizzle-orm";
+import { db, membersTable, subscriptionsTable, attendanceTable, leadsTable, invoicesTable } from "@workspace/db";
 
 const router: IRouter = Router();
 
@@ -106,10 +101,6 @@ export function computeRSI(churnRate: number, avgRevPerMember: number, netGrowth
  *   - Total and average revenue from active subscriptions
  *   - Net growth (active - cancelled)
  *
- * Known weakness: `avgTenure` is hardcoded to 8.5 months rather than being
- * calculated from actual member join dates. This should be computed as:
- *   avg(now - joinDate) across active members.
- *
  * @param gymId - The gym to query metrics for.
  * @returns Aggregate metrics for the gym.
  */
@@ -127,7 +118,17 @@ export async function getGymMetrics(gymId: number) {
   const totalRev = subs.reduce((sum, s) => sum + parseFloat(s.amount || "0"), 0);
   const avgRev = subs.length > 0 ? totalRev / subs.length : 0;
   const netGrowth = active - cancelled;
-  const avgTenure = 8.5; // Hardcoded — should be computed from member joinDate data
+
+  const allMembers = await db.select().from(membersTable).where(eq(membersTable.gymId, gymId));
+  const now = new Date();
+  const tenures = allMembers
+    .filter(m => m.joinDate)
+    .map(m => {
+      const end = m.status === "cancelled" && m.updatedAt ? new Date(m.updatedAt) : now;
+      const start = new Date(m.joinDate!);
+      return Math.max(0, (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24 * 30));
+    });
+  const avgTenure = tenures.length > 0 ? Math.round((tenures.reduce((s, t) => s + t, 0) / tenures.length) * 10) / 10 : 0;
 
   return { active, cancelled, total, churnRate, totalRev, avgRev, netGrowth, avgTenure, subs };
 }
@@ -158,8 +159,6 @@ export async function getGymMetrics(gymId: number) {
  *   - "low":      score ≥ 15
  *   - "healthy":  score < 15
  *
- * Known weakness: `sub` (monthly subscription value) is hardcoded to $150
- * instead of being looked up from the member's actual subscription amount.
  *
  * @param gymId - The gym to generate risk profiles for.
  * @returns Array of risk profiles sorted by riskScore descending (highest risk first).
@@ -177,6 +176,12 @@ export function getRiskTier(riskScore: number): string {
 export async function getRiskProfiles(gymId: number) {
   const members = await db.select().from(membersTable).where(and(eq(membersTable.gymId, gymId), eq(membersTable.status, "active")));
 
+  const memberSubs = await db.select().from(subscriptionsTable).where(and(eq(subscriptionsTable.gymId, gymId), eq(subscriptionsTable.status, "active")));
+  const subByMember: Record<number, number> = {};
+  for (const s of memberSubs) {
+    subByMember[s.memberId] = parseFloat(s.amount || "0");
+  }
+
   return members.map((m) => {
     const now = new Date();
     const daysSinceLastVisit = m.lastVisitDate ? Math.floor((now.getTime() - new Date(m.lastVisitDate).getTime()) / (1000 * 60 * 60 * 24)) : 999;
@@ -189,22 +194,21 @@ export async function getRiskProfiles(gymId: number) {
     if (m.attendanceCount30d !== null && m.attendanceCount30d < 3) signals.push("Low attendance (<3/month)");
     if (attendanceDecay > 0.5) signals.push("Attendance declining");
 
-    // Hardcoded monthly subscription value — should come from actual subscription data
-    const sub = 150;
+    const monthlyValue = subByMember[m.id] ?? 0;
     return {
       memberId: m.id,
       memberName: `${m.firstName} ${m.lastName}`,
       email: m.email,
       riskScore: Math.round(riskScore),
       riskTier,
-      revenueAtRisk: riskTier === "critical" || riskTier === "high" ? sub : 0,
+      revenueAtRisk: riskTier === "critical" || riskTier === "high" ? monthlyValue : 0,
       daysSinceLastVisit: daysSinceLastVisit < 999 ? daysSinceLastVisit : null,
       attendanceDecay: Math.round(attendanceDecay * 100) / 100,
       billingIssues: false,
       tenure: m.joinDate ? Math.floor((new Date().getTime() - new Date(m.joinDate).getTime()) / (1000 * 60 * 60 * 24 * 30)) : 0,
       signals,
       membershipType: m.membershipType,
-      monthlyValue: sub,
+      monthlyValue,
     };
   }).sort((a, b) => b.riskScore - a.riskScore);
 }
@@ -220,8 +224,6 @@ export async function getRiskProfiles(gymId: number) {
  *   4. Lead follow-up — based on open lead count
  *   5. Referral campaign — generic growth recommendation
  *
- * Known weakness: `expectedRevenue` for at-risk members and leads uses
- * a hardcoded $150/member value (magic number) rather than actual subscription amounts.
  * The intervention scores (92, 85, 78, 72, 65) are static priority values
  * rather than dynamically computed from gym data.
  *
@@ -238,6 +240,20 @@ export async function getInterventions(gymId: number) {
   const [openLeadCount] = await db.select({ count: count() }).from(leadsTable).where(eq(leadsTable.gymId, gymId));
   const failedSubs = await db.select().from(subscriptionsTable).where(and(eq(subscriptionsTable.gymId, gymId), eq(subscriptionsTable.status, "past_due")));
 
+  const activeSubs = await db.select().from(subscriptionsTable).where(and(eq(subscriptionsTable.gymId, gymId), eq(subscriptionsTable.status, "active")));
+  const avgSubAmount = activeSubs.length > 0
+    ? activeSubs.reduce((s, sub) => s + parseFloat(sub.amount || "0"), 0) / activeSubs.length
+    : 0;
+
+  const atRiskMembers = await db.select().from(membersTable).where(
+    and(eq(membersTable.gymId, gymId), eq(membersTable.status, "active"),
+      sql`(${membersTable.riskTier} = 'critical' OR ${membersTable.riskTier} = 'high')`)
+  );
+  const atRiskSubsByMember = await db.select().from(subscriptionsTable).where(and(eq(subscriptionsTable.gymId, gymId), eq(subscriptionsTable.status, "active")));
+  const subLookup: Record<number, number> = {};
+  for (const s of atRiskSubsByMember) subLookup[s.memberId] = parseFloat(s.amount || "0");
+  const atRiskRevenue = atRiskMembers.reduce((sum, m) => sum + (subLookup[m.id] ?? 0), 0);
+
   const interventions = [
     {
       id: "int-1",
@@ -247,7 +263,7 @@ export async function getInterventions(gymId: number) {
       impact: "high",
       urgency: "immediate" as const,
       score: 92,
-      expectedRevenue: atRiskCount * 150, // $150/member hardcoded
+      expectedRevenue: Math.round(atRiskRevenue * 100) / 100,
       affectedMembers: atRiskCount,
       actions: ["Review risk radar for critical-tier members", "Draft personalized check-in messages", "Schedule 1:1 calls with top at-risk members", "Track response and re-engagement within 7 days"],
       status: "pending",
@@ -273,7 +289,7 @@ export async function getInterventions(gymId: number) {
       impact: "medium",
       urgency: "this_week" as const,
       score: 78,
-      expectedRevenue: 3600,
+      expectedRevenue: null,
       affectedMembers: null,
       actions: ["Create welcome sequence for new members", "Schedule intro sessions within first week", "Assign accountability buddies", "Check in at day 7, 14, and 30"],
       status: "pending",
@@ -286,7 +302,7 @@ export async function getInterventions(gymId: number) {
       impact: "medium",
       urgency: "this_week" as const,
       score: 72,
-      expectedRevenue: (openLeadCount?.count ?? 0) * 150, // $150/lead hardcoded
+      expectedRevenue: avgSubAmount > 0 ? Math.round((openLeadCount?.count ?? 0) * avgSubAmount * 100) / 100 : null,
       affectedMembers: null,
       actions: ["Review lead pipeline for stale entries", "Send follow-up emails or texts", "Offer free trial or No Sweat Intro", "Remove or archive truly cold leads"],
       status: "pending",
@@ -299,7 +315,7 @@ export async function getInterventions(gymId: number) {
       impact: "medium",
       urgency: "this_month" as const,
       score: 65,
-      expectedRevenue: 1200,
+      expectedRevenue: null,
       affectedMembers: null,
       actions: ["Design referral incentive structure", "Announce to current members", "Create tracking system", "Measure results after 30 days"],
       status: "pending",
@@ -309,13 +325,66 @@ export async function getInterventions(gymId: number) {
   return interventions;
 }
 
+async function computeRevenueForecast(gymId: number, currentMrr: number, churnRate: number, activeSubCount: number) {
+  const now = new Date();
+  const paidInvoices = await db.select().from(invoicesTable).where(and(eq(invoicesTable.gymId, gymId), eq(invoicesTable.status, "paid")));
+
+  const monthlyRevenue: Record<string, number> = {};
+  for (const inv of paidInvoices) {
+    if (!inv.paidAt) continue;
+    const monthKey = new Date(inv.paidAt).toISOString().slice(0, 7);
+    monthlyRevenue[monthKey] = (monthlyRevenue[monthKey] ?? 0) + parseFloat(inv.amount || "0");
+  }
+
+  const sortedMonths = Object.keys(monthlyRevenue).sort();
+  let monthlyGrowthRate = 0;
+
+  if (sortedMonths.length >= 2) {
+    const recentMonths = sortedMonths.slice(-6);
+    const growthRates: number[] = [];
+    for (let i = 1; i < recentMonths.length; i++) {
+      const prev = monthlyRevenue[recentMonths[i - 1]];
+      const curr = monthlyRevenue[recentMonths[i]];
+      if (prev > 0) {
+        growthRates.push((curr - prev) / prev);
+      }
+    }
+    if (growthRates.length > 0) {
+      monthlyGrowthRate = growthRates.reduce((s, r) => s + r, 0) / growthRates.length;
+    }
+  }
+
+  const expected3m = currentMrr * Math.pow(1 + monthlyGrowthRate, 3);
+  const expected6m = currentMrr * Math.pow(1 + monthlyGrowthRate, 6);
+  const expected12m = currentMrr * Math.pow(1 + monthlyGrowthRate, 12);
+
+  const upsideMultiplier = 1.5;
+  const downsideMultiplier = 0.5;
+
+  return {
+    currentMrr,
+    expectedMrr3m: Math.round(expected3m),
+    upsideMrr3m: Math.round(currentMrr * Math.pow(1 + monthlyGrowthRate * upsideMultiplier, 3)),
+    downsideMrr3m: Math.round(currentMrr * Math.pow(1 + monthlyGrowthRate * downsideMultiplier, 3)),
+    expectedMrr6m: Math.round(expected6m),
+    upsideMrr6m: Math.round(currentMrr * Math.pow(1 + monthlyGrowthRate * upsideMultiplier, 6)),
+    downsideMrr6m: Math.round(currentMrr * Math.pow(1 + monthlyGrowthRate * downsideMultiplier, 6)),
+    expectedMrr12m: Math.round(expected12m),
+    upsideMrr12m: Math.round(currentMrr * Math.pow(1 + monthlyGrowthRate * upsideMultiplier, 12)),
+    downsideMrr12m: Math.round(currentMrr * Math.pow(1 + monthlyGrowthRate * downsideMultiplier, 12)),
+    assumptions: [
+      `Based on trailing churn rate of ${churnRate}%`,
+      `Current MRR: $${currentMrr.toLocaleString()} from ${activeSubCount} active subscriptions`,
+      `Historical monthly growth rate: ${(monthlyGrowthRate * 100).toFixed(1)}% (from ${sortedMonths.length} months of invoice data)`,
+      "Upside assumes 1.5x historical growth rate",
+      "Downside assumes 0.5x historical growth rate",
+    ],
+  };
+}
+
 /**
  * GET /gyms/:gymId/intelligence/rsi
  * Returns the Retention Strength Index for a gym.
- *
- * Known weakness: `trend30d` (2.3) and `trend90d` (5.1) are hardcoded static
- * values. In a production system these would be computed by comparing the
- * current RSI against historical snapshots stored in the database.
  */
 router.get("/gyms/:gymId/intelligence/rsi", async (req, res): Promise<void> => {
   const gymId = parseGymId(req.params);
@@ -325,10 +394,46 @@ router.get("/gyms/:gymId/intelligence/rsi", async (req, res): Promise<void> => {
     const metrics = await getGymMetrics(gymId);
     const rsi = computeRSI(metrics.churnRate, metrics.avgRev, metrics.netGrowth, metrics.avgTenure);
 
+    const now = new Date();
+    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    const ninetyDaysAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+
+    const membersJoinedBefore30 = await db.select().from(membersTable).where(and(eq(membersTable.gymId, gymId), sql`${membersTable.joinDate} <= ${thirtyDaysAgo.toISOString().split("T")[0]}`));
+    const membersJoinedBefore90 = await db.select().from(membersTable).where(and(eq(membersTable.gymId, gymId), sql`${membersTable.joinDate} <= ${ninetyDaysAgo.toISOString().split("T")[0]}`));
+
+    let trend30d: number | null = null;
+    let trend90d: number | null = null;
+    let trendInsufficient = false;
+
+    if (membersJoinedBefore30.length >= 5) {
+      const past30Active = membersJoinedBefore30.filter(m => m.status === "active").length;
+      const past30Total = membersJoinedBefore30.length;
+      const pastChurn30 = past30Total > 0 ? ((past30Total - past30Active) / past30Total) * 100 : 0;
+      const pastSubs30 = await db.select().from(subscriptionsTable).where(and(eq(subscriptionsTable.gymId, gymId), eq(subscriptionsTable.status, "active")));
+      const pastAvgRev30 = pastSubs30.length > 0 ? pastSubs30.reduce((s, sub) => s + parseFloat(sub.amount || "0"), 0) / pastSubs30.length : 0;
+      const pastRsi30 = computeRSI(pastChurn30, pastAvgRev30, past30Active - (past30Total - past30Active), metrics.avgTenure > 1 ? metrics.avgTenure - 1 : 0);
+      trend30d = Math.round((rsi.score - pastRsi30.score) * 10) / 10;
+    } else {
+      trendInsufficient = true;
+    }
+
+    if (membersJoinedBefore90.length >= 5) {
+      const past90Active = membersJoinedBefore90.filter(m => m.status === "active").length;
+      const past90Total = membersJoinedBefore90.length;
+      const pastChurn90 = past90Total > 0 ? ((past90Total - past90Active) / past90Total) * 100 : 0;
+      const pastSubs90 = await db.select().from(subscriptionsTable).where(and(eq(subscriptionsTable.gymId, gymId), eq(subscriptionsTable.status, "active")));
+      const pastAvgRev90 = pastSubs90.length > 0 ? pastSubs90.reduce((s, sub) => s + parseFloat(sub.amount || "0"), 0) / pastSubs90.length : 0;
+      const pastRsi90 = computeRSI(pastChurn90, pastAvgRev90, past90Active - (past90Total - past90Active), metrics.avgTenure > 3 ? metrics.avgTenure - 3 : 0);
+      trend90d = Math.round((rsi.score - pastRsi90.score) * 10) / 10;
+    } else {
+      trendInsufficient = true;
+    }
+
     res.json({
       ...rsi,
-      trend30d: 2.3,
-      trend90d: 5.1,
+      trend30d,
+      trend90d,
+      trendInsufficient,
       insight: rsi.band === "Strong"
         ? "Your gym is showing strong retention. Keep focus on onboarding quality."
         : rsi.band === "Moderate"
@@ -374,9 +479,6 @@ router.get("/gyms/:gymId/intelligence/interventions", async (req, res): Promise<
  * Returns monthly cohort retention analysis for the last 8 months.
  *
  * Groups members by their join month and calculates retention rates.
- * Known weakness: 30-day and 60-day retention rates use fixed multipliers
- * (0.9 and 0.85) rather than actual retention data. The avgRevenue per
- * cohort member uses a hardcoded $145 instead of real subscription amounts.
  */
 router.get("/gyms/:gymId/intelligence/cohorts", async (req, res): Promise<void> => {
   const gymId = parseGymId(req.params);
@@ -401,23 +503,48 @@ router.get("/gyms/:gymId/intelligence/cohorts", async (req, res): Promise<void> 
       }
     }
 
+    const allSubs = await db.select().from(subscriptionsTable).where(eq(subscriptionsTable.gymId, gymId));
+    const subAmountByMember: Record<number, number> = {};
+    for (const s of allSubs) {
+      subAmountByMember[s.memberId] = parseFloat(s.amount || "0");
+    }
+
     const cohorts = Object.entries(monthBuckets).map(([month, cohortMembers]) => {
       const starting = cohortMembers.length;
       const stillActive = cohortMembers.filter(m => m.status === "active").length;
       const retRate = starting > 0 ? Math.round((stillActive / starting) * 1000) / 10 : 0;
 
+      const cohortStart = new Date(month + "-01");
+      const day30 = new Date(cohortStart.getTime() + 30 * 24 * 60 * 60 * 1000);
+      const day60 = new Date(cohortStart.getTime() + 60 * 24 * 60 * 60 * 1000);
+
+      const retained30d = starting > 0 ? cohortMembers.filter(m => {
+        if (m.status === "active") return true;
+        if (m.status === "cancelled" && m.updatedAt && new Date(m.updatedAt) > day30) return true;
+        return false;
+      }).length : 0;
+
+      const retained60d = starting > 0 ? cohortMembers.filter(m => {
+        if (m.status === "active") return true;
+        if (m.status === "cancelled" && m.updatedAt && new Date(m.updatedAt) > day60) return true;
+        return false;
+      }).length : 0;
+
+      const cohortRevenues = cohortMembers.map(m => subAmountByMember[m.id] ?? 0);
+      const avgRevenue = starting > 0 ? Math.round((cohortRevenues.reduce((s, v) => s + v, 0) / starting) * 100) / 100 : 0;
+
       return {
         cohortMonth: month,
         startingMembers: starting,
-        retained30d: starting > 0 ? Math.round(starting * 0.9) : 0,
-        retained60d: starting > 0 ? Math.round(starting * 0.85) : 0,
+        retained30d,
+        retained60d,
         retained90d: stillActive,
         retained180d: stillActive,
         retained365d: 0,
-        retentionRate30d: starting > 0 ? 90 : 0,
+        retentionRate30d: starting > 0 ? Math.round((retained30d / starting) * 1000) / 10 : 0,
         retentionRate90d: retRate,
         retentionRate365d: 0,
-        avgRevenue: starting > 0 ? Math.round((cohortMembers.reduce((s, m) => s + 145, 0) / starting) * 100) / 100 : 0,
+        avgRevenue,
       };
     });
 
@@ -432,13 +559,8 @@ router.get("/gyms/:gymId/intelligence/cohorts", async (req, res): Promise<void> 
  * GET /gyms/:gymId/intelligence/revenue-forecast
  * Projects MRR (Monthly Recurring Revenue) forward at 3, 6, and 12 months.
  *
- * Uses fixed growth/decline multipliers applied to current MRR:
- *   - Expected: +5% (3m), +10% (6m), +18% (12m)
- *   - Upside:  +12% (3m), +22% (6m), +35% (12m)
- *   - Downside: -8% (3m), -15% (6m), -22% (12m)
- *
- * These multipliers are hardcoded assumptions — a more sophisticated model
- * would incorporate historical growth rates, seasonal patterns, and churn trends.
+ * Uses historical invoice data to derive monthly growth rates, then projects
+ * forward using compound growth with upside/downside scenarios.
  */
 router.get("/gyms/:gymId/intelligence/revenue-forecast", async (req, res): Promise<void> => {
   const gymId = parseGymId(req.params);
@@ -452,25 +574,8 @@ router.get("/gyms/:gymId/intelligence/revenue-forecast", async (req, res): Promi
     const total = totalCount?.count ?? 0;
     const churnRate = total > 0 ? Math.round((cancelledCount?.count ?? 0) / total * 1000) / 10 : 0;
 
-    res.json({
-      currentMrr,
-      expectedMrr3m: Math.round(currentMrr * 1.05),
-      upsideMrr3m: Math.round(currentMrr * 1.12),
-      downsideMrr3m: Math.round(currentMrr * 0.92),
-      expectedMrr6m: Math.round(currentMrr * 1.10),
-      upsideMrr6m: Math.round(currentMrr * 1.22),
-      downsideMrr6m: Math.round(currentMrr * 0.85),
-      expectedMrr12m: Math.round(currentMrr * 1.18),
-      upsideMrr12m: Math.round(currentMrr * 1.35),
-      downsideMrr12m: Math.round(currentMrr * 0.78),
-      assumptions: [
-        `Based on trailing churn rate of ${churnRate}%`,
-        `Current MRR: $${currentMrr.toLocaleString()} from ${subs.length} active subscriptions`,
-        "Accounts for seasonal patterns (Q1 surge, summer dip)",
-        "Upside includes successful retention interventions",
-        "Downside includes accelerated churn without intervention",
-      ],
-    });
+    const forecast = await computeRevenueForecast(gymId, currentMrr, churnRate, subs.length);
+    res.json(forecast);
   } catch (err) {
     console.error("[intelligence/revenue-forecast] Failed to generate forecast:", err);
     res.status(500).json({ error: "Failed to generate revenue forecast. Please try again." });
@@ -491,8 +596,9 @@ router.get("/gyms/:gymId/intelligence/overview", async (req, res): Promise<void>
     const rsi = computeRSI(metrics.churnRate, metrics.avgRev, metrics.netGrowth, metrics.avgTenure);
     const rsiData = {
       ...rsi,
-      trend30d: 2.3,
-      trend90d: 5.1,
+      trend30d: null as number | null,
+      trend90d: null as number | null,
+      trendInsufficient: true,
       insight: rsi.band === "Strong"
         ? "Your gym is showing strong retention. Keep focus on onboarding quality."
         : rsi.band === "Moderate"
@@ -504,18 +610,11 @@ router.get("/gyms/:gymId/intelligence/overview", async (req, res): Promise<void>
     const interventions = await getInterventions(gymId);
 
     const currentMrr = metrics.totalRev;
-    const forecast = {
-      currentMrr,
-      expectedMrr3m: Math.round(currentMrr * 1.05),
-      upsideMrr3m: Math.round(currentMrr * 1.12),
-      downsideMrr3m: Math.round(currentMrr * 0.92),
-      expectedMrr6m: Math.round(currentMrr * 1.10),
-      upsideMrr6m: Math.round(currentMrr * 1.22),
-      downsideMrr6m: Math.round(currentMrr * 0.85),
-      expectedMrr12m: Math.round(currentMrr * 1.18),
-      upsideMrr12m: Math.round(currentMrr * 1.35),
-      downsideMrr12m: Math.round(currentMrr * 0.78),
-    };
+    const [totalCount] = await db.select({ count: count() }).from(membersTable).where(eq(membersTable.gymId, gymId));
+    const [cancelledCount] = await db.select({ count: count() }).from(membersTable).where(and(eq(membersTable.gymId, gymId), eq(membersTable.status, "cancelled")));
+    const total = totalCount?.count ?? 0;
+    const churnRate = total > 0 ? Math.round((cancelledCount?.count ?? 0) / total * 1000) / 10 : 0;
+    const forecast = await computeRevenueForecast(gymId, currentMrr, churnRate, metrics.subs.length);
 
     res.json({
       gymId,

@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, and, count } from "drizzle-orm";
+import { eq, and, count, sql } from "drizzle-orm";
 import { db, gymStaffTable, classesTable } from "@workspace/db";
 import { InviteStaffBody, UpdateStaffBody } from "@workspace/api-zod";
 
@@ -23,12 +23,13 @@ router.get("/gyms/:gymId/staff", async (req, res): Promise<void> => {
 
   const staff = await db.select().from(gymStaffTable).where(eq(gymStaffTable.gymId, gymId));
 
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
   const staffWithCounts = await Promise.all(
     staff.map(async (s) => {
       const [classCountResult] = await db
         .select({ count: count() })
         .from(classesTable)
-        .where(and(eq(classesTable.coachId, s.id), eq(classesTable.gymId, gymId)));
+        .where(and(eq(classesTable.coachId, s.id), eq(classesTable.gymId, gymId), sql`${classesTable.startTime} >= ${thirtyDaysAgo}`));
       return { ...s, classCount30d: classCountResult?.count ?? 0 };
     })
   );
@@ -58,7 +59,12 @@ router.post("/gyms/:gymId/staff", async (req, res): Promise<void> => {
     role: parsed.data.role,
   }).returning();
 
-  res.status(201).json({ ...staff, classCount30d: 0 });
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+  const [classCountResult] = await db
+    .select({ count: count() })
+    .from(classesTable)
+    .where(and(eq(classesTable.coachId, staff.id), eq(classesTable.gymId, gymId), sql`${classesTable.startTime} >= ${thirtyDaysAgo}`));
+  res.status(201).json({ ...staff, classCount30d: classCountResult?.count ?? 0 });
 });
 
 router.patch("/gyms/:gymId/staff/:staffId", async (req, res): Promise<void> => {
@@ -91,7 +97,12 @@ router.patch("/gyms/:gymId/staff/:staffId", async (req, res): Promise<void> => {
 
   const [staff] = await db.update(gymStaffTable).set(parsed.data).where(and(eq(gymStaffTable.id, staffId), eq(gymStaffTable.gymId, gymId))).returning();
   if (!staff) { res.status(404).json({ error: "Staff not found" }); return; }
-  res.json({ ...staff, classCount30d: 0 });
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+  const [classCountResult] = await db
+    .select({ count: count() })
+    .from(classesTable)
+    .where(and(eq(classesTable.coachId, staff.id), eq(classesTable.gymId, gymId), sql`${classesTable.startTime} >= ${thirtyDaysAgo}`));
+  res.json({ ...staff, classCount30d: classCountResult?.count ?? 0 });
 });
 
 router.delete("/gyms/:gymId/staff/:staffId", async (req, res): Promise<void> => {
