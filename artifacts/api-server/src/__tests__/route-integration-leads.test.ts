@@ -210,7 +210,7 @@ describe("Leads route handlers", () => {
   describe("POST /gyms/:gymId/leads", () => {
     it("creates a new lead and returns 201", async () => {
       const handler = findHandler(router, "post", "/leads");
-      if (!handler) return;
+      expect(handler).toBeTruthy();
       const body = { firstName: "Charlie", lastName: "Brown", email: "charlie@test.com", source: "website" };
       const { req, res } = makeReqRes({ params: { gymId: "1" }, body });
       await handler(req, res);
@@ -222,7 +222,7 @@ describe("Leads route handlers", () => {
 
     it("returns 400 for invalid gym ID on POST", async () => {
       const handler = findHandler(router, "post", "/leads");
-      if (!handler) return;
+      expect(handler).toBeTruthy();
       const { req, res } = makeReqRes({ params: { gymId: "bad" }, body: {} });
       await handler(req, res);
       expect(res.status).toHaveBeenCalledWith(400);
@@ -235,7 +235,7 @@ describe("Leads route handlers", () => {
         { id: 1, gymId: 1, firstName: "Alice", lastName: "Smith", email: "a@b.com", stage: "new", source: "web", notes: null },
       ];
       const handler = findHandler(router, "patch", "/leads", "/gyms/:gymId/leads/:leadId");
-      if (!handler) return;
+      expect(handler).toBeTruthy();
       const { req, res } = makeReqRes({
         params: { gymId: "1", leadId: "1" },
         body: { stage: "contacted" },
@@ -248,7 +248,7 @@ describe("Leads route handlers", () => {
 
     it("returns 400 for invalid IDs", async () => {
       const handler = findHandler(router, "patch", "/leads", "/gyms/:gymId/leads/:leadId");
-      if (!handler) return;
+      expect(handler).toBeTruthy();
       const { req, res } = makeReqRes({ params: { gymId: "bad", leadId: "bad" }, body: {} });
       await handler(req, res);
       expect(res.status).toHaveBeenCalledWith(400);
@@ -257,7 +257,7 @@ describe("Leads route handlers", () => {
     it("returns 404 when lead not found", async () => {
       mockLeads = [];
       const handler = findHandler(router, "patch", "/leads", "/gyms/:gymId/leads/:leadId");
-      if (!handler) return;
+      expect(handler).toBeTruthy();
       const { req, res } = makeReqRes({
         params: { gymId: "1", leadId: "999" },
         body: { stage: "contacted" },
@@ -271,7 +271,7 @@ describe("Leads route handlers", () => {
         { id: 1, gymId: 1, firstName: "Alice", lastName: "Smith", email: "a@b.com", stage: "contacted", nextFollowUpDate: "2025-01-20", followUpNote: "call back" },
       ];
       const handler = findHandler(router, "patch", "/leads", "/gyms/:gymId/leads/:leadId");
-      if (!handler) return;
+      expect(handler).toBeTruthy();
       const { req, res } = makeReqRes({
         params: { gymId: "1", leadId: "1" },
         body: { stage: "lost" },
@@ -290,7 +290,7 @@ describe("Leads route handlers", () => {
         { id: 1, gymId: 1, firstName: "Alice", lastName: "Smith", email: "a@b.com", phone: "555-0100", stage: "trial" },
       ];
       const handler = findHandler(router, "post", "/convert", "/gyms/:gymId/leads/:leadId/convert");
-      if (!handler) return;
+      expect(handler).toBeTruthy();
       const { req, res } = makeReqRes({
         params: { gymId: "1", leadId: "1" },
         body: { startDate: "2025-02-01" },
@@ -305,7 +305,7 @@ describe("Leads route handlers", () => {
     it("returns 404 when lead not found", async () => {
       mockLeads = [];
       const handler = findHandler(router, "post", "/convert", "/gyms/:gymId/leads/:leadId/convert");
-      if (!handler) return;
+      expect(handler).toBeTruthy();
       const { req, res } = makeReqRes({ params: { gymId: "1", leadId: "999" }, body: {} });
       await handler(req, res);
       expect(res.status).toHaveBeenCalledWith(404);
@@ -316,7 +316,7 @@ describe("Leads route handlers", () => {
         { id: 1, gymId: 1, firstName: "A", lastName: "B", email: "a@b.com", stage: "converted" },
       ];
       const handler = findHandler(router, "post", "/convert", "/gyms/:gymId/leads/:leadId/convert");
-      if (!handler) return;
+      expect(handler).toBeTruthy();
       const { req, res } = makeReqRes({ params: { gymId: "1", leadId: "1" }, body: {} });
       await handler(req, res);
       expect(res.status).toHaveBeenCalledWith(409);
@@ -327,7 +327,7 @@ describe("Leads route handlers", () => {
         { id: 1, gymId: 1, firstName: "A", lastName: "B", email: "a@b.com", stage: "lost" },
       ];
       const handler = findHandler(router, "post", "/convert", "/gyms/:gymId/leads/:leadId/convert");
-      if (!handler) return;
+      expect(handler).toBeTruthy();
       const { req, res } = makeReqRes({ params: { gymId: "1", leadId: "1" }, body: {} });
       await handler(req, res);
       expect(res.status).toHaveBeenCalledWith(400);

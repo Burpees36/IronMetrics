@@ -203,7 +203,7 @@ describe("Classes route handlers", () => {
   describe("POST /gyms/:gymId/classes", () => {
     it("creates a class and returns 201", async () => {
       const handler = findHandler(router, "post", "/classes");
-      if (!handler) return;
+      expect(handler).toBeTruthy();
       const { req, res } = makeReqRes({
         params: { gymId: "1" },
         body: { name: "New WOD", startTime: "2025-01-15T09:00:00Z", endTime: "2025-01-15T10:00:00Z", capacity: 20 },
@@ -250,7 +250,7 @@ describe("Classes route handlers", () => {
       mockClasses = [{ id: 5, gymId: 1, name: "WOD", capacity: 20, enrolled: 5, waitlistEnabled: false }];
       mockAttendance = [];
       const handler = findHandler(router, "post", "/checkin");
-      if (!handler) return;
+      expect(handler).toBeTruthy();
       const { req, res } = makeReqRes({ params: { gymId: "1", classId: "5" }, body: { memberId: 10 } });
       await handler(req, res);
       expect(res.status).toHaveBeenCalledWith(201);
@@ -260,7 +260,7 @@ describe("Classes route handlers", () => {
       mockMembers = [];
       mockClasses = [{ id: 5, gymId: 1, name: "WOD", capacity: 20, enrolled: 5 }];
       const handler = findHandler(router, "post", "/checkin");
-      if (!handler) return;
+      expect(handler).toBeTruthy();
       const { req, res } = makeReqRes({ params: { gymId: "1", classId: "5" }, body: { memberId: 999 } });
       await handler(req, res);
       expect(res.status).toHaveBeenCalledWith(404);
@@ -270,7 +270,7 @@ describe("Classes route handlers", () => {
       mockMembers = [{ id: 10, gymId: 1, firstName: "John", lastName: "Doe" }];
       mockClasses = [];
       const handler = findHandler(router, "post", "/checkin");
-      if (!handler) return;
+      expect(handler).toBeTruthy();
       const { req, res } = makeReqRes({ params: { gymId: "1", classId: "5" }, body: { memberId: 10 } });
       await handler(req, res);
       expect(res.status).toHaveBeenCalledWith(404);
@@ -281,7 +281,7 @@ describe("Classes route handlers", () => {
       mockClasses = [{ id: 5, gymId: 1, name: "WOD", capacity: 20, enrolled: 5 }];
       mockAttendance = [{ id: 1, classId: 5, memberId: 10, status: "checked_in" }];
       const handler = findHandler(router, "post", "/checkin");
-      if (!handler) return;
+      expect(handler).toBeTruthy();
       const { req, res } = makeReqRes({ params: { gymId: "1", classId: "5" }, body: { memberId: 10 } });
       await handler(req, res);
       expect(res.status).toHaveBeenCalledWith(409);
@@ -292,7 +292,7 @@ describe("Classes route handlers", () => {
       mockClasses = [{ id: 5, gymId: 1, name: "WOD", capacity: 5, enrolled: 5, waitlistEnabled: false }];
       mockAttendance = [];
       const handler = findHandler(router, "post", "/checkin");
-      if (!handler) return;
+      expect(handler).toBeTruthy();
       const { req, res } = makeReqRes({ params: { gymId: "1", classId: "5" }, body: { memberId: 10 } });
       await handler(req, res);
       expect(res.status).toHaveBeenCalledWith(409);
@@ -300,7 +300,7 @@ describe("Classes route handlers", () => {
 
     it("returns 400 for invalid IDs", async () => {
       const handler = findHandler(router, "post", "/checkin");
-      if (!handler) return;
+      expect(handler).toBeTruthy();
       const { req, res } = makeReqRes({ params: { gymId: "abc", classId: "xyz" }, body: {} });
       await handler(req, res);
       expect(res.status).toHaveBeenCalledWith(400);
@@ -313,7 +313,7 @@ describe("Classes route handlers", () => {
       mockClasses = [{ id: 5, gymId: 1, name: "Yoga", capacity: 20, enrolled: 3, isBookable: true, waitlistEnabled: false }];
       mockAttendance = [];
       const handler = findHandler(router, "post", "/book");
-      if (!handler) return;
+      expect(handler).toBeTruthy();
       const { req, res } = makeReqRes({ params: { gymId: "1", classId: "5" }, body: { memberId: 10 } });
       await handler(req, res);
       expect(res.status).toHaveBeenCalledWith(201);
@@ -321,7 +321,7 @@ describe("Classes route handlers", () => {
 
     it("returns 400 when memberId is missing", async () => {
       const handler = findHandler(router, "post", "/book");
-      if (!handler) return;
+      expect(handler).toBeTruthy();
       const { req, res } = makeReqRes({ params: { gymId: "1", classId: "5" }, body: {} });
       await handler(req, res);
       expect(res.status).toHaveBeenCalledWith(400);
@@ -331,7 +331,7 @@ describe("Classes route handlers", () => {
       mockMembers = [];
       mockClasses = [{ id: 5, gymId: 1, name: "Yoga", capacity: 20, enrolled: 3, isBookable: true }];
       const handler = findHandler(router, "post", "/book");
-      if (!handler) return;
+      expect(handler).toBeTruthy();
       const { req, res } = makeReqRes({ params: { gymId: "1", classId: "5" }, body: { memberId: 999 } });
       await handler(req, res);
       expect(res.status).toHaveBeenCalledWith(404);
@@ -341,7 +341,7 @@ describe("Classes route handlers", () => {
       mockMembers = [{ id: 10, gymId: 1, firstName: "Jane", lastName: "Doe" }];
       mockClasses = [{ id: 5, gymId: 1, name: "WOD", capacity: 20, enrolled: 3, isBookable: false }];
       const handler = findHandler(router, "post", "/book");
-      if (!handler) return;
+      expect(handler).toBeTruthy();
       const { req, res } = makeReqRes({ params: { gymId: "1", classId: "5" }, body: { memberId: 10 } });
       await handler(req, res);
       expect(res.status).toHaveBeenCalledWith(400);
@@ -352,7 +352,7 @@ describe("Classes route handlers", () => {
       mockClasses = [{ id: 5, gymId: 1, name: "Yoga", capacity: 20, enrolled: 3, isBookable: true }];
       mockAttendance = [{ id: 1, classId: 5, memberId: 10, status: "reserved" }];
       const handler = findHandler(router, "post", "/book");
-      if (!handler) return;
+      expect(handler).toBeTruthy();
       const { req, res } = makeReqRes({ params: { gymId: "1", classId: "5" }, body: { memberId: 10 } });
       await handler(req, res);
       expect(res.status).toHaveBeenCalledWith(409);
@@ -363,7 +363,7 @@ describe("Classes route handlers", () => {
       mockClasses = [{ id: 5, gymId: 1, name: "Yoga", capacity: 5, enrolled: 5, isBookable: true, waitlistEnabled: false }];
       mockAttendance = [];
       const handler = findHandler(router, "post", "/book");
-      if (!handler) return;
+      expect(handler).toBeTruthy();
       const { req, res } = makeReqRes({ params: { gymId: "1", classId: "5" }, body: { memberId: 10 } });
       await handler(req, res);
       expect(res.status).toHaveBeenCalledWith(409);

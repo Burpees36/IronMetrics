@@ -146,12 +146,16 @@ describe("Members route handlers", () => {
     router = mod.default;
   });
 
-  function findHandler(method: string, pathPattern: string) {
+  function findHandler(method: string, pathPattern: string, exact?: string) {
     for (const layer of router.stack) {
       if (layer.route) {
         const routePath = layer.route.path;
         const routeMethod = Object.keys(layer.route.methods)[0];
-        if (routeMethod === method && routePath.includes(pathPattern)) {
+        if (exact) {
+          if (routeMethod === method && routePath === exact) {
+            return layer.route.stack[0].handle;
+          }
+        } else if (routeMethod === method && routePath.includes(pathPattern)) {
           return layer.route.stack[0].handle;
         }
       }
@@ -239,37 +243,78 @@ describe("Members route handlers", () => {
 
   describe("POST /gyms/:gymId/members", () => {
     it("creates a new member and returns 201", async () => {
-      const handler = findHandler("post", "/members");
-      if (!handler) return;
+      const handler = findHandler("post", "/members", "/gyms/:gymId/members");
+      expect(handler).toBeTruthy();
       const body = { firstName: "Charlie", lastName: "Brown", email: "charlie@test.com" };
       const { req, res } = makeReqRes({ params: { gymId: "1" }, body });
-      await handler(req, res);
+      await handler!(req, res);
       expect(res.status).toHaveBeenCalledWith(201);
       expect(insertedMember).toBeTruthy();
       expect(insertedMember.gymId).toBe(1);
     });
 
     it("returns 400 for invalid gym ID on create", async () => {
-      const handler = findHandler("post", "/members");
-      if (!handler) return;
+      const handler = findHandler("post", "/members", "/gyms/:gymId/members");
+      expect(handler).toBeTruthy();
       const { req, res } = makeReqRes({ params: { gymId: "bad" }, body: {} });
-      await handler(req, res);
+      await handler!(req, res);
       expect(res.status).toHaveBeenCalledWith(400);
     });
   });
 
-  describe("PUT /gyms/:gymId/members/:memberId", () => {
+  describe("GET /gyms/:gymId/members/:memberId", () => {
+    it("returns a single member by ID", async () => {
+      mockMembers = [
+        { id: 1, gymId: 1, firstName: "Alice", lastName: "Smith", email: "alice@test.com", status: "active", riskScore: "42.5" },
+      ];
+      mockNotes = [{ id: 1, memberId: 1, content: "Good progress" }];
+      const handler = findHandler("get", "/members", "/gyms/:gymId/members/:memberId");
+      expect(handler).toBeTruthy();
+      const { req, res } = makeReqRes({ params: { gymId: "1", memberId: "1" } });
+      await handler!(req, res);
+      expect(res.json).toHaveBeenCalled();
+      const data = res.json.mock.calls[0][0];
+      expect(data.firstName).toBe("Alice");
+    });
+
+    it("returns 404 when member not found", async () => {
+      mockMembers = [];
+      const handler = findHandler("get", "/members", "/gyms/:gymId/members/:memberId");
+      expect(handler).toBeTruthy();
+      const { req, res } = makeReqRes({ params: { gymId: "1", memberId: "999" } });
+      await handler!(req, res);
+      expect(res.status).toHaveBeenCalledWith(404);
+    });
+
+    it("returns 400 for invalid IDs", async () => {
+      const handler = findHandler("get", "/members", "/gyms/:gymId/members/:memberId");
+      expect(handler).toBeTruthy();
+      const { req, res } = makeReqRes({ params: { gymId: "abc", memberId: "xyz" } });
+      await handler!(req, res);
+      expect(res.status).toHaveBeenCalledWith(400);
+    });
+  });
+
+  describe("PATCH /gyms/:gymId/members/:memberId", () => {
     it("updates a member", async () => {
       mockMembers = [
         { id: 1, gymId: 1, firstName: "Alice", lastName: "Smith", email: "alice@test.com", status: "active" },
       ];
-      const handler = findHandler("put", "members");
-      if (!handler) return;
+      const handler = findHandler("patch", "/members", "/gyms/:gymId/members/:memberId");
+      expect(handler).toBeTruthy();
       const body = { firstName: "Alicia" };
       const { req, res } = makeReqRes({ params: { gymId: "1", memberId: "1" }, body });
-      await handler(req, res);
+      await handler!(req, res);
       expect(updatedMember).toBeTruthy();
       expect(updatedMember.firstName).toBe("Alicia");
+    });
+
+    it("returns 400 for invalid IDs on update", async () => {
+      const handler = findHandler("patch", "/members", "/gyms/:gymId/members/:memberId");
+      expect(handler).toBeTruthy();
+      const { req, res } = makeReqRes({ params: { gymId: "bad", memberId: "bad" }, body: {} });
+      await handler!(req, res);
+      expect(res.status).toHaveBeenCalledWith(400);
     });
   });
 });

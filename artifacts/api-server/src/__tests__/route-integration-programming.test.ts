@@ -208,7 +208,7 @@ describe("Programming route handlers", () => {
         { id: 1, dayId: 5, title: "WOD", orderIndex: 0 },
       ];
       const handler = findHandler(router, "get", "/programming", "/gyms/:gymId/programming/:dayId");
-      if (!handler) return;
+      expect(handler).toBeTruthy();
       const { req, res } = makeReqRes({ params: { gymId: "1", dayId: "5" } });
       await handler(req, res);
       expect(res.json).toHaveBeenCalled();
@@ -217,7 +217,7 @@ describe("Programming route handlers", () => {
     it("returns 404 for non-existent day", async () => {
       mockDays = [];
       const handler = findHandler(router, "get", "/programming", "/gyms/:gymId/programming/:dayId");
-      if (!handler) return;
+      expect(handler).toBeTruthy();
       const { req, res } = makeReqRes({ params: { gymId: "1", dayId: "999" } });
       await handler(req, res);
       expect(res.status).toHaveBeenCalledWith(404);
@@ -227,7 +227,7 @@ describe("Programming route handlers", () => {
   describe("POST /gyms/:gymId/programming", () => {
     it("creates a programming day and returns 201", async () => {
       const handler = findHandler(router, "post", "/programming", "/gyms/:gymId/programming");
-      if (!handler) return;
+      expect(handler).toBeTruthy();
       const { req, res } = makeReqRes({
         params: { gymId: "1" },
         body: { date: "2025-01-20", title: "New Day", description: "Test" },
@@ -240,7 +240,7 @@ describe("Programming route handlers", () => {
 
     it("returns 400 for invalid gym ID", async () => {
       const handler = findHandler(router, "post", "/programming", "/gyms/:gymId/programming");
-      if (!handler) return;
+      expect(handler).toBeTruthy();
       const { req, res } = makeReqRes({ params: { gymId: "xyz" }, body: {} });
       await handler(req, res);
       expect(res.status).toHaveBeenCalledWith(400);
@@ -252,7 +252,7 @@ describe("Programming route handlers", () => {
       mockDays = [{ id: 1, gymId: 1, date: "2025-01-15", title: "Monday", status: "draft" }];
       mockSections = [];
       const handler = findHandler(router, "post", "/sections", "/gyms/:gymId/programming/:dayId/sections");
-      if (!handler) return;
+      expect(handler).toBeTruthy();
       const { req, res } = makeReqRes({
         params: { gymId: "1", dayId: "1" },
         body: { title: "Warmup", sectionType: "warmup", instructions: "5 min row" },
@@ -266,7 +266,7 @@ describe("Programming route handlers", () => {
     it("returns 400 when title is missing", async () => {
       mockDays = [{ id: 1, gymId: 1, date: "2025-01-15", title: "Monday", status: "draft" }];
       const handler = findHandler(router, "post", "/sections", "/gyms/:gymId/programming/:dayId/sections");
-      if (!handler) return;
+      expect(handler).toBeTruthy();
       const { req, res } = makeReqRes({
         params: { gymId: "1", dayId: "1" },
         body: {},
@@ -278,7 +278,7 @@ describe("Programming route handlers", () => {
     it("returns 404 when day not found", async () => {
       mockDays = [];
       const handler = findHandler(router, "post", "/sections", "/gyms/:gymId/programming/:dayId/sections");
-      if (!handler) return;
+      expect(handler).toBeTruthy();
       const { req, res } = makeReqRes({
         params: { gymId: "1", dayId: "999" },
         body: { title: "WOD" },
@@ -289,7 +289,7 @@ describe("Programming route handlers", () => {
 
     it("returns 400 for invalid IDs", async () => {
       const handler = findHandler(router, "post", "/sections", "/gyms/:gymId/programming/:dayId/sections");
-      if (!handler) return;
+      expect(handler).toBeTruthy();
       const { req, res } = makeReqRes({ params: { gymId: "abc", dayId: "xyz" }, body: { title: "WOD" } });
       await handler(req, res);
       expect(res.status).toHaveBeenCalledWith(400);
@@ -301,7 +301,7 @@ describe("Programming route handlers", () => {
       mockDays = [{ id: 1, gymId: 1, date: "2025-01-15", title: "Monday", status: "draft" }];
       mockSections = [{ id: 1, dayId: 1, title: "WOD", orderIndex: 0 }];
       const handler = findHandler(router, "post", "/publish", "/gyms/:gymId/programming/:dayId/publish");
-      if (!handler) return;
+      expect(handler).toBeTruthy();
       const { req, res } = makeReqRes({ params: { gymId: "1", dayId: "1" } });
       await handler(req, res);
       expect(res.json).toHaveBeenCalled();
@@ -310,7 +310,7 @@ describe("Programming route handlers", () => {
     it("returns 404 when day not found", async () => {
       mockDays = [];
       const handler = findHandler(router, "post", "/publish", "/gyms/:gymId/programming/:dayId/publish");
-      if (!handler) return;
+      expect(handler).toBeTruthy();
       const { req, res } = makeReqRes({ params: { gymId: "1", dayId: "999" } });
       await handler(req, res);
       expect(res.status).toHaveBeenCalledWith(404);
@@ -318,7 +318,7 @@ describe("Programming route handlers", () => {
 
     it("returns 400 for invalid IDs", async () => {
       const handler = findHandler(router, "post", "/publish", "/gyms/:gymId/programming/:dayId/publish");
-      if (!handler) return;
+      expect(handler).toBeTruthy();
       const { req, res } = makeReqRes({ params: { gymId: "abc", dayId: "xyz" } });
       await handler(req, res);
       expect(res.status).toHaveBeenCalledWith(400);
