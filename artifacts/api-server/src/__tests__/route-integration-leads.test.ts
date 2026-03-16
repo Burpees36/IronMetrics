@@ -128,12 +128,16 @@ function makeReqRes(opts: { params?: any; query?: any; body?: any }) {
   return { req, res };
 }
 
-function findHandler(router: any, method: string, pathFragment: string) {
+function findHandler(router: any, method: string, pathFragment: string, exact?: string) {
   for (const layer of router.stack) {
     if (layer.route) {
       const routePath = layer.route.path;
       const routeMethod = Object.keys(layer.route.methods)[0];
-      if (routeMethod === method && routePath.includes(pathFragment)) {
+      if (exact) {
+        if (routeMethod === method && routePath === exact) {
+          return layer.route.stack[0].handle;
+        }
+      } else if (routeMethod === method && routePath.includes(pathFragment)) {
         return layer.route.stack[0].handle;
       }
     }
@@ -220,6 +224,111 @@ describe("Leads route handlers", () => {
       const handler = findHandler(router, "post", "/leads");
       if (!handler) return;
       const { req, res } = makeReqRes({ params: { gymId: "bad" }, body: {} });
+      await handler(req, res);
+      expect(res.status).toHaveBeenCalledWith(400);
+    });
+  });
+
+  describe("PATCH /gyms/:gymId/leads/:leadId", () => {
+    it("updates a lead and returns updated record", async () => {
+      mockLeads = [
+        { id: 1, gymId: 1, firstName: "Alice", lastName: "Smith", email: "a@b.com", stage: "new", source: "web", notes: null },
+      ];
+      const handler = findHandler(router, "patch", "/leads", "/gyms/:gymId/leads/:leadId");
+      if (!handler) return;
+      const { req, res } = makeReqRes({
+        params: { gymId: "1", leadId: "1" },
+        body: { stage: "contacted" },
+      });
+      await handler(req, res);
+      expect(res.json).toHaveBeenCalled();
+      const data = res.json.mock.calls[0][0];
+      expect(data.stage).toBe("contacted");
+    });
+
+    it("returns 400 for invalid IDs", async () => {
+      const handler = findHandler(router, "patch", "/leads", "/gyms/:gymId/leads/:leadId");
+      if (!handler) return;
+      const { req, res } = makeReqRes({ params: { gymId: "bad", leadId: "bad" }, body: {} });
+      await handler(req, res);
+      expect(res.status).toHaveBeenCalledWith(400);
+    });
+
+    it("returns 404 when lead not found", async () => {
+      mockLeads = [];
+      const handler = findHandler(router, "patch", "/leads", "/gyms/:gymId/leads/:leadId");
+      if (!handler) return;
+      const { req, res } = makeReqRes({
+        params: { gymId: "1", leadId: "999" },
+        body: { stage: "contacted" },
+      });
+      await handler(req, res);
+      expect(res.status).toHaveBeenCalledWith(404);
+    });
+
+    it("clears follow-up when stage changed to lost", async () => {
+      mockLeads = [
+        { id: 1, gymId: 1, firstName: "Alice", lastName: "Smith", email: "a@b.com", stage: "contacted", nextFollowUpDate: "2025-01-20", followUpNote: "call back" },
+      ];
+      const handler = findHandler(router, "patch", "/leads", "/gyms/:gymId/leads/:leadId");
+      if (!handler) return;
+      const { req, res } = makeReqRes({
+        params: { gymId: "1", leadId: "1" },
+        body: { stage: "lost" },
+      });
+      await handler(req, res);
+      expect(res.json).toHaveBeenCalled();
+      const data = res.json.mock.calls[0][0];
+      expect(data.nextFollowUpDate).toBeNull();
+      expect(data.followUpNote).toBeNull();
+    });
+  });
+
+  describe("POST /gyms/:gymId/leads/:leadId/convert", () => {
+    it("converts a lead to a member", async () => {
+      mockLeads = [
+        { id: 1, gymId: 1, firstName: "Alice", lastName: "Smith", email: "a@b.com", phone: "555-0100", stage: "trial" },
+      ];
+      const handler = findHandler(router, "post", "/convert", "/gyms/:gymId/leads/:leadId/convert");
+      if (!handler) return;
+      const { req, res } = makeReqRes({
+        params: { gymId: "1", leadId: "1" },
+        body: { startDate: "2025-02-01" },
+      });
+      await handler(req, res);
+      expect(res.json).toHaveBeenCalled();
+      const data = res.json.mock.calls[0][0];
+      expect(data.firstName).toBe("Alice");
+      expect(data.riskScore).toBeNull();
+    });
+
+    it("returns 404 when lead not found", async () => {
+      mockLeads = [];
+      const handler = findHandler(router, "post", "/convert", "/gyms/:gymId/leads/:leadId/convert");
+      if (!handler) return;
+      const { req, res } = makeReqRes({ params: { gymId: "1", leadId: "999" }, body: {} });
+      await handler(req, res);
+      expect(res.status).toHaveBeenCalledWith(404);
+    });
+
+    it("returns 409 when lead is already converted", async () => {
+      mockLeads = [
+        { id: 1, gymId: 1, firstName: "A", lastName: "B", email: "a@b.com", stage: "converted" },
+      ];
+      const handler = findHandler(router, "post", "/convert", "/gyms/:gymId/leads/:leadId/convert");
+      if (!handler) return;
+      const { req, res } = makeReqRes({ params: { gymId: "1", leadId: "1" }, body: {} });
+      await handler(req, res);
+      expect(res.status).toHaveBeenCalledWith(409);
+    });
+
+    it("returns 400 when lead is lost", async () => {
+      mockLeads = [
+        { id: 1, gymId: 1, firstName: "A", lastName: "B", email: "a@b.com", stage: "lost" },
+      ];
+      const handler = findHandler(router, "post", "/convert", "/gyms/:gymId/leads/:leadId/convert");
+      if (!handler) return;
+      const { req, res } = makeReqRes({ params: { gymId: "1", leadId: "1" }, body: {} });
       await handler(req, res);
       expect(res.status).toHaveBeenCalledWith(400);
     });
