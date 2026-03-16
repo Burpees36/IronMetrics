@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, beforeAll } from "vitest";
 import { getPeriodStart } from "../services/recommendation-learning";
 
 vi.mock("drizzle-orm", () => ({
@@ -338,26 +338,13 @@ describe("upsertLearningStat", () => {
   });
 });
 
-describe("keyword classification", () => {
-  function classifyAction(text: string): string | null {
-    const INTERVENTION_KEYWORDS: Record<string, string[]> = {
-      retention: ["retain", "keep", "churn", "at-risk", "save", "loyalty", "re-engage"],
-      onboarding: ["onboard", "new member", "welcome", "intro", "first visit", "nsi", "ramp"],
-      referral: ["refer", "word of mouth", "bring a friend", "advocate"],
-      community: ["event", "social", "community", "gathering", "potluck", "competition"],
-      coaching: ["coach", "training", "programming", "skill", "development", "quality"],
-      pricing: ["price", "revenue", "upsell", "nutrition challenge", "arm"],
-      marketing: ["market", "social proof", "content", "testimonial", "local partner"],
-    };
-    const lower = text.toLowerCase();
-    let bestMatch: string | null = null;
-    let bestScore = 0;
-    for (const [type, keywords] of Object.entries(INTERVENTION_KEYWORDS)) {
-      const score = keywords.filter((kw) => lower.includes(kw)).length;
-      if (score > bestScore) { bestScore = score; bestMatch = type; }
-    }
-    return bestMatch;
-  }
+describe("keyword classification (production import)", () => {
+  let classifyAction: (text: string) => string | null;
+
+  beforeAll(async () => {
+    const mod = await import("../services/recommendation-learning");
+    classifyAction = mod.classifyAction;
+  });
 
   it("classifies referral keywords", () => {
     expect(classifyAction("Launched bring a friend campaign")).toBe("referral");

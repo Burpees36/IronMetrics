@@ -253,7 +253,7 @@ const INTERVENTION_KEYWORDS: Record<string, string[]> = {
   marketing: ["market", "social proof", "content", "testimonial", "local partner"],
 };
 
-function classifyAction(text: string): string | null {
+export function classifyAction(text: string): string | null {
   const lower = text.toLowerCase();
   let bestMatch: string | null = null;
   let bestScore = 0;

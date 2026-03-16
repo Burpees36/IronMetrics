@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import React from "react";
 
@@ -140,11 +141,13 @@ describe("Members Page", () => {
   async function importAndRender() {
     const mod = await import("../pages/Members");
     const Members = mod.default || mod.Members;
-    return render(
+    const user = userEvent.setup();
+    const result = render(
       <QueryClientProvider client={queryClient}>
         <Members />
       </QueryClientProvider>
     );
+    return { ...result, user };
   }
 
   it("shows loader when data is loading", async () => {
@@ -229,5 +232,26 @@ describe("Members Page", () => {
     mockUseListMembers.mockReturnValue({ data: undefined, isLoading: false, error: null });
     await importAndRender();
     expect(document.body).toBeDefined();
+  });
+
+  it("search input filters by typing", async () => {
+    mockUseListMembers.mockReturnValue({ data: MOCK_MEMBERS, isLoading: false, error: null });
+    const { user } = await importAndRender();
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText("Search members...")).toBeInTheDocument();
+    });
+    const input = screen.getByPlaceholderText("Search members...");
+    await user.type(input, "Alice");
+    expect(input).toHaveValue("Alice");
+  });
+
+  it("displays header title and subtitle", async () => {
+    mockUseListMembers.mockReturnValue({ data: MOCK_MEMBERS, isLoading: false, error: null });
+    await importAndRender();
+    await waitFor(() => {
+      const text = document.body.textContent || "";
+      expect(text).toContain("Directory");
+      expect(text).toContain("Manage your gym");
+    });
   });
 });

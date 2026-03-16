@@ -73,7 +73,7 @@ function parseGymId(params: any): number | null {
  *
  * @returns RSI score, band label, raw component values, and a detailed breakdown.
  */
-function computeRSI(churnRate: number, avgRevPerMember: number, netGrowth: number, avgTenure: number) {
+export function computeRSI(churnRate: number, avgRevPerMember: number, netGrowth: number, avgTenure: number) {
   // Normalize each component to a 0–100 scale
   const churnNorm = Math.max(0, Math.min(100, 100 - churnRate * 10));           // 10% churn → 0 score
   const revNorm = Math.min(100, (avgRevPerMember / 200) * 100);                 // $200/member → full score
@@ -164,18 +164,25 @@ async function getGymMetrics(gymId: number) {
  * @param gymId - The gym to generate risk profiles for.
  * @returns Array of risk profiles sorted by riskScore descending (highest risk first).
  */
+export function calculateRiskScore(daysSinceLastVisit: number, attendanceCount30d: number | null, storedRiskScore?: string | null): number {
+  const attendanceDecay = Math.min(1, daysSinceLastVisit / 30);
+  if (storedRiskScore) return parseFloat(storedRiskScore);
+  return Math.min(100, attendanceDecay * 60 + (attendanceCount30d !== null && attendanceCount30d < 3 ? 25 : 0));
+}
+
+export function getRiskTier(riskScore: number): string {
+  return riskScore >= 80 ? "critical" : riskScore >= 60 ? "high" : riskScore >= 35 ? "moderate" : riskScore >= 15 ? "low" : "healthy";
+}
+
 async function getRiskProfiles(gymId: number) {
   const members = await db.select().from(membersTable).where(and(eq(membersTable.gymId, gymId), eq(membersTable.status, "active")));
 
   return members.map((m) => {
     const now = new Date();
-    // Calculate days since last gym visit; default to 999 if no visit recorded
     const daysSinceLastVisit = m.lastVisitDate ? Math.floor((now.getTime() - new Date(m.lastVisitDate).getTime()) / (1000 * 60 * 60 * 24)) : 999;
-    // Attendance decay: linearly 0→1 over 30 days of no visits
     const attendanceDecay = Math.min(1, daysSinceLastVisit / 30);
-    // Risk score: decay contributes up to 60 pts, low attendance adds 25 pts
-    const riskScore = m.riskScore ? parseFloat(m.riskScore) : Math.min(100, attendanceDecay * 60 + (m.attendanceCount30d !== null && m.attendanceCount30d < 3 ? 25 : 0));
-    const riskTier = riskScore >= 80 ? "critical" : riskScore >= 60 ? "high" : riskScore >= 35 ? "moderate" : riskScore >= 15 ? "low" : "healthy";
+    const riskScore = calculateRiskScore(daysSinceLastVisit, m.attendanceCount30d, m.riskScore);
+    const riskTier = getRiskTier(riskScore);
 
     const signals: string[] = [];
     if (daysSinceLastVisit > 14) signals.push(`No visit in ${daysSinceLastVisit} days`);

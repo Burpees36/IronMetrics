@@ -206,20 +206,20 @@ const VALID_STATUSES = ["active", "inactive", "hold", "cancelled", "prospect"];
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 
-function normalizePhone(phone: string): string {
+export function normalizePhone(phone: string): string {
   const digits = phone.replace(/[^\d+]/g, "");
   if (digits.length === 10) return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
   return digits || phone.trim();
 }
 
-function isValidCalendarDate(dateStr: string): boolean {
+export function isValidCalendarDate(dateStr: string): boolean {
   const d = new Date(dateStr + "T00:00:00");
   if (isNaN(d.getTime())) return false;
   const [y, m, day] = dateStr.split("-").map(Number);
   return d.getFullYear() === y && d.getMonth() + 1 === m && d.getDate() === day;
 }
 
-function parseImportDate(val: string): string | null {
+export function parseImportDate(val: string): string | null {
   if (!val) return null;
   const trimmed = val.trim();
   if (DATE_REGEX.test(trimmed)) {
@@ -273,7 +273,7 @@ function safeStr(val: any): string {
   return String(val);
 }
 
-function sanitizeRow(row: ImportRow): ImportRow {
+export function sanitizeRow(row: ImportRow): ImportRow {
   return {
     firstName: safeStr(row.firstName),
     lastName: safeStr(row.lastName),
@@ -293,7 +293,7 @@ function sanitizeRow(row: ImportRow): ImportRow {
   };
 }
 
-function validateRow(row: ImportRow, rowIndex: number): Omit<ValidatedRow, "isDuplicate" | "duplicateOf"> {
+export function validateRow(row: ImportRow, rowIndex: number): Omit<ValidatedRow, "isDuplicate" | "duplicateOf"> {
   const safe = sanitizeRow(row);
   const errors: string[] = [];
   if (!safe.firstName?.trim()) errors.push("First name is required");
