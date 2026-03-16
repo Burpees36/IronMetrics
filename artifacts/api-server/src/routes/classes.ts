@@ -22,7 +22,7 @@ router.get("/gyms/:gymId/classes", async (req, res): Promise<void> => {
   const gymId = parseGymId(req.params);
   if (!gymId) { res.status(400).json({ error: "Invalid gym ID" }); return; }
 
-  const role = (req as any).gymRole as ScheduleRole;
+  const role = req.gymRole as ScheduleRole;
 
   let conditions: any[] = [eq(classesTable.gymId, gymId)];
   if (req.query.startDate) conditions.push(gte(classesTable.startTime, new Date(req.query.startDate as string)));
@@ -83,7 +83,7 @@ router.get("/gyms/:gymId/classes/:classId", async (req, res): Promise<void> => {
   const classId = parseClassId(req.params);
   if (!gymId || !classId) { res.status(400).json({ error: "Invalid IDs" }); return; }
 
-  const role = (req as any).gymRole as ScheduleRole;
+  const role = req.gymRole as ScheduleRole;
 
   const [gymClass] = await db.select().from(classesTable).where(and(eq(classesTable.id, classId), eq(classesTable.gymId, gymId)));
   if (!gymClass) { res.status(404).json({ error: "Class not found" }); return; }

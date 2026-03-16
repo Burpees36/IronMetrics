@@ -5100,10 +5100,12 @@ components:
           type: number
         revenueGrowth:
           type: number
-        avgAttendancePerWeek:
+        engagementRate:
           type: number
-        attendanceGrowth:
+          description: Percentage of active members who checked in at least once in the trailing 7 days
+        engagementChange:
           type: number
+          description: Week-over-week change in engagement rate (percentage points)
         classesThisWeek:
           type: integer
         openLeads:
@@ -5165,8 +5167,8 @@ components:
         - mrrGrowth
         - totalRevenue
         - revenueGrowth
-        - avgAttendancePerWeek
-        - attendanceGrowth
+        - engagementRate
+        - engagementChange
         - classesThisWeek
         - openLeads
         - atRiskMembers

@@ -3013,8 +3013,14 @@ export const GetDashboardStatsResponse = zod.object({
   mrrGrowth: zod.number(),
   totalRevenue: zod.number(),
   revenueGrowth: zod.number(),
-  avgAttendancePerWeek: zod.number(),
-  attendanceGrowth: zod.number(),
+  engagementRate: zod
+    .number()
+    .describe(
+      "Percentage of active members who checked in at least once in the trailing 7 days",
+    ),
+  engagementChange: zod
+    .number()
+    .describe("Week-over-week change in engagement rate (percentage points)"),
   classesThisWeek: zod.number(),
   openLeads: zod.number(),
   atRiskMembers: zod.number(),

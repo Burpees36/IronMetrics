@@ -52,7 +52,7 @@ export function requireProgrammingWrite() {
       return;
     }
 
-    (req as any).programmingRole = role;
+    req.programmingRole = role;
     next();
   };
 }
@@ -80,7 +80,7 @@ export function requireProgrammingRead() {
       return;
     }
 
-    (req as any).programmingRole = role;
+    req.programmingRole = role;
     next();
   };
 }

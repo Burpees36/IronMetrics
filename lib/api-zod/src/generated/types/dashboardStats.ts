@@ -17,8 +17,10 @@ export interface DashboardStats {
   mrrGrowth: number;
   totalRevenue: number;
   revenueGrowth: number;
-  avgAttendancePerWeek: number;
-  attendanceGrowth: number;
+  /** Percentage of active members who checked in at least once in the trailing 7 days */
+  engagementRate: number;
+  /** Week-over-week change in engagement rate (percentage points) */
+  engagementChange: number;
   classesThisWeek: number;
   openLeads: number;
   atRiskMembers: number;

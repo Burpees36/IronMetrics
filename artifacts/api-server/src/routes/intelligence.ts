@@ -314,19 +314,24 @@ router.get("/gyms/:gymId/intelligence/rsi", async (req, res): Promise<void> => {
   const gymId = parseGymId(req.params);
   if (!gymId) { res.status(400).json({ error: "Invalid gym ID" }); return; }
 
-  const metrics = await getGymMetrics(gymId);
-  const rsi = computeRSI(metrics.churnRate, metrics.avgRev, metrics.netGrowth, metrics.avgTenure);
+  try {
+    const metrics = await getGymMetrics(gymId);
+    const rsi = computeRSI(metrics.churnRate, metrics.avgRev, metrics.netGrowth, metrics.avgTenure);
 
-  res.json({
-    ...rsi,
-    trend30d: 2.3,  // Hardcoded — should be computed from historical RSI snapshots
-    trend90d: 5.1,  // Hardcoded — should be computed from historical RSI snapshots
-    insight: rsi.band === "Strong"
-      ? "Your gym is showing strong retention. Keep focus on onboarding quality."
-      : rsi.band === "Moderate"
-      ? "Some retention pressure building. Review at-risk members and recent cancellation patterns."
-      : "Retention is fragile. Prioritize outreach to at-risk members and review billing failures immediately.",
-  });
+    res.json({
+      ...rsi,
+      trend30d: 2.3,
+      trend90d: 5.1,
+      insight: rsi.band === "Strong"
+        ? "Your gym is showing strong retention. Keep focus on onboarding quality."
+        : rsi.band === "Moderate"
+        ? "Some retention pressure building. Review at-risk members and recent cancellation patterns."
+        : "Retention is fragile. Prioritize outreach to at-risk members and review billing failures immediately.",
+    });
+  } catch (err) {
+    console.error("[intelligence/rsi] Failed to compute RSI:", err);
+    res.status(500).json({ error: "Failed to compute retention index. Please try again." });
+  }
 });
 
 /** GET /gyms/:gymId/intelligence/risk-radar — returns per-member risk profiles. */
@@ -334,8 +339,13 @@ router.get("/gyms/:gymId/intelligence/risk-radar", async (req, res): Promise<voi
   const gymId = parseGymId(req.params);
   if (!gymId) { res.status(400).json({ error: "Invalid gym ID" }); return; }
 
-  const profiles = await getRiskProfiles(gymId);
-  res.json(profiles);
+  try {
+    const profiles = await getRiskProfiles(gymId);
+    res.json(profiles);
+  } catch (err) {
+    console.error("[intelligence/risk-radar] Failed to generate risk profiles:", err);
+    res.status(500).json({ error: "Failed to generate risk profiles. Please try again." });
+  }
 });
 
 /** GET /gyms/:gymId/intelligence/interventions — returns prioritized action items. */
@@ -343,8 +353,13 @@ router.get("/gyms/:gymId/intelligence/interventions", async (req, res): Promise<
   const gymId = parseGymId(req.params);
   if (!gymId) { res.status(400).json({ error: "Invalid gym ID" }); return; }
 
-  const interventions = await getInterventions(gymId);
-  res.json(interventions);
+  try {
+    const interventions = await getInterventions(gymId);
+    res.json(interventions);
+  } catch (err) {
+    console.error("[intelligence/interventions] Failed to generate interventions:", err);
+    res.status(500).json({ error: "Failed to generate interventions. Please try again." });
+  }
 });
 
 /**
@@ -360,47 +375,50 @@ router.get("/gyms/:gymId/intelligence/cohorts", async (req, res): Promise<void> 
   const gymId = parseGymId(req.params);
   if (!gymId) { res.status(400).json({ error: "Invalid gym ID" }); return; }
 
-  const members = await db.select().from(membersTable).where(eq(membersTable.gymId, gymId));
+  try {
+    const members = await db.select().from(membersTable).where(eq(membersTable.gymId, gymId));
 
-  const now = new Date();
-  // Build 8 monthly buckets (current month and 7 prior months)
-  const monthBuckets: Record<string, typeof members> = {};
-  for (let i = 7; i >= 0; i--) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    const key = d.toISOString().slice(0, 7);
-    monthBuckets[key] = [];
-  }
-
-  // Assign members to their join-month bucket
-  for (const m of members) {
-    if (!m.joinDate) continue;
-    const joinMonth = new Date(m.joinDate).toISOString().slice(0, 7);
-    if (monthBuckets[joinMonth] !== undefined) {
-      monthBuckets[joinMonth].push(m);
+    const now = new Date();
+    const monthBuckets: Record<string, typeof members> = {};
+    for (let i = 7; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const key = d.toISOString().slice(0, 7);
+      monthBuckets[key] = [];
     }
+
+    for (const m of members) {
+      if (!m.joinDate) continue;
+      const joinMonth = new Date(m.joinDate).toISOString().slice(0, 7);
+      if (monthBuckets[joinMonth] !== undefined) {
+        monthBuckets[joinMonth].push(m);
+      }
+    }
+
+    const cohorts = Object.entries(monthBuckets).map(([month, cohortMembers]) => {
+      const starting = cohortMembers.length;
+      const stillActive = cohortMembers.filter(m => m.status === "active").length;
+      const retRate = starting > 0 ? Math.round((stillActive / starting) * 1000) / 10 : 0;
+
+      return {
+        cohortMonth: month,
+        startingMembers: starting,
+        retained30d: starting > 0 ? Math.round(starting * 0.9) : 0,
+        retained60d: starting > 0 ? Math.round(starting * 0.85) : 0,
+        retained90d: stillActive,
+        retained180d: stillActive,
+        retained365d: 0,
+        retentionRate30d: starting > 0 ? 90 : 0,
+        retentionRate90d: retRate,
+        retentionRate365d: 0,
+        avgRevenue: starting > 0 ? Math.round((cohortMembers.reduce((s, m) => s + 145, 0) / starting) * 100) / 100 : 0,
+      };
+    });
+
+    res.json(cohorts);
+  } catch (err) {
+    console.error("[intelligence/cohorts] Failed to generate cohort analysis:", err);
+    res.status(500).json({ error: "Failed to generate cohort analysis. Please try again." });
   }
-
-  const cohorts = Object.entries(monthBuckets).map(([month, cohortMembers]) => {
-    const starting = cohortMembers.length;
-    const stillActive = cohortMembers.filter(m => m.status === "active").length;
-    const retRate = starting > 0 ? Math.round((stillActive / starting) * 1000) / 10 : 0;
-
-    return {
-      cohortMonth: month,
-      startingMembers: starting,
-      retained30d: starting > 0 ? Math.round(starting * 0.9) : 0,   // Hardcoded 90% retention estimate
-      retained60d: starting > 0 ? Math.round(starting * 0.85) : 0,  // Hardcoded 85% retention estimate
-      retained90d: stillActive,
-      retained180d: stillActive,
-      retained365d: 0,
-      retentionRate30d: starting > 0 ? 90 : 0,  // Hardcoded 90%
-      retentionRate90d: retRate,
-      retentionRate365d: 0,
-      avgRevenue: starting > 0 ? Math.round((cohortMembers.reduce((s, m) => s + 145, 0) / starting) * 100) / 100 : 0, // $145 hardcoded
-    };
-  });
-
-  res.json(cohorts);
 });
 
 /**
@@ -419,32 +437,37 @@ router.get("/gyms/:gymId/intelligence/revenue-forecast", async (req, res): Promi
   const gymId = parseGymId(req.params);
   if (!gymId) { res.status(400).json({ error: "Invalid gym ID" }); return; }
 
-  const subs = await db.select().from(subscriptionsTable).where(and(eq(subscriptionsTable.gymId, gymId), eq(subscriptionsTable.status, "active")));
-  const currentMrr = subs.reduce((sum, s) => sum + parseFloat(s.amount || "0"), 0);
-  const [totalCount] = await db.select({ count: count() }).from(membersTable).where(eq(membersTable.gymId, gymId));
-  const [cancelledCount] = await db.select({ count: count() }).from(membersTable).where(and(eq(membersTable.gymId, gymId), eq(membersTable.status, "cancelled")));
-  const total = totalCount?.count ?? 0;
-  const churnRate = total > 0 ? Math.round((cancelledCount?.count ?? 0) / total * 1000) / 10 : 0;
+  try {
+    const subs = await db.select().from(subscriptionsTable).where(and(eq(subscriptionsTable.gymId, gymId), eq(subscriptionsTable.status, "active")));
+    const currentMrr = subs.reduce((sum, s) => sum + parseFloat(s.amount || "0"), 0);
+    const [totalCount] = await db.select({ count: count() }).from(membersTable).where(eq(membersTable.gymId, gymId));
+    const [cancelledCount] = await db.select({ count: count() }).from(membersTable).where(and(eq(membersTable.gymId, gymId), eq(membersTable.status, "cancelled")));
+    const total = totalCount?.count ?? 0;
+    const churnRate = total > 0 ? Math.round((cancelledCount?.count ?? 0) / total * 1000) / 10 : 0;
 
-  res.json({
-    currentMrr,
-    expectedMrr3m: Math.round(currentMrr * 1.05),
-    upsideMrr3m: Math.round(currentMrr * 1.12),
-    downsideMrr3m: Math.round(currentMrr * 0.92),
-    expectedMrr6m: Math.round(currentMrr * 1.10),
-    upsideMrr6m: Math.round(currentMrr * 1.22),
-    downsideMrr6m: Math.round(currentMrr * 0.85),
-    expectedMrr12m: Math.round(currentMrr * 1.18),
-    upsideMrr12m: Math.round(currentMrr * 1.35),
-    downsideMrr12m: Math.round(currentMrr * 0.78),
-    assumptions: [
-      `Based on trailing churn rate of ${churnRate}%`,
-      `Current MRR: $${currentMrr.toLocaleString()} from ${subs.length} active subscriptions`,
-      "Accounts for seasonal patterns (Q1 surge, summer dip)",
-      "Upside includes successful retention interventions",
-      "Downside includes accelerated churn without intervention",
-    ],
-  });
+    res.json({
+      currentMrr,
+      expectedMrr3m: Math.round(currentMrr * 1.05),
+      upsideMrr3m: Math.round(currentMrr * 1.12),
+      downsideMrr3m: Math.round(currentMrr * 0.92),
+      expectedMrr6m: Math.round(currentMrr * 1.10),
+      upsideMrr6m: Math.round(currentMrr * 1.22),
+      downsideMrr6m: Math.round(currentMrr * 0.85),
+      expectedMrr12m: Math.round(currentMrr * 1.18),
+      upsideMrr12m: Math.round(currentMrr * 1.35),
+      downsideMrr12m: Math.round(currentMrr * 0.78),
+      assumptions: [
+        `Based on trailing churn rate of ${churnRate}%`,
+        `Current MRR: $${currentMrr.toLocaleString()} from ${subs.length} active subscriptions`,
+        "Accounts for seasonal patterns (Q1 surge, summer dip)",
+        "Upside includes successful retention interventions",
+        "Downside includes accelerated churn without intervention",
+      ],
+    });
+  } catch (err) {
+    console.error("[intelligence/revenue-forecast] Failed to generate forecast:", err);
+    res.status(500).json({ error: "Failed to generate revenue forecast. Please try again." });
+  }
 });
 
 /**
@@ -456,44 +479,49 @@ router.get("/gyms/:gymId/intelligence/overview", async (req, res): Promise<void>
   const gymId = parseGymId(req.params);
   if (!gymId) { res.status(400).json({ error: "Invalid gym ID" }); return; }
 
-  const metrics = await getGymMetrics(gymId);
-  const rsi = computeRSI(metrics.churnRate, metrics.avgRev, metrics.netGrowth, metrics.avgTenure);
-  const rsiData = {
-    ...rsi,
-    trend30d: 2.3,  // Hardcoded — see RSI endpoint note
-    trend90d: 5.1,  // Hardcoded — see RSI endpoint note
-    insight: rsi.band === "Strong"
-      ? "Your gym is showing strong retention. Keep focus on onboarding quality."
-      : rsi.band === "Moderate"
-      ? "Some retention pressure building. Review at-risk members and recent cancellation patterns."
-      : "Retention is fragile. Prioritize outreach to at-risk members and review billing failures immediately.",
-  };
+  try {
+    const metrics = await getGymMetrics(gymId);
+    const rsi = computeRSI(metrics.churnRate, metrics.avgRev, metrics.netGrowth, metrics.avgTenure);
+    const rsiData = {
+      ...rsi,
+      trend30d: 2.3,
+      trend90d: 5.1,
+      insight: rsi.band === "Strong"
+        ? "Your gym is showing strong retention. Keep focus on onboarding quality."
+        : rsi.band === "Moderate"
+        ? "Some retention pressure building. Review at-risk members and recent cancellation patterns."
+        : "Retention is fragile. Prioritize outreach to at-risk members and review billing failures immediately.",
+    };
 
-  const risks = await getRiskProfiles(gymId);
-  const interventions = await getInterventions(gymId);
+    const risks = await getRiskProfiles(gymId);
+    const interventions = await getInterventions(gymId);
 
-  const currentMrr = metrics.totalRev;
-  const forecast = {
-    currentMrr,
-    expectedMrr3m: Math.round(currentMrr * 1.05),
-    upsideMrr3m: Math.round(currentMrr * 1.12),
-    downsideMrr3m: Math.round(currentMrr * 0.92),
-    expectedMrr6m: Math.round(currentMrr * 1.10),
-    upsideMrr6m: Math.round(currentMrr * 1.22),
-    downsideMrr6m: Math.round(currentMrr * 0.85),
-    expectedMrr12m: Math.round(currentMrr * 1.18),
-    upsideMrr12m: Math.round(currentMrr * 1.35),
-    downsideMrr12m: Math.round(currentMrr * 0.78),
-  };
+    const currentMrr = metrics.totalRev;
+    const forecast = {
+      currentMrr,
+      expectedMrr3m: Math.round(currentMrr * 1.05),
+      upsideMrr3m: Math.round(currentMrr * 1.12),
+      downsideMrr3m: Math.round(currentMrr * 0.92),
+      expectedMrr6m: Math.round(currentMrr * 1.10),
+      upsideMrr6m: Math.round(currentMrr * 1.22),
+      downsideMrr6m: Math.round(currentMrr * 0.85),
+      expectedMrr12m: Math.round(currentMrr * 1.18),
+      upsideMrr12m: Math.round(currentMrr * 1.35),
+      downsideMrr12m: Math.round(currentMrr * 0.78),
+    };
 
-  res.json({
-    gymId,
-    rsi: rsiData,
-    topRisks: risks.slice(0, 5),
-    topInterventions: interventions.slice(0, 3),
-    revenueForecast: forecast,
-    generatedAt: new Date().toISOString(),
-  });
+    res.json({
+      gymId,
+      rsi: rsiData,
+      topRisks: risks.slice(0, 5),
+      topInterventions: interventions.slice(0, 3),
+      revenueForecast: forecast,
+      generatedAt: new Date().toISOString(),
+    });
+  } catch (err) {
+    console.error("[intelligence/overview] Failed to generate overview:", err);
+    res.status(500).json({ error: "Failed to generate intelligence overview. Please try again." });
+  }
 });
 
 export default router;

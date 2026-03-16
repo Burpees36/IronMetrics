@@ -15,9 +15,9 @@
  * middleware because Stripe signature verification requires the raw
  * request body as a Buffer.
  *
- * Known weakness: CORS is configured with `origin: true`, which reflects
- * any requesting origin. In production this should be locked down to a
- * whitelist of allowed origins.
+ * CORS is configured via the ALLOWED_ORIGINS environment variable
+ * (comma-separated list of allowed origins). When not set, it defaults
+ * to allowing *.replit.dev and localhost for development.
  */
 import express, { type Express } from "express";
 import cors from "cors";
@@ -69,9 +69,20 @@ app.post(
 );
 
 // --- Global middleware ---
-// Known weakness: `origin: true` mirrors any origin, making CORS effectively open.
-// Should be restricted to known frontend domains in production.
-app.use(cors({ credentials: true, origin: true }));
+const allowedOrigins = process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(",").map((o) => o.trim())
+  : [/\.replit\.dev$/, /localhost/];
+
+app.use(cors({
+  credentials: true,
+  origin: (origin, callback) => {
+    if (!origin) return callback(null, true);
+    const allowed = allowedOrigins.some((o) =>
+      o instanceof RegExp ? o.test(origin) : o === origin
+    );
+    callback(null, allowed);
+  },
+}));
 app.use(cookieParser());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));

@@ -39,10 +39,26 @@ router.get("/gyms/:gymId/reports/dashboard", async (req, res): Promise<void> => 
 
   const now = new Date();
   const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+  const twoWeeksAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
   const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
 
+  /**
+   * Member Engagement Rate: percentage of active members who checked in
+   * at least once in the trailing 7 days. This answers the question every
+   * gym owner cares about: "how many of my paying members are showing up?"
+   *
+   * Formula: (unique members with ≥1 check-in this week / total active members) × 100
+   *
+   * Also computes the prior-week engagement rate for a week-over-week
+   * change indicator on the dashboard KPI card.
+   */
   const weeklyAttendance = await db.select().from(attendanceTable).where(and(eq(attendanceTable.gymId, gymId), gte(attendanceTable.checkinTime, weekAgo)));
-  const avgAttendancePerWeek = weeklyAttendance.length;
+  const uniqueMembersThisWeek = new Set(weeklyAttendance.map(a => a.memberId)).size;
+
+  const priorWeekAttendance = await db.select().from(attendanceTable).where(
+    and(eq(attendanceTable.gymId, gymId), gte(attendanceTable.checkinTime, twoWeeksAgo), sql`${attendanceTable.checkinTime} < ${weekAgo}`)
+  );
+  const uniqueMembersPriorWeek = new Set(priorWeekAttendance.map(a => a.memberId)).size;
 
   const [classesThisWeek] = await db.select({ count: count() }).from(classesTable).where(and(eq(classesTable.gymId, gymId), gte(classesTable.startTime, weekAgo)));
 
@@ -60,6 +76,10 @@ router.get("/gyms/:gymId/reports/dashboard", async (req, res): Promise<void> => 
       sql`(${membersTable.riskTier} = 'critical' OR ${membersTable.riskTier} = 'high')`)
   );
   const atRiskCount = atRiskMembers[0]?.count ?? 0;
+
+  const engagementRate = active > 0 ? Math.round((uniqueMembersThisWeek / active) * 1000) / 10 : 0;
+  const priorEngagementRate = active > 0 ? Math.round((uniqueMembersPriorWeek / active) * 1000) / 10 : 0;
+  const engagementChange = Math.round((engagementRate - priorEngagementRate) * 10) / 10;
 
   const avgRevPerMember = subs.length > 0 ? mrr / subs.length : 0;
   const netGrowth = active - cancelled;
@@ -103,8 +123,8 @@ router.get("/gyms/:gymId/reports/dashboard", async (req, res): Promise<void> => 
     mrrGrowth: mrr > 0 ? Math.round(churnRate > 0 ? -churnRate : 2.0) : 0,
     totalRevenue: mrr * 12,
     revenueGrowth: mrr > 0 ? Math.round((1 - churnRate / 100) * 100) / 10 : 0,
-    avgAttendancePerWeek,
-    attendanceGrowth: 0,
+    engagementRate,
+    engagementChange,
     classesThisWeek: classesThisWeek?.count ?? 0,
     openLeads: openLeadCount?.count ?? 0,
     atRiskMembers: atRiskCount,
