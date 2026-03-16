@@ -44,8 +44,7 @@ router.get("/gyms/:gymId/reports/dashboard", async (req, res): Promise<void> => 
 
   /**
    * Member Engagement Rate: percentage of active members who checked in
-   * at least once in the trailing 7 days. This answers the question every
-   * gym owner cares about: "how many of my paying members are showing up?"
+   * at least once in the trailing 7 days. 
    *
    * Formula: (unique members with ≥1 check-in this week / total active members) × 100
    *
