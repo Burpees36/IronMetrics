@@ -18,6 +18,7 @@ let mockSubs: any[] = [];
 let mockLeads: any[] = [];
 let mockAttendance: any[] = [];
 let mockTasks: any[] = [];
+let mockInvoices: any[] = [];
 
 vi.mock("@workspace/db", () => {
   function resolveField(colRef: any): string {
@@ -43,6 +44,7 @@ vi.mock("@workspace/db", () => {
     if (tn === "leads") return mockLeads;
     if (tn === "attendance") return mockAttendance;
     if (tn === "ai_tasks") return mockTasks;
+    if (tn === "invoices") return mockInvoices;
     return [];
   }
   const db: any = {
@@ -79,6 +81,7 @@ vi.mock("@workspace/db", () => {
     leadsTable: makeTable("leads"),
     attendanceTable: makeTable("attendance"),
     aiTasksTable: makeTable("ai_tasks"),
+    invoicesTable: makeTable("invoices"),
   };
 });
 
@@ -119,6 +122,7 @@ describe("Intelligence route handlers", () => {
     mockLeads = [];
     mockAttendance = [];
     mockTasks = [];
+    mockInvoices = [];
     const mod = await import("../routes/intelligence");
     router = mod.default;
   });

@@ -70,7 +70,7 @@ router.get("/gyms/:gymId/plans", requireBillingRead(), async (req, res): Promise
         .select({ count: count() })
         .from(subscriptionsTable)
         .where(and(eq(subscriptionsTable.planId, p.id), eq(subscriptionsTable.status, "active")));
-      return { ...p, price: parseFloat(p.price), memberCount: memberCountResult?.count ?? 0 };
+      return { ...p, price: parseFloat(p.price), memberCount: Number(memberCountResult?.count ?? 0) };
     })
   );
 

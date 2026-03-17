@@ -54,8 +54,8 @@ router.get("/gyms", async (req, res): Promise<void> => {
       .where(and(eq(membersTable.gymId, gymId), eq(membersTable.status, "active")));
     gyms.push({
       ...gym,
-      memberCount: memberCountResult?.count ?? 0,
-      activeCount: activeCountResult?.count ?? 0,
+      memberCount: Number(memberCountResult?.count ?? 0),
+      activeCount: Number(activeCountResult?.count ?? 0),
     });
   }
 
@@ -125,8 +125,8 @@ router.get("/gyms/:gymId", async (req, res): Promise<void> => {
 
   res.json({
     ...gym,
-    memberCount: memberCountResult?.count ?? 0,
-    activeCount: activeCountResult?.count ?? 0,
+    memberCount: Number(memberCountResult?.count ?? 0),
+    activeCount: Number(activeCountResult?.count ?? 0),
   });
 });
 
@@ -188,8 +188,8 @@ router.patch("/gyms/:gymId", async (req, res): Promise<void> => {
 
   res.json({
     ...gym,
-    memberCount: memberCountResult?.count ?? 0,
-    activeCount: activeCountResult?.count ?? 0,
+    memberCount: Number(memberCountResult?.count ?? 0),
+    activeCount: Number(activeCountResult?.count ?? 0),
   });
 });
 

@@ -62,19 +62,19 @@ router.get("/gyms/:gymId/reports/dashboard", async (req, res): Promise<void> => 
   const [classesThisWeek] = await db.select({ count: count() }).from(classesTable).where(and(eq(classesTable.gymId, gymId), gte(classesTable.startTime, weekAgo)));
 
   const newMembersThisMonth = await db.select({ count: count() }).from(membersTable).where(and(eq(membersTable.gymId, gymId), gte(membersTable.joinDate, monthAgo.toISOString().split("T")[0])));
-  const newCount = newMembersThisMonth[0]?.count ?? 0;
+  const newCount = Number(newMembersThisMonth[0]?.count ?? 0);
 
-  const active = activeCount?.count ?? 0;
-  const cancelled = cancelledCount?.count ?? 0;
-  const hold = holdCount?.count ?? 0;
-  const total = totalCount?.count ?? 0;
+  const active = Number(activeCount?.count ?? 0);
+  const cancelled = Number(cancelledCount?.count ?? 0);
+  const hold = Number(holdCount?.count ?? 0);
+  const total = Number(totalCount?.count ?? 0);
   const churnRate = total > 0 ? Math.round((cancelled / total) * 1000) / 10 : 0;
 
   const atRiskMembers = await db.select({ count: count() }).from(membersTable).where(
     and(eq(membersTable.gymId, gymId), eq(membersTable.status, "active"),
       sql`(${membersTable.riskTier} = 'critical' OR ${membersTable.riskTier} = 'high')`)
   );
-  const atRiskCount = atRiskMembers[0]?.count ?? 0;
+  const atRiskCount = Number(atRiskMembers[0]?.count ?? 0);
 
   const engagementRate = active > 0 ? Math.round((uniqueMembersThisWeek / active) * 1000) / 10 : 0;
   const priorEngagementRate = active > 0 ? Math.round((uniqueMembersPriorWeek / active) * 1000) / 10 : 0;
@@ -85,10 +85,10 @@ router.get("/gyms/:gymId/reports/dashboard", async (req, res): Promise<void> => 
 
   const allMembersForTenure = await db.select().from(membersTable).where(eq(membersTable.gymId, gymId));
   const tenures = allMembersForTenure
-    .filter(m => m.joinDate)
+    .filter(m => m.joinDate || m.createdAt)
     .map(m => {
       const end = m.status === "cancelled" && m.updatedAt ? new Date(m.updatedAt) : now;
-      const start = new Date(m.joinDate!);
+      const start = new Date(m.joinDate || m.createdAt!);
       return Math.max(0, (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24 * 30));
     });
   const avgTenure = tenures.length > 0 ? Math.round((tenures.reduce((s, t) => s + t, 0) / tenures.length) * 10) / 10 : 0;
@@ -140,8 +140,8 @@ router.get("/gyms/:gymId/reports/dashboard", async (req, res): Promise<void> => 
     revenueGrowth: mrr > 0 ? Math.round((1 - churnRate / 100) * 100) / 10 : 0,
     engagementRate,
     engagementChange,
-    classesThisWeek: classesThisWeek?.count ?? 0,
-    openLeads: openLeadCount?.count ?? 0,
+    classesThisWeek: Number(classesThisWeek?.count ?? 0),
+    openLeads: Number(openLeadCount?.count ?? 0),
     atRiskMembers: atRiskCount,
     failedPayments: failedSubs.length,
     collectionRate,
@@ -166,10 +166,10 @@ router.get("/gyms/:gymId/reports/membership", async (req, res): Promise<void> =>
   const [cancelledCount] = await db.select({ count: count() }).from(membersTable).where(and(eq(membersTable.gymId, gymId), eq(membersTable.status, "cancelled")));
   const [totalCount] = await db.select({ count: count() }).from(membersTable).where(eq(membersTable.gymId, gymId));
 
-  const total = totalCount?.count ?? 0;
-  const active = activeCount?.count ?? 0;
-  const cancelled = cancelledCount?.count ?? 0;
-  const hold = holdCount?.count ?? 0;
+  const total = Number(totalCount?.count ?? 0);
+  const active = Number(activeCount?.count ?? 0);
+  const cancelled = Number(cancelledCount?.count ?? 0);
+  const hold = Number(holdCount?.count ?? 0);
   const churnRate = total > 0 ? Math.round((cancelled / total) * 1000) / 10 : 0;
 
   const now = new Date();
@@ -179,7 +179,7 @@ router.get("/gyms/:gymId/reports/membership", async (req, res): Promise<void> =>
   const plans = await db.select().from(membershipPlansTable).where(eq(membershipPlansTable.gymId, gymId));
   const byPlan = await Promise.all(plans.map(async (p) => {
     const [subCount] = await db.select({ count: count() }).from(subscriptionsTable).where(and(eq(subscriptionsTable.planId, p.id), eq(subscriptionsTable.status, "active")));
-    const memberCount = subCount?.count ?? 0;
+    const memberCount = Number(subCount?.count ?? 0);
     return {
       planName: p.name,
       count: memberCount,
@@ -191,10 +191,10 @@ router.get("/gyms/:gymId/reports/membership", async (req, res): Promise<void> =>
 
   const allMembersForTenure = await db.select().from(membersTable).where(eq(membersTable.gymId, gymId));
   const tenureValues = allMembersForTenure
-    .filter(m => m.joinDate)
+    .filter(m => m.joinDate || m.createdAt)
     .map(m => {
       const end = m.status === "cancelled" && m.updatedAt ? new Date(m.updatedAt) : now;
-      const start = new Date(m.joinDate!);
+      const start = new Date(m.joinDate || m.createdAt!);
       return Math.max(0, (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24 * 30));
     });
   const avgTenureMonths = tenureValues.length > 0 ? Math.round((tenureValues.reduce((s, t) => s + t, 0) / tenureValues.length) * 10) / 10 : 0;
@@ -204,7 +204,7 @@ router.get("/gyms/:gymId/reports/membership", async (req, res): Promise<void> =>
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
     months.push({
       month: d.toISOString().slice(0, 7),
-      newMembers: i === 0 ? (newThisMonth?.count ?? 0) : Math.max(0, active - i),
+      newMembers: i === 0 ? Number(newThisMonth?.count ?? 0) : Math.max(0, active - i),
       churned: i === 0 ? cancelled : 0,
       net: i === 0 ? netGrowth : Math.max(0, active - i),
     });
@@ -215,7 +215,7 @@ router.get("/gyms/:gymId/reports/membership", async (req, res): Promise<void> =>
     totalInactive: 0,
     totalOnHold: hold,
     totalCancelled: cancelled,
-    newThisMonth: newThisMonth?.count ?? 0,
+    newThisMonth: Number(newThisMonth?.count ?? 0),
     churnedThisMonth: cancelled,
     netGrowth,
     churnRate,
@@ -244,10 +244,10 @@ router.get("/gyms/:gymId/reports/revenue", async (req, res): Promise<void> => {
   const allMembersRev = await db.select().from(membersTable).where(eq(membersTable.gymId, gymId));
   const now = new Date();
   const tenuresRev = allMembersRev
-    .filter(m => m.joinDate)
+    .filter(m => m.joinDate || m.createdAt)
     .map(m => {
       const end = m.status === "cancelled" && m.updatedAt ? new Date(m.updatedAt) : now;
-      const start = new Date(m.joinDate!);
+      const start = new Date(m.joinDate || m.createdAt!);
       return Math.max(0, (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24 * 30));
     });
   const avgTenureRev = tenuresRev.length > 0 ? tenuresRev.reduce((s, t) => s + t, 0) / tenuresRev.length : 0;
@@ -318,7 +318,7 @@ router.get("/gyms/:gymId/reports/attendance", async (req, res): Promise<void> =>
   const peakTime = peakHour ? `${peakHour.hour > 12 ? peakHour.hour - 12 : peakHour.hour}:00 ${peakHour.hour >= 12 ? 'PM' : 'AM'}` : "N/A";
 
   const [classCount] = await db.select({ count: count() }).from(classesTable).where(eq(classesTable.gymId, gymId));
-  const totalCapacity = (classCount?.count ?? 1) * 20;
+  const totalCapacity = Number(classCount?.count ?? 1) * 20;
   const capacityUtilization = Math.round((totalRecords / Math.max(totalCapacity, 1)) * 100);
 
   const trend = [];

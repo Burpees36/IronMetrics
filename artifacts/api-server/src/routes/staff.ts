@@ -30,7 +30,7 @@ router.get("/gyms/:gymId/staff", async (req, res): Promise<void> => {
         .select({ count: count() })
         .from(classesTable)
         .where(and(eq(classesTable.coachId, s.id), eq(classesTable.gymId, gymId), sql`${classesTable.startTime} >= ${thirtyDaysAgo}`));
-      return { ...s, classCount30d: classCountResult?.count ?? 0 };
+      return { ...s, classCount30d: Number(classCountResult?.count ?? 0) };
     })
   );
 
@@ -64,7 +64,7 @@ router.post("/gyms/:gymId/staff", async (req, res): Promise<void> => {
     .select({ count: count() })
     .from(classesTable)
     .where(and(eq(classesTable.coachId, staff.id), eq(classesTable.gymId, gymId), sql`${classesTable.startTime} >= ${thirtyDaysAgo}`));
-  res.status(201).json({ ...staff, classCount30d: classCountResult?.count ?? 0 });
+  res.status(201).json({ ...staff, classCount30d: Number(classCountResult?.count ?? 0) });
 });
 
 router.patch("/gyms/:gymId/staff/:staffId", async (req, res): Promise<void> => {
@@ -102,7 +102,7 @@ router.patch("/gyms/:gymId/staff/:staffId", async (req, res): Promise<void> => {
     .select({ count: count() })
     .from(classesTable)
     .where(and(eq(classesTable.coachId, staff.id), eq(classesTable.gymId, gymId), sql`${classesTable.startTime} >= ${thirtyDaysAgo}`));
-  res.json({ ...staff, classCount30d: classCountResult?.count ?? 0 });
+  res.json({ ...staff, classCount30d: Number(classCountResult?.count ?? 0) });
 });
 
 router.delete("/gyms/:gymId/staff/:staffId", async (req, res): Promise<void> => {

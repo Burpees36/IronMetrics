@@ -61,26 +61,26 @@ async function computeStepStatus(gymId: number) {
     .select({ count: count() })
     .from(membershipPlansTable)
     .where(and(eq(membershipPlansTable.gymId, gymId), eq(membershipPlansTable.isActive, true)));
-  const plansComplete = (plans[0]?.count ?? 0) > 0;
+  const plansComplete = Number(plans[0]?.count ?? 0) > 0;
 
   const staffCount = await db
     .select({ count: count() })
     .from(gymStaffTable)
     .where(and(eq(gymStaffTable.gymId, gymId), eq(gymStaffTable.isActive, true)));
-  const staffComplete = (staffCount[0]?.count ?? 0) > 1;
+  const staffComplete = Number(staffCount[0]?.count ?? 0) > 1;
 
   const memberCount = await db
     .select({ count: count() })
     .from(membersTable)
     .where(eq(membersTable.gymId, gymId));
-  const membersComplete = (memberCount[0]?.count ?? 0) > 0;
+  const membersComplete = Number(memberCount[0]?.count ?? 0) > 0;
 
   const now = new Date();
   const upcomingClasses = await db
     .select({ count: count() })
     .from(classesTable)
     .where(and(eq(classesTable.gymId, gymId), gte(classesTable.startTime, now)));
-  const scheduleComplete = (upcomingClasses[0]?.count ?? 0) > 0;
+  const scheduleComplete = Number(upcomingClasses[0]?.count ?? 0) > 0;
 
   return {
     stepStatus: {
@@ -92,10 +92,10 @@ async function computeStepStatus(gymId: number) {
       finish: false,
     },
     counts: {
-      plans: plans[0]?.count ?? 0,
-      staff: staffCount[0]?.count ?? 0,
-      members: memberCount[0]?.count ?? 0,
-      upcomingClasses: upcomingClasses[0]?.count ?? 0,
+      plans: Number(plans[0]?.count ?? 0),
+      staff: Number(staffCount[0]?.count ?? 0),
+      members: Number(memberCount[0]?.count ?? 0),
+      upcomingClasses: Number(upcomingClasses[0]?.count ?? 0),
     },
   };
 }

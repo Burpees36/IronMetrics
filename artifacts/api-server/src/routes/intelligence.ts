@@ -109,9 +109,9 @@ export async function getGymMetrics(gymId: number) {
   const [cancelledCount] = await db.select({ count: count() }).from(membersTable).where(and(eq(membersTable.gymId, gymId), eq(membersTable.status, "cancelled")));
   const [totalCount] = await db.select({ count: count() }).from(membersTable).where(eq(membersTable.gymId, gymId));
 
-  const total = totalCount?.count ?? 0;
-  const active = activeCount?.count ?? 0;
-  const cancelled = cancelledCount?.count ?? 0;
+  const total = Number(totalCount?.count ?? 0);
+  const active = Number(activeCount?.count ?? 0);
+  const cancelled = Number(cancelledCount?.count ?? 0);
   const churnRate = total > 0 ? (cancelled / total) * 100 : 0;
 
   const subs = await db.select().from(subscriptionsTable).where(and(eq(subscriptionsTable.gymId, gymId), eq(subscriptionsTable.status, "active")));
@@ -122,10 +122,10 @@ export async function getGymMetrics(gymId: number) {
   const allMembers = await db.select().from(membersTable).where(eq(membersTable.gymId, gymId));
   const now = new Date();
   const tenures = allMembers
-    .filter(m => m.joinDate)
+    .filter(m => m.joinDate || m.createdAt)
     .map(m => {
       const end = m.status === "cancelled" && m.updatedAt ? new Date(m.updatedAt) : now;
-      const start = new Date(m.joinDate!);
+      const start = new Date(m.joinDate || m.createdAt!);
       return Math.max(0, (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24 * 30));
     });
   const avgTenure = tenures.length > 0 ? Math.round((tenures.reduce((s, t) => s + t, 0) / tenures.length) * 10) / 10 : 0;
@@ -205,7 +205,7 @@ export async function getRiskProfiles(gymId: number) {
       daysSinceLastVisit: daysSinceLastVisit < 999 ? daysSinceLastVisit : null,
       attendanceDecay: Math.round(attendanceDecay * 100) / 100,
       billingIssues: false,
-      tenure: m.joinDate ? Math.floor((new Date().getTime() - new Date(m.joinDate).getTime()) / (1000 * 60 * 60 * 24 * 30)) : 0,
+      tenure: (m.joinDate || m.createdAt) ? Math.floor((new Date().getTime() - new Date(m.joinDate || m.createdAt!).getTime()) / (1000 * 60 * 60 * 24 * 30)) : 0,
       signals,
       membershipType: m.membershipType,
       monthlyValue,
@@ -235,7 +235,7 @@ export async function getInterventions(gymId: number) {
     and(eq(membersTable.gymId, gymId), eq(membersTable.status, "active"),
       sql`(${membersTable.riskTier} = 'critical' OR ${membersTable.riskTier} = 'high')`)
   );
-  const atRiskCount = atRiskResult?.count ?? 0;
+  const atRiskCount = Number(atRiskResult?.count ?? 0);
 
   const [openLeadCount] = await db.select({ count: count() }).from(leadsTable).where(eq(leadsTable.gymId, gymId));
   const failedSubs = await db.select().from(subscriptionsTable).where(and(eq(subscriptionsTable.gymId, gymId), eq(subscriptionsTable.status, "past_due")));
@@ -298,11 +298,11 @@ export async function getInterventions(gymId: number) {
       id: "int-4",
       category: "leads",
       title: "Follow up on open leads",
-      description: `${openLeadCount?.count ?? 0} lead${(openLeadCount?.count ?? 0) !== 1 ? 's' : ''} in pipeline. Speed to lead matters for conversion.`,
+      description: `${Number(openLeadCount?.count ?? 0)} lead${Number(openLeadCount?.count ?? 0) !== 1 ? 's' : ''} in pipeline. Speed to lead matters for conversion.`,
       impact: "medium",
       urgency: "this_week" as const,
       score: 72,
-      expectedRevenue: avgSubAmount > 0 ? Math.round((openLeadCount?.count ?? 0) * avgSubAmount * 100) / 100 : null,
+      expectedRevenue: avgSubAmount > 0 ? Math.round(Number(openLeadCount?.count ?? 0) * avgSubAmount * 100) / 100 : null,
       affectedMembers: null,
       actions: ["Review lead pipeline for stale entries", "Send follow-up emails or texts", "Offer free trial or No Sweat Intro", "Remove or archive truly cold leads"],
       status: "pending",
@@ -571,8 +571,8 @@ router.get("/gyms/:gymId/intelligence/revenue-forecast", async (req, res): Promi
     const currentMrr = subs.reduce((sum, s) => sum + parseFloat(s.amount || "0"), 0);
     const [totalCount] = await db.select({ count: count() }).from(membersTable).where(eq(membersTable.gymId, gymId));
     const [cancelledCount] = await db.select({ count: count() }).from(membersTable).where(and(eq(membersTable.gymId, gymId), eq(membersTable.status, "cancelled")));
-    const total = totalCount?.count ?? 0;
-    const churnRate = total > 0 ? Math.round((cancelledCount?.count ?? 0) / total * 1000) / 10 : 0;
+    const total = Number(totalCount?.count ?? 0);
+    const churnRate = total > 0 ? Math.round(Number(cancelledCount?.count ?? 0) / total * 1000) / 10 : 0;
 
     const forecast = await computeRevenueForecast(gymId, currentMrr, churnRate, subs.length);
     res.json(forecast);
@@ -612,8 +612,8 @@ router.get("/gyms/:gymId/intelligence/overview", async (req, res): Promise<void>
     const currentMrr = metrics.totalRev;
     const [totalCount] = await db.select({ count: count() }).from(membersTable).where(eq(membersTable.gymId, gymId));
     const [cancelledCount] = await db.select({ count: count() }).from(membersTable).where(and(eq(membersTable.gymId, gymId), eq(membersTable.status, "cancelled")));
-    const total = totalCount?.count ?? 0;
-    const churnRate = total > 0 ? Math.round((cancelledCount?.count ?? 0) / total * 1000) / 10 : 0;
+    const total = Number(totalCount?.count ?? 0);
+    const churnRate = total > 0 ? Math.round(Number(cancelledCount?.count ?? 0) / total * 1000) / 10 : 0;
     const forecast = await computeRevenueForecast(gymId, currentMrr, churnRate, metrics.subs.length);
 
     res.json({

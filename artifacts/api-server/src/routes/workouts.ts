@@ -20,7 +20,7 @@ router.get("/gyms/:gymId/workouts", async (req, res): Promise<void> => {
   const workoutsWithCounts = await Promise.all(
     workouts.map(async (w) => {
       const [resultCountRes] = await db.select({ count: count() }).from(workoutResultsTable).where(eq(workoutResultsTable.workoutId, w.id));
-      return { ...w, resultCount: resultCountRes?.count ?? 0 };
+      return { ...w, resultCount: Number(resultCountRes?.count ?? 0) };
     })
   );
 

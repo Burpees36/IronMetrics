@@ -18,7 +18,7 @@ router.get("/gyms/:gymId/documents", async (req, res): Promise<void> => {
   const docs = await db.select().from(documentsTable).where(eq(documentsTable.gymId, gymId));
   const [totalMembersResult] = await db.select({ count: count() }).from(membersTable).where(eq(membersTable.gymId, gymId));
 
-  const totalMembers = totalMembersResult?.count ?? 0;
+  const totalMembers = Number(totalMembersResult?.count ?? 0);
 
   res.json(
     docs.map((d) => ({

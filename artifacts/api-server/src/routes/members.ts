@@ -58,7 +58,7 @@ router.get("/gyms/:gymId/members", async (req, res): Promise<void> => {
       ...m,
       riskScore: m.riskScore ? parseFloat(m.riskScore) : null,
     })),
-    total: totalResult?.count ?? 0,
+    total: Number(totalResult?.count ?? 0),
     limit,
     offset,
   });
