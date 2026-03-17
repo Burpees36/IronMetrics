@@ -679,9 +679,10 @@ router.get("/gyms/:gymId/intelligence/morning-briefing", async (req, res): Promi
       return false;
     });
     const activeLeads = allLeads.filter(l => l.stage !== "converted" && l.stage !== "lost");
+
+    const now = new Date();
     const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
     const newLeadsToday = allLeads.filter(l => new Date(l.createdAt) >= oneDayAgo && l.stage !== "converted" && l.stage !== "lost");
-
 
     const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
     const allAttendance = await db.select().from(attendanceTable).where(and(eq(attendanceTable.gymId, gymId), gte(attendanceTable.checkinTime, weekAgo)));
