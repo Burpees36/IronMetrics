@@ -6,7 +6,8 @@ import {
   RefreshCw, Loader2, Plus, ToggleLeft, ToggleRight, ChevronRight,
   Users, Mail, ClipboardList, Clock, Trash2, Play, Square,
   UserMinus, ArrowLeft, AlertCircle, CheckCircle2, XCircle,
-  Zap, Shield, Heart, Sparkles, Settings2, Activity
+  Zap, Shield, Heart, Sparkles, Settings2, Activity,
+  HelpCircle, X, Info, PauseCircle
 } from "lucide-react";
 
 const API_BASE = import.meta.env.VITE_API_URL || "";
@@ -70,12 +71,6 @@ interface SequenceEvent {
   memberLastName: string;
 }
 
-const TRIGGER_LABELS: Record<string, string> = {
-  no_attendance: "No attendance",
-  risk_score: "Risk score threshold",
-  new_member_decline: "New member declining",
-};
-
 const TYPE_ICONS: Record<string, typeof Zap> = {
   miss_you: Heart,
   check_in: Shield,
@@ -96,6 +91,147 @@ function apiFetch(url: string, opts?: RequestInit) {
   return fetch(`${API_BASE}${url}`, { credentials: "include", ...opts });
 }
 
+function TabHint({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex items-start gap-2 bg-muted/20 rounded-lg px-3 py-2.5 mb-3">
+      <HelpCircle className="h-3.5 w-3.5 text-muted-foreground mt-0.5 shrink-0" />
+      <p className="text-xs text-muted-foreground leading-relaxed">{children}</p>
+    </div>
+  );
+}
+
+function HowItWorksGuide({ onSeedDefaults, onDismiss, hasSequences }: {
+  onSeedDefaults: () => void;
+  onDismiss: () => void;
+  hasSequences: boolean;
+}) {
+  const [showFaq, setShowFaq] = useState(false);
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -8 }}
+      className="bg-gradient-to-br from-violet-500/10 via-card to-primary/5 border border-violet-500/20 rounded-2xl p-5 relative overflow-hidden"
+    >
+      <button onClick={onDismiss} className="absolute top-3 right-3 p-1 rounded-lg hover:bg-muted/50 text-muted-foreground hover:text-foreground transition-colors z-10">
+        <X className="h-3.5 w-3.5" />
+      </button>
+
+      <div className="flex items-center gap-2 mb-3">
+        <div className="h-7 w-7 bg-violet-500/15 rounded-lg flex items-center justify-center">
+          <Sparkles className="h-4 w-4 text-violet-500" />
+        </div>
+        <h3 className="text-sm font-semibold text-foreground">How Retention Automations Work</h3>
+      </div>
+
+      <p className="text-sm text-muted-foreground mb-5 leading-relaxed">
+        Retention sequences automatically reach out to members who are at risk of leaving — before they churn. The system monitors attendance and engagement, and when a member matches a trigger, it sends them a series of personalized emails and creates follow-up tasks for your staff.
+      </p>
+
+      <div className="grid gap-4 mb-5">
+        <div className="flex gap-3">
+          <div className="flex flex-col items-center">
+            <div className="h-7 w-7 rounded-full bg-primary/15 text-primary flex items-center justify-center text-xs font-bold shrink-0">1</div>
+            <div className="w-px flex-1 bg-border mt-1" />
+          </div>
+          <div className="pb-3">
+            <p className="text-sm font-medium text-foreground">Set up your sequences</p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {hasSequences
+                ? "You already have sequences created. Each one targets a different situation — members who stopped showing up, those at risk, or new members who are losing momentum."
+                : "Start with our 4 proven templates (\"Miss You\", \"Check-In\", \"Win Back\", \"New Member Support\") or create your own from scratch. Each one targets a different at-risk situation."}
+            </p>
+          </div>
+        </div>
+
+        <div className="flex gap-3">
+          <div className="flex flex-col items-center">
+            <div className="h-7 w-7 rounded-full bg-primary/15 text-primary flex items-center justify-center text-xs font-bold shrink-0">2</div>
+            <div className="w-px flex-1 bg-border mt-1" />
+          </div>
+          <div className="pb-3">
+            <p className="text-sm font-medium text-foreground">Members are enrolled automatically</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Every 2 hours, the system checks all your members against each sequence's trigger conditions. When someone matches (e.g., hasn't attended in 10 days), they're enrolled and the sequence begins. If they come back within 3 days, they're automatically removed.</p>
+          </div>
+        </div>
+
+        <div className="flex gap-3">
+          <div className="flex flex-col items-center">
+            <div className="h-7 w-7 rounded-full bg-primary/15 text-primary flex items-center justify-center text-xs font-bold shrink-0">3</div>
+          </div>
+          <div>
+            <p className="text-sm font-medium text-foreground">Personalized outreach happens on your behalf</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Emails are sent from your gym's configured email address (set in Settings) and personalized with each member's name. The {"{{first_name}}"} placeholders you see in templates are replaced automatically — members see their real name, not the placeholder.</p>
+          </div>
+        </div>
+      </div>
+
+      <button
+        onClick={() => setShowFaq(!showFaq)}
+        className="flex items-center gap-2 w-full text-left text-xs font-medium text-muted-foreground hover:text-foreground transition-colors mb-3"
+      >
+        <Info className="h-3.5 w-3.5" />
+        <span>{showFaq ? "Hide" : "Common"} questions</span>
+        <ChevronRight className={`h-3 w-3 transition-transform ${showFaq ? "rotate-90" : ""}`} />
+      </button>
+
+      <AnimatePresence>
+        {showFaq && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            className="overflow-hidden"
+          >
+            <div className="space-y-3 mb-5 pl-5 border-l-2 border-border">
+              <FaqItem
+                q="Are sequences turned on by default?"
+                a="No. New sequences start paused. You'll see a toggle next to each one — flip it to 'Active' when you're ready. This gives you time to customize the emails and triggers first."
+              />
+              <FaqItem
+                q="What if a member is on vacation or I need to skip someone?"
+                a="Go to the Enrolled tab and click the remove icon next to their name. They'll be taken out of the sequence immediately. The cooldown period prevents them from being re-enrolled too quickly."
+              />
+              <FaqItem
+                q="What email address do these come from?"
+                a="Emails are sent from whatever sender address you've configured in Settings > Email & Notifications. If you haven't set one up yet, email steps will be skipped (no emails go out) until you do."
+              />
+              <FaqItem
+                q="Can I create my own custom sequences?"
+                a="Yes! Click 'Create Sequence' and you can define your own trigger conditions, email content, and task steps. You're not limited to the built-in templates."
+              />
+              <FaqItem
+                q="What's the cooldown?"
+                a="After a member completes or exits a sequence, there's a waiting period (e.g., 30 days) before they can be auto-enrolled in the same sequence again. This prevents spamming someone who just went through it."
+              />
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {!hasSequences && (
+        <button
+          onClick={onSeedDefaults}
+          className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-primary text-primary-foreground rounded-lg font-medium text-sm hover:bg-primary/90 transition-colors shadow-lg shadow-primary/20"
+        >
+          <Sparkles className="h-4 w-4" />
+          Create Default Sequences
+        </button>
+      )}
+    </motion.div>
+  );
+}
+
+function FaqItem({ q, a }: { q: string; a: string }) {
+  return (
+    <div>
+      <p className="text-xs font-medium text-foreground">{q}</p>
+      <p className="text-[11px] text-muted-foreground mt-0.5 leading-relaxed">{a}</p>
+    </div>
+  );
+}
+
 export function Retention() {
   const { activeGymId } = useGym();
   const { toast } = useToast();
@@ -105,6 +241,8 @@ export function Retention() {
   const [loading, setLoading] = useState(true);
   const [selectedSequence, setSelectedSequence] = useState<Sequence | null>(null);
   const [activeTab, setActiveTab] = useState<"sequences" | "enrollments" | "activity">("sequences");
+  const [showGuide, setShowGuide] = useState(true);
+  const [showCreateForm, setShowCreateForm] = useState(false);
 
   const loadData = useCallback(async () => {
     if (!activeGymId) return;
@@ -124,6 +262,10 @@ export function Retention() {
   }, [activeGymId]);
 
   useEffect(() => { loadData(); }, [loadData]);
+
+  useEffect(() => {
+    if (events.length > 10) setShowGuide(false);
+  }, [events]);
 
   const seedDefaults = async () => {
     if (!activeGymId) return;
@@ -160,8 +302,10 @@ export function Retention() {
     if (!activeGymId) return;
     try {
       const res = await apiFetch(`/api/gyms/${activeGymId}/retention/sequences/${seq.id}`);
-      const detail = await res.json();
-      setSelectedSequence(detail);
+      if (res.ok) {
+        const detail = await res.json();
+        setSelectedSequence(detail);
+      }
     } catch {
       toast({ title: "Error", description: "Failed to load sequence" });
     }
@@ -175,18 +319,6 @@ export function Retention() {
       loadData();
     } catch {
       toast({ title: "Error", description: "Failed to exit enrollment" });
-    }
-  };
-
-  const deleteSequence = async (seqId: number) => {
-    if (!activeGymId) return;
-    try {
-      await apiFetch(`/api/gyms/${activeGymId}/retention/sequences/${seqId}`, { method: "DELETE" });
-      toast({ title: "Sequence deleted" });
-      setSelectedSequence(null);
-      loadData();
-    } catch {
-      toast({ title: "Error", description: "Failed to delete" });
     }
   };
 
@@ -210,6 +342,10 @@ export function Retention() {
     return <SequenceDetail sequence={selectedSequence} onBack={() => { setSelectedSequence(null); loadData(); }} gymId={activeGymId} />;
   }
 
+  if (showCreateForm) {
+    return <CreateSequenceForm gymId={activeGymId} onBack={() => { setShowCreateForm(false); loadData(); }} />;
+  }
+
   const totalActiveEnrollments = sequences.reduce((sum, s) => sum + s.activeEnrollments, 0);
 
   return (
@@ -221,68 +357,113 @@ export function Retention() {
           </div>
           <div>
             <h1 className="text-2xl font-display font-bold text-foreground">Retention Automations</h1>
-            <p className="text-xs text-muted-foreground">Automated sequences to keep members engaged</p>
+            <p className="text-xs text-muted-foreground">Proactively engage members before they churn</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
+          {!showGuide && (
+            <button
+              onClick={() => setShowGuide(true)}
+              className="p-2 rounded-lg border border-border bg-card text-muted-foreground hover:text-foreground transition-colors"
+              title="How it works"
+            >
+              <HelpCircle className="h-4 w-4" />
+            </button>
+          )}
           <button onClick={() => loadData()} className="p-2 rounded-lg border border-border bg-card text-muted-foreground hover:text-foreground transition-colors">
             <RefreshCw className="h-4 w-4" />
           </button>
+          {sequences.length > 0 && (
+            <button
+              onClick={() => setShowCreateForm(true)}
+              className="flex items-center gap-2 px-3 py-2 bg-primary text-primary-foreground hover:bg-primary/90 rounded-lg font-medium text-sm transition-colors shadow-lg shadow-primary/20"
+            >
+              <Plus className="h-4 w-4" />
+              Create Sequence
+            </button>
+          )}
         </div>
       </header>
 
-      <div className="grid grid-cols-3 gap-3 shrink-0">
-        <div className="bg-card border border-border rounded-xl p-3 text-center">
-          <p className="text-2xl font-bold text-foreground">{sequences.length}</p>
-          <p className="text-xs text-muted-foreground">Sequences</p>
-        </div>
-        <div className="bg-card border border-border rounded-xl p-3 text-center">
-          <p className="text-2xl font-bold text-foreground">{sequences.filter(s => s.isEnabled).length}</p>
-          <p className="text-xs text-muted-foreground">Active</p>
-        </div>
-        <div className="bg-card border border-border rounded-xl p-3 text-center">
-          <p className="text-2xl font-bold text-foreground">{totalActiveEnrollments}</p>
-          <p className="text-xs text-muted-foreground">Enrolled Members</p>
-        </div>
-      </div>
+      <div className="flex-1 overflow-y-auto space-y-4">
+        <AnimatePresence>
+          {showGuide && (
+            <HowItWorksGuide
+              onSeedDefaults={seedDefaults}
+              onDismiss={() => setShowGuide(false)}
+              hasSequences={sequences.length > 0}
+            />
+          )}
+        </AnimatePresence>
 
-      <div className="flex gap-1 bg-muted/20 p-1 rounded-lg shrink-0">
-        {[
-          { key: "sequences" as const, label: "Sequences", icon: Settings2 },
-          { key: "enrollments" as const, label: `Enrolled (${enrollments.length})`, icon: Users },
-          { key: "activity" as const, label: "Activity", icon: Activity },
-        ].map(({ key, label, icon: Icon }) => (
-          <button
-            key={key}
-            onClick={() => setActiveTab(key)}
-            className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-md text-xs font-medium transition-colors ${
-              activeTab === key ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            <Icon className="h-3.5 w-3.5" />
-            {label}
-          </button>
-        ))}
-      </div>
+        <div className="grid grid-cols-3 gap-3">
+          <div className="bg-card border border-border rounded-xl p-3 text-center">
+            <p className="text-2xl font-bold text-foreground">{sequences.length}</p>
+            <p className="text-xs text-muted-foreground">Sequences</p>
+          </div>
+          <div className="bg-card border border-border rounded-xl p-3 text-center">
+            <p className={`text-2xl font-bold ${sequences.filter(s => s.isEnabled).length > 0 ? "text-emerald-600 dark:text-emerald-400" : "text-foreground"}`}>
+              {sequences.filter(s => s.isEnabled).length}
+            </p>
+            <p className="text-xs text-muted-foreground">Active</p>
+          </div>
+          <div className="bg-card border border-border rounded-xl p-3 text-center">
+            <p className={`text-2xl font-bold ${totalActiveEnrollments > 0 ? "text-blue-600 dark:text-blue-400" : "text-foreground"}`}>
+              {totalActiveEnrollments}
+            </p>
+            <p className="text-xs text-muted-foreground">Enrolled</p>
+          </div>
+        </div>
 
-      <div className="flex-1 overflow-y-auto">
+        <div className="flex gap-1 bg-muted/20 p-1 rounded-lg">
+          {[
+            { key: "sequences" as const, label: "Sequences", icon: Settings2 },
+            { key: "enrollments" as const, label: `Enrolled (${enrollments.length})`, icon: Users },
+            { key: "activity" as const, label: "Activity", icon: Activity },
+          ].map(({ key, label, icon: Icon }) => (
+            <button
+              key={key}
+              onClick={() => setActiveTab(key)}
+              className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-md text-xs font-medium transition-colors ${
+                activeTab === key ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <Icon className="h-3.5 w-3.5" />
+              {label}
+            </button>
+          ))}
+        </div>
+
         <AnimatePresence mode="wait">
           {activeTab === "sequences" && (
             <motion.div key="sequences" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-3">
+              <TabHint>
+                Each sequence watches for a specific trigger condition and runs a series of steps (emails, staff tasks) when a member matches. Sequences start <span className="font-medium text-foreground">paused</span> — use the toggle to activate them when you're ready.
+              </TabHint>
               {sequences.length === 0 ? (
-                <div className="bg-card border border-border rounded-xl p-8 text-center">
-                  <RefreshCw className="h-10 w-10 text-muted-foreground/50 mx-auto mb-4" />
-                  <h3 className="text-lg font-semibold text-foreground mb-2">No Sequences Yet</h3>
-                  <p className="text-sm text-muted-foreground mb-4 max-w-sm mx-auto">
-                    Set up automated retention sequences to proactively engage at-risk members.
-                  </p>
-                  <button
-                    onClick={seedDefaults}
-                    className="px-4 py-2.5 bg-primary text-primary-foreground rounded-lg font-medium text-sm hover:bg-primary/90 transition-colors shadow-lg shadow-primary/20"
-                  >
-                    Create Default Sequences
-                  </button>
-                </div>
+                !showGuide && (
+                  <div className="bg-card border border-border rounded-xl p-8 text-center">
+                    <RefreshCw className="h-10 w-10 text-muted-foreground/50 mx-auto mb-4" />
+                    <h3 className="text-lg font-semibold text-foreground mb-2">No Sequences Yet</h3>
+                    <p className="text-sm text-muted-foreground mb-4 max-w-sm mx-auto">
+                      Get started with our 4 proven templates, or create your own custom sequence.
+                    </p>
+                    <div className="flex items-center justify-center gap-3">
+                      <button
+                        onClick={seedDefaults}
+                        className="px-4 py-2.5 bg-primary text-primary-foreground rounded-lg font-medium text-sm hover:bg-primary/90 transition-colors shadow-lg shadow-primary/20"
+                      >
+                        Create Defaults
+                      </button>
+                      <button
+                        onClick={() => setShowCreateForm(true)}
+                        className="px-4 py-2.5 bg-card border border-border rounded-lg font-medium text-sm text-foreground hover:bg-muted/50 transition-colors"
+                      >
+                        Build Custom
+                      </button>
+                    </div>
+                  </div>
+                )
               ) : (
                 sequences.map(seq => {
                   const Icon = TYPE_ICONS[seq.type] || Settings2;
@@ -318,13 +499,14 @@ export function Retention() {
                           className={`p-1.5 rounded-lg transition-colors ${
                             seq.isEnabled ? "text-emerald-500 hover:bg-emerald-500/10" : "text-muted-foreground hover:bg-muted/30"
                           }`}
+                          title={seq.isEnabled ? "Pause sequence" : "Activate sequence"}
                         >
                           {seq.isEnabled ? <ToggleRight className="h-5 w-5" /> : <ToggleLeft className="h-5 w-5" />}
                         </button>
                         <ChevronRight className="h-4 w-4 text-muted-foreground" />
                       </div>
                       {seq.description && (
-                        <p className="text-xs text-muted-foreground mt-2 pl-13">{seq.description}</p>
+                        <p className="text-xs text-muted-foreground mt-2 ml-13">{seq.description}</p>
                       )}
                     </div>
                   );
@@ -335,10 +517,16 @@ export function Retention() {
 
           {activeTab === "enrollments" && (
             <motion.div key="enrollments" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-2">
+              <TabHint>
+                Members shown here are actively receiving a retention sequence. If someone is on vacation or shouldn't be contacted right now, click the <UserMinus className="inline h-3 w-3" /> icon to remove them. The cooldown period will prevent them from being re-enrolled too quickly.
+              </TabHint>
               {enrollments.length === 0 ? (
                 <div className="bg-card border border-border rounded-xl p-8 text-center">
                   <Users className="h-8 w-8 text-muted-foreground/50 mx-auto mb-3" />
-                  <p className="text-sm text-muted-foreground">No members currently enrolled in any sequence.</p>
+                  <p className="text-sm font-medium text-foreground mb-1">No members enrolled</p>
+                  <p className="text-xs text-muted-foreground max-w-xs mx-auto">
+                    When you activate a sequence and members match its trigger conditions, they'll appear here automatically.
+                  </p>
                 </div>
               ) : (
                 enrollments.map(enrollment => {
@@ -354,13 +542,14 @@ export function Retention() {
                         </div>
                         <button
                           onClick={() => exitEnrollment(enrollment.id)}
-                          className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
-                          title="Remove from sequence"
+                          className="flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                          title="Remove from sequence — stops all future emails in this sequence"
                         >
-                          <UserMinus className="h-4 w-4" />
+                          <UserMinus className="h-3.5 w-3.5" />
+                          <span className="hidden sm:inline">Remove</span>
                         </button>
                       </div>
-                      <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
+                      <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground flex-wrap">
                         <span className="flex items-center gap-1">
                           <RefreshCw className="h-3 w-3" />
                           {seq?.name || `Sequence #${enrollment.sequenceId}`}
@@ -392,10 +581,16 @@ export function Retention() {
 
           {activeTab === "activity" && (
             <motion.div key="activity" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-2">
+              <TabHint>
+                A log of everything that's happened — enrollments, emails sent, tasks created, and members who re-engaged. This is your audit trail for all automated retention actions.
+              </TabHint>
               {events.length === 0 ? (
                 <div className="bg-card border border-border rounded-xl p-8 text-center">
                   <Activity className="h-8 w-8 text-muted-foreground/50 mx-auto mb-3" />
-                  <p className="text-sm text-muted-foreground">No retention activity yet.</p>
+                  <p className="text-sm font-medium text-foreground mb-1">No activity yet</p>
+                  <p className="text-xs text-muted-foreground max-w-xs mx-auto">
+                    Once sequences are active and members are enrolled, all actions will be logged here.
+                  </p>
                 </div>
               ) : (
                 events.map(event => (
@@ -451,10 +646,230 @@ function getEventIcon(type: string) {
   return <Activity className="h-3.5 w-3.5" />;
 }
 
+function CreateSequenceForm({ gymId, onBack }: { gymId: number; onBack: () => void }) {
+  const { toast } = useToast();
+  const [saving, setSaving] = useState(false);
+  const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
+  const [triggerType, setTriggerType] = useState("no_attendance");
+  const [triggerDays, setTriggerDays] = useState(10);
+  const [triggerThreshold, setTriggerThreshold] = useState(50);
+  const [triggerJoinDays, setTriggerJoinDays] = useState(90);
+  const [triggerInactiveDays, setTriggerInactiveDays] = useState(7);
+  const [cooldownDays, setCooldownDays] = useState(30);
+  const [steps, setSteps] = useState<{ actionType: string; delayDays: number; config: Record<string, any> }[]>([
+    { actionType: "email", delayDays: 0, config: { subject: "", body: "" } },
+  ]);
+
+  const addStep = (type: string) => {
+    setSteps(prev => [...prev, {
+      actionType: type,
+      delayDays: prev.length === 0 ? 0 : 3,
+      config: type === "email" ? { subject: "", body: "" } : { title: "", description: "" },
+    }]);
+  };
+
+  const removeStep = (index: number) => {
+    setSteps(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleCreate = async () => {
+    if (!name.trim()) {
+      toast({ title: "Name is required" });
+      return;
+    }
+    if (steps.length === 0) {
+      toast({ title: "Add at least one step" });
+      return;
+    }
+    setSaving(true);
+    const triggerConfig: TriggerConfig = { type: triggerType };
+    if (triggerType === "no_attendance") triggerConfig.days = triggerDays;
+    if (triggerType === "risk_score") triggerConfig.threshold = triggerThreshold;
+    if (triggerType === "new_member_decline") {
+      triggerConfig.joinDays = triggerJoinDays;
+      triggerConfig.inactiveDays = triggerInactiveDays;
+    }
+
+    try {
+      const res = await apiFetch(`/api/gyms/${gymId}/retention/sequences`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name, description, type: "custom", isEnabled: false,
+          triggerConfig, cooldownDays,
+          steps: steps.map((s, i) => ({ ...s, stepOrder: i })),
+        }),
+      });
+      if (res.ok) {
+        toast({ title: "Sequence created" });
+        onBack();
+      } else {
+        const data = await res.json();
+        toast({ title: "Error", description: data.error || "Failed to create" });
+      }
+    } catch {
+      toast({ title: "Error", description: "Failed to create sequence" });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="h-full flex flex-col gap-4 overflow-y-auto">
+      <div className="flex items-center gap-3 shrink-0">
+        <button onClick={onBack} className="p-1.5 rounded-lg hover:bg-muted/50 transition-colors">
+          <ArrowLeft className="h-4 w-4 text-muted-foreground" />
+        </button>
+        <div className="h-9 w-9 bg-violet-500/15 rounded-xl flex items-center justify-center">
+          <Plus className="h-5 w-5 text-violet-500" />
+        </div>
+        <div>
+          <h2 className="text-lg font-semibold text-foreground">Create Custom Sequence</h2>
+          <p className="text-xs text-muted-foreground">Build your own retention automation from scratch</p>
+        </div>
+      </div>
+
+      <TabHint>
+        Define when this sequence triggers, what emails or tasks to run, and how long to wait between steps. The sequence will start <span className="font-medium text-foreground">paused</span> — you can activate it after reviewing.
+      </TabHint>
+
+      <div className="space-y-4">
+        <div className="bg-card border border-border rounded-xl p-4 space-y-3">
+          <h3 className="text-sm font-medium text-foreground">Basics</h3>
+          <div>
+            <label className="block text-xs text-muted-foreground mb-1">Sequence Name</label>
+            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g., Weekend Warriors Re-engage"
+              className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary" />
+          </div>
+          <div>
+            <label className="block text-xs text-muted-foreground mb-1">Description</label>
+            <input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="What does this sequence do?"
+              className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary" />
+          </div>
+        </div>
+
+        <div className="bg-card border border-border rounded-xl p-4 space-y-3">
+          <div>
+            <h3 className="text-sm font-medium text-foreground">Trigger</h3>
+            <p className="text-[10px] text-muted-foreground mt-0.5">When should members be enrolled in this sequence?</p>
+          </div>
+          <select value={triggerType} onChange={(e) => setTriggerType(e.target.value)}
+            className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary">
+            <option value="no_attendance">No attendance for X days</option>
+            <option value="risk_score">Risk score exceeds threshold</option>
+            <option value="new_member_decline">New member activity declining</option>
+          </select>
+          {triggerType === "no_attendance" && (
+            <div>
+              <label className="block text-xs text-muted-foreground mb-1">Days without a check-in</label>
+              <input type="number" value={triggerDays} onChange={(e) => setTriggerDays(Number(e.target.value))}
+                className="w-24 px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary" />
+            </div>
+          )}
+          {triggerType === "risk_score" && (
+            <div>
+              <label className="block text-xs text-muted-foreground mb-1">Risk score threshold (0-100)</label>
+              <input type="number" value={triggerThreshold} onChange={(e) => setTriggerThreshold(Number(e.target.value))}
+                className="w-24 px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary" />
+            </div>
+          )}
+          {triggerType === "new_member_decline" && (
+            <div className="flex gap-4">
+              <div>
+                <label className="block text-xs text-muted-foreground mb-1">Joined within last X days</label>
+                <input type="number" value={triggerJoinDays} onChange={(e) => setTriggerJoinDays(Number(e.target.value))}
+                  className="w-24 px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary" />
+              </div>
+              <div>
+                <label className="block text-xs text-muted-foreground mb-1">Inactive for Y days</label>
+                <input type="number" value={triggerInactiveDays} onChange={(e) => setTriggerInactiveDays(Number(e.target.value))}
+                  className="w-24 px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary" />
+              </div>
+            </div>
+          )}
+          <div>
+            <label className="block text-xs text-muted-foreground mb-1">Cooldown (days between re-enrollments)</label>
+            <input type="number" value={cooldownDays} onChange={(e) => setCooldownDays(Number(e.target.value))}
+              className="w-24 px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary" />
+            <p className="text-[10px] text-muted-foreground mt-1">How long to wait before a member can be enrolled in this sequence again</p>
+          </div>
+        </div>
+
+        <div className="bg-card border border-border rounded-xl p-4 space-y-3">
+          <div>
+            <h3 className="text-sm font-medium text-foreground">Steps</h3>
+            <p className="text-[10px] text-muted-foreground mt-0.5">
+              Build the sequence of actions. Use {"{{first_name}}"}, {"{{last_name}}"}, {"{{gym_name}}"} — these are replaced with real values when sent.
+            </p>
+          </div>
+          {steps.map((step, i) => (
+            <div key={i} className="border border-border rounded-lg p-3 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-medium text-foreground flex items-center gap-1.5">
+                  {step.actionType === "email" ? <Mail className="h-3.5 w-3.5 text-blue-500" /> : <ClipboardList className="h-3.5 w-3.5 text-amber-500" />}
+                  Step {i + 1}: {step.actionType === "email" ? "Send Email" : "Create Staff Task"}
+                </span>
+                <div className="flex items-center gap-2">
+                  <label className="text-[10px] text-muted-foreground">Wait:</label>
+                  <input type="number" value={step.delayDays}
+                    onChange={(e) => setSteps(prev => prev.map((s, idx) => idx === i ? { ...s, delayDays: Number(e.target.value) } : s))}
+                    className="w-14 px-2 py-1 bg-background border border-border rounded text-xs text-center focus:outline-none focus:ring-1 focus:ring-primary" />
+                  <span className="text-[10px] text-muted-foreground">days</span>
+                  <button onClick={() => removeStep(i)} className="p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors">
+                    <Trash2 className="h-3 w-3" />
+                  </button>
+                </div>
+              </div>
+              {step.actionType === "email" ? (
+                <>
+                  <input value={step.config.subject || ""} onChange={(e) => {
+                    const newSteps = [...steps]; newSteps[i] = { ...step, config: { ...step.config, subject: e.target.value } }; setSteps(newSteps);
+                  }} placeholder="Email subject line" className="w-full px-2 py-1.5 bg-background border border-border rounded text-xs focus:outline-none focus:ring-1 focus:ring-primary" />
+                  <textarea value={step.config.body || ""} onChange={(e) => {
+                    const newSteps = [...steps]; newSteps[i] = { ...step, config: { ...step.config, body: e.target.value } }; setSteps(newSteps);
+                  }} rows={4} placeholder="Hey {{first_name}}, we've missed seeing you at {{gym_name}}..."
+                    className="w-full px-2 py-1.5 bg-background border border-border rounded text-xs focus:outline-none focus:ring-1 focus:ring-primary resize-none" />
+                </>
+              ) : (
+                <>
+                  <input value={step.config.title || ""} onChange={(e) => {
+                    const newSteps = [...steps]; newSteps[i] = { ...step, config: { ...step.config, title: e.target.value } }; setSteps(newSteps);
+                  }} placeholder="Task title for your staff" className="w-full px-2 py-1.5 bg-background border border-border rounded text-xs focus:outline-none focus:ring-1 focus:ring-primary" />
+                  <textarea value={step.config.description || ""} onChange={(e) => {
+                    const newSteps = [...steps]; newSteps[i] = { ...step, config: { ...step.config, description: e.target.value } }; setSteps(newSteps);
+                  }} rows={2} placeholder="What should the staff do?" className="w-full px-2 py-1.5 bg-background border border-border rounded text-xs focus:outline-none focus:ring-1 focus:ring-primary resize-none" />
+                </>
+              )}
+            </div>
+          ))}
+          <div className="flex gap-2">
+            <button onClick={() => addStep("email")}
+              className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border border-dashed border-border text-xs text-muted-foreground hover:text-foreground hover:border-primary/30 transition-colors">
+              <Mail className="h-3.5 w-3.5" /> Add Email Step
+            </button>
+            <button onClick={() => addStep("task")}
+              className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border border-dashed border-border text-xs text-muted-foreground hover:text-foreground hover:border-primary/30 transition-colors">
+              <ClipboardList className="h-3.5 w-3.5" /> Add Task Step
+            </button>
+          </div>
+        </div>
+
+        <button onClick={handleCreate} disabled={saving}
+          className="w-full py-2.5 bg-primary text-primary-foreground rounded-lg font-medium text-sm hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
+          {saving && <Loader2 className="h-4 w-4 animate-spin" />}
+          Create Sequence (Paused)
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function SequenceDetail({ sequence, onBack, gymId }: { sequence: Sequence; onBack: () => void; gymId: number }) {
   const { toast } = useToast();
   const [editMode, setEditMode] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [name, setName] = useState(sequence.name);
   const [description, setDescription] = useState(sequence.description || "");
   const [triggerConfig, setTriggerConfig] = useState<TriggerConfig>(sequence.triggerConfig as TriggerConfig);
@@ -485,6 +900,18 @@ function SequenceDetail({ sequence, onBack, gymId }: { sequence: Sequence; onBac
     }
   };
 
+  const handleDelete = async () => {
+    setDeleting(true);
+    try {
+      await apiFetch(`/api/gyms/${gymId}/retention/sequences/${sequence.id}`, { method: "DELETE" });
+      toast({ title: "Sequence deleted" });
+      onBack();
+    } catch {
+      toast({ title: "Error", description: "Failed to delete" });
+      setDeleting(false);
+    }
+  };
+
   const updateStepConfig = (index: number, key: string, value: any) => {
     setSteps(prev => prev.map((s, i) => i === index ? { ...s, config: { ...s.config, [key]: value } } : s));
   };
@@ -502,18 +929,34 @@ function SequenceDetail({ sequence, onBack, gymId }: { sequence: Sequence; onBac
           <h2 className="text-lg font-semibold text-foreground">{sequence.name}</h2>
           <p className="text-xs text-muted-foreground">{sequence.description}</p>
         </div>
-        <button
-          onClick={() => setEditMode(!editMode)}
-          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-            editMode ? "bg-primary/15 text-primary" : "bg-muted/30 text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          {editMode ? "Cancel" : "Edit"}
-        </button>
+        <div className="flex items-center gap-2">
+          {!editMode && (
+            <button
+              onClick={handleDelete}
+              disabled={deleting}
+              className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+              title="Delete sequence"
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
+          )}
+          <button
+            onClick={() => setEditMode(!editMode)}
+            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+              editMode ? "bg-primary/15 text-primary" : "bg-muted/30 text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {editMode ? "Cancel" : "Edit"}
+          </button>
+        </div>
       </div>
 
       {editMode ? (
         <div className="space-y-4">
+          <TabHint>
+            Edit your sequence settings below. The {"{{first_name}}"}, {"{{last_name}}"}, and {"{{gym_name}}"} placeholders will be replaced with real values when emails are sent — you don't need to type actual names.
+          </TabHint>
+
           <div className="bg-card border border-border rounded-xl p-4 space-y-3">
             <h3 className="text-sm font-medium text-foreground">General</h3>
             <div>
@@ -530,6 +973,7 @@ function SequenceDetail({ sequence, onBack, gymId }: { sequence: Sequence; onBac
               <label className="block text-xs text-muted-foreground mb-1">Cooldown (days)</label>
               <input type="number" value={cooldownDays} onChange={(e) => setCooldownDays(Number(e.target.value))}
                 className="w-24 px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary" />
+              <p className="text-[10px] text-muted-foreground mt-1">How long to wait before a member can be re-enrolled after completing this sequence</p>
             </div>
           </div>
 
@@ -553,7 +997,7 @@ function SequenceDetail({ sequence, onBack, gymId }: { sequence: Sequence; onBac
             )}
             {triggerConfig.type === "risk_score" && (
               <div>
-                <label className="block text-xs text-muted-foreground mb-1">Score threshold</label>
+                <label className="block text-xs text-muted-foreground mb-1">Score threshold (0-100)</label>
                 <input type="number" value={triggerConfig.threshold || 50} onChange={(e) => setTriggerConfig({ ...triggerConfig, threshold: Number(e.target.value) })}
                   className="w-24 px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary" />
               </div>
@@ -575,7 +1019,10 @@ function SequenceDetail({ sequence, onBack, gymId }: { sequence: Sequence; onBac
           </div>
 
           <div className="bg-card border border-border rounded-xl p-4 space-y-3">
-            <h3 className="text-sm font-medium text-foreground">Steps ({steps.length})</h3>
+            <div>
+              <h3 className="text-sm font-medium text-foreground">Steps ({steps.length})</h3>
+              <p className="text-[10px] text-muted-foreground mt-0.5">Available placeholders: {"{{first_name}}"}, {"{{last_name}}"}, {"{{gym_name}}"}, {"{{member_email}}"}</p>
+            </div>
             {steps.map((step, i) => (
               <div key={i} className="border border-border rounded-lg p-3 space-y-2">
                 <div className="flex items-center justify-between">
@@ -595,7 +1042,7 @@ function SequenceDetail({ sequence, onBack, gymId }: { sequence: Sequence; onBac
                     <input value={step.config.subject || ""} onChange={(e) => updateStepConfig(i, "subject", e.target.value)}
                       placeholder="Subject" className="w-full px-2 py-1.5 bg-background border border-border rounded text-xs focus:outline-none focus:ring-1 focus:ring-primary" />
                     <textarea value={step.config.body || ""} onChange={(e) => updateStepConfig(i, "body", e.target.value)}
-                      rows={4} placeholder="Email body (use {{first_name}}, {{gym_name}})" className="w-full px-2 py-1.5 bg-background border border-border rounded text-xs focus:outline-none focus:ring-1 focus:ring-primary resize-none" />
+                      rows={4} placeholder="Hey {{first_name}}, we've missed seeing you at {{gym_name}}..." className="w-full px-2 py-1.5 bg-background border border-border rounded text-xs focus:outline-none focus:ring-1 focus:ring-primary resize-none" />
                   </>
                 )}
                 {step.actionType === "task" && (
@@ -608,9 +1055,6 @@ function SequenceDetail({ sequence, onBack, gymId }: { sequence: Sequence; onBac
                 )}
               </div>
             ))}
-            <p className="text-[10px] text-muted-foreground">
-              Available template variables: {"{{first_name}}"}, {"{{last_name}}"}, {"{{gym_name}}"}, {"{{member_email}}"}
-            </p>
           </div>
 
           <button onClick={handleSave} disabled={saving}
@@ -642,8 +1086,8 @@ function SequenceDetail({ sequence, onBack, gymId }: { sequence: Sequence; onBac
                   </div>
                   <div>
                     <p className="text-xs font-medium text-foreground">
-                      {step.actionType === "email" ? "Send Email" : "Create Task"}
-                      {step.delayDays > 0 && <span className="text-muted-foreground font-normal"> (after {step.delayDays}d)</span>}
+                      {step.actionType === "email" ? "Send Email" : "Create Staff Task"}
+                      {step.delayDays > 0 && <span className="text-muted-foreground font-normal"> (after {step.delayDays} days)</span>}
                     </p>
                     <p className="text-xs text-muted-foreground mt-0.5 truncate max-w-md">
                       {step.config.subject || step.config.title || ""}
@@ -666,6 +1110,11 @@ function SequenceDetail({ sequence, onBack, gymId }: { sequence: Sequence; onBac
             <p className="text-xs text-muted-foreground">
               {sequence.activeEnrollments} members currently enrolled
             </p>
+            {!sequence.isEnabled && (
+              <p className="text-[10px] text-muted-foreground mt-1">
+                This sequence is paused. Go back and use the toggle to activate it when you're ready.
+              </p>
+            )}
           </div>
         </div>
       )}
