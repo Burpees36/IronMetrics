@@ -82,6 +82,8 @@ import type {
   Invoice,
   Lead,
   LeadActivity,
+  LeadCaptureBody,
+  LeadCaptureGymInfo,
   LeadInsights,
   ListAttendanceParams,
   ListClassesParams,
@@ -99,6 +101,7 @@ import type {
   MemberRiskProfile,
   MembershipPlan,
   MembershipReport,
+  MorningBriefing,
   PaymentRecord,
   PaymentUpdateCompleteResponse,
   PaymentUpdateSetupIntent,
@@ -116,6 +119,7 @@ import type {
   SendEmailResponse,
   SendRecoveryLinkResponse,
   StaffMember,
+  SubmitLeadCapture201,
   Subscription,
   SuccessResponse,
   TimelineEvent,
@@ -9325,6 +9329,270 @@ export function useGetRevenueForecast<
   },
 ): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getGetRevenueForecastQueryOptions(gymId, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Get morning briefing for gym owner
+ */
+export const getGetMorningBriefingUrl = (gymId: number) => {
+  return `/api/gyms/${gymId}/intelligence/morning-briefing`;
+};
+
+export const getMorningBriefing = async (
+  gymId: number,
+  options?: RequestInit,
+): Promise<MorningBriefing> => {
+  return customFetch<MorningBriefing>(getGetMorningBriefingUrl(gymId), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetMorningBriefingQueryKey = (gymId: number) => {
+  return [`/api/gyms/${gymId}/intelligence/morning-briefing`] as const;
+};
+
+export const getGetMorningBriefingQueryOptions = <
+  TData = Awaited<ReturnType<typeof getMorningBriefing>>,
+  TError = ErrorType<unknown>,
+>(
+  gymId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getMorningBriefing>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetMorningBriefingQueryKey(gymId);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getMorningBriefing>>
+  > = ({ signal }) => getMorningBriefing(gymId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!gymId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getMorningBriefing>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetMorningBriefingQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getMorningBriefing>>
+>;
+export type GetMorningBriefingQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get morning briefing for gym owner
+ */
+
+export function useGetMorningBriefing<
+  TData = Awaited<ReturnType<typeof getMorningBriefing>>,
+  TError = ErrorType<unknown>,
+>(
+  gymId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getMorningBriefing>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetMorningBriefingQueryOptions(gymId, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Public lead capture form submission (no auth required)
+ */
+export const getSubmitLeadCaptureUrl = (gymSlug: string) => {
+  return `/api/lead-capture/${gymSlug}`;
+};
+
+export const submitLeadCapture = async (
+  gymSlug: string,
+  leadCaptureBody: LeadCaptureBody,
+  options?: RequestInit,
+): Promise<SubmitLeadCapture201> => {
+  return customFetch<SubmitLeadCapture201>(getSubmitLeadCaptureUrl(gymSlug), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(leadCaptureBody),
+  });
+};
+
+export const getSubmitLeadCaptureMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof submitLeadCapture>>,
+    TError,
+    { gymSlug: string; data: BodyType<LeadCaptureBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof submitLeadCapture>>,
+  TError,
+  { gymSlug: string; data: BodyType<LeadCaptureBody> },
+  TContext
+> => {
+  const mutationKey = ["submitLeadCapture"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof submitLeadCapture>>,
+    { gymSlug: string; data: BodyType<LeadCaptureBody> }
+  > = (props) => {
+    const { gymSlug, data } = props ?? {};
+
+    return submitLeadCapture(gymSlug, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SubmitLeadCaptureMutationResult = NonNullable<
+  Awaited<ReturnType<typeof submitLeadCapture>>
+>;
+export type SubmitLeadCaptureMutationBody = BodyType<LeadCaptureBody>;
+export type SubmitLeadCaptureMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Public lead capture form submission (no auth required)
+ */
+export const useSubmitLeadCapture = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof submitLeadCapture>>,
+    TError,
+    { gymSlug: string; data: BodyType<LeadCaptureBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof submitLeadCapture>>,
+  TError,
+  { gymSlug: string; data: BodyType<LeadCaptureBody> },
+  TContext
+> => {
+  return useMutation(getSubmitLeadCaptureMutationOptions(options));
+};
+
+/**
+ * @summary Get public gym info for lead capture form
+ */
+export const getGetLeadCaptureGymInfoUrl = (gymSlug: string) => {
+  return `/api/lead-capture/${gymSlug}/info`;
+};
+
+export const getLeadCaptureGymInfo = async (
+  gymSlug: string,
+  options?: RequestInit,
+): Promise<LeadCaptureGymInfo> => {
+  return customFetch<LeadCaptureGymInfo>(getGetLeadCaptureGymInfoUrl(gymSlug), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetLeadCaptureGymInfoQueryKey = (gymSlug: string) => {
+  return [`/api/lead-capture/${gymSlug}/info`] as const;
+};
+
+export const getGetLeadCaptureGymInfoQueryOptions = <
+  TData = Awaited<ReturnType<typeof getLeadCaptureGymInfo>>,
+  TError = ErrorType<unknown>,
+>(
+  gymSlug: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getLeadCaptureGymInfo>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetLeadCaptureGymInfoQueryKey(gymSlug);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getLeadCaptureGymInfo>>
+  > = ({ signal }) =>
+    getLeadCaptureGymInfo(gymSlug, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!gymSlug,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getLeadCaptureGymInfo>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetLeadCaptureGymInfoQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getLeadCaptureGymInfo>>
+>;
+export type GetLeadCaptureGymInfoQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get public gym info for lead capture form
+ */
+
+export function useGetLeadCaptureGymInfo<
+  TData = Awaited<ReturnType<typeof getLeadCaptureGymInfo>>,
+  TError = ErrorType<unknown>,
+>(
+  gymSlug: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getLeadCaptureGymInfo>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetLeadCaptureGymInfoQueryOptions(gymSlug, options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

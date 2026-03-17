@@ -1320,6 +1320,14 @@ export interface Intervention {
   status: InterventionStatus;
 }
 
+export type RevenueForecastDataSource =
+  (typeof RevenueForecastDataSource)[keyof typeof RevenueForecastDataSource];
+
+export const RevenueForecastDataSource = {
+  invoices: "invoices",
+  subscriptions: "subscriptions",
+} as const;
+
 export interface RevenueForecast {
   currentMrr: number;
   expectedMrr3m: number;
@@ -1331,6 +1339,7 @@ export interface RevenueForecast {
   expectedMrr12m: number;
   upsideMrr12m: number;
   downsideMrr12m: number;
+  dataSource?: RevenueForecastDataSource;
   assumptions: string[];
 }
 
@@ -1355,6 +1364,77 @@ export interface CohortData {
   retentionRate90d: number;
   retentionRate365d: number;
   avgRevenue: number;
+}
+
+export type MorningBriefingItemPriority =
+  (typeof MorningBriefingItemPriority)[keyof typeof MorningBriefingItemPriority];
+
+export const MorningBriefingItemPriority = {
+  critical: "critical",
+  warning: "warning",
+  info: "info",
+  positive: "positive",
+} as const;
+
+export interface MorningBriefingItem {
+  icon: string;
+  priority: MorningBriefingItemPriority;
+  message: string;
+  /** @nullable */
+  action?: string | null;
+  /** @nullable */
+  link?: string | null;
+}
+
+export interface MorningBriefingSnapshot {
+  activeMembers?: number;
+  mrr?: number;
+  rsiScore?: number;
+  rsiBand?: string;
+  atRiskMembers?: number;
+  revenueAtRisk?: number;
+  engagementRate?: number;
+  staleLeads?: number;
+  failedPayments?: number;
+  todayClasses?: number;
+  classFillRate?: number;
+}
+
+export interface MorningBriefing {
+  date: string;
+  summary: string;
+  items: MorningBriefingItem[];
+  snapshot: MorningBriefingSnapshot;
+}
+
+export interface LeadCaptureBody {
+  firstName: string;
+  lastName: string;
+  email: string;
+  /** @nullable */
+  phone?: string | null;
+  /** @nullable */
+  notes?: string | null;
+}
+
+export interface LeadCaptureGymInfo {
+  name?: string;
+  /** @nullable */
+  description?: string | null;
+  /** @nullable */
+  logoUrl?: string | null;
+  /** @nullable */
+  phone?: string | null;
+  /** @nullable */
+  email?: string | null;
+  /** @nullable */
+  address?: string | null;
+  /** @nullable */
+  city?: string | null;
+  /** @nullable */
+  state?: string | null;
+  /** @nullable */
+  website?: string | null;
 }
 
 export interface AiGeneratedContent {
@@ -1817,3 +1897,7 @@ export const ListProgrammingDaysStatus = {
   published: "published",
   archived: "archived",
 } as const;
+
+export type SubmitLeadCapture201 = {
+  message?: string;
+};

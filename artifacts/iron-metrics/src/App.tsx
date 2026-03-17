@@ -26,6 +26,7 @@ import { MemberDetail } from "@/pages/MemberDetail";
 import { Settings } from "@/pages/Settings";
 import { Onboarding } from "@/pages/Onboarding";
 import { UpdatePayment } from "@/pages/UpdatePayment";
+import { LeadCapture } from "@/pages/LeadCapture";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -77,6 +78,7 @@ function Router() {
       <Route path="/login" component={Login} />
       <Route path="/select-gym" component={GymSelect} />
       <Route path="/update-payment" component={UpdatePayment} />
+      <Route path="/join/:gymSlug" component={LeadCapture} />
       
       {/* Protected Routes */}
       <Route path="/">

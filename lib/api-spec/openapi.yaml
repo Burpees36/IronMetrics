@@ -2553,6 +2553,72 @@ paths:
               schema:
                 $ref: "#/components/schemas/RevenueForecast"
 
+  /gyms/{gymId}/intelligence/morning-briefing:
+    get:
+      operationId: getMorningBriefing
+      tags: [intelligence]
+      summary: Get morning briefing for gym owner
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Morning briefing with prioritized action items
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MorningBriefing"
+
+  /lead-capture/{gymSlug}:
+    post:
+      operationId: submitLeadCapture
+      tags: [leads]
+      summary: Public lead capture form submission (no auth required)
+      parameters:
+        - name: gymSlug
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LeadCaptureBody"
+      responses:
+        "201":
+          description: Lead captured successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+
+  /lead-capture/{gymSlug}/info:
+    get:
+      operationId: getLeadCaptureGymInfo
+      tags: [leads]
+      summary: Get public gym info for lead capture form
+      parameters:
+        - name: gymSlug
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Public gym info
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LeadCaptureGymInfo"
+
   # AI OPERATOR
   /gyms/{gymId}/ai/generate-outreach:
     post:
@@ -4911,6 +4977,9 @@ components:
           type: number
         downsideMrr12m:
           type: number
+        dataSource:
+          type: string
+          enum: [invoices, subscriptions]
         assumptions:
           type: array
           items:
@@ -4927,6 +4996,101 @@ components:
         - upsideMrr12m
         - downsideMrr12m
         - assumptions
+
+    MorningBriefingItem:
+      type: object
+      properties:
+        icon:
+          type: string
+        priority:
+          type: string
+          enum: [critical, warning, info, positive]
+        message:
+          type: string
+        action:
+          type: ["string", "null"]
+        link:
+          type: ["string", "null"]
+      required: [icon, priority, message]
+
+    MorningBriefingSnapshot:
+      type: object
+      properties:
+        activeMembers:
+          type: number
+        mrr:
+          type: number
+        rsiScore:
+          type: number
+        rsiBand:
+          type: string
+        atRiskMembers:
+          type: number
+        revenueAtRisk:
+          type: number
+        engagementRate:
+          type: number
+        staleLeads:
+          type: number
+        failedPayments:
+          type: number
+        todayClasses:
+          type: number
+        classFillRate:
+          type: number
+
+    MorningBriefing:
+      type: object
+      properties:
+        date:
+          type: string
+        summary:
+          type: string
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/MorningBriefingItem"
+        snapshot:
+          $ref: "#/components/schemas/MorningBriefingSnapshot"
+      required: [date, summary, items, snapshot]
+
+    LeadCaptureBody:
+      type: object
+      properties:
+        firstName:
+          type: string
+        lastName:
+          type: string
+        email:
+          type: string
+          format: email
+        phone:
+          type: ["string", "null"]
+        notes:
+          type: ["string", "null"]
+      required: [firstName, lastName, email]
+
+    LeadCaptureGymInfo:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: ["string", "null"]
+        logoUrl:
+          type: ["string", "null"]
+        phone:
+          type: ["string", "null"]
+        email:
+          type: ["string", "null"]
+        address:
+          type: ["string", "null"]
+        city:
+          type: ["string", "null"]
+        state:
+          type: ["string", "null"]
+        website:
+          type: ["string", "null"]
 
     AiGeneratedContent:
       type: object

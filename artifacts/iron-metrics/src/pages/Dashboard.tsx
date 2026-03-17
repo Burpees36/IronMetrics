@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from "react";
 import { useGym } from "@/store/GymContext";
-import { useGetDashboardStats } from "@workspace/api-client-react";
+import { useGetDashboardStats, useGetMorningBriefing } from "@workspace/api-client-react";
 import { 
   Users, TrendingUp, AlertTriangle, CalendarCheck, 
-  ArrowUpRight, ArrowDownRight, Loader2, BrainCircuit, Rocket
+  ArrowUpRight, ArrowDownRight, Loader2, BrainCircuit, Rocket,
+  Sun, CreditCard, UserCheck, Calendar, ChevronRight, Sparkles
 } from "lucide-react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { AreaChart, Area, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
@@ -46,6 +47,93 @@ function OnboardingBanner({ gymId }: { gymId: number }) {
           Resume Setup
         </Button>
       </Link>
+    </motion.div>
+  );
+}
+
+const priorityConfig = {
+  critical: { bg: "bg-destructive/10", border: "border-destructive/20", text: "text-destructive", dot: "bg-destructive" },
+  warning: { bg: "bg-amber-500/10", border: "border-amber-500/20", text: "text-amber-500", dot: "bg-amber-500" },
+  info: { bg: "bg-blue-500/10", border: "border-blue-500/20", text: "text-blue-500", dot: "bg-blue-500" },
+  positive: { bg: "bg-emerald-500/10", border: "border-emerald-500/20", text: "text-emerald-500", dot: "bg-emerald-500" },
+};
+
+const iconMap: Record<string, React.ElementType> = {
+  alert: AlertTriangle,
+  warning: AlertTriangle,
+  billing: CreditCard,
+  leads: UserCheck,
+  schedule: Calendar,
+  positive: Sparkles,
+  engagement: Users,
+};
+
+function MorningBriefing({ gymId }: { gymId: number }) {
+  const { data: briefing, isLoading } = useGetMorningBriefing(gymId, {
+    query: { enabled: !!gymId }
+  });
+  const [collapsed, setCollapsed] = useState(false);
+
+  if (isLoading || !briefing) return null;
+
+  const visibleItems = collapsed ? briefing.items.slice(0, 2) : briefing.items;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: -10 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="bg-card border border-border rounded-2xl shadow-sm overflow-hidden"
+    >
+      <div className="px-4 md:px-6 py-3 md:py-4 border-b border-border/50 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="p-2 rounded-lg bg-primary/10">
+            <Sun className="h-4 w-4 text-primary" />
+          </div>
+          <div>
+            <h3 className="text-sm md:text-base font-semibold text-foreground">Morning Briefing</h3>
+            <p className="text-xs text-muted-foreground mt-0.5">{briefing.summary}</p>
+          </div>
+        </div>
+        {briefing.items.length > 2 && (
+          <button
+            onClick={() => setCollapsed(!collapsed)}
+            className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+          >
+            {collapsed ? `+${briefing.items.length - 2} more` : "Show less"}
+          </button>
+        )}
+      </div>
+
+      <div className="divide-y divide-border/30">
+        <AnimatePresence mode="sync">
+          {visibleItems.map((item: any, i: number) => {
+            const config = priorityConfig[item.priority as keyof typeof priorityConfig] || priorityConfig.info;
+            const Icon = iconMap[item.icon] || BrainCircuit;
+
+            return (
+              <motion.div
+                key={`${item.priority}-${i}`}
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: "auto" }}
+                exit={{ opacity: 0, height: 0 }}
+                className="flex items-center gap-3 px-4 md:px-6 py-2.5 md:py-3 group"
+              >
+                <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${config.dot}`} />
+                <Icon className={`h-4 w-4 shrink-0 ${config.text}`} />
+                <span className="text-xs md:text-sm text-foreground flex-1">{item.message}</span>
+                {item.link && item.action && (
+                  <Link href={item.link}>
+                    <span className="text-xs font-medium text-primary hover:text-primary/80 transition-colors flex items-center gap-1 whitespace-nowrap opacity-0 group-hover:opacity-100 md:opacity-100">
+                      {item.action}
+                      <ChevronRight className="h-3 w-3" />
+                    </span>
+                  </Link>
+                )}
+              </motion.div>
+            );
+          })}
+        </AnimatePresence>
+      </div>
     </motion.div>
   );
 }
@@ -105,6 +193,8 @@ export function Dashboard() {
           </Link>
         </div>
       </header>
+
+      <MorningBriefing gymId={activeGymId} />
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-6">
         {kpis.map((kpi, i) => (

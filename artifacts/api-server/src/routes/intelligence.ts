@@ -16,7 +16,7 @@
  */
 import { Router, type IRouter } from "express";
 import { eq, and, count, sql, desc, gte } from "drizzle-orm";
-import { db, membersTable, subscriptionsTable, attendanceTable, leadsTable, invoicesTable } from "@workspace/db";
+import { db, membersTable, subscriptionsTable, attendanceTable, leadsTable, invoicesTable, classesTable } from "@workspace/db";
 
 const router: IRouter = Router();
 
@@ -326,7 +326,6 @@ export async function getInterventions(gymId: number) {
 }
 
 async function computeRevenueForecast(gymId: number, currentMrr: number, churnRate: number, activeSubCount: number) {
-  const now = new Date();
   const paidInvoices = await db.select().from(invoicesTable).where(and(eq(invoicesTable.gymId, gymId), eq(invoicesTable.status, "paid")));
 
   const monthlyRevenue: Record<string, number> = {};
@@ -338,6 +337,7 @@ async function computeRevenueForecast(gymId: number, currentMrr: number, churnRa
 
   const sortedMonths = Object.keys(monthlyRevenue).sort();
   let monthlyGrowthRate = 0;
+  let dataSource: "invoices" | "subscriptions" = "invoices";
 
   if (sortedMonths.length >= 2) {
     const recentMonths = sortedMonths.slice(-6);
@@ -352,32 +352,56 @@ async function computeRevenueForecast(gymId: number, currentMrr: number, churnRa
     if (growthRates.length > 0) {
       monthlyGrowthRate = growthRates.reduce((s, r) => s + r, 0) / growthRates.length;
     }
+  } else {
+    dataSource = "subscriptions";
+    const allMembers = await db.select().from(membersTable).where(eq(membersTable.gymId, gymId));
+    const activeMembers = allMembers.filter(m => m.status === "active").length;
+    const totalMembers = allMembers.length;
+
+    const monthlyChurnRate = churnRate > 0 ? (churnRate / 100) / Math.max(1, totalMembers > activeMembers ? 12 : 6) : 0;
+
+    const openLeads = await db.select({ count: count() }).from(leadsTable).where(
+      and(eq(leadsTable.gymId, gymId), sql`${leadsTable.stage} NOT IN ('converted', 'lost')`)
+    );
+    const pipelineLeads = Number(openLeads[0]?.count ?? 0);
+    const estimatedConversionsPerMonth = pipelineLeads * 0.15;
+    const avgSubAmount = activeSubCount > 0 ? currentMrr / activeSubCount : 0;
+    const growthFromNewMembers = activeMembers > 0 ? (estimatedConversionsPerMonth * avgSubAmount) / currentMrr : 0;
+
+    monthlyGrowthRate = currentMrr > 0 ? growthFromNewMembers - monthlyChurnRate : 0;
   }
 
-  const expected3m = currentMrr * Math.pow(1 + monthlyGrowthRate, 3);
-  const expected6m = currentMrr * Math.pow(1 + monthlyGrowthRate, 6);
-  const expected12m = currentMrr * Math.pow(1 + monthlyGrowthRate, 12);
+  const monthlyChurnDecay = churnRate > 0 ? (churnRate / 100) / 12 : 0;
 
-  const upsideMultiplier = 1.5;
-  const downsideMultiplier = 0.5;
+  const project = (months: number, growthMult: number) => {
+    const rate = monthlyGrowthRate * growthMult;
+    return Math.round(currentMrr * Math.pow(1 + rate, months));
+  };
+
+  const projectWithChurn = (months: number) => {
+    return Math.round(currentMrr * Math.pow(1 - monthlyChurnDecay, months));
+  };
 
   return {
     currentMrr,
-    expectedMrr3m: Math.round(expected3m),
-    upsideMrr3m: Math.round(currentMrr * Math.pow(1 + monthlyGrowthRate * upsideMultiplier, 3)),
-    downsideMrr3m: Math.round(currentMrr * Math.pow(1 + monthlyGrowthRate * downsideMultiplier, 3)),
-    expectedMrr6m: Math.round(expected6m),
-    upsideMrr6m: Math.round(currentMrr * Math.pow(1 + monthlyGrowthRate * upsideMultiplier, 6)),
-    downsideMrr6m: Math.round(currentMrr * Math.pow(1 + monthlyGrowthRate * downsideMultiplier, 6)),
-    expectedMrr12m: Math.round(expected12m),
-    upsideMrr12m: Math.round(currentMrr * Math.pow(1 + monthlyGrowthRate * upsideMultiplier, 12)),
-    downsideMrr12m: Math.round(currentMrr * Math.pow(1 + monthlyGrowthRate * downsideMultiplier, 12)),
+    expectedMrr3m: project(3, 1),
+    upsideMrr3m: project(3, 1.5),
+    downsideMrr3m: projectWithChurn(3),
+    expectedMrr6m: project(6, 1),
+    upsideMrr6m: project(6, 1.5),
+    downsideMrr6m: projectWithChurn(6),
+    expectedMrr12m: project(12, 1),
+    upsideMrr12m: project(12, 1.5),
+    downsideMrr12m: projectWithChurn(12),
+    dataSource,
     assumptions: [
-      `Based on trailing churn rate of ${churnRate}%`,
+      `Based on trailing churn rate of ${churnRate.toFixed(1)}%`,
       `Current MRR: $${currentMrr.toLocaleString()} from ${activeSubCount} active subscriptions`,
-      `Historical monthly growth rate: ${(monthlyGrowthRate * 100).toFixed(1)}% (from ${sortedMonths.length} months of invoice data)`,
-      "Upside assumes 1.5x historical growth rate",
-      "Downside assumes 0.5x historical growth rate",
+      dataSource === "invoices"
+        ? `Historical monthly growth rate: ${(monthlyGrowthRate * 100).toFixed(1)}% (from ${sortedMonths.length} months of invoice data)`
+        : `Estimated monthly growth rate: ${(monthlyGrowthRate * 100).toFixed(1)}% (derived from pipeline conversion and churn)`,
+      "Upside assumes 1.5x growth rate",
+      "Downside models churn-only scenario (no new revenue)",
     ],
   };
 }
@@ -629,5 +653,185 @@ router.get("/gyms/:gymId/intelligence/overview", async (req, res): Promise<void>
     res.status(500).json({ error: "Failed to generate intelligence overview. Please try again." });
   }
 });
+
+router.get("/gyms/:gymId/intelligence/morning-briefing", async (req, res): Promise<void> => {
+  const gymId = parseGymId(req.params);
+  if (!gymId) { res.status(400).json({ error: "Invalid gym ID" }); return; }
+
+  try {
+    const metrics = await getGymMetrics(gymId);
+    const rsi = computeRSI(metrics.churnRate, metrics.avgRev, metrics.netGrowth, metrics.avgTenure);
+    const risks = await getRiskProfiles(gymId);
+
+    const criticalRisks = risks.filter(r => r.riskTier === "critical");
+    const highRisks = risks.filter(r => r.riskTier === "high");
+    const atRiskCount = criticalRisks.length + highRisks.length;
+    const revenueAtRisk = risks.reduce((sum, r) => sum + r.revenueAtRisk, 0);
+
+    const allLeads = await db.select().from(leadsTable).where(eq(leadsTable.gymId, gymId));
+    const staleLeads = allLeads.filter(l => {
+      if (l.stage === "converted" || l.stage === "lost") return false;
+      const now = new Date();
+      const lastContact = l.lastContactDate ? new Date(l.lastContactDate) : new Date(l.createdAt);
+      const hours = (now.getTime() - lastContact.getTime()) / (1000 * 60 * 60);
+      if (l.stage === "new" && hours > 24) return true;
+      if (l.stage === "contacted" && hours > 72) return true;
+      return false;
+    });
+    const activeLeads = allLeads.filter(l => l.stage !== "converted" && l.stage !== "lost");
+
+    const now = new Date();
+    const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const allAttendance = await db.select().from(attendanceTable).where(and(eq(attendanceTable.gymId, gymId), gte(attendanceTable.checkinTime, weekAgo)));
+    const uniqueAttendees = new Set(allAttendance.map(a => a.memberId)).size;
+    const engagementRate = metrics.active > 0 ? Math.round((uniqueAttendees / metrics.active) * 1000) / 10 : 0;
+
+    const todayStr = now.toISOString().split("T")[0];
+    const allClasses = await db.select().from(classesTable).where(eq(classesTable.gymId, gymId));
+    const todayClasses = allClasses.filter(c => {
+      const classDate = new Date(c.startTime).toISOString().split("T")[0];
+      return classDate === todayStr;
+    });
+    const totalCapacity = todayClasses.reduce((sum, c) => sum + (c.capacity || 0), 0);
+    const totalEnrolled = todayClasses.reduce((sum, c) => sum + (c.enrolled || 0), 0);
+    const classFillRate = totalCapacity > 0 ? Math.round((totalEnrolled / totalCapacity) * 100) : 0;
+
+    const failedSubs = await db.select().from(subscriptionsTable).where(and(eq(subscriptionsTable.gymId, gymId), eq(subscriptionsTable.status, "past_due")));
+
+    const items: { icon: string; priority: "critical" | "warning" | "info" | "positive"; message: string; action?: string; link?: string }[] = [];
+
+    if (criticalRisks.length > 0) {
+      const names = criticalRisks.slice(0, 3).map(r => r.memberName.split(" ")[0]).join(", ");
+      items.push({
+        icon: "alert",
+        priority: "critical",
+        message: `${criticalRisks.length} member${criticalRisks.length > 1 ? "s" : ""} at critical churn risk (${names}${criticalRisks.length > 3 ? "..." : ""})`,
+        action: "Review in Risk Radar",
+        link: "/intelligence",
+      });
+    }
+
+    if (highRisks.length > 0) {
+      items.push({
+        icon: "warning",
+        priority: "warning",
+        message: `${highRisks.length} member${highRisks.length > 1 ? "s" : ""} at high risk — $${Math.round(revenueAtRisk)}/mo at stake`,
+        action: "View Risk Profiles",
+        link: "/intelligence",
+      });
+    }
+
+    if (failedSubs.length > 0) {
+      const failedRev = failedSubs.reduce((sum, s) => sum + parseFloat(s.amount || "0"), 0);
+      items.push({
+        icon: "billing",
+        priority: "critical",
+        message: `${failedSubs.length} failed payment${failedSubs.length > 1 ? "s" : ""} totaling $${Math.round(failedRev)}/mo need recovery`,
+        action: "Go to Billing",
+        link: "/billing",
+      });
+    }
+
+    if (staleLeads.length > 0) {
+      items.push({
+        icon: "leads",
+        priority: "warning",
+        message: `${staleLeads.length} lead${staleLeads.length > 1 ? "s" : ""} went stale — follow up before they go cold`,
+        action: "Open Pipeline",
+        link: "/leads",
+      });
+    }
+
+    if (todayClasses.length > 0) {
+      items.push({
+        icon: "schedule",
+        priority: classFillRate >= 80 ? "positive" : "info",
+        message: `${todayClasses.length} class${todayClasses.length > 1 ? "es" : ""} today at ${classFillRate}% capacity (${totalEnrolled}/${totalCapacity} spots filled)`,
+        action: "View Schedule",
+        link: "/schedule",
+      });
+    }
+
+    if (activeLeads.length > 0 && staleLeads.length === 0) {
+      items.push({
+        icon: "leads",
+        priority: "info",
+        message: `${activeLeads.length} active lead${activeLeads.length > 1 ? "s" : ""} in your pipeline`,
+        link: "/leads",
+      });
+    }
+
+    if (rsi.band === "Strong") {
+      items.push({
+        icon: "positive",
+        priority: "positive",
+        message: `RSI is ${rsi.score.toFixed(1)} (Strong) — your gym is in great shape`,
+      });
+    }
+
+    if (engagementRate > 0) {
+      items.push({
+        icon: "engagement",
+        priority: engagementRate >= 50 ? "positive" : engagementRate >= 30 ? "info" : "warning",
+        message: `${engagementRate}% engagement rate this week (${uniqueAttendees} of ${metrics.active} active members checked in)`,
+      });
+    }
+
+    const summary = buildBriefingSummary(atRiskCount, staleLeads.length, failedSubs.length, metrics.totalRev, rsi, todayClasses.length, classFillRate);
+
+    res.json({
+      date: todayStr,
+      summary,
+      items: items.sort((a, b) => {
+        const priorityOrder = { critical: 0, warning: 1, info: 2, positive: 3 };
+        return priorityOrder[a.priority] - priorityOrder[b.priority];
+      }),
+      snapshot: {
+        activeMembers: metrics.active,
+        mrr: Math.round(metrics.totalRev),
+        rsiScore: rsi.score,
+        rsiBand: rsi.band,
+        atRiskMembers: atRiskCount,
+        revenueAtRisk: Math.round(revenueAtRisk),
+        engagementRate,
+        staleLeads: staleLeads.length,
+        failedPayments: failedSubs.length,
+        todayClasses: todayClasses.length,
+        classFillRate,
+      },
+    });
+  } catch (err) {
+    console.error("[intelligence/morning-briefing] Failed to generate briefing:", err);
+    res.status(500).json({ error: "Failed to generate morning briefing. Please try again." });
+  }
+});
+
+function buildBriefingSummary(
+  atRisk: number, staleLeads: number, failedPayments: number,
+  mrr: number, rsi: { score: number; band: string },
+  todayClasses: number, classFillRate: number
+): string {
+  const parts: string[] = [];
+
+  if (atRisk > 0) {
+    parts.push(`${atRisk} member${atRisk > 1 ? "s" : ""} need${atRisk === 1 ? "s" : ""} attention`);
+  }
+  if (failedPayments > 0) {
+    parts.push(`${failedPayments} payment${failedPayments > 1 ? "s" : ""} to recover`);
+  }
+  if (staleLeads > 0) {
+    parts.push(`${staleLeads} stale lead${staleLeads > 1 ? "s" : ""}`);
+  }
+  if (todayClasses > 0) {
+    parts.push(`today's classes are ${classFillRate}% full`);
+  }
+
+  if (parts.length === 0) {
+    return `All clear — your gym is running smoothly. RSI: ${rsi.score.toFixed(1)} (${rsi.band}), MRR: $${mrr.toLocaleString()}.`;
+  }
+
+  const actionPart = parts.join(", ");
+  return `${actionPart.charAt(0).toUpperCase() + actionPart.slice(1)}. MRR: $${Math.round(mrr).toLocaleString()}, RSI: ${rsi.score.toFixed(1)} (${rsi.band}).`;
+}
 
 export default router;

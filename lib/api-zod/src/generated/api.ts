@@ -2686,6 +2686,7 @@ export const GetIntelligenceOverviewResponse = zod.object({
     expectedMrr12m: zod.number(),
     upsideMrr12m: zod.number(),
     downsideMrr12m: zod.number(),
+    dataSource: zod.enum(["invoices", "subscriptions"]).optional(),
     assumptions: zod.array(zod.string()),
   }),
   generatedAt: zod.date(),
@@ -2819,7 +2820,76 @@ export const GetRevenueForecastResponse = zod.object({
   expectedMrr12m: zod.number(),
   upsideMrr12m: zod.number(),
   downsideMrr12m: zod.number(),
+  dataSource: zod.enum(["invoices", "subscriptions"]).optional(),
   assumptions: zod.array(zod.string()),
+});
+
+/**
+ * @summary Get morning briefing for gym owner
+ */
+export const GetMorningBriefingParams = zod.object({
+  gymId: zod.coerce.number(),
+});
+
+export const GetMorningBriefingResponse = zod.object({
+  date: zod.string(),
+  summary: zod.string(),
+  items: zod.array(
+    zod.object({
+      icon: zod.string(),
+      priority: zod.enum(["critical", "warning", "info", "positive"]),
+      message: zod.string(),
+      action: zod.string().nullish(),
+      link: zod.string().nullish(),
+    }),
+  ),
+  snapshot: zod.object({
+    activeMembers: zod.number().optional(),
+    mrr: zod.number().optional(),
+    rsiScore: zod.number().optional(),
+    rsiBand: zod.string().optional(),
+    atRiskMembers: zod.number().optional(),
+    revenueAtRisk: zod.number().optional(),
+    engagementRate: zod.number().optional(),
+    staleLeads: zod.number().optional(),
+    failedPayments: zod.number().optional(),
+    todayClasses: zod.number().optional(),
+    classFillRate: zod.number().optional(),
+  }),
+});
+
+/**
+ * @summary Public lead capture form submission (no auth required)
+ */
+export const SubmitLeadCaptureParams = zod.object({
+  gymSlug: zod.coerce.string(),
+});
+
+export const SubmitLeadCaptureBody = zod.object({
+  firstName: zod.string(),
+  lastName: zod.string(),
+  email: zod.string().email(),
+  phone: zod.string().nullish(),
+  notes: zod.string().nullish(),
+});
+
+/**
+ * @summary Get public gym info for lead capture form
+ */
+export const GetLeadCaptureGymInfoParams = zod.object({
+  gymSlug: zod.coerce.string(),
+});
+
+export const GetLeadCaptureGymInfoResponse = zod.object({
+  name: zod.string().optional(),
+  description: zod.string().nullish(),
+  logoUrl: zod.string().nullish(),
+  phone: zod.string().nullish(),
+  email: zod.string().nullish(),
+  address: zod.string().nullish(),
+  city: zod.string().nullish(),
+  state: zod.string().nullish(),
+  website: zod.string().nullish(),
 });
 
 /**

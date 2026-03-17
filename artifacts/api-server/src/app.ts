@@ -27,6 +27,7 @@ import { authMiddleware } from "./middlewares/authMiddleware";
 import { WebhookHandlers } from "./webhookHandlers";
 import router from "./routes";
 import paymentUpdatePublicRouter from "./routes/payment-update-public";
+import leadCaptureRouter from "./routes/lead-capture";
 
 const app: Express = express();
 
@@ -125,8 +126,9 @@ app.use("/api/callback", authLimiter);
 app.use("/api/payment-update", paymentUpdateLimiter);
 app.use("/api", apiLimiter);
 
-// Public routes that do not require authentication (e.g., payment update links)
+// Public routes that do not require authentication (e.g., payment update links, lead capture)
 app.use("/api", paymentUpdatePublicRouter);
+app.use("/api", leadCaptureRouter);
 
 // Authentication middleware — everything below this point requires a valid session
 app.use(authMiddleware);
