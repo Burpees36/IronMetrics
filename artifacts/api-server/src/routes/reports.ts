@@ -108,13 +108,15 @@ router.get("/gyms/:gymId/reports/dashboard", async (req, res): Promise<void> => 
   }
 
   const months = [];
+  const currentMonthKey = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 7);
   for (let i = 11; i >= 0; i--) {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
     const monthKey = d.toISOString().slice(0, 7);
+    const invoiceRev = invoicesByMonth[monthKey] ?? 0;
+    const revenue = invoiceRev > 0 ? Math.round(invoiceRev) : (monthKey === currentMonthKey ? Math.round(mrr) : 0);
     months.push({
       month: monthKey,
-      revenue: Math.round(invoicesByMonth[monthKey] ?? 0),
-      members: Math.max(1, active - i),
+      revenue,
     });
   }
 
@@ -135,9 +137,14 @@ router.get("/gyms/:gymId/reports/dashboard", async (req, res): Promise<void> => 
     newMembersThisMonth: newCount,
     churnedThisMonth: cancelled,
     mrr,
-    mrrGrowth: mrr > 0 ? Math.round(churnRate > 0 ? -churnRate : 2.0) : 0,
+    mrrGrowth: (() => {
+      const currentRev = months[months.length - 1]?.revenue ?? 0;
+      const prevRev = months[months.length - 2]?.revenue ?? 0;
+      if (prevRev > 0) return Math.round(((currentRev - prevRev) / prevRev) * 1000) / 10;
+      return null;
+    })(),
     totalRevenue: mrr * 12,
-    revenueGrowth: mrr > 0 ? Math.round((1 - churnRate / 100) * 100) / 10 : 0,
+    revenueGrowth: null,
     engagementRate,
     engagementChange,
     classesThisWeek: Number(classesThisWeek?.count ?? 0),
@@ -204,9 +211,9 @@ router.get("/gyms/:gymId/reports/membership", async (req, res): Promise<void> =>
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
     months.push({
       month: d.toISOString().slice(0, 7),
-      newMembers: i === 0 ? Number(newThisMonth?.count ?? 0) : Math.max(0, active - i),
+      newMembers: i === 0 ? Number(newThisMonth?.count ?? 0) : 0,
       churned: i === 0 ? cancelled : 0,
-      net: i === 0 ? netGrowth : Math.max(0, active - i),
+      net: i === 0 ? netGrowth : 0,
     });
   }
 
@@ -261,12 +268,13 @@ router.get("/gyms/:gymId/reports/revenue", async (req, res): Promise<void> => {
   }
 
   const byMonth = [];
+  const currentMonthKeyRev = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 7);
   for (let i = 11; i >= 0; i--) {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
     const monthKey = d.toISOString().slice(0, 7);
-    const membership = Math.round(invoicesByMonthRev[monthKey] ?? 0);
-    const retail = 0;
-    byMonth.push({ month: monthKey, membership, retail, total: membership + retail });
+    const invoiceRev = invoicesByMonthRev[monthKey] ?? 0;
+    const membership = invoiceRev > 0 ? Math.round(invoiceRev) : (monthKey === currentMonthKeyRev ? Math.round(mrr) : 0);
+    byMonth.push({ month: monthKey, membership, retail: 0, total: membership });
   }
 
   res.json({
