@@ -4,7 +4,8 @@ import { useGetDashboardStats, useGetMorningBriefing } from "@workspace/api-clie
 import { 
   Users, TrendingUp, AlertTriangle, CalendarCheck, 
   ArrowUpRight, ArrowDownRight, Loader2, BrainCircuit, Rocket,
-  Sun, CreditCard, UserCheck, Calendar, ChevronRight, Sparkles
+  Sun, CreditCard, UserCheck, Calendar, ChevronRight, Sparkles,
+  ChevronDown, ChevronUp, UserPlus, Clock, DollarSign, Inbox
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { AreaChart, Area, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
@@ -68,6 +69,13 @@ const iconMap: Record<string, React.ElementType> = {
   engagement: Users,
 };
 
+function getGreeting(): string {
+  const hour = new Date().getHours();
+  if (hour < 12) return "Good morning";
+  if (hour < 17) return "Good afternoon";
+  return "Good evening";
+}
+
 function MorningBriefing({ gymId }: { gymId: number }) {
   const { data: briefing, isLoading } = useGetMorningBriefing(gymId, {
     query: { enabled: !!gymId }
@@ -76,7 +84,46 @@ function MorningBriefing({ gymId }: { gymId: number }) {
 
   if (isLoading || !briefing) return null;
 
-  const visibleItems = collapsed ? briefing.items.slice(0, 2) : briefing.items;
+  const snap = (briefing as any).snapshot;
+  const actionItems = (briefing.items || []).filter(
+    (item: any) => item.priority === "critical" || item.priority === "warning"
+  );
+  const positiveItems = (briefing.items || []).filter(
+    (item: any) => item.priority === "positive" || item.priority === "info"
+  );
+
+  const attentionCards = [
+    {
+      label: "Critical Members",
+      value: snap?.atRiskMembers || 0,
+      icon: AlertTriangle,
+      color: (snap?.atRiskMembers || 0) > 0 ? "text-destructive bg-destructive/10 border-destructive/20" : "text-muted-foreground bg-muted/20 border-border",
+      link: "/intelligence",
+    },
+    {
+      label: "Stale Leads",
+      value: snap?.staleLeads || 0,
+      icon: Clock,
+      color: (snap?.staleLeads || 0) > 0 ? "text-amber-500 bg-amber-500/10 border-amber-500/20" : "text-muted-foreground bg-muted/20 border-border",
+      link: "/leads",
+    },
+    {
+      label: "New Leads",
+      value: snap?.newLeads || 0,
+      icon: UserPlus,
+      color: (snap?.newLeads || 0) > 0 ? "text-emerald-500 bg-emerald-500/10 border-emerald-500/20" : "text-muted-foreground bg-muted/20 border-border",
+      link: "/leads",
+    },
+    {
+      label: "Overdue Payments",
+      value: snap?.failedPayments || 0,
+      icon: CreditCard,
+      color: (snap?.failedPayments || 0) > 0 ? "text-red-500 bg-red-500/10 border-red-500/20" : "text-muted-foreground bg-muted/20 border-border",
+      link: "/billing",
+    },
+  ];
+
+  const hasIssues = actionItems.length > 0;
 
   return (
     <motion.div
@@ -84,56 +131,114 @@ function MorningBriefing({ gymId }: { gymId: number }) {
       animate={{ opacity: 1, y: 0 }}
       className="bg-card border border-border rounded-2xl shadow-sm overflow-hidden"
     >
-      <div className="px-4 md:px-6 py-3 md:py-4 border-b border-border/50 flex items-center justify-between">
+      <button
+        onClick={() => setCollapsed(!collapsed)}
+        className="w-full px-4 md:px-6 py-3 md:py-4 flex items-center justify-between hover:bg-muted/10 transition-colors text-left"
+      >
         <div className="flex items-center gap-3">
           <div className="p-2 rounded-lg bg-primary/10">
             <Sun className="h-4 w-4 text-primary" />
           </div>
           <div>
-            <h3 className="text-sm md:text-base font-semibold text-foreground">Morning Briefing</h3>
+            <h3 className="text-sm md:text-base font-semibold text-foreground">{getGreeting()}</h3>
             <p className="text-xs text-muted-foreground mt-0.5">{briefing.summary}</p>
           </div>
         </div>
-        {briefing.items.length > 2 && (
-          <button
-            onClick={() => setCollapsed(!collapsed)}
-            className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+        <div className="flex items-center gap-2">
+          {collapsed && hasIssues && (
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-destructive/10 text-destructive">
+              {actionItems.length} action{actionItems.length !== 1 ? "s" : ""} needed
+            </span>
+          )}
+          {collapsed ? (
+            <ChevronDown className="h-4 w-4 text-muted-foreground" />
+          ) : (
+            <ChevronUp className="h-4 w-4 text-muted-foreground" />
+          )}
+        </div>
+      </button>
+
+      <AnimatePresence>
+        {!collapsed && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="overflow-hidden"
           >
-            {collapsed ? `+${briefing.items.length - 2} more` : "Show less"}
-          </button>
-        )}
-      </div>
-
-      <div className="divide-y divide-border/30">
-        <AnimatePresence mode="sync">
-          {visibleItems.map((item: any, i: number) => {
-            const config = priorityConfig[item.priority as keyof typeof priorityConfig] || priorityConfig.info;
-            const Icon = iconMap[item.icon] || BrainCircuit;
-
-            return (
-              <motion.div
-                key={`${item.priority}-${i}`}
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: "auto" }}
-                exit={{ opacity: 0, height: 0 }}
-                className="flex items-center gap-3 px-4 md:px-6 py-2.5 md:py-3 group"
-              >
-                <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${config.dot}`} />
-                <Icon className={`h-4 w-4 shrink-0 ${config.text}`} />
-                <span className="text-xs md:text-sm text-foreground flex-1">{item.message}</span>
-                {item.link && item.action && (
-                  <Link href={item.link}>
-                    <span className="text-xs font-medium text-primary hover:text-primary/80 transition-colors flex items-center gap-1 whitespace-nowrap opacity-0 group-hover:opacity-100 md:opacity-100">
-                      {item.action}
-                      <ChevronRight className="h-3 w-3" />
-                    </span>
+            <div className="px-4 md:px-6 pb-4 md:pb-5 space-y-4">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
+                {attentionCards.map(card => (
+                  <Link key={card.label} href={card.link}>
+                    <div className={`rounded-xl border p-3 transition-colors hover:opacity-80 cursor-pointer ${card.color}`}>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <card.icon className="h-4 w-4" />
+                        <span className="text-xl font-bold">{card.value}</span>
+                      </div>
+                      <p className="text-[11px] font-medium opacity-80">{card.label}</p>
+                    </div>
                   </Link>
-                )}
-              </motion.div>
-            );
-          })}
-        </AnimatePresence>
-      </div>
+                ))}
+              </div>
+
+              {actionItems.length > 0 && (
+                <div className="space-y-1.5">
+                  {actionItems.map((item: any, i: number) => {
+                    const config = priorityConfig[item.priority as keyof typeof priorityConfig] || priorityConfig.info;
+                    const Icon = iconMap[item.icon] || BrainCircuit;
+                    return (
+                      <div
+                        key={`action-${i}`}
+                        className="flex items-center gap-3 px-3 py-2 rounded-lg bg-muted/15 group"
+                      >
+                        <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${config.dot}`} />
+                        <Icon className={`h-3.5 w-3.5 shrink-0 ${config.text}`} />
+                        <span className="text-xs text-foreground flex-1">{item.message}</span>
+                        {item.link && item.action && (
+                          <Link href={item.link}>
+                            <span className="text-[11px] font-medium text-primary hover:text-primary/80 transition-colors flex items-center gap-0.5 whitespace-nowrap">
+                              {item.action}
+                              <ChevronRight className="h-3 w-3" />
+                            </span>
+                          </Link>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {positiveItems.length > 0 && (
+                <div className="space-y-1.5">
+                  {positiveItems.map((item: any, i: number) => {
+                    const config = priorityConfig[item.priority as keyof typeof priorityConfig] || priorityConfig.info;
+                    const Icon = iconMap[item.icon] || BrainCircuit;
+                    return (
+                      <div
+                        key={`positive-${i}`}
+                        className="flex items-center gap-3 px-3 py-2 rounded-lg group"
+                      >
+                        <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${config.dot}`} />
+                        <Icon className={`h-3.5 w-3.5 shrink-0 ${config.text}`} />
+                        <span className="text-xs text-muted-foreground flex-1">{item.message}</span>
+                        {item.link && item.action && (
+                          <Link href={item.link}>
+                            <span className="text-[11px] font-medium text-primary hover:text-primary/80 transition-colors flex items-center gap-0.5 whitespace-nowrap opacity-0 group-hover:opacity-100">
+                              {item.action}
+                              <ChevronRight className="h-3 w-3" />
+                            </span>
+                          </Link>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 }

@@ -679,8 +679,10 @@ router.get("/gyms/:gymId/intelligence/morning-briefing", async (req, res): Promi
       return false;
     });
     const activeLeads = allLeads.filter(l => l.stage !== "converted" && l.stage !== "lost");
+    const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    const newLeadsToday = allLeads.filter(l => new Date(l.createdAt) >= oneDayAgo && l.stage !== "converted" && l.stage !== "lost");
 
-    const now = new Date();
+
     const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
     const allAttendance = await db.select().from(attendanceTable).where(and(eq(attendanceTable.gymId, gymId), gte(attendanceTable.checkinTime, weekAgo)));
     const uniqueAttendees = new Set(allAttendance.map(a => a.memberId)).size;
@@ -769,11 +771,13 @@ router.get("/gyms/:gymId/intelligence/morning-briefing", async (req, res): Promi
       });
     }
 
-    if (engagementRate > 0) {
+    if (newLeadsToday.length > 0) {
       items.push({
-        icon: "engagement",
-        priority: engagementRate >= 50 ? "positive" : engagementRate >= 30 ? "info" : "warning",
-        message: `${engagementRate}% engagement rate this week (${uniqueAttendees} of ${metrics.active} active members checked in)`,
+        icon: "leads",
+        priority: "positive",
+        message: `${newLeadsToday.length} new lead${newLeadsToday.length > 1 ? "s" : ""} in the last 24 hours`,
+        action: "View Leads",
+        link: "/leads",
       });
     }
 
@@ -795,6 +799,8 @@ router.get("/gyms/:gymId/intelligence/morning-briefing", async (req, res): Promi
         revenueAtRisk: Math.round(revenueAtRisk),
         engagementRate,
         staleLeads: staleLeads.length,
+        newLeads: newLeadsToday.length,
+        activeLeads: activeLeads.length,
         failedPayments: failedSubs.length,
         todayClasses: todayClasses.length,
         classFillRate,
