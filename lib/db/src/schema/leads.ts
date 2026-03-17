@@ -40,6 +40,33 @@ export const leadActivitiesTable = pgTable("lead_activities", {
   index("idx_lead_activities_gym").on(table.gymId),
 ]);
 
+export const leadCaptureConfigTable = pgTable("lead_capture_config", {
+  id: serial("id").primaryKey(),
+  gymId: integer("gym_id").notNull().references(() => gymsTable.id).unique(),
+  isEnabled: boolean("is_enabled").notNull().default(true),
+  headline: text("headline"),
+  subheadline: text("subheadline"),
+  ctaButtonText: text("cta_button_text"),
+  successMessage: text("success_message"),
+  disclaimerText: text("disclaimer_text"),
+  showPhone: boolean("show_phone").notNull().default(true),
+  showAddress: boolean("show_address").notNull().default(true),
+  phoneRequired: boolean("phone_required").notNull().default(false),
+  showInterests: boolean("show_interests").notNull().default(true),
+  showConsent: boolean("show_consent").notNull().default(false),
+  consentText: text("consent_text"),
+  sourceLabel: text("source_label").notNull().default("website"),
+  campaignTag: text("campaign_tag"),
+  defaultStage: text("default_stage").notNull().default("new"),
+  autoAssignStaffId: integer("auto_assign_staff_id"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
+});
+
+export const insertLeadCaptureConfigSchema = createInsertSchema(leadCaptureConfigTable).omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertLeadCaptureConfig = z.infer<typeof insertLeadCaptureConfigSchema>;
+export type LeadCaptureConfig = typeof leadCaptureConfigTable.$inferSelect;
+
 export const insertLeadSchema = createInsertSchema(leadsTable).omit({ id: true, createdAt: true, updatedAt: true });
 export type InsertLead = z.infer<typeof insertLeadSchema>;
 export type Lead = typeof leadsTable.$inferSelect;

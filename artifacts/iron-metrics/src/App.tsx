@@ -27,6 +27,7 @@ import { Settings } from "@/pages/Settings";
 import { Onboarding } from "@/pages/Onboarding";
 import { UpdatePayment } from "@/pages/UpdatePayment";
 import { LeadCapture } from "@/pages/LeadCapture";
+import { Retention } from "@/pages/Retention";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -99,6 +100,7 @@ function Router() {
       <Route path="/schedule" component={() => <ProtectedRoute component={Schedule} />} />
       <Route path="/ai-operator" component={() => <ProtectedRoute component={AiOperator} />} />
       <Route path="/leads" component={() => <ProtectedRoute component={Leads} />} />
+      <Route path="/retention" component={() => <ProtectedRoute component={Retention} />} />
       <Route path="/billing" component={() => <ProtectedRoute component={Billing} />} />
       <Route path="/workouts" component={() => <ProtectedRoute component={Workouts} />} />
       <Route path="/resources" component={() => <ProtectedRoute component={Resources} />} />

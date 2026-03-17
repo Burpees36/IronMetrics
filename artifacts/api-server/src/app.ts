@@ -28,6 +28,8 @@ import { WebhookHandlers } from "./webhookHandlers";
 import router from "./routes";
 import paymentUpdatePublicRouter from "./routes/payment-update-public";
 import leadCaptureRouter from "./routes/lead-capture";
+import leadCaptureConfigRouter from "./routes/lead-capture-config";
+import retentionRouter from "./routes/retention";
 
 const app: Express = express();
 
@@ -120,10 +122,21 @@ const paymentUpdateLimiter = rateLimit({
   validate: { ip: false, trustProxy: false },
 } as Partial<Options>);
 
+/** Lead capture limiter: 20 requests per 15-minute window (spam prevention for public forms). */
+const leadCaptureLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 20,
+  standardHeaders: "draft-7",
+  legacyHeaders: false,
+  message: { error: "Too many submissions. Please try again later." },
+  validate: { ip: false, trustProxy: false },
+} as Partial<Options>);
+
 // Apply rate limiters to their respective route prefixes
 app.use("/api/login", authLimiter);
 app.use("/api/callback", authLimiter);
 app.use("/api/payment-update", paymentUpdateLimiter);
+app.use("/api/lead-capture", leadCaptureLimiter);
 app.use("/api", apiLimiter);
 
 // Public routes that do not require authentication (e.g., payment update links, lead capture)
@@ -135,6 +148,8 @@ app.use(authMiddleware);
 
 // Protected API routes — gym-scoped routes are further guarded by requireGymAccess
 app.use("/api", router);
+app.use("/api", leadCaptureConfigRouter);
+app.use("/api", retentionRouter);
 
 /** Global error handler — catches unhandled errors from any route or middleware. */
 app.use((err: any, _req: any, res: any, _next: any) => {

@@ -5,6 +5,20 @@ import { CheckCircle2, Loader2, Dumbbell, Send } from "lucide-react";
 
 const API_BASE = import.meta.env.VITE_API_URL || "";
 
+interface FormConfig {
+  headline: string | null;
+  subheadline: string | null;
+  ctaButtonText: string | null;
+  successMessage: string | null;
+  disclaimerText: string | null;
+  showPhone: boolean;
+  showAddress: boolean;
+  phoneRequired: boolean;
+  showInterests: boolean;
+  showConsent: boolean;
+  consentText: string | null;
+}
+
 interface GymInfo {
   name: string;
   description?: string | null;
@@ -15,6 +29,7 @@ interface GymInfo {
   city?: string | null;
   state?: string | null;
   website?: string | null;
+  formConfig: FormConfig;
 }
 
 export function LeadCapture() {
@@ -24,9 +39,11 @@ export function LeadCapture() {
   const [gymInfo, setGymInfo] = useState<GymInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
+  const [disabled, setDisabled] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState("");
+  const [consentGiven, setConsentGiven] = useState(false);
 
   const [form, setForm] = useState({
     firstName: "",
@@ -40,18 +57,20 @@ export function LeadCapture() {
     if (!gymSlug) return;
     fetch(`${API_BASE}/api/lead-capture/${gymSlug}/info`)
       .then((r) => {
+        if (r.status === 403) { setDisabled(true); setLoading(false); return null; }
         if (!r.ok) throw new Error("Not found");
         return r.json();
       })
       .then((data) => {
-        setGymInfo(data);
-        setLoading(false);
+        if (data) { setGymInfo(data); setLoading(false); }
       })
       .catch(() => {
         setNotFound(true);
         setLoading(false);
       });
   }, [gymSlug]);
+
+  const fc = gymInfo?.formConfig;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -68,6 +87,7 @@ export function LeadCapture() {
           email: form.email.trim(),
           phone: form.phone.trim() || undefined,
           notes: form.notes.trim() || undefined,
+          consentGiven: fc?.showConsent ? consentGiven : undefined,
         }),
       });
 
@@ -92,13 +112,19 @@ export function LeadCapture() {
     );
   }
 
-  if (notFound) {
+  if (notFound || disabled) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background p-4">
         <div className="text-center">
           <Dumbbell className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-          <h1 className="text-xl font-bold text-foreground">Gym Not Found</h1>
-          <p className="text-muted-foreground mt-2">This gym link doesn't seem to be active.</p>
+          <h1 className="text-xl font-bold text-foreground">
+            {disabled ? "Form Unavailable" : "Gym Not Found"}
+          </h1>
+          <p className="text-muted-foreground mt-2">
+            {disabled
+              ? "This form is currently not accepting submissions."
+              : "This gym link doesn't seem to be active."}
+          </p>
         </div>
       </div>
     );
@@ -117,7 +143,7 @@ export function LeadCapture() {
           </div>
           <h1 className="text-2xl font-bold text-foreground mb-2">You're In!</h1>
           <p className="text-muted-foreground">
-            Thanks for your interest in {gymInfo?.name}. We'll be in touch soon to get you started.
+            {fc?.successMessage || `Thanks for your interest in ${gymInfo?.name}. We'll be in touch soon to get you started.`}
           </p>
         </motion.div>
       </div>
@@ -143,12 +169,18 @@ export function LeadCapture() {
           {gymInfo?.description && (
             <p className="text-muted-foreground mt-2 text-sm md:text-base">{gymInfo.description}</p>
           )}
-          <p className="text-primary font-medium mt-3 text-sm">Start your fitness journey today</p>
+          <p className="text-primary font-medium mt-3 text-sm">
+            {fc?.headline || "Start your fitness journey today"}
+          </p>
         </div>
 
         <div className="bg-card border border-border rounded-2xl p-6 md:p-8 shadow-sm">
-          <h2 className="text-lg font-semibold text-foreground mb-1">Get Started</h2>
-          <p className="text-sm text-muted-foreground mb-6">Fill out the form below and we'll reach out to schedule your first visit.</p>
+          <h2 className="text-lg font-semibold text-foreground mb-1">
+            {fc?.ctaButtonText ? `${fc.ctaButtonText}` : "Get Started"}
+          </h2>
+          <p className="text-sm text-muted-foreground mb-6">
+            {fc?.subheadline || "Fill out the form below and we'll reach out to schedule your first visit."}
+          </p>
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
@@ -188,27 +220,53 @@ export function LeadCapture() {
               />
             </div>
 
-            <div>
-              <label className="block text-xs font-medium text-muted-foreground mb-1.5">Phone</label>
-              <input
-                type="tel"
-                value={form.phone}
-                onChange={(e) => setForm({ ...form, phone: e.target.value })}
-                className="w-full px-3 py-2.5 bg-background border border-border rounded-lg text-sm text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
-                placeholder="(555) 123-4567"
-              />
-            </div>
+            {(fc?.showPhone ?? true) && (
+              <div>
+                <label className="block text-xs font-medium text-muted-foreground mb-1.5">
+                  Phone{fc?.phoneRequired ? " *" : ""}
+                </label>
+                <input
+                  type="tel"
+                  required={fc?.phoneRequired}
+                  value={form.phone}
+                  onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                  className="w-full px-3 py-2.5 bg-background border border-border rounded-lg text-sm text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+                  placeholder="(555) 123-4567"
+                />
+              </div>
+            )}
 
-            <div>
-              <label className="block text-xs font-medium text-muted-foreground mb-1.5">What are you interested in?</label>
-              <textarea
-                value={form.notes}
-                onChange={(e) => setForm({ ...form, notes: e.target.value })}
-                rows={3}
-                className="w-full px-3 py-2.5 bg-background border border-border rounded-lg text-sm text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary resize-none"
-                placeholder="CrossFit, personal training, group classes..."
-              />
-            </div>
+            {(fc?.showInterests ?? true) && (
+              <div>
+                <label className="block text-xs font-medium text-muted-foreground mb-1.5">What are you interested in?</label>
+                <textarea
+                  value={form.notes}
+                  onChange={(e) => setForm({ ...form, notes: e.target.value })}
+                  rows={3}
+                  className="w-full px-3 py-2.5 bg-background border border-border rounded-lg text-sm text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary resize-none"
+                  placeholder="CrossFit, personal training, group classes..."
+                />
+              </div>
+            )}
+
+            {fc?.showConsent && (
+              <label className="flex items-start gap-3">
+                <input
+                  type="checkbox"
+                  checked={consentGiven}
+                  onChange={(e) => setConsentGiven(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 rounded border-border text-primary focus:ring-primary"
+                  required
+                />
+                <span className="text-xs text-muted-foreground">
+                  {fc.consentText || "I agree to receive communications from this gym."}
+                </span>
+              </label>
+            )}
+
+            {fc?.disclaimerText && (
+              <p className="text-xs text-muted-foreground/70">{fc.disclaimerText}</p>
+            )}
 
             {error && (
               <p className="text-sm text-destructive">{error}</p>
@@ -224,7 +282,7 @@ export function LeadCapture() {
               ) : (
                 <>
                   <Send className="h-4 w-4" />
-                  Get Started
+                  {fc?.ctaButtonText || "Get Started"}
                 </>
               )}
             </button>
@@ -232,7 +290,7 @@ export function LeadCapture() {
         </div>
 
         <div className="text-center mt-6 text-xs text-muted-foreground">
-          {gymInfo?.address && gymInfo?.city && gymInfo?.state && (
+          {(fc?.showAddress ?? true) && gymInfo?.address && gymInfo?.city && gymInfo?.state && (
             <p>{gymInfo.address}, {gymInfo.city}, {gymInfo.state}</p>
           )}
           {gymInfo?.phone && <p className="mt-1">{gymInfo.phone}</p>}

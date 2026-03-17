@@ -44,6 +44,8 @@ import reportsRouter from "./reports";
 import recommendationsRouter from "./recommendations";
 import knowledgeRouter from "./knowledge";
 import onboardingRouter from "./onboarding";
+import leadCaptureConfigRouter from "./lead-capture-config";
+import retentionRouter from "./retention";
 
 const router: IRouter = Router();
 
@@ -77,5 +79,7 @@ router.use(aiRouter);
 router.use(recommendationsRouter);
 router.use(knowledgeRouter);
 router.use(onboardingRouter);
+router.use(leadCaptureConfigRouter);
+router.use(retentionRouter);
 
 export default router;

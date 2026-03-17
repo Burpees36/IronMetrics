@@ -4,7 +4,7 @@ import { useAuth } from "@workspace/replit-auth-web";
 import { 
   Dumbbell, LayoutDashboard, BrainCircuit, Users, CalendarDays, 
   Target, CreditCard, Activity, Bot, LogOut, Loader2, Menu, X, BookOpen,
-  ShoppingBag, MessagesSquare, FileText, BarChart3, Settings, Sun, Moon
+  ShoppingBag, MessagesSquare, FileText, BarChart3, Settings, Sun, Moon, RefreshCw
 } from "lucide-react";
 import { useGym } from "@/store/GymContext";
 import { useTheme } from "@/store/ThemeContext";
@@ -27,6 +27,7 @@ const NAV_ITEMS = [
   { name: "Billing", href: "/billing", icon: CreditCard },
   { name: "Workouts", href: "/workouts", icon: Activity },
   { name: "AI Operator", href: "/ai-operator", icon: Bot },
+  { name: "Retention", href: "/retention", icon: RefreshCw },
   { name: "Resources", href: "/resources", icon: BookOpen },
   { name: "Settings", href: "/settings", icon: Settings },
 ];
