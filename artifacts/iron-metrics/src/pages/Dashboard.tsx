@@ -141,7 +141,7 @@ function MorningBriefing({ gymId }: { gymId: number }) {
           </div>
           <div>
             <h3 className="text-sm md:text-base font-semibold text-foreground">{getGreeting()}</h3>
-            <p className="text-xs text-muted-foreground mt-0.5">{briefing.summary}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Your daily brief — tap to {collapsed ? "expand" : "collapse"}</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
