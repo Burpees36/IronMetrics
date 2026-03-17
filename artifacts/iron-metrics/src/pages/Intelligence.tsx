@@ -168,7 +168,7 @@ export function Intelligence() {
                       <div className="flex items-center gap-3">
                         <div className="flex-1 h-2.5 md:h-3 bg-muted rounded-full overflow-hidden">
                           <motion.div 
-                            initial={{ width: 0 }} animate={{ width: `${item.normalized}%` }}
+                            initial={{ width: 0 }} animate={{ width: `${Math.max(item.normalized, 2)}%` }}
                             transition={{ duration: 1, delay: i * 0.1 }}
                             className={`h-full ${item.normalized > 70 ? 'bg-emerald-500' : item.normalized > 40 ? 'bg-yellow-500' : 'bg-destructive'}`}
                           />

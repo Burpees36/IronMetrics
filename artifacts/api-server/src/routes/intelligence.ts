@@ -70,7 +70,7 @@ function parseGymId(params: any): number | null {
  */
 export function computeRSI(churnRate: number, avgRevPerMember: number, netGrowth: number, avgTenure: number) {
   // Normalize each component to a 0–100 scale
-  const churnNorm = Math.max(0, Math.min(100, 100 - churnRate * 10));           // 10% churn → 0 score
+  const churnNorm = Math.max(0, Math.min(100, 100 - churnRate * 7));            // ~14% churn → 0 score
   const revNorm = Math.min(100, (avgRevPerMember / 200) * 100);                 // $200/member → full score
   const growthNorm = Math.max(0, Math.min(100, 50 + netGrowth * 5));            // 0 growth → neutral 50
   const tenureNorm = Math.min(100, (avgTenure / 24) * 100);                     // 24 months → full score
