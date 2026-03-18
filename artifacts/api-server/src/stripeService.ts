@@ -115,7 +115,7 @@ export class StripeService {
     const subscription = await stripe.subscriptions.create({
       customer: customerId,
       items: [{ price: stripePriceId }],
-      payment_behavior: "default_incomplete",
+      payment_behavior: paymentMethodId ? "allow_incomplete" : "default_incomplete",
       payment_settings: { save_default_payment_method: "on_subscription" },
       expand: ["latest_invoice.payment_intent"],
       metadata: { gymId: String(gymId), memberId: String(memberId), planId: String(planId) },

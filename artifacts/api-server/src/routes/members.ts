@@ -134,7 +134,8 @@ router.post("/gyms/:gymId/members", async (req, res): Promise<void> => {
   }
 
   const today = new Date().toISOString().split("T")[0];
-  const stripeCustomerId = (req.body as any).stripeCustomerId || null;
+  const body = req.body as Record<string, unknown>;
+  const stripeCustomerId = (typeof body.stripeCustomerId === "string" ? body.stripeCustomerId : null);
   const [member] = await db
     .insert(membersTable)
     .values({
@@ -159,8 +160,8 @@ router.post("/gyms/:gymId/members", async (req, res): Promise<void> => {
     date: new Date(),
   });
 
-  const planId = (req.body as any).planId ? parseInt((req.body as any).planId, 10) : null;
-  const paymentMethodId = (req.body as any).paymentMethodId || null;
+  const planId = body.planId ? parseInt(String(body.planId), 10) : null;
+  const paymentMethodId = typeof body.paymentMethodId === "string" ? body.paymentMethodId : null;
 
   let subscriptionResult = null;
   let subscriptionError = null;
@@ -170,8 +171,8 @@ router.post("/gyms/:gymId/members", async (req, res): Promise<void> => {
       subscriptionResult = await stripeService.createStripeSubscription(
         member.id, gymId, planId, paymentMethodId || undefined
       );
-    } catch (err: any) {
-      subscriptionError = err.message || "Failed to create subscription";
+    } catch (err: unknown) {
+      subscriptionError = err instanceof Error ? err.message : "Failed to create subscription";
     }
   }
 

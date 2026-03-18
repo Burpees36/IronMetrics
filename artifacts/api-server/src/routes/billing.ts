@@ -212,8 +212,31 @@ router.post("/gyms/:gymId/onboarding/setup-intent", async (req, res): Promise<vo
       clientSecret: setupIntent.client_secret!,
       customerId: customer.id,
     });
-  } catch (err: any) {
-    res.status(400).json({ error: err.message || "Failed to create setup intent" });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Failed to create setup intent";
+    res.status(400).json({ error: message });
+  }
+});
+
+router.get("/gyms/:gymId/payment-methods/:paymentMethodId", async (req, res): Promise<void> => {
+  const gymId = parseGymId(req.params);
+  if (!gymId) { res.status(400).json({ error: "Invalid gym ID" }); return; }
+
+  const pmId = req.params.paymentMethodId;
+  if (!pmId) { res.status(400).json({ error: "Payment method ID is required" }); return; }
+
+  try {
+    const stripe = await getStripeClient();
+    const pm = await stripe.paymentMethods.retrieve(pmId);
+    res.json({
+      brand: pm.card?.brand || "card",
+      last4: pm.card?.last4 || "****",
+      expMonth: pm.card?.exp_month,
+      expYear: pm.card?.exp_year,
+    });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Failed to retrieve payment method";
+    res.status(400).json({ error: message });
   }
 });
 

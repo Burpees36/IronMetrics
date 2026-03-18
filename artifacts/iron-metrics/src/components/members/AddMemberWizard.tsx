@@ -23,6 +23,34 @@ import {
 } from "lucide-react";
 import { loadStripeJs } from "@/lib/stripe";
 
+interface StripePaymentElementEvent {
+  complete: boolean;
+  error?: { message: string };
+}
+
+interface StripeSetupIntentResult {
+  error?: { message: string };
+  setupIntent?: {
+    payment_method: string;
+  };
+}
+
+interface StripePaymentElement {
+  mount(el: HTMLElement): void;
+  on(event: string, handler: (e: StripePaymentElementEvent) => void): void;
+  unmount(): void;
+}
+
+interface StripeElements {
+  create(type: string, options?: Record<string, unknown>): StripePaymentElement;
+  getElement(type: string): StripePaymentElement | null;
+}
+
+interface StripeInstance {
+  elements(options: Record<string, unknown>): StripeElements;
+  confirmSetup(options: Record<string, unknown>): Promise<StripeSetupIntentResult>;
+}
+
 type WizardStep = "personal" | "contact" | "membership" | "payment" | "review";
 const STEPS: WizardStep[] = ["personal", "contact", "membership", "payment", "review"];
 const STEP_LABELS: Record<WizardStep, string> = {
@@ -98,8 +126,8 @@ export function AddMemberWizard({ open, onOpenChange }: Props) {
   const [selectedPlanId, setSelectedPlanId] = useState<number | null>(null);
   const [skipPayment, setSkipPayment] = useState(false);
 
-  const [stripeInstance, setStripeInstance] = useState<any>(null);
-  const [stripeElements, setStripeElements] = useState<any>(null);
+  const [stripeInstance, setStripeInstance] = useState<StripeInstance | null>(null);
+  const [stripeElements, setStripeElements] = useState<StripeElements | null>(null);
   const [stripeClientSecret, setStripeClientSecret] = useState("");
   const [stripeCustomerId, setStripeCustomerId] = useState("");
   const [paymentReady, setPaymentReady] = useState(false);
@@ -198,12 +226,13 @@ export function AddMemberWizard({ open, onOpenChange }: Props) {
     setStripeError("");
 
     try {
-      const stripe = await loadStripeJs(stripeKeyData.publishableKey);
-      if (!stripe) {
+      const stripeRaw = await loadStripeJs(stripeKeyData.publishableKey);
+      if (!stripeRaw) {
         setStripeError("Failed to load payment system.");
         setStripeLoading(false);
         return;
       }
+      const stripe = stripeRaw as StripeInstance;
       setStripeInstance(stripe);
 
       const res = await fetch(`${API_BASE}/gyms/${gymId}/onboarding/setup-intent`, {
@@ -250,7 +279,7 @@ export function AddMemberWizard({ open, onOpenChange }: Props) {
         if (cardMountRef.current && !cardMountedRef.current) {
           cardElement.mount(cardMountRef.current);
           cardMountedRef.current = true;
-          cardElement.on("change", (event: any) => {
+          cardElement.on("change", (event: StripePaymentElementEvent) => {
             setCardComplete(event.complete);
             if (event.error) {
               setStripeError(event.error.message);
@@ -260,8 +289,8 @@ export function AddMemberWizard({ open, onOpenChange }: Props) {
           });
         }
       });
-    } catch (err: any) {
-      setStripeError(err.message || "Failed to initialize payment.");
+    } catch (err: unknown) {
+      setStripeError(err instanceof Error ? err.message : "Failed to initialize payment.");
       setStripeLoading(false);
     }
   }, [stripeInstance, stripeLoading, stripeKeyData, gymId, form.email, form.firstName, form.lastName]);
@@ -307,18 +336,21 @@ export function AddMemberWizard({ open, onOpenChange }: Props) {
           if (setupIntent?.payment_method) {
             setConfirmedPaymentMethodId(setupIntent.payment_method);
             try {
-              const methods = await stripeInstance.paymentMethods?.retrieve?.(setupIntent.payment_method);
-              if (methods?.card) {
-                setCardSummary({ brand: methods.card.brand, last4: methods.card.last4 });
+              const pmRes = await fetch(`${API_BASE}/gyms/${gymId}/payment-methods/${setupIntent.payment_method}`);
+              if (pmRes.ok) {
+                const pmData = await pmRes.json() as { brand?: string; last4?: string };
+                if (pmData.brand && pmData.last4) {
+                  setCardSummary({ brand: pmData.brand, last4: pmData.last4 });
+                }
               }
-            } catch {}
-            if (!cardSummary) {
+            } catch {
               setCardSummary({ brand: "card", last4: "****" });
             }
+            setCardSummary(prev => prev || { brand: "card", last4: "****" });
           }
           setStripeLoading(false);
-        } catch (err: any) {
-          setStripeError(err.message || "Payment verification failed.");
+        } catch (err: unknown) {
+          setStripeError(err instanceof Error ? err.message : "Payment verification failed.");
           setStripeLoading(false);
           return;
         }
@@ -351,9 +383,9 @@ export function AddMemberWizard({ open, onOpenChange }: Props) {
         membershipType: selectedPlan?.name || null,
         waiverSigned: form.waiverSigned,
         tags: form.tags ? form.tags.split(",").map(t => t.trim()).filter(Boolean) : [],
-        planId: selectedPlanId || null,
-        paymentMethodId: confirmedPaymentMethodId || null,
-        stripeCustomerId: stripeCustomerId || null,
+        planId: (selectedPlanId && !skipPayment) ? selectedPlanId : null,
+        paymentMethodId: (!skipPayment && confirmedPaymentMethodId) ? confirmedPaymentMethodId : null,
+        stripeCustomerId: (!skipPayment && stripeCustomerId) ? stripeCustomerId : null,
       },
     }, {
       onSuccess: (data: Member & { subscriptionError?: string }) => {
