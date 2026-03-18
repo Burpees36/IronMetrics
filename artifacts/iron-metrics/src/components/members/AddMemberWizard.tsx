@@ -43,6 +43,16 @@ const initialForm = {
   membershipType: "", waiverSigned: false, tags: "",
 };
 
+function FormField({ label, required, error, children }: { label: string; required?: boolean; error?: string; children: React.ReactNode }) {
+  return (
+    <div className="space-y-1.5">
+      <Label className="text-sm text-foreground font-medium">{label}{required && <span className="text-red-400 ml-0.5">*</span>}</Label>
+      {children}
+      {error && <p className="text-xs text-red-400 flex items-center gap-1"><AlertTriangle className="h-3 w-3" />{error}</p>}
+    </div>
+  );
+}
+
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -166,14 +176,6 @@ export function AddMemberWizard({ open, onOpenChange }: Props) {
   };
 
   const stepIndex = STEPS.indexOf(step);
-
-  const FormField = ({ label, required, error, children }: { label: string; required?: boolean; error?: string; children: React.ReactNode }) => (
-    <div className="space-y-1.5">
-      <Label className="text-sm text-foreground font-medium">{label}{required && <span className="text-red-400 ml-0.5">*</span>}</Label>
-      {children}
-      {error && <p className="text-xs text-red-400 flex items-center gap-1"><AlertTriangle className="h-3 w-3" />{error}</p>}
-    </div>
-  );
 
   if (showSuccess) {
     return (

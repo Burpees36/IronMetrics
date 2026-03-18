@@ -50,6 +50,15 @@ const RISK_OPTIONS = [
   { value: "critical", label: "Critical" },
 ];
 
+function FormField({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
+  return (
+    <div className="space-y-1.5">
+      <Label className="text-sm text-foreground">{label}{required && <span className="text-destructive ml-0.5">*</span>}</Label>
+      {children}
+    </div>
+  );
+}
+
 export function Members() {
   const { activeGymId } = useGym();
   const [search, setSearch] = useState("");
@@ -271,13 +280,6 @@ export function Members() {
         ))}
       </DropdownMenuContent>
     </DropdownMenu>
-  );
-
-  const FormField = ({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) => (
-    <div className="space-y-1.5">
-      <Label className="text-sm text-foreground">{label}{required && <span className="text-destructive ml-0.5">*</span>}</Label>
-      {children}
-    </div>
   );
 
   return (

@@ -902,11 +902,11 @@ export function MemberDetail() {
           <div className="space-y-4 py-2">
             <div className="space-y-2">
               <Label>Amount ($) *</Label>
-              <Input type="number" step="0.01" value={chargeForm.amount} onChange={(e) => setChargeForm({ ...chargeForm, amount: e.target.value })} placeholder="25.00" className="bg-background border-border" />
+              <Input type="number" step="0.01" value={chargeForm.amount} onChange={(e) => setChargeForm(f => ({ ...f, amount: e.target.value }))} placeholder="25.00" className="bg-background border-border" />
             </div>
             <div className="space-y-2">
               <Label>Description *</Label>
-              <Input value={chargeForm.description} onChange={(e) => setChargeForm({ ...chargeForm, description: e.target.value })} placeholder="e.g. Late cancel fee" className="bg-background border-border" />
+              <Input value={chargeForm.description} onChange={(e) => setChargeForm(f => ({ ...f, description: e.target.value }))} placeholder="e.g. Late cancel fee" className="bg-background border-border" />
             </div>
           </div>
           <DialogFooter>
@@ -1010,47 +1010,47 @@ export function MemberDetail() {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="edit-first">First Name</Label>
-                <Input id="edit-first" value={editForm.firstName} onChange={(e) => setEditForm({ ...editForm, firstName: e.target.value })} className="bg-background border-border" />
+                <Input id="edit-first" value={editForm.firstName} onChange={(e) => setEditForm(f => ({ ...f, firstName: e.target.value }))} className="bg-background border-border" />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="edit-last">Last Name</Label>
-                <Input id="edit-last" value={editForm.lastName} onChange={(e) => setEditForm({ ...editForm, lastName: e.target.value })} className="bg-background border-border" />
+                <Input id="edit-last" value={editForm.lastName} onChange={(e) => setEditForm(f => ({ ...f, lastName: e.target.value }))} className="bg-background border-border" />
               </div>
             </div>
             <div className="space-y-2">
               <Label htmlFor="edit-email">Email</Label>
-              <Input id="edit-email" type="email" value={editForm.email} onChange={(e) => setEditForm({ ...editForm, email: e.target.value })} className="bg-background border-border" />
+              <Input id="edit-email" type="email" value={editForm.email} onChange={(e) => setEditForm(f => ({ ...f, email: e.target.value }))} className="bg-background border-border" />
             </div>
             <div className="space-y-2">
               <Label htmlFor="edit-phone">Phone</Label>
-              <Input id="edit-phone" value={editForm.phone} onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })} className="bg-background border-border" />
+              <Input id="edit-phone" value={editForm.phone} onChange={(e) => setEditForm(f => ({ ...f, phone: e.target.value }))} className="bg-background border-border" />
             </div>
             <div className="space-y-2">
               <Label htmlFor="edit-membership">Membership Plan</Label>
-              <Input id="edit-membership" value={editForm.membershipType} onChange={(e) => setEditForm({ ...editForm, membershipType: e.target.value })} className="bg-background border-border" placeholder="e.g. Unlimited, 3x Week" />
+              <Input id="edit-membership" value={editForm.membershipType} onChange={(e) => setEditForm(f => ({ ...f, membershipType: e.target.value }))} className="bg-background border-border" placeholder="e.g. Unlimited, 3x Week" />
             </div>
             <div className="space-y-2">
               <Label htmlFor="edit-address">Address</Label>
-              <Input id="edit-address" value={editForm.address} onChange={(e) => setEditForm({ ...editForm, address: e.target.value })} className="bg-background border-border" />
+              <Input id="edit-address" value={editForm.address} onChange={(e) => setEditForm(f => ({ ...f, address: e.target.value }))} className="bg-background border-border" />
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="edit-city">City</Label>
-                <Input id="edit-city" value={editForm.city} onChange={(e) => setEditForm({ ...editForm, city: e.target.value })} className="bg-background border-border" />
+                <Input id="edit-city" value={editForm.city} onChange={(e) => setEditForm(f => ({ ...f, city: e.target.value }))} className="bg-background border-border" />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="edit-state">State</Label>
-                <Input id="edit-state" value={editForm.state} onChange={(e) => setEditForm({ ...editForm, state: e.target.value })} className="bg-background border-border" placeholder="TX" />
+                <Input id="edit-state" value={editForm.state} onChange={(e) => setEditForm(f => ({ ...f, state: e.target.value }))} className="bg-background border-border" placeholder="TX" />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="edit-ec-name">Emergency Contact</Label>
-                <Input id="edit-ec-name" value={editForm.emergencyContactName} onChange={(e) => setEditForm({ ...editForm, emergencyContactName: e.target.value })} className="bg-background border-border" />
+                <Input id="edit-ec-name" value={editForm.emergencyContactName} onChange={(e) => setEditForm(f => ({ ...f, emergencyContactName: e.target.value }))} className="bg-background border-border" />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="edit-ec-phone">EC Phone</Label>
-                <Input id="edit-ec-phone" value={editForm.emergencyContactPhone} onChange={(e) => setEditForm({ ...editForm, emergencyContactPhone: e.target.value })} className="bg-background border-border" />
+                <Input id="edit-ec-phone" value={editForm.emergencyContactPhone} onChange={(e) => setEditForm(f => ({ ...f, emergencyContactPhone: e.target.value }))} className="bg-background border-border" />
               </div>
             </div>
             <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/30 border border-border">
@@ -1058,7 +1058,7 @@ export function MemberDetail() {
                 type="checkbox"
                 id="edit-waiver-detail"
                 checked={editForm.waiverSigned}
-                onChange={(e) => setEditForm({ ...editForm, waiverSigned: e.target.checked })}
+                onChange={(e) => setEditForm(f => ({ ...f, waiverSigned: e.target.checked }))}
                 className="rounded border-border"
               />
               <label htmlFor="edit-waiver-detail" className="text-sm text-foreground cursor-pointer">Liability Waiver Signed</label>
