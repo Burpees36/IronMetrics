@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { eq, and, ilike, or, count, desc, ne, sql } from "drizzle-orm";
 import { db, membersTable, memberNotesTable, timelineEventsTable, subscriptionsTable, attendanceTable, membershipPlansTable } from "@workspace/db";
 import { stripeService } from "../stripeService";
+import { getStripeClient } from "../stripeClient";
 import { CreateMemberBody, UpdateMemberBody, AddMemberNoteBody } from "@workspace/api-zod";
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -135,7 +136,28 @@ router.post("/gyms/:gymId/members", async (req, res): Promise<void> => {
 
   const today = new Date().toISOString().split("T")[0];
   const body = req.body as Record<string, unknown>;
-  const stripeCustomerId = (typeof body.stripeCustomerId === "string" ? body.stripeCustomerId : null);
+  const setupIntentId = typeof body.setupIntentId === "string" ? body.setupIntentId : null;
+  const planId = body.planId ? parseInt(String(body.planId), 10) : null;
+
+  let verifiedCustomerId: string | null = null;
+  let verifiedPaymentMethodId: string | null = null;
+
+  if (setupIntentId && planId) {
+    try {
+      const stripe = await getStripeClient();
+      const intent = await stripe.setupIntents.retrieve(setupIntentId);
+      if (intent.status !== "succeeded") {
+        res.status(400).json({ error: "Payment setup has not been completed" });
+        return;
+      }
+      verifiedCustomerId = typeof intent.customer === "string" ? intent.customer : null;
+      verifiedPaymentMethodId = typeof intent.payment_method === "string" ? intent.payment_method : null;
+    } catch (err: unknown) {
+      res.status(400).json({ error: "Invalid setup intent" });
+      return;
+    }
+  }
+
   const [member] = await db
     .insert(membersTable)
     .values({
@@ -147,7 +169,7 @@ router.post("/gyms/:gymId/members", async (req, res): Promise<void> => {
       status: "active",
       joinDate: today,
       tags: parsed.data.tags || [],
-      ...(stripeCustomerId ? { stripeCustomerId } : {}),
+      ...(verifiedCustomerId ? { stripeCustomerId: verifiedCustomerId } : {}),
     })
     .returning();
 
@@ -160,20 +182,19 @@ router.post("/gyms/:gymId/members", async (req, res): Promise<void> => {
     date: new Date(),
   });
 
-  const planId = body.planId ? parseInt(String(body.planId), 10) : null;
-  const paymentMethodId = typeof body.paymentMethodId === "string" ? body.paymentMethodId : null;
-
   let subscriptionResult = null;
   let subscriptionError = null;
 
-  if (planId) {
+  if (planId && verifiedPaymentMethodId) {
     try {
       subscriptionResult = await stripeService.createStripeSubscription(
-        member.id, gymId, planId, paymentMethodId || undefined
+        member.id, gymId, planId, verifiedPaymentMethodId
       );
     } catch (err: unknown) {
       subscriptionError = err instanceof Error ? err.message : "Failed to create subscription";
     }
+  } else if (planId && !setupIntentId) {
+    subscriptionError = "Payment setup required for subscription activation";
   }
 
   res.status(201).json({

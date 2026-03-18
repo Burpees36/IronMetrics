@@ -210,14 +210,12 @@ export const CreateMemberBody = zod.object({
     .number()
     .nullish()
     .describe("Optional membership plan ID to create a subscription"),
-  paymentMethodId: zod
+  setupIntentId: zod
     .string()
     .nullish()
-    .describe("Optional Stripe payment method ID from SetupIntent"),
-  stripeCustomerId: zod
-    .string()
-    .nullish()
-    .describe("Optional Stripe customer ID created during onboarding"),
+    .describe(
+      "Optional Stripe SetupIntent ID, verified server-side to extract customer and payment method",
+    ),
 });
 
 /**

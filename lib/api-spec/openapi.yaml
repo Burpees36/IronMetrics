@@ -3283,12 +3283,9 @@ components:
         planId:
           type: ["integer", "null"]
           description: Optional membership plan ID to create a subscription
-        paymentMethodId:
+        setupIntentId:
           type: ["string", "null"]
-          description: Optional Stripe payment method ID from SetupIntent
-        stripeCustomerId:
-          type: ["string", "null"]
-          description: Optional Stripe customer ID created during onboarding
+          description: Optional Stripe SetupIntent ID, verified server-side to extract customer and payment method
       required:
         - firstName
         - lastName

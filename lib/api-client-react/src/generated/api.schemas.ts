@@ -260,15 +260,10 @@ export interface CreateMemberBody {
    */
   planId?: number | null;
   /**
-   * Optional Stripe payment method ID from SetupIntent
+   * Optional Stripe SetupIntent ID, verified server-side to extract customer and payment method
    * @nullable
    */
-  paymentMethodId?: string | null;
-  /**
-   * Optional Stripe customer ID created during onboarding
-   * @nullable
-   */
-  stripeCustomerId?: string | null;
+  setupIntentId?: string | null;
 }
 
 export interface EmailCheckResult {

@@ -31,6 +31,7 @@ interface StripePaymentElementEvent {
 interface StripeSetupIntentResult {
   error?: { message: string };
   setupIntent?: {
+    id: string;
     payment_method: string;
   };
 }
@@ -134,7 +135,7 @@ export function AddMemberWizard({ open, onOpenChange }: Props) {
   const [stripeLoading, setStripeLoading] = useState(false);
   const [stripeError, setStripeError] = useState("");
   const [cardComplete, setCardComplete] = useState(false);
-  const [confirmedPaymentMethodId, setConfirmedPaymentMethodId] = useState<string | null>(null);
+  const [confirmedSetupIntentId, setConfirmedSetupIntentId] = useState<string | null>(null);
   const [cardSummary, setCardSummary] = useState<{ brand: string; last4: string } | null>(null);
   const cardMountRef = useRef<HTMLDivElement>(null);
   const cardMountedRef = useRef(false);
@@ -185,7 +186,7 @@ export function AddMemberWizard({ open, onOpenChange }: Props) {
         setStripeLoading(false);
         setStripeError("");
         setCardComplete(false);
-        setConfirmedPaymentMethodId(null);
+        setConfirmedSetupIntentId(null);
         setCardSummary(null);
         setSubscriptionError(null);
         cardMountedRef.current = false;
@@ -212,7 +213,7 @@ export function AddMemberWizard({ open, onOpenChange }: Props) {
       if (emailCheck?.exists) e.email = `Already in use by ${emailCheck.memberName}`;
     }
     if (s === "payment") {
-      if (!skipPayment && !confirmedPaymentMethodId && !cardComplete) {
+      if (!skipPayment && !confirmedSetupIntentId && !cardComplete) {
         e.payment = "Please enter card details";
       }
     }
@@ -317,7 +318,7 @@ export function AddMemberWizard({ open, onOpenChange }: Props) {
     const idx = activeSteps.indexOf(step);
     if (idx < activeSteps.length - 1) {
       const nextStep = activeSteps[idx + 1];
-      if (nextStep === "review" && step === "payment" && !skipPayment && !confirmedPaymentMethodId) {
+      if (nextStep === "review" && step === "payment" && !skipPayment && !confirmedSetupIntentId) {
         if (!stripeInstance || !stripeElements) {
           setStripeError("Payment system not ready. Please wait.");
           return;
@@ -333,20 +334,22 @@ export function AddMemberWizard({ open, onOpenChange }: Props) {
             setStripeLoading(false);
             return;
           }
-          if (setupIntent?.payment_method) {
-            setConfirmedPaymentMethodId(setupIntent.payment_method);
-            try {
-              const pmRes = await fetch(`${API_BASE}/gyms/${gymId}/payment-methods/${setupIntent.payment_method}`);
-              if (pmRes.ok) {
-                const pmData = await pmRes.json() as { brand?: string; last4?: string };
-                if (pmData.brand && pmData.last4) {
-                  setCardSummary({ brand: pmData.brand, last4: pmData.last4 });
+          if (setupIntent?.id) {
+            setConfirmedSetupIntentId(setupIntent.id);
+            if (setupIntent.payment_method) {
+              try {
+                const pmRes = await fetch(`${API_BASE}/gyms/${gymId}/payment-methods/${setupIntent.payment_method}`);
+                if (pmRes.ok) {
+                  const pmData = await pmRes.json() as { brand?: string; last4?: string };
+                  if (pmData.brand && pmData.last4) {
+                    setCardSummary({ brand: pmData.brand, last4: pmData.last4 });
+                  }
                 }
+              } catch {
+                setCardSummary({ brand: "card", last4: "****" });
               }
-            } catch {
-              setCardSummary({ brand: "card", last4: "****" });
+              setCardSummary(prev => prev || { brand: "card", last4: "****" });
             }
-            setCardSummary(prev => prev || { brand: "card", last4: "****" });
           }
           setStripeLoading(false);
         } catch (err: unknown) {
@@ -384,8 +387,7 @@ export function AddMemberWizard({ open, onOpenChange }: Props) {
         waiverSigned: form.waiverSigned,
         tags: form.tags ? form.tags.split(",").map(t => t.trim()).filter(Boolean) : [],
         planId: (selectedPlanId && !skipPayment) ? selectedPlanId : null,
-        paymentMethodId: (!skipPayment && confirmedPaymentMethodId) ? confirmedPaymentMethodId : null,
-        stripeCustomerId: (!skipPayment && stripeCustomerId) ? stripeCustomerId : null,
+        setupIntentId: (!skipPayment && confirmedSetupIntentId) ? confirmedSetupIntentId : null,
       },
     }, {
       onSuccess: (data: Member & { subscriptionError?: string }) => {
@@ -468,7 +470,7 @@ export function AddMemberWizard({ open, onOpenChange }: Props) {
                   setStripeLoading(false);
                   setStripeError("");
                   setCardComplete(false);
-                  setConfirmedPaymentMethodId(null);
+                  setConfirmedSetupIntentId(null);
                   setCardSummary(null);
                   setSubscriptionError(null);
                   cardMountedRef.current = false;
@@ -798,7 +800,7 @@ export function AddMemberWizard({ open, onOpenChange }: Props) {
                         <>
                           <ReviewRow label="Plan" value={selectedPlan.name} />
                           <ReviewRow label="Price" value={formatPrice(selectedPlan.price, selectedPlan.billingInterval)} />
-                          {confirmedPaymentMethodId ? (
+                          {confirmedSetupIntentId ? (
                             <ReviewRow label="Payment" value={cardSummary ? `${cardSummary.brand.toUpperCase()} ····${cardSummary.last4}` : "Card on file"} />
                           ) : skipPayment ? (
                             <ReviewRow label="Payment" value="Skipped — set up later" highlight />
