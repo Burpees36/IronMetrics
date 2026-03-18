@@ -199,8 +199,12 @@ export const CreateMemberBody = zod.object({
   phone: zod.string().nullish(),
   birthDate: zod.string().nullish(),
   address: zod.string().nullish(),
+  city: zod.string().nullish(),
+  state: zod.string().nullish(),
   emergencyContactName: zod.string().nullish(),
   emergencyContactPhone: zod.string().nullish(),
+  membershipType: zod.string().nullish(),
+  waiverSigned: zod.boolean().optional(),
   tags: zod.array(zod.string()).optional(),
 });
 
@@ -311,10 +315,13 @@ export const UpdateMemberBody = zod.object({
     .optional(),
   birthDate: zod.string().nullish(),
   address: zod.string().nullish(),
+  city: zod.string().nullish(),
+  state: zod.string().nullish(),
   emergencyContactName: zod.string().nullish(),
   emergencyContactPhone: zod.string().nullish(),
-  tags: zod.array(zod.string()).optional(),
   membershipType: zod.string().nullish(),
+  waiverSigned: zod.boolean().optional(),
+  tags: zod.array(zod.string()).optional(),
 });
 
 export const UpdateMemberResponse = zod.object({
@@ -336,6 +343,36 @@ export const UpdateMemberResponse = zod.object({
   attendanceCount30d: zod.number().nullish(),
   createdAt: zod.date(),
 });
+
+/**
+ * @summary Check if email is already in use by an existing member
+ */
+export const CheckMemberEmailParams = zod.object({
+  gymId: zod.coerce.number(),
+});
+
+export const CheckMemberEmailQueryParams = zod.object({
+  email: zod.coerce.string(),
+  excludeMemberId: zod.coerce.number().optional(),
+});
+
+export const CheckMemberEmailResponse = zod.object({
+  exists: zod.boolean(),
+  memberName: zod.string().nullish(),
+  memberId: zod.number().nullish(),
+});
+
+/**
+ * @summary Get distinct membership types used in this gym
+ */
+export const ListMembershipTypesParams = zod.object({
+  gymId: zod.coerce.number(),
+});
+
+export const ListMembershipTypesResponseItem = zod.string();
+export const ListMembershipTypesResponse = zod.array(
+  ListMembershipTypesResponseItem,
+);
 
 /**
  * @summary Add note to member record

@@ -1,10 +1,11 @@
 import React, { useState } from "react";
 import { useGym } from "@/store/GymContext";
-import { useListMembers, useCreateMember, useUpdateMember, useAddMemberNote, getListMembersQueryKey } from "@workspace/api-client-react";
+import { useListMembers, useUpdateMember, useAddMemberNote, getListMembersQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import { Loader2, Search, Plus, Filter, MoreHorizontal, UserCircle, Upload, FileSpreadsheet } from "lucide-react";
 import { ImportMembersDialog } from "@/components/members/ImportMembersDialog";
+import { AddMemberWizard } from "@/components/members/AddMemberWizard";
 import { Link, useLocation } from "wouter";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useToast } from "@/hooks/use-toast";
@@ -67,16 +68,11 @@ export function Members() {
   const [selectedMember, setSelectedMember] = useState<MemberFromList | null>(null);
   const [pendingStatus, setPendingStatus] = useState<string>("");
 
-  const [addForm, setAddForm] = useState({
-    firstName: "", lastName: "", email: "", phone: "",
-    emergencyContactName: "", emergencyContactPhone: "",
-    tags: "", birthDate: "", address: "",
-  });
-
   const [editForm, setEditForm] = useState({
     firstName: "", lastName: "", email: "", phone: "",
     emergencyContactName: "", emergencyContactPhone: "",
-    tags: "", birthDate: "", address: "",
+    tags: "", birthDate: "", address: "", city: "", state: "",
+    membershipType: "", waiverSigned: false,
   });
 
   const [noteContent, setNoteContent] = useState("");
@@ -92,39 +88,10 @@ export function Members() {
     query: { enabled: !!activeGymId, placeholderData: (prev: any) => prev } as any
   });
 
-  const createMemberMutation = useCreateMember();
   const updateMemberMutation = useUpdateMember();
   const addNoteMutation = useAddMemberNote();
 
   const gymId = activeGymId as number;
-
-  const handleAddMember = () => {
-    if (!addForm.firstName || !addForm.lastName || !addForm.email) return;
-    createMemberMutation.mutate({
-      gymId,
-      data: {
-        firstName: addForm.firstName,
-        lastName: addForm.lastName,
-        email: addForm.email,
-        phone: addForm.phone || null,
-        emergencyContactName: addForm.emergencyContactName || null,
-        emergencyContactPhone: addForm.emergencyContactPhone || null,
-        tags: addForm.tags ? addForm.tags.split(",").map(t => t.trim()).filter(Boolean) : [],
-        birthDate: addForm.birthDate || null,
-        address: addForm.address || null,
-      },
-    }, {
-      onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: getListMembersQueryKey(gymId) });
-        toast({ title: "Member created", description: `${addForm.firstName} ${addForm.lastName} has been added.` });
-        setAddOpen(false);
-        setAddForm({ firstName: "", lastName: "", email: "", phone: "", emergencyContactName: "", emergencyContactPhone: "", tags: "", birthDate: "", address: "" });
-      },
-      onError: () => {
-        toast({ title: "Error", description: "Failed to create member." });
-      },
-    });
-  };
 
   const handleEditMember = () => {
     if (!selectedMember) return;
@@ -141,6 +108,10 @@ export function Members() {
         tags: editForm.tags ? editForm.tags.split(",").map(t => t.trim()).filter(Boolean) : [],
         birthDate: editForm.birthDate || null,
         address: editForm.address || null,
+        city: editForm.city || null,
+        state: editForm.state || null,
+        membershipType: editForm.membershipType || null,
+        waiverSigned: editForm.waiverSigned,
       },
     }, {
       onSuccess: () => {
@@ -207,6 +178,10 @@ export function Members() {
       tags: (member.tags || []).join(", "),
       birthDate: member.birthDate || "",
       address: member.address || "",
+      city: (member as any).city || "",
+      state: (member as any).state || "",
+      membershipType: member.membershipType || "",
+      waiverSigned: (member as any).waiverSigned || false,
     });
     setEditOpen(true);
   };
@@ -477,58 +452,7 @@ export function Members() {
         )}
       </div>
 
-      <Dialog open={addOpen} onOpenChange={setAddOpen}>
-        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Add New Member</DialogTitle>
-            <DialogDescription>Fill in the details to create a new member.</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-3 py-2">
-            <div className="grid grid-cols-2 gap-3">
-              <FormField label="First Name" required>
-                <Input value={addForm.firstName} onChange={e => setAddForm(f => ({ ...f, firstName: e.target.value }))} placeholder="John" />
-              </FormField>
-              <FormField label="Last Name" required>
-                <Input value={addForm.lastName} onChange={e => setAddForm(f => ({ ...f, lastName: e.target.value }))} placeholder="Doe" />
-              </FormField>
-            </div>
-            <FormField label="Email" required>
-              <Input type="email" value={addForm.email} onChange={e => setAddForm(f => ({ ...f, email: e.target.value }))} placeholder="john@example.com" />
-            </FormField>
-            <FormField label="Phone">
-              <Input value={addForm.phone} onChange={e => setAddForm(f => ({ ...f, phone: e.target.value }))} placeholder="+1 (555) 000-0000" />
-            </FormField>
-            <FormField label="Birth Date">
-              <Input type="date" value={addForm.birthDate} onChange={e => setAddForm(f => ({ ...f, birthDate: e.target.value }))} />
-            </FormField>
-            <FormField label="Address">
-              <Input value={addForm.address} onChange={e => setAddForm(f => ({ ...f, address: e.target.value }))} placeholder="123 Main St" />
-            </FormField>
-            <div className="grid grid-cols-2 gap-3">
-              <FormField label="Emergency Contact">
-                <Input value={addForm.emergencyContactName} onChange={e => setAddForm(f => ({ ...f, emergencyContactName: e.target.value }))} placeholder="Jane Doe" />
-              </FormField>
-              <FormField label="Emergency Phone">
-                <Input value={addForm.emergencyContactPhone} onChange={e => setAddForm(f => ({ ...f, emergencyContactPhone: e.target.value }))} placeholder="+1 (555) 000-0000" />
-              </FormField>
-            </div>
-            <FormField label="Tags">
-              <Input value={addForm.tags} onChange={e => setAddForm(f => ({ ...f, tags: e.target.value }))} placeholder="vip, morning-class" />
-            </FormField>
-          </div>
-          <DialogFooter>
-            <button onClick={() => setAddOpen(false)} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors">Cancel</button>
-            <button
-              onClick={handleAddMember}
-              disabled={!addForm.firstName || !addForm.lastName || !addForm.email || createMemberMutation.isPending}
-              className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-            >
-              {createMemberMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
-              Add Member
-            </button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <AddMemberWizard open={addOpen} onOpenChange={setAddOpen} />
 
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
         <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
@@ -551,12 +475,23 @@ export function Members() {
             <FormField label="Phone">
               <Input value={editForm.phone} onChange={e => setEditForm(f => ({ ...f, phone: e.target.value }))} />
             </FormField>
-            <FormField label="Birth Date">
+            <FormField label="Date of Birth">
               <Input type="date" value={editForm.birthDate} onChange={e => setEditForm(f => ({ ...f, birthDate: e.target.value }))} />
             </FormField>
-            <FormField label="Address">
-              <Input value={editForm.address} onChange={e => setEditForm(f => ({ ...f, address: e.target.value }))} />
+            <FormField label="Membership Plan">
+              <Input value={editForm.membershipType} onChange={e => setEditForm(f => ({ ...f, membershipType: e.target.value }))} placeholder="e.g. Unlimited, 3x Week" />
             </FormField>
+            <FormField label="Address">
+              <Input value={editForm.address} onChange={e => setEditForm(f => ({ ...f, address: e.target.value }))} placeholder="123 Main St" />
+            </FormField>
+            <div className="grid grid-cols-2 gap-3">
+              <FormField label="City">
+                <Input value={editForm.city} onChange={e => setEditForm(f => ({ ...f, city: e.target.value }))} placeholder="Austin" />
+              </FormField>
+              <FormField label="State">
+                <Input value={editForm.state} onChange={e => setEditForm(f => ({ ...f, state: e.target.value }))} placeholder="TX" />
+              </FormField>
+            </div>
             <div className="grid grid-cols-2 gap-3">
               <FormField label="Emergency Contact">
                 <Input value={editForm.emergencyContactName} onChange={e => setEditForm(f => ({ ...f, emergencyContactName: e.target.value }))} />
@@ -564,6 +499,14 @@ export function Members() {
               <FormField label="Emergency Phone">
                 <Input value={editForm.emergencyContactPhone} onChange={e => setEditForm(f => ({ ...f, emergencyContactPhone: e.target.value }))} />
               </FormField>
+            </div>
+            <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/30 border border-border">
+              <Checkbox
+                id="edit-waiver"
+                checked={editForm.waiverSigned}
+                onCheckedChange={(c) => setEditForm(f => ({ ...f, waiverSigned: !!c }))}
+              />
+              <label htmlFor="edit-waiver" className="text-sm text-foreground cursor-pointer">Liability Waiver Signed</label>
             </div>
             <FormField label="Tags">
               <Input value={editForm.tags} onChange={e => setEditForm(f => ({ ...f, tags: e.target.value }))} placeholder="vip, morning-class" />

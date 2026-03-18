@@ -1,7 +1,9 @@
 import { Router, type IRouter } from "express";
-import { eq, and, ilike, or, count, desc } from "drizzle-orm";
+import { eq, and, ilike, or, count, desc, ne, sql } from "drizzle-orm";
 import { db, membersTable, memberNotesTable, timelineEventsTable, subscriptionsTable, attendanceTable } from "@workspace/db";
 import { CreateMemberBody, UpdateMemberBody, AddMemberNoteBody } from "@workspace/api-zod";
+
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const router: IRouter = Router();
 
@@ -64,6 +66,40 @@ router.get("/gyms/:gymId/members", async (req, res): Promise<void> => {
   });
 });
 
+router.get("/gyms/:gymId/members/check-email", async (req, res): Promise<void> => {
+  const gymId = parseGymId(req.params);
+  if (!gymId) { res.status(400).json({ error: "Invalid gym ID" }); return; }
+
+  const email = (req.query.email as string || "").trim().toLowerCase();
+  if (!email) { res.json({ exists: false }); return; }
+
+  const excludeId = req.query.excludeMemberId ? parseInt(req.query.excludeMemberId as string, 10) : null;
+
+  let conditions = [eq(membersTable.gymId, gymId), eq(sql`lower(${membersTable.email})`, email)];
+  if (excludeId) conditions.push(ne(membersTable.id, excludeId));
+
+  const [existing] = await db.select({ id: membersTable.id, firstName: membersTable.firstName, lastName: membersTable.lastName })
+    .from(membersTable).where(and(...conditions)).limit(1);
+
+  if (existing) {
+    res.json({ exists: true, memberName: `${existing.firstName} ${existing.lastName}`, memberId: existing.id });
+  } else {
+    res.json({ exists: false, memberName: null, memberId: null });
+  }
+});
+
+router.get("/gyms/:gymId/members/membership-types", async (req, res): Promise<void> => {
+  const gymId = parseGymId(req.params);
+  if (!gymId) { res.status(400).json({ error: "Invalid gym ID" }); return; }
+
+  const rows = await db.selectDistinct({ membershipType: membersTable.membershipType })
+    .from(membersTable)
+    .where(and(eq(membersTable.gymId, gymId), sql`${membersTable.membershipType} IS NOT NULL AND ${membersTable.membershipType} != ''`))
+    .orderBy(membersTable.membershipType);
+
+  res.json(rows.map(r => r.membershipType as string));
+});
+
 router.post("/gyms/:gymId/members", async (req, res): Promise<void> => {
   const gymId = parseGymId(req.params);
   if (!gymId) { res.status(400).json({ error: "Invalid gym ID" }); return; }
@@ -74,11 +110,36 @@ router.post("/gyms/:gymId/members", async (req, res): Promise<void> => {
     return;
   }
 
+  const fieldErrors: Record<string, string> = {};
+  if (!parsed.data.firstName?.trim()) fieldErrors.firstName = "First name is required";
+  if (!parsed.data.lastName?.trim()) fieldErrors.lastName = "Last name is required";
+  if (!parsed.data.email?.trim()) fieldErrors.email = "Email is required";
+  else if (!EMAIL_REGEX.test(parsed.data.email.trim())) fieldErrors.email = "Invalid email format";
+
+  if (Object.keys(fieldErrors).length > 0) {
+    res.status(400).json({ error: "Validation failed", fieldErrors });
+    return;
+  }
+
+  const emailLower = parsed.data.email.trim().toLowerCase();
+  const [dup] = await db.select({ id: membersTable.id })
+    .from(membersTable)
+    .where(and(eq(membersTable.gymId, gymId), eq(sql`lower(${membersTable.email})`, emailLower)))
+    .limit(1);
+
+  if (dup) {
+    res.status(409).json({ error: "A member with this email already exists", fieldErrors: { email: "This email is already in use" } });
+    return;
+  }
+
   const today = new Date().toISOString().split("T")[0];
   const [member] = await db
     .insert(membersTable)
     .values({
       ...parsed.data,
+      firstName: parsed.data.firstName.trim(),
+      lastName: parsed.data.lastName.trim(),
+      email: parsed.data.email.trim(),
       gymId,
       status: "active",
       joinDate: today,
@@ -203,7 +264,6 @@ router.get("/gyms/:gymId/members/:memberId/timeline", async (req, res): Promise<
 });
 
 const VALID_STATUSES = ["active", "inactive", "hold", "cancelled", "prospect"];
-const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 
 export function normalizePhone(phone: string): string {

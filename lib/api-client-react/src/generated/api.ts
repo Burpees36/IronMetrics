@@ -30,6 +30,7 @@ import type {
   CancelSubscriptionBody,
   CancelledMembersResponse,
   CheckInBody,
+  CheckMemberEmailParams,
   ClassTemplate,
   ClassTemplateDetail,
   CohortData,
@@ -62,6 +63,7 @@ import type {
   CreateWorkoutResultBody,
   DashboardStats,
   DuplicateProgrammingDayBody,
+  EmailCheckResult,
   EmailStatusResponse,
   GenerateAiTasksResponse,
   GenerateOutreachBody,
@@ -982,6 +984,207 @@ export const useUpdateMember = <
 > => {
   return useMutation(getUpdateMemberMutationOptions(options));
 };
+
+/**
+ * @summary Check if email is already in use by an existing member
+ */
+export const getCheckMemberEmailUrl = (
+  gymId: number,
+  params: CheckMemberEmailParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/gyms/${gymId}/members/check-email?${stringifiedParams}`
+    : `/api/gyms/${gymId}/members/check-email`;
+};
+
+export const checkMemberEmail = async (
+  gymId: number,
+  params: CheckMemberEmailParams,
+  options?: RequestInit,
+): Promise<EmailCheckResult> => {
+  return customFetch<EmailCheckResult>(getCheckMemberEmailUrl(gymId, params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getCheckMemberEmailQueryKey = (
+  gymId: number,
+  params?: CheckMemberEmailParams,
+) => {
+  return [
+    `/api/gyms/${gymId}/members/check-email`,
+    ...(params ? [params] : []),
+  ] as const;
+};
+
+export const getCheckMemberEmailQueryOptions = <
+  TData = Awaited<ReturnType<typeof checkMemberEmail>>,
+  TError = ErrorType<unknown>,
+>(
+  gymId: number,
+  params: CheckMemberEmailParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof checkMemberEmail>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getCheckMemberEmailQueryKey(gymId, params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof checkMemberEmail>>
+  > = ({ signal }) =>
+    checkMemberEmail(gymId, params, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!gymId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof checkMemberEmail>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type CheckMemberEmailQueryResult = NonNullable<
+  Awaited<ReturnType<typeof checkMemberEmail>>
+>;
+export type CheckMemberEmailQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Check if email is already in use by an existing member
+ */
+
+export function useCheckMemberEmail<
+  TData = Awaited<ReturnType<typeof checkMemberEmail>>,
+  TError = ErrorType<unknown>,
+>(
+  gymId: number,
+  params: CheckMemberEmailParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof checkMemberEmail>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getCheckMemberEmailQueryOptions(gymId, params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Get distinct membership types used in this gym
+ */
+export const getListMembershipTypesUrl = (gymId: number) => {
+  return `/api/gyms/${gymId}/members/membership-types`;
+};
+
+export const listMembershipTypes = async (
+  gymId: number,
+  options?: RequestInit,
+): Promise<string[]> => {
+  return customFetch<string[]>(getListMembershipTypesUrl(gymId), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListMembershipTypesQueryKey = (gymId: number) => {
+  return [`/api/gyms/${gymId}/members/membership-types`] as const;
+};
+
+export const getListMembershipTypesQueryOptions = <
+  TData = Awaited<ReturnType<typeof listMembershipTypes>>,
+  TError = ErrorType<unknown>,
+>(
+  gymId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listMembershipTypes>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListMembershipTypesQueryKey(gymId);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listMembershipTypes>>
+  > = ({ signal }) => listMembershipTypes(gymId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!gymId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof listMembershipTypes>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListMembershipTypesQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listMembershipTypes>>
+>;
+export type ListMembershipTypesQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get distinct membership types used in this gym
+ */
+
+export function useListMembershipTypes<
+  TData = Awaited<ReturnType<typeof listMembershipTypes>>,
+  TError = ErrorType<unknown>,
+>(
+  gymId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listMembershipTypes>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListMembershipTypesQueryOptions(gymId, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
 
 /**
  * @summary Add note to member record

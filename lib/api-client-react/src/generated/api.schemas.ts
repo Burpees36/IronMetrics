@@ -243,10 +243,25 @@ export interface CreateMemberBody {
   /** @nullable */
   address?: string | null;
   /** @nullable */
+  city?: string | null;
+  /** @nullable */
+  state?: string | null;
+  /** @nullable */
   emergencyContactName?: string | null;
   /** @nullable */
   emergencyContactPhone?: string | null;
+  /** @nullable */
+  membershipType?: string | null;
+  waiverSigned?: boolean;
   tags?: string[];
+}
+
+export interface EmailCheckResult {
+  exists: boolean;
+  /** @nullable */
+  memberName?: string | null;
+  /** @nullable */
+  memberId?: number | null;
 }
 
 export type UpdateMemberBodyStatus =
@@ -272,12 +287,17 @@ export interface UpdateMemberBody {
   /** @nullable */
   address?: string | null;
   /** @nullable */
+  city?: string | null;
+  /** @nullable */
+  state?: string | null;
+  /** @nullable */
   emergencyContactName?: string | null;
   /** @nullable */
   emergencyContactPhone?: string | null;
-  tags?: string[];
   /** @nullable */
   membershipType?: string | null;
+  waiverSigned?: boolean;
+  tags?: string[];
 }
 
 export interface CreateMemberNoteBody {
@@ -1779,6 +1799,11 @@ export type ListMembersParams = {
   search?: string;
   limit?: number;
   offset?: number;
+};
+
+export type CheckMemberEmailParams = {
+  email: string;
+  excludeMemberId?: number;
 };
 
 export type ListLeadsParams = {

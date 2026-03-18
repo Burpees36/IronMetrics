@@ -57,8 +57,12 @@ export function MemberDetail() {
     email: "",
     phone: "",
     address: "",
+    city: "",
+    state: "",
     emergencyContactName: "",
     emergencyContactPhone: "",
+    membershipType: "",
+    waiverSigned: false,
   });
 
   const { data: member, isLoading, isError } = useGetMember(activeGymId as number, memberId, {
@@ -248,8 +252,12 @@ export function MemberDetail() {
         email: member.email,
         phone: member.phone || "",
         address: member.address || "",
+        city: (member as any).city || "",
+        state: (member as any).state || "",
         emergencyContactName: member.emergencyContactName || "",
         emergencyContactPhone: member.emergencyContactPhone || "",
+        membershipType: member.membershipType || "",
+        waiverSigned: (member as any).waiverSigned || false,
       });
       setEditOpen(true);
     }
@@ -267,8 +275,12 @@ export function MemberDetail() {
           email: editForm.email,
           phone: editForm.phone || null,
           address: editForm.address || null,
+          city: editForm.city || null,
+          state: editForm.state || null,
           emergencyContactName: editForm.emergencyContactName || null,
           emergencyContactPhone: editForm.emergencyContactPhone || null,
+          membershipType: editForm.membershipType || null,
+          waiverSigned: editForm.waiverSigned,
         },
       },
       {
@@ -990,7 +1002,7 @@ export function MemberDetail() {
       </AlertDialog>
 
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
-        <DialogContent className="bg-card border-border max-w-md">
+        <DialogContent className="bg-card border-border max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Edit Member</DialogTitle>
           </DialogHeader>
@@ -1014,8 +1026,22 @@ export function MemberDetail() {
               <Input id="edit-phone" value={editForm.phone} onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })} className="bg-background border-border" />
             </div>
             <div className="space-y-2">
+              <Label htmlFor="edit-membership">Membership Plan</Label>
+              <Input id="edit-membership" value={editForm.membershipType} onChange={(e) => setEditForm({ ...editForm, membershipType: e.target.value })} className="bg-background border-border" placeholder="e.g. Unlimited, 3x Week" />
+            </div>
+            <div className="space-y-2">
               <Label htmlFor="edit-address">Address</Label>
               <Input id="edit-address" value={editForm.address} onChange={(e) => setEditForm({ ...editForm, address: e.target.value })} className="bg-background border-border" />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="edit-city">City</Label>
+                <Input id="edit-city" value={editForm.city} onChange={(e) => setEditForm({ ...editForm, city: e.target.value })} className="bg-background border-border" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-state">State</Label>
+                <Input id="edit-state" value={editForm.state} onChange={(e) => setEditForm({ ...editForm, state: e.target.value })} className="bg-background border-border" placeholder="TX" />
+              </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
@@ -1026,6 +1052,16 @@ export function MemberDetail() {
                 <Label htmlFor="edit-ec-phone">EC Phone</Label>
                 <Input id="edit-ec-phone" value={editForm.emergencyContactPhone} onChange={(e) => setEditForm({ ...editForm, emergencyContactPhone: e.target.value })} className="bg-background border-border" />
               </div>
+            </div>
+            <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/30 border border-border">
+              <input
+                type="checkbox"
+                id="edit-waiver-detail"
+                checked={editForm.waiverSigned}
+                onChange={(e) => setEditForm({ ...editForm, waiverSigned: e.target.checked })}
+                className="rounded border-border"
+              />
+              <label htmlFor="edit-waiver-detail" className="text-sm text-foreground cursor-pointer">Liability Waiver Signed</label>
             </div>
           </div>
           <DialogFooter>
