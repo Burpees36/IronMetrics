@@ -554,7 +554,7 @@ export function MemberDetail() {
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-muted-foreground text-sm">Amount</span>
-                  <span className="text-foreground font-medium">${parseFloat(member.activeSubscription.amount).toFixed(2)}/mo</span>
+                  <span className="text-foreground font-medium">${parseFloat(member.activeSubscription.amount).toFixed(2)}</span>
                 </div>
                 {member.activeSubscription.currentPeriodEnd && (
                   <div className="flex justify-between items-center">
