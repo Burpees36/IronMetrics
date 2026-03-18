@@ -228,6 +228,17 @@ router.get("/gyms/:gymId/payment-methods/:paymentMethodId", async (req, res): Pr
   try {
     const stripe = await getStripeClient();
     const pm = await stripe.paymentMethods.retrieve(pmId);
+    if (pm.customer) {
+      const customerId = typeof pm.customer === "string" ? pm.customer : pm.customer.id;
+      const customer = await stripe.customers.retrieve(customerId);
+      if (!customer.deleted) {
+        const meta = (customer as { metadata?: Record<string, string> }).metadata || {};
+        if (meta.gymId && meta.gymId !== String(gymId)) {
+          res.status(403).json({ error: "Payment method does not belong to this gym" });
+          return;
+        }
+      }
+    }
     res.json({
       brand: pm.card?.brand || "card",
       last4: pm.card?.last4 || "****",

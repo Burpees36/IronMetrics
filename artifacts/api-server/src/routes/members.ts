@@ -145,12 +145,26 @@ router.post("/gyms/:gymId/members", async (req, res): Promise<void> => {
   if (setupIntentId && planId) {
     try {
       const stripe = await getStripeClient();
-      const intent = await stripe.setupIntents.retrieve(setupIntentId);
+      const intent = await stripe.setupIntents.retrieve(setupIntentId, {
+        expand: ["customer"],
+      });
       if (intent.status !== "succeeded") {
         res.status(400).json({ error: "Payment setup has not been completed" });
         return;
       }
-      verifiedCustomerId = typeof intent.customer === "string" ? intent.customer : null;
+      const customer = typeof intent.customer === "string"
+        ? await stripe.customers.retrieve(intent.customer)
+        : intent.customer;
+      if (!customer || customer.deleted) {
+        res.status(400).json({ error: "Invalid customer for setup intent" });
+        return;
+      }
+      const customerMeta = (customer as { metadata?: Record<string, string> }).metadata || {};
+      if (customerMeta.gymId !== String(gymId) || customerMeta.source !== "onboarding") {
+        res.status(403).json({ error: "Setup intent does not belong to this gym" });
+        return;
+      }
+      verifiedCustomerId = customer.id;
       verifiedPaymentMethodId = typeof intent.payment_method === "string" ? intent.payment_method : null;
     } catch (err: unknown) {
       res.status(400).json({ error: "Invalid setup intent" });

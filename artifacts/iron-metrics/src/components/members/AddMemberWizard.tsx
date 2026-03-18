@@ -369,6 +369,11 @@ export function AddMemberWizard({ open, onOpenChange }: Props) {
 
   const handleSubmit = () => {
     if (!validateStep("personal")) { setStep("personal"); return; }
+    if (selectedPlanId && !skipPayment && !confirmedSetupIntentId) {
+      setStep("payment");
+      setStripeError("Please confirm your card details before submitting.");
+      return;
+    }
 
     createMutation.mutate({
       gymId,
@@ -507,7 +512,10 @@ export function AddMemberWizard({ open, onOpenChange }: Props) {
                 <button
                   onClick={() => {
                     if (i < stepIndex) setStep(s);
-                    else if (i === stepIndex + 1 && validateStep(step)) setStep(s);
+                    else if (i === stepIndex + 1 && validateStep(step)) {
+                      if (step === "payment" && !skipPayment && !confirmedSetupIntentId) return;
+                      setStep(s);
+                    }
                   }}
                   className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
                     i < stepIndex ? "text-emerald-500 bg-emerald-500/10" :
