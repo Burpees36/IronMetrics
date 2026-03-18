@@ -139,7 +139,7 @@ router.post("/gyms/:gymId/members", async (req, res): Promise<void> => {
       ...parsed.data,
       firstName: parsed.data.firstName.trim(),
       lastName: parsed.data.lastName.trim(),
-      email: parsed.data.email.trim(),
+      email: parsed.data.email.trim().toLowerCase(),
       gymId,
       status: "active",
       joinDate: today,
@@ -233,7 +233,7 @@ router.patch("/gyms/:gymId/members/:memberId", async (req, res): Promise<void> =
         .from(membersTable)
         .where(and(
           eq(membersTable.gymId, gymId),
-          eq(membersTable.email, data.email.trim().toLowerCase()),
+          eq(sql`lower(${membersTable.email})`, data.email.trim().toLowerCase()),
           ne(membersTable.id, memberId)
         ))
         .limit(1);
