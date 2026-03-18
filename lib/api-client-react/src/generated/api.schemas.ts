@@ -254,6 +254,21 @@ export interface CreateMemberBody {
   membershipType?: string | null;
   waiverSigned?: boolean;
   tags?: string[];
+  /**
+   * Optional membership plan ID to create a subscription
+   * @nullable
+   */
+  planId?: number | null;
+  /**
+   * Optional Stripe payment method ID from SetupIntent
+   * @nullable
+   */
+  paymentMethodId?: string | null;
+  /**
+   * Optional Stripe customer ID created during onboarding
+   * @nullable
+   */
+  stripeCustomerId?: string | null;
 }
 
 export interface EmailCheckResult {
@@ -1843,6 +1858,16 @@ export type ListInvoicesParams = {
 
 export type GetStripePublishableKey200 = {
   publishableKey?: string;
+};
+
+export type CreateOnboardingSetupIntentBody = {
+  email: string;
+  name?: string;
+};
+
+export type CreateOnboardingSetupIntent200 = {
+  clientSecret?: string;
+  customerId?: string;
 };
 
 export type CreateSetupIntent200 = {

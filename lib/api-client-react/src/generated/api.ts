@@ -50,6 +50,8 @@ import type {
   CreateMemberBody,
   CreateMemberNoteBody,
   CreateMembershipPlanBody,
+  CreateOnboardingSetupIntent200,
+  CreateOnboardingSetupIntentBody,
   CreateOneTimeChargeBody,
   CreatePaymentUpdateSetupIntentBody,
   CreateProductBody,
@@ -4628,6 +4630,97 @@ export function useGetStripePublishableKey<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * @summary Create a Stripe SetupIntent for member onboarding (no existing member required)
+ */
+export const getCreateOnboardingSetupIntentUrl = (gymId: number) => {
+  return `/api/gyms/${gymId}/onboarding/setup-intent`;
+};
+
+export const createOnboardingSetupIntent = async (
+  gymId: number,
+  createOnboardingSetupIntentBody: CreateOnboardingSetupIntentBody,
+  options?: RequestInit,
+): Promise<CreateOnboardingSetupIntent200> => {
+  return customFetch<CreateOnboardingSetupIntent200>(
+    getCreateOnboardingSetupIntentUrl(gymId),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(createOnboardingSetupIntentBody),
+    },
+  );
+};
+
+export const getCreateOnboardingSetupIntentMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createOnboardingSetupIntent>>,
+    TError,
+    { gymId: number; data: BodyType<CreateOnboardingSetupIntentBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createOnboardingSetupIntent>>,
+  TError,
+  { gymId: number; data: BodyType<CreateOnboardingSetupIntentBody> },
+  TContext
+> => {
+  const mutationKey = ["createOnboardingSetupIntent"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createOnboardingSetupIntent>>,
+    { gymId: number; data: BodyType<CreateOnboardingSetupIntentBody> }
+  > = (props) => {
+    const { gymId, data } = props ?? {};
+
+    return createOnboardingSetupIntent(gymId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateOnboardingSetupIntentMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createOnboardingSetupIntent>>
+>;
+export type CreateOnboardingSetupIntentMutationBody =
+  BodyType<CreateOnboardingSetupIntentBody>;
+export type CreateOnboardingSetupIntentMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Create a Stripe SetupIntent for member onboarding (no existing member required)
+ */
+export const useCreateOnboardingSetupIntent = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createOnboardingSetupIntent>>,
+    TError,
+    { gymId: number; data: BodyType<CreateOnboardingSetupIntentBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createOnboardingSetupIntent>>,
+  TError,
+  { gymId: number; data: BodyType<CreateOnboardingSetupIntentBody> },
+  TContext
+> => {
+  return useMutation(getCreateOnboardingSetupIntentMutationOptions(options));
+};
 
 /**
  * @summary Create Stripe setup intent for payment method

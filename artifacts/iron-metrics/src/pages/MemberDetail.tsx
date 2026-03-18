@@ -563,6 +563,18 @@ export function MemberDetail() {
                   </div>
                 )}
               </div>
+            ) : member.membershipType ? (
+              <div className="space-y-3">
+                <div className="flex justify-between items-center">
+                  <span className="text-muted-foreground text-sm">Plan</span>
+                  <span className="text-foreground font-medium">{member.membershipType}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-muted-foreground text-sm">Status</span>
+                  <span className="px-2 py-0.5 rounded-full text-xs font-medium border bg-amber-500/10 text-amber-500 border-amber-500/20">No active billing</span>
+                </div>
+                <p className="text-xs text-muted-foreground">Subscription can be set up from the Billing tab.</p>
+              </div>
             ) : (
               <p className="text-muted-foreground text-sm">No active subscription.</p>
             )}

@@ -1271,6 +1271,43 @@ paths:
                   publishableKey:
                     type: string
 
+  /gyms/{gymId}/onboarding/setup-intent:
+    post:
+      operationId: createOnboardingSetupIntent
+      tags: [billing]
+      summary: Create a Stripe SetupIntent for member onboarding (no existing member required)
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+                name:
+                  type: string
+              required:
+                - email
+      responses:
+        "200":
+          description: SetupIntent created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  clientSecret:
+                    type: string
+                  customerId:
+                    type: string
+
   /gyms/{gymId}/members/{memberId}/setup-intent:
     post:
       operationId: createSetupIntent
@@ -3243,6 +3280,15 @@ components:
           type: array
           items:
             type: string
+        planId:
+          type: ["integer", "null"]
+          description: Optional membership plan ID to create a subscription
+        paymentMethodId:
+          type: ["string", "null"]
+          description: Optional Stripe payment method ID from SetupIntent
+        stripeCustomerId:
+          type: ["string", "null"]
+          description: Optional Stripe customer ID created during onboarding
       required:
         - firstName
         - lastName

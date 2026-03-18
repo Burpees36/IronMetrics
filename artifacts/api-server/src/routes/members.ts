@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
 import { eq, and, ilike, or, count, desc, ne, sql } from "drizzle-orm";
-import { db, membersTable, memberNotesTable, timelineEventsTable, subscriptionsTable, attendanceTable } from "@workspace/db";
+import { db, membersTable, memberNotesTable, timelineEventsTable, subscriptionsTable, attendanceTable, membershipPlansTable } from "@workspace/db";
+import { stripeService } from "../stripeService";
 import { CreateMemberBody, UpdateMemberBody, AddMemberNoteBody } from "@workspace/api-zod";
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -133,6 +134,7 @@ router.post("/gyms/:gymId/members", async (req, res): Promise<void> => {
   }
 
   const today = new Date().toISOString().split("T")[0];
+  const stripeCustomerId = (req.body as any).stripeCustomerId || null;
   const [member] = await db
     .insert(membersTable)
     .values({
@@ -144,6 +146,7 @@ router.post("/gyms/:gymId/members", async (req, res): Promise<void> => {
       status: "active",
       joinDate: today,
       tags: parsed.data.tags || [],
+      ...(stripeCustomerId ? { stripeCustomerId } : {}),
     })
     .returning();
 
@@ -156,9 +159,27 @@ router.post("/gyms/:gymId/members", async (req, res): Promise<void> => {
     date: new Date(),
   });
 
+  const planId = (req.body as any).planId ? parseInt((req.body as any).planId, 10) : null;
+  const paymentMethodId = (req.body as any).paymentMethodId || null;
+
+  let subscriptionResult = null;
+  let subscriptionError = null;
+
+  if (planId) {
+    try {
+      subscriptionResult = await stripeService.createStripeSubscription(
+        member.id, gymId, planId, paymentMethodId || undefined
+      );
+    } catch (err: any) {
+      subscriptionError = err.message || "Failed to create subscription";
+    }
+  }
+
   res.status(201).json({
     ...member,
     riskScore: member.riskScore ? parseFloat(member.riskScore) : null,
+    subscription: subscriptionResult || undefined,
+    subscriptionError: subscriptionError || undefined,
   });
 });
 

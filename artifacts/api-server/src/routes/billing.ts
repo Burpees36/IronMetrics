@@ -3,7 +3,7 @@ import { eq, and, count, desc, sql, gte, lt } from "drizzle-orm";
 import { db, membershipPlansTable, subscriptionsTable, invoicesTable, membersTable, paymentsTable, refundsTable, billingAuditLogsTable, billingWebhookEventsTable, gymsTable, gymStaffTable } from "@workspace/db";
 import { CreateMembershipPlanBody, CreateSubscriptionBody, UpdateSubscriptionBody } from "@workspace/api-zod";
 import { stripeService } from "../stripeService";
-import { getPublishableKey } from "../stripeClient";
+import { getPublishableKey, getStripeClient } from "../stripeClient";
 import { requireBillingPermission, requireBillingRead, getPermissionsForRole } from "../middlewares/billingRbac";
 import { computeBillingSummary } from "../billingMetrics";
 import { billingAuditLogger } from "../billingAuditLogger";
@@ -186,6 +186,35 @@ router.patch("/gyms/:gymId/subscriptions/:subscriptionId", requireBillingPermiss
   }
 
   res.json({ ...sub, amount: parseFloat(sub.amount) });
+});
+
+router.post("/gyms/:gymId/onboarding/setup-intent", async (req, res): Promise<void> => {
+  const gymId = parseGymId(req.params);
+  if (!gymId) { res.status(400).json({ error: "Invalid gym ID" }); return; }
+
+  const { email, name } = req.body;
+  if (!email) { res.status(400).json({ error: "Email is required" }); return; }
+
+  try {
+    const stripe = await getStripeClient();
+    const customer = await stripe.customers.create({
+      email,
+      name: name || undefined,
+      metadata: { gymId: String(gymId), source: "onboarding" },
+    });
+
+    const setupIntent = await stripe.setupIntents.create({
+      customer: customer.id,
+      payment_method_types: ["card"],
+    });
+
+    res.json({
+      clientSecret: setupIntent.client_secret!,
+      customerId: customer.id,
+    });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message || "Failed to create setup intent" });
+  }
 });
 
 router.post("/gyms/:gymId/members/:memberId/setup-intent", requireBillingPermission("billing.create_subscription"), async (req, res): Promise<void> => {

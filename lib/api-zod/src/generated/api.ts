@@ -206,6 +206,18 @@ export const CreateMemberBody = zod.object({
   membershipType: zod.string().nullish(),
   waiverSigned: zod.boolean().optional(),
   tags: zod.array(zod.string()).optional(),
+  planId: zod
+    .number()
+    .nullish()
+    .describe("Optional membership plan ID to create a subscription"),
+  paymentMethodId: zod
+    .string()
+    .nullish()
+    .describe("Optional Stripe payment method ID from SetupIntent"),
+  stripeCustomerId: zod
+    .string()
+    .nullish()
+    .describe("Optional Stripe customer ID created during onboarding"),
 });
 
 /**
@@ -1382,6 +1394,23 @@ export const GetStripePublishableKeyParams = zod.object({
 
 export const GetStripePublishableKeyResponse = zod.object({
   publishableKey: zod.string().optional(),
+});
+
+/**
+ * @summary Create a Stripe SetupIntent for member onboarding (no existing member required)
+ */
+export const CreateOnboardingSetupIntentParams = zod.object({
+  gymId: zod.coerce.number(),
+});
+
+export const CreateOnboardingSetupIntentBody = zod.object({
+  email: zod.string(),
+  name: zod.string().optional(),
+});
+
+export const CreateOnboardingSetupIntentResponse = zod.object({
+  clientSecret: zod.string().optional(),
+  customerId: zod.string().optional(),
 });
 
 /**

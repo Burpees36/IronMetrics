@@ -28,4 +28,19 @@ export interface CreateMemberBody {
   membershipType?: string | null;
   waiverSigned?: boolean;
   tags?: string[];
+  /**
+   * Optional membership plan ID to create a subscription
+   * @nullable
+   */
+  planId?: number | null;
+  /**
+   * Optional Stripe payment method ID from SetupIntent
+   * @nullable
+   */
+  paymentMethodId?: string | null;
+  /**
+   * Optional Stripe customer ID created during onboarding
+   * @nullable
+   */
+  stripeCustomerId?: string | null;
 }

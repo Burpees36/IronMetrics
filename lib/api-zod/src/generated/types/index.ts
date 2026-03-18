@@ -58,6 +58,8 @@ export * from "./createMemberBody";
 export * from "./createMemberNoteBody";
 export * from "./createMembershipPlanBody";
 export * from "./createMembershipPlanBodyBillingInterval";
+export * from "./createOnboardingSetupIntent200";
+export * from "./createOnboardingSetupIntentBody";
 export * from "./createOneTimeChargeBody";
 export * from "./createPaymentUpdateSetupIntentBody";
 export * from "./createProductBody";
