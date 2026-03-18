@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useGym } from "@/store/GymContext";
 import { useListMembers, useUpdateMember, useAddMemberNote, getListMembersQueryKey } from "@workspace/api-client-react";
+import type { ApiError } from "@workspace/api-client-react/custom-fetch";
 import { useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import { Loader2, Search, Plus, Filter, MoreHorizontal, UserCircle, Upload, FileSpreadsheet } from "lucide-react";
@@ -149,12 +150,13 @@ export function Members() {
         setEditOpen(false);
         setSelectedMember(null);
       },
-      onError: (err: any) => {
-        const fieldErrors = err?.response?.data?.fieldErrors;
+      onError: (err: ApiError) => {
+        const errData = err.data as { error?: string; fieldErrors?: Record<string, string> } | null;
+        const fieldErrors = errData?.fieldErrors;
         if (fieldErrors) {
           setEditErrors(fieldErrors);
         } else {
-          toast({ title: "Error", description: err?.response?.data?.error || "Failed to update member.", variant: "destructive" });
+          toast({ title: "Error", description: errData?.error || "Failed to update member.", variant: "destructive" });
         }
       },
     });

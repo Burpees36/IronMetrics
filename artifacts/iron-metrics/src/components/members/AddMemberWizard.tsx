@@ -4,6 +4,8 @@ import {
   useCreateMember, useCheckMemberEmail, useListMembershipTypes,
   getListMembersQueryKey,
 } from "@workspace/api-client-react";
+import type { Member } from "@workspace/api-client-react";
+import type { ApiError } from "@workspace/api-client-react/custom-fetch";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
@@ -75,12 +77,13 @@ export function AddMemberWizard({ open, onOpenChange }: Props) {
 
   const createMutation = useCreateMember();
 
+  const emailCheckEnabled = !!gymId && debouncedEmail.length > 3 && debouncedEmail.includes("@");
   const { data: emailCheck } = useCheckMemberEmail(gymId, { email: debouncedEmail }, {
-    query: { enabled: !!gymId && debouncedEmail.length > 3 && debouncedEmail.includes("@") } as any,
+    query: { enabled: emailCheckEnabled },
   });
 
   const { data: membershipTypes } = useListMembershipTypes(gymId, {
-    query: { enabled: !!gymId } as any,
+    query: { enabled: !!gymId },
   });
 
   useEffect(() => {
@@ -106,7 +109,7 @@ export function AddMemberWizard({ open, onOpenChange }: Props) {
     }
   }, [open]);
 
-  const updateField = useCallback((field: string, value: any) => {
+  const updateField = useCallback((field: string, value: string | boolean) => {
     setForm(f => ({ ...f, [field]: value }));
     setErrors(e => { const n = { ...e }; delete n[field]; return n; });
   }, []);
@@ -158,18 +161,19 @@ export function AddMemberWizard({ open, onOpenChange }: Props) {
         tags: form.tags ? form.tags.split(",").map(t => t.trim()).filter(Boolean) : [],
       },
     }, {
-      onSuccess: (data: any) => {
+      onSuccess: (data: Member) => {
         queryClient.invalidateQueries({ queryKey: getListMembersQueryKey(gymId) });
         setCreatedMemberId(data.id);
         setShowSuccess(true);
       },
-      onError: (err: any) => {
-        const fieldErrors = err?.response?.data?.fieldErrors;
+      onError: (err: ApiError) => {
+        const errData = err.data as { error?: string; fieldErrors?: Record<string, string> } | null;
+        const fieldErrors = errData?.fieldErrors;
         if (fieldErrors) {
           setErrors(fieldErrors);
           if (fieldErrors.firstName || fieldErrors.lastName || fieldErrors.email) setStep("personal");
         } else {
-          toast({ title: "Error", description: err?.response?.data?.error || "Failed to create member.", variant: "destructive" });
+          toast({ title: "Error", description: errData?.error || "Failed to create member.", variant: "destructive" });
         }
       },
     });

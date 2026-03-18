@@ -8,6 +8,7 @@ import {
   useCancelSubscription, usePauseSubscription, useResumeSubscription,
   getGetMemberBillingHistoryQueryKey, getListSubscriptionsQueryKey,
 } from "@workspace/api-client-react";
+import type { ApiError } from "@workspace/api-client-react/custom-fetch";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRoute, useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
@@ -66,22 +67,24 @@ export function MemberDetail() {
   });
   const [editErrors, setEditErrors] = useState<Record<string, string>>({});
 
+  const memberEnabled = !!activeGymId && !!memberId;
   const { data: member, isLoading, isError } = useGetMember(activeGymId as number, memberId, {
-    query: { enabled: !!activeGymId && !!memberId } as any
+    query: { enabled: memberEnabled },
   });
 
   const { data: timeline } = useGetMemberTimeline(activeGymId as number, memberId, {
-    query: { enabled: !!activeGymId && !!memberId } as any
+    query: { enabled: memberEnabled },
   });
 
   const updateMutation = useUpdateMember();
   const addNoteMutation = useAddMemberNote();
 
+  const billingEnabled = !!activeGymId && !!memberId && activeTab === "billing";
   const { data: billingHistory } = useGetMemberBillingHistory(activeGymId as number, memberId, {
-    query: { enabled: !!activeGymId && !!memberId && activeTab === "billing" } as any
+    query: { enabled: billingEnabled },
   });
   const { data: paymentMethods } = useListPaymentMethods(activeGymId as number, memberId, {
-    query: { enabled: !!activeGymId && !!memberId && activeTab === "billing" } as any
+    query: { enabled: billingEnabled },
   });
   const { data: plans } = useListMembershipPlans(activeGymId as number, {
     query: { enabled: !!activeGymId && activeTab === "billing" }
@@ -306,12 +309,13 @@ export function MemberDetail() {
           setEditOpen(false);
           invalidateAll();
         },
-        onError: (err: any) => {
-          const fieldErrors = err?.response?.data?.fieldErrors;
+        onError: (err: ApiError) => {
+          const errData = err.data as { error?: string; fieldErrors?: Record<string, string> } | null;
+          const fieldErrors = errData?.fieldErrors;
           if (fieldErrors) {
             setEditErrors(fieldErrors);
           } else {
-            toast({ title: "Error", description: err?.response?.data?.error || "Failed to update member.", variant: "destructive" });
+            toast({ title: "Error", description: errData?.error || "Failed to update member.", variant: "destructive" });
           }
         },
       }
