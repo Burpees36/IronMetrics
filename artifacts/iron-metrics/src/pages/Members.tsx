@@ -31,8 +31,11 @@ type MemberFromList = {
   tags: string[];
   birthDate?: string | null;
   address?: string | null;
+  city?: string | null;
+  state?: string | null;
   emergencyContactName?: string | null;
   emergencyContactPhone?: string | null;
+  waiverSigned?: boolean;
 };
 
 const STATUS_OPTIONS = [
@@ -50,11 +53,12 @@ const RISK_OPTIONS = [
   { value: "critical", label: "Critical" },
 ];
 
-function FormField({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
+function FormField({ label, required, error, children }: { label: string; required?: boolean; error?: string; children: React.ReactNode }) {
   return (
     <div className="space-y-1.5">
       <Label className="text-sm text-foreground">{label}{required && <span className="text-destructive ml-0.5">*</span>}</Label>
       {children}
+      {error && <p className="text-xs text-red-400">{error}</p>}
     </div>
   );
 }
@@ -83,6 +87,7 @@ export function Members() {
     tags: "", birthDate: "", address: "", city: "", state: "",
     membershipType: "", waiverSigned: false,
   });
+  const [editErrors, setEditErrors] = useState<Record<string, string>>({});
 
   const [noteContent, setNoteContent] = useState("");
 
@@ -104,13 +109,28 @@ export function Members() {
 
   const handleEditMember = () => {
     if (!selectedMember) return;
+
+    const errors: Record<string, string> = {};
+    if (!editForm.firstName.trim()) errors.firstName = "First name is required";
+    if (!editForm.lastName.trim()) errors.lastName = "Last name is required";
+    if (!editForm.email.trim()) {
+      errors.email = "Email is required";
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(editForm.email.trim())) {
+      errors.email = "Invalid email format";
+    }
+    if (Object.keys(errors).length > 0) {
+      setEditErrors(errors);
+      return;
+    }
+    setEditErrors({});
+
     updateMemberMutation.mutate({
       gymId,
       memberId: selectedMember.id,
       data: {
-        firstName: editForm.firstName || undefined,
-        lastName: editForm.lastName || undefined,
-        email: editForm.email || undefined,
+        firstName: editForm.firstName.trim(),
+        lastName: editForm.lastName.trim(),
+        email: editForm.email.trim(),
         phone: editForm.phone || null,
         emergencyContactName: editForm.emergencyContactName || null,
         emergencyContactPhone: editForm.emergencyContactPhone || null,
@@ -129,8 +149,13 @@ export function Members() {
         setEditOpen(false);
         setSelectedMember(null);
       },
-      onError: () => {
-        toast({ title: "Error", description: "Failed to update member." });
+      onError: (err: any) => {
+        const fieldErrors = err?.response?.data?.fieldErrors;
+        if (fieldErrors) {
+          setEditErrors(fieldErrors);
+        } else {
+          toast({ title: "Error", description: err?.response?.data?.error || "Failed to update member.", variant: "destructive" });
+        }
       },
     });
   };
@@ -187,11 +212,12 @@ export function Members() {
       tags: (member.tags || []).join(", "),
       birthDate: member.birthDate || "",
       address: member.address || "",
-      city: (member as any).city || "",
-      state: (member as any).state || "",
+      city: member.city || "",
+      state: member.state || "",
       membershipType: member.membershipType || "",
-      waiverSigned: (member as any).waiverSigned || false,
+      waiverSigned: member.waiverSigned || false,
     });
+    setEditErrors({});
     setEditOpen(true);
   };
 
@@ -464,15 +490,15 @@ export function Members() {
           </DialogHeader>
           <div className="space-y-3 py-2">
             <div className="grid grid-cols-2 gap-3">
-              <FormField label="First Name" required>
-                <Input value={editForm.firstName} onChange={e => setEditForm(f => ({ ...f, firstName: e.target.value }))} />
+              <FormField label="First Name" required error={editErrors.firstName}>
+                <Input value={editForm.firstName} onChange={e => { setEditForm(f => ({ ...f, firstName: e.target.value })); setEditErrors(prev => { const n = {...prev}; delete n.firstName; return n; }); }} className={editErrors.firstName ? "border-red-400" : ""} />
               </FormField>
-              <FormField label="Last Name" required>
-                <Input value={editForm.lastName} onChange={e => setEditForm(f => ({ ...f, lastName: e.target.value }))} />
+              <FormField label="Last Name" required error={editErrors.lastName}>
+                <Input value={editForm.lastName} onChange={e => { setEditForm(f => ({ ...f, lastName: e.target.value })); setEditErrors(prev => { const n = {...prev}; delete n.lastName; return n; }); }} className={editErrors.lastName ? "border-red-400" : ""} />
               </FormField>
             </div>
-            <FormField label="Email" required>
-              <Input type="email" value={editForm.email} onChange={e => setEditForm(f => ({ ...f, email: e.target.value }))} />
+            <FormField label="Email" required error={editErrors.email}>
+              <Input type="email" value={editForm.email} onChange={e => { setEditForm(f => ({ ...f, email: e.target.value })); setEditErrors(prev => { const n = {...prev}; delete n.email; return n; }); }} className={editErrors.email ? "border-red-400" : ""} />
             </FormField>
             <FormField label="Phone">
               <Input value={editForm.phone} onChange={e => setEditForm(f => ({ ...f, phone: e.target.value }))} />

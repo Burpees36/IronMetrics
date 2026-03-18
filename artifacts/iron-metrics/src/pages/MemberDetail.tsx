@@ -64,6 +64,7 @@ export function MemberDetail() {
     membershipType: "",
     waiverSigned: false,
   });
+  const [editErrors, setEditErrors] = useState<Record<string, string>>({});
 
   const { data: member, isLoading, isError } = useGetMember(activeGymId as number, memberId, {
     query: { enabled: !!activeGymId && !!memberId } as any
@@ -252,27 +253,43 @@ export function MemberDetail() {
         email: member.email,
         phone: member.phone || "",
         address: member.address || "",
-        city: (member as any).city || "",
-        state: (member as any).state || "",
+        city: member.city || "",
+        state: member.state || "",
         emergencyContactName: member.emergencyContactName || "",
         emergencyContactPhone: member.emergencyContactPhone || "",
         membershipType: member.membershipType || "",
-        waiverSigned: (member as any).waiverSigned || false,
+        waiverSigned: member.waiverSigned || false,
       });
+      setEditErrors({});
       setEditOpen(true);
     }
   };
 
   const handleEditSave = () => {
     if (!activeGymId) return;
+
+    const errors: Record<string, string> = {};
+    if (!editForm.firstName.trim()) errors.firstName = "First name is required";
+    if (!editForm.lastName.trim()) errors.lastName = "Last name is required";
+    if (!editForm.email.trim()) {
+      errors.email = "Email is required";
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(editForm.email.trim())) {
+      errors.email = "Invalid email format";
+    }
+    if (Object.keys(errors).length > 0) {
+      setEditErrors(errors);
+      return;
+    }
+    setEditErrors({});
+
     updateMutation.mutate(
       {
         gymId: activeGymId,
         memberId,
         data: {
-          firstName: editForm.firstName,
-          lastName: editForm.lastName,
-          email: editForm.email,
+          firstName: editForm.firstName.trim(),
+          lastName: editForm.lastName.trim(),
+          email: editForm.email.trim(),
           phone: editForm.phone || null,
           address: editForm.address || null,
           city: editForm.city || null,
@@ -289,8 +306,13 @@ export function MemberDetail() {
           setEditOpen(false);
           invalidateAll();
         },
-        onError: () => {
-          toast({ title: "Error", description: "Failed to update member." });
+        onError: (err: any) => {
+          const fieldErrors = err?.response?.data?.fieldErrors;
+          if (fieldErrors) {
+            setEditErrors(fieldErrors);
+          } else {
+            toast({ title: "Error", description: err?.response?.data?.error || "Failed to update member.", variant: "destructive" });
+          }
         },
       }
     );
@@ -1008,47 +1030,50 @@ export function MemberDetail() {
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="edit-first">First Name</Label>
-                <Input id="edit-first" value={editForm.firstName} onChange={(e) => setEditForm(f => ({ ...f, firstName: e.target.value }))} className="bg-background border-border" />
+              <div className="space-y-1.5">
+                <Label htmlFor="edit-first">First Name <span className="text-red-400">*</span></Label>
+                <Input id="edit-first" value={editForm.firstName} onChange={(e) => { setEditForm(f => ({ ...f, firstName: e.target.value })); setEditErrors(e2 => { const n = {...e2}; delete n.firstName; return n; }); }} className={`bg-background border-border ${editErrors.firstName ? "border-red-400" : ""}`} />
+                {editErrors.firstName && <p className="text-xs text-red-400">{editErrors.firstName}</p>}
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="edit-last">Last Name</Label>
-                <Input id="edit-last" value={editForm.lastName} onChange={(e) => setEditForm(f => ({ ...f, lastName: e.target.value }))} className="bg-background border-border" />
+              <div className="space-y-1.5">
+                <Label htmlFor="edit-last">Last Name <span className="text-red-400">*</span></Label>
+                <Input id="edit-last" value={editForm.lastName} onChange={(e) => { setEditForm(f => ({ ...f, lastName: e.target.value })); setEditErrors(e2 => { const n = {...e2}; delete n.lastName; return n; }); }} className={`bg-background border-border ${editErrors.lastName ? "border-red-400" : ""}`} />
+                {editErrors.lastName && <p className="text-xs text-red-400">{editErrors.lastName}</p>}
               </div>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="edit-email">Email</Label>
-              <Input id="edit-email" type="email" value={editForm.email} onChange={(e) => setEditForm(f => ({ ...f, email: e.target.value }))} className="bg-background border-border" />
+            <div className="space-y-1.5">
+              <Label htmlFor="edit-email">Email <span className="text-red-400">*</span></Label>
+              <Input id="edit-email" type="email" value={editForm.email} onChange={(e) => { setEditForm(f => ({ ...f, email: e.target.value })); setEditErrors(e2 => { const n = {...e2}; delete n.email; return n; }); }} className={`bg-background border-border ${editErrors.email ? "border-red-400" : ""}`} />
+              {editErrors.email && <p className="text-xs text-red-400">{editErrors.email}</p>}
             </div>
-            <div className="space-y-2">
+            <div className="space-y-1.5">
               <Label htmlFor="edit-phone">Phone</Label>
               <Input id="edit-phone" value={editForm.phone} onChange={(e) => setEditForm(f => ({ ...f, phone: e.target.value }))} className="bg-background border-border" />
             </div>
-            <div className="space-y-2">
+            <div className="space-y-1.5">
               <Label htmlFor="edit-membership">Membership Plan</Label>
               <Input id="edit-membership" value={editForm.membershipType} onChange={(e) => setEditForm(f => ({ ...f, membershipType: e.target.value }))} className="bg-background border-border" placeholder="e.g. Unlimited, 3x Week" />
             </div>
-            <div className="space-y-2">
+            <div className="space-y-1.5">
               <Label htmlFor="edit-address">Address</Label>
               <Input id="edit-address" value={editForm.address} onChange={(e) => setEditForm(f => ({ ...f, address: e.target.value }))} className="bg-background border-border" />
             </div>
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
+              <div className="space-y-1.5">
                 <Label htmlFor="edit-city">City</Label>
                 <Input id="edit-city" value={editForm.city} onChange={(e) => setEditForm(f => ({ ...f, city: e.target.value }))} className="bg-background border-border" />
               </div>
-              <div className="space-y-2">
+              <div className="space-y-1.5">
                 <Label htmlFor="edit-state">State</Label>
                 <Input id="edit-state" value={editForm.state} onChange={(e) => setEditForm(f => ({ ...f, state: e.target.value }))} className="bg-background border-border" placeholder="TX" />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
+              <div className="space-y-1.5">
                 <Label htmlFor="edit-ec-name">Emergency Contact</Label>
                 <Input id="edit-ec-name" value={editForm.emergencyContactName} onChange={(e) => setEditForm(f => ({ ...f, emergencyContactName: e.target.value }))} className="bg-background border-border" />
               </div>
-              <div className="space-y-2">
+              <div className="space-y-1.5">
                 <Label htmlFor="edit-ec-phone">EC Phone</Label>
                 <Input id="edit-ec-phone" value={editForm.emergencyContactPhone} onChange={(e) => setEditForm(f => ({ ...f, emergencyContactPhone: e.target.value }))} className="bg-background border-border" />
               </div>

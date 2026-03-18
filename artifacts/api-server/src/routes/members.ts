@@ -213,9 +213,48 @@ router.patch("/gyms/:gymId/members/:memberId", async (req, res): Promise<void> =
     return;
   }
 
+  const fieldErrors: Record<string, string> = {};
+  const data = parsed.data;
+
+  if (data.firstName !== undefined && !data.firstName.trim()) {
+    fieldErrors.firstName = "First name is required";
+  }
+  if (data.lastName !== undefined && !data.lastName.trim()) {
+    fieldErrors.lastName = "Last name is required";
+  }
+  if (data.email !== undefined) {
+    if (!data.email.trim()) {
+      fieldErrors.email = "Email is required";
+    } else if (!EMAIL_REGEX.test(data.email.trim())) {
+      fieldErrors.email = "Invalid email format";
+    } else {
+      const [existing] = await db
+        .select({ id: membersTable.id })
+        .from(membersTable)
+        .where(and(
+          eq(membersTable.gymId, gymId),
+          eq(membersTable.email, data.email.trim().toLowerCase()),
+          ne(membersTable.id, memberId)
+        ))
+        .limit(1);
+      if (existing) {
+        fieldErrors.email = "This email is already in use";
+      }
+    }
+  }
+
+  if (Object.keys(fieldErrors).length > 0) {
+    res.status(400).json({ error: "Validation failed", fieldErrors });
+    return;
+  }
+
+  if (data.email) {
+    data.email = data.email.trim().toLowerCase();
+  }
+
   const [member] = await db
     .update(membersTable)
-    .set(parsed.data)
+    .set(data)
     .where(and(eq(membersTable.id, memberId), eq(membersTable.gymId, gymId)))
     .returning();
 
