@@ -271,7 +271,11 @@ export function AddMemberWizard({ open, onOpenChange }: Props) {
         },
       });
 
-      const cardElement = elements.create("payment", { layout: "tabs" });
+      const cardElement = elements.create("payment", {
+        layout: "tabs",
+        paymentMethodOrder: ["card"],
+        fields: { billingDetails: { address: { country: "never", postalCode: "auto" } } },
+      });
       setStripeElements(elements);
       setPaymentReady(true);
       setStripeLoading(false);
