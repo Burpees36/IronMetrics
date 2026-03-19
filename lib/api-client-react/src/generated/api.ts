@@ -73,6 +73,7 @@ import type {
   GenerateRecoveryLinkResponse,
   GetCancelledMembersParams,
   GetMemberBillingHistory200,
+  GetMemberLinkedBilling200,
   GetStripePublishableKey200,
   GraceEvaluationResponse,
   Gym,
@@ -89,6 +90,8 @@ import type {
   LeadCaptureBody,
   LeadCaptureGymInfo,
   LeadInsights,
+  LinkMemberBilling200,
+  LinkMemberBillingBody,
   ListAttendanceParams,
   ListClassesParams,
   ListInvoicesParams,
@@ -115,6 +118,7 @@ import type {
   ProgrammingSection,
   RefundPaymentBody,
   RefundRecord,
+  RemovePaymentMethod200,
   ReorderSectionsBody,
   RetentionStabilityIndex,
   RevenueForecast,
@@ -122,11 +126,13 @@ import type {
   Sale,
   SendEmailResponse,
   SendRecoveryLinkResponse,
+  SetDefaultPaymentMethod200,
   StaffMember,
   SubmitLeadCapture201,
   Subscription,
   SuccessResponse,
   TimelineEvent,
+  UnlinkMemberBilling200,
   UpdateAiTaskBody,
   UpdateClassBody,
   UpdateClassTemplateBody,
@@ -4900,6 +4906,487 @@ export function useListPaymentMethods<
   },
 ): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getListPaymentMethodsQueryOptions(
+    gymId,
+    memberId,
+    options,
+  );
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Set a payment method as default for member
+ */
+export const getSetDefaultPaymentMethodUrl = (
+  gymId: number,
+  memberId: number,
+  paymentMethodId: string,
+) => {
+  return `/api/gyms/${gymId}/members/${memberId}/payment-methods/${paymentMethodId}/set-default`;
+};
+
+export const setDefaultPaymentMethod = async (
+  gymId: number,
+  memberId: number,
+  paymentMethodId: string,
+  options?: RequestInit,
+): Promise<SetDefaultPaymentMethod200> => {
+  return customFetch<SetDefaultPaymentMethod200>(
+    getSetDefaultPaymentMethodUrl(gymId, memberId, paymentMethodId),
+    {
+      ...options,
+      method: "POST",
+    },
+  );
+};
+
+export const getSetDefaultPaymentMethodMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof setDefaultPaymentMethod>>,
+    TError,
+    { gymId: number; memberId: number; paymentMethodId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof setDefaultPaymentMethod>>,
+  TError,
+  { gymId: number; memberId: number; paymentMethodId: string },
+  TContext
+> => {
+  const mutationKey = ["setDefaultPaymentMethod"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof setDefaultPaymentMethod>>,
+    { gymId: number; memberId: number; paymentMethodId: string }
+  > = (props) => {
+    const { gymId, memberId, paymentMethodId } = props ?? {};
+
+    return setDefaultPaymentMethod(
+      gymId,
+      memberId,
+      paymentMethodId,
+      requestOptions,
+    );
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SetDefaultPaymentMethodMutationResult = NonNullable<
+  Awaited<ReturnType<typeof setDefaultPaymentMethod>>
+>;
+
+export type SetDefaultPaymentMethodMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Set a payment method as default for member
+ */
+export const useSetDefaultPaymentMethod = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof setDefaultPaymentMethod>>,
+    TError,
+    { gymId: number; memberId: number; paymentMethodId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof setDefaultPaymentMethod>>,
+  TError,
+  { gymId: number; memberId: number; paymentMethodId: string },
+  TContext
+> => {
+  return useMutation(getSetDefaultPaymentMethodMutationOptions(options));
+};
+
+/**
+ * @summary Remove a payment method from member
+ */
+export const getRemovePaymentMethodUrl = (
+  gymId: number,
+  memberId: number,
+  paymentMethodId: string,
+) => {
+  return `/api/gyms/${gymId}/members/${memberId}/payment-methods/${paymentMethodId}`;
+};
+
+export const removePaymentMethod = async (
+  gymId: number,
+  memberId: number,
+  paymentMethodId: string,
+  options?: RequestInit,
+): Promise<RemovePaymentMethod200> => {
+  return customFetch<RemovePaymentMethod200>(
+    getRemovePaymentMethodUrl(gymId, memberId, paymentMethodId),
+    {
+      ...options,
+      method: "DELETE",
+    },
+  );
+};
+
+export const getRemovePaymentMethodMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof removePaymentMethod>>,
+    TError,
+    { gymId: number; memberId: number; paymentMethodId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof removePaymentMethod>>,
+  TError,
+  { gymId: number; memberId: number; paymentMethodId: string },
+  TContext
+> => {
+  const mutationKey = ["removePaymentMethod"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof removePaymentMethod>>,
+    { gymId: number; memberId: number; paymentMethodId: string }
+  > = (props) => {
+    const { gymId, memberId, paymentMethodId } = props ?? {};
+
+    return removePaymentMethod(
+      gymId,
+      memberId,
+      paymentMethodId,
+      requestOptions,
+    );
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RemovePaymentMethodMutationResult = NonNullable<
+  Awaited<ReturnType<typeof removePaymentMethod>>
+>;
+
+export type RemovePaymentMethodMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Remove a payment method from member
+ */
+export const useRemovePaymentMethod = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof removePaymentMethod>>,
+    TError,
+    { gymId: number; memberId: number; paymentMethodId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof removePaymentMethod>>,
+  TError,
+  { gymId: number; memberId: number; paymentMethodId: string },
+  TContext
+> => {
+  return useMutation(getRemovePaymentMethodMutationOptions(options));
+};
+
+/**
+ * @summary Link another member's billing to this member (couples plan)
+ */
+export const getLinkMemberBillingUrl = (gymId: number, memberId: number) => {
+  return `/api/gyms/${gymId}/members/${memberId}/link-billing`;
+};
+
+export const linkMemberBilling = async (
+  gymId: number,
+  memberId: number,
+  linkMemberBillingBody: LinkMemberBillingBody,
+  options?: RequestInit,
+): Promise<LinkMemberBilling200> => {
+  return customFetch<LinkMemberBilling200>(
+    getLinkMemberBillingUrl(gymId, memberId),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(linkMemberBillingBody),
+    },
+  );
+};
+
+export const getLinkMemberBillingMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof linkMemberBilling>>,
+    TError,
+    { gymId: number; memberId: number; data: BodyType<LinkMemberBillingBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof linkMemberBilling>>,
+  TError,
+  { gymId: number; memberId: number; data: BodyType<LinkMemberBillingBody> },
+  TContext
+> => {
+  const mutationKey = ["linkMemberBilling"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof linkMemberBilling>>,
+    { gymId: number; memberId: number; data: BodyType<LinkMemberBillingBody> }
+  > = (props) => {
+    const { gymId, memberId, data } = props ?? {};
+
+    return linkMemberBilling(gymId, memberId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type LinkMemberBillingMutationResult = NonNullable<
+  Awaited<ReturnType<typeof linkMemberBilling>>
+>;
+export type LinkMemberBillingMutationBody = BodyType<LinkMemberBillingBody>;
+export type LinkMemberBillingMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Link another member's billing to this member (couples plan)
+ */
+export const useLinkMemberBilling = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof linkMemberBilling>>,
+    TError,
+    { gymId: number; memberId: number; data: BodyType<LinkMemberBillingBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof linkMemberBilling>>,
+  TError,
+  { gymId: number; memberId: number; data: BodyType<LinkMemberBillingBody> },
+  TContext
+> => {
+  return useMutation(getLinkMemberBillingMutationOptions(options));
+};
+
+/**
+ * @summary Unlink coupled billing for this member
+ */
+export const getUnlinkMemberBillingUrl = (gymId: number, memberId: number) => {
+  return `/api/gyms/${gymId}/members/${memberId}/unlink-billing`;
+};
+
+export const unlinkMemberBilling = async (
+  gymId: number,
+  memberId: number,
+  options?: RequestInit,
+): Promise<UnlinkMemberBilling200> => {
+  return customFetch<UnlinkMemberBilling200>(
+    getUnlinkMemberBillingUrl(gymId, memberId),
+    {
+      ...options,
+      method: "POST",
+    },
+  );
+};
+
+export const getUnlinkMemberBillingMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof unlinkMemberBilling>>,
+    TError,
+    { gymId: number; memberId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof unlinkMemberBilling>>,
+  TError,
+  { gymId: number; memberId: number },
+  TContext
+> => {
+  const mutationKey = ["unlinkMemberBilling"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof unlinkMemberBilling>>,
+    { gymId: number; memberId: number }
+  > = (props) => {
+    const { gymId, memberId } = props ?? {};
+
+    return unlinkMemberBilling(gymId, memberId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UnlinkMemberBillingMutationResult = NonNullable<
+  Awaited<ReturnType<typeof unlinkMemberBilling>>
+>;
+
+export type UnlinkMemberBillingMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Unlink coupled billing for this member
+ */
+export const useUnlinkMemberBilling = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof unlinkMemberBilling>>,
+    TError,
+    { gymId: number; memberId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof unlinkMemberBilling>>,
+  TError,
+  { gymId: number; memberId: number },
+  TContext
+> => {
+  return useMutation(getUnlinkMemberBillingMutationOptions(options));
+};
+
+/**
+ * @summary Get linked billing info for a member
+ */
+export const getGetMemberLinkedBillingUrl = (
+  gymId: number,
+  memberId: number,
+) => {
+  return `/api/gyms/${gymId}/members/${memberId}/linked-billing`;
+};
+
+export const getMemberLinkedBilling = async (
+  gymId: number,
+  memberId: number,
+  options?: RequestInit,
+): Promise<GetMemberLinkedBilling200> => {
+  return customFetch<GetMemberLinkedBilling200>(
+    getGetMemberLinkedBillingUrl(gymId, memberId),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetMemberLinkedBillingQueryKey = (
+  gymId: number,
+  memberId: number,
+) => {
+  return [`/api/gyms/${gymId}/members/${memberId}/linked-billing`] as const;
+};
+
+export const getGetMemberLinkedBillingQueryOptions = <
+  TData = Awaited<ReturnType<typeof getMemberLinkedBilling>>,
+  TError = ErrorType<unknown>,
+>(
+  gymId: number,
+  memberId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getMemberLinkedBilling>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ??
+    getGetMemberLinkedBillingQueryKey(gymId, memberId);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getMemberLinkedBilling>>
+  > = ({ signal }) =>
+    getMemberLinkedBilling(gymId, memberId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!(gymId && memberId),
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getMemberLinkedBilling>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetMemberLinkedBillingQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getMemberLinkedBilling>>
+>;
+export type GetMemberLinkedBillingQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get linked billing info for a member
+ */
+
+export function useGetMemberLinkedBilling<
+  TData = Awaited<ReturnType<typeof getMemberLinkedBilling>>,
+  TError = ErrorType<unknown>,
+>(
+  gymId: number,
+  memberId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getMemberLinkedBilling>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetMemberLinkedBillingQueryOptions(
     gymId,
     memberId,
     options,

@@ -139,6 +139,8 @@ export interface Member {
   lastVisitDate?: string | null;
   /** @nullable */
   attendanceCount30d?: number | null;
+  /** @nullable */
+  linkedBillingMemberId?: number | null;
   createdAt: string;
 }
 
@@ -1876,6 +1878,51 @@ export type ListPaymentMethods200Item = {
   last4?: string;
   expMonth?: number;
   expYear?: number;
+  isDefault?: boolean;
+};
+
+export type SetDefaultPaymentMethod200 = {
+  success?: boolean;
+};
+
+export type RemovePaymentMethod200 = {
+  success?: boolean;
+};
+
+export type LinkMemberBillingBody = {
+  linkedMemberId: number;
+};
+
+export type LinkMemberBilling200 = {
+  success?: boolean;
+  primaryMemberId?: number;
+  linkedMemberId?: number;
+};
+
+export type UnlinkMemberBilling200 = {
+  success?: boolean;
+};
+
+export type GetMemberLinkedBilling200PrimaryPayer = {
+  id?: number;
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+} | null;
+
+export type GetMemberLinkedBilling200DependentsItem = {
+  id?: number;
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+  status?: string;
+};
+
+export type GetMemberLinkedBilling200 = {
+  isPrimaryPayer?: boolean;
+  isDependent?: boolean;
+  primaryPayer?: GetMemberLinkedBilling200PrimaryPayer;
+  dependents?: GetMemberLinkedBilling200DependentsItem[];
 };
 
 export type CreateStripeSubscriptionBody = {

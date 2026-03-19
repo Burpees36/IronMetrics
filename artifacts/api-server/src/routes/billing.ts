@@ -277,6 +277,34 @@ router.get("/gyms/:gymId/members/:memberId/payment-methods", requireBillingRead(
   }
 });
 
+router.post("/gyms/:gymId/members/:memberId/payment-methods/:paymentMethodId/set-default", requireBillingPermission("billing.create_subscription"), async (req, res): Promise<void> => {
+  const gymId = parseGymId(req.params);
+  const memberId = parseInt(String(req.params.memberId), 10);
+  const paymentMethodId = req.params.paymentMethodId;
+  if (!gymId || isNaN(memberId) || !paymentMethodId) { res.status(400).json({ error: "Invalid IDs" }); return; }
+
+  try {
+    await stripeService.setDefaultPaymentMethod(memberId, gymId, paymentMethodId);
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+router.delete("/gyms/:gymId/members/:memberId/payment-methods/:paymentMethodId", requireBillingPermission("billing.create_subscription"), async (req, res): Promise<void> => {
+  const gymId = parseGymId(req.params);
+  const memberId = parseInt(String(req.params.memberId), 10);
+  const paymentMethodId = req.params.paymentMethodId;
+  if (!gymId || isNaN(memberId) || !paymentMethodId) { res.status(400).json({ error: "Invalid IDs" }); return; }
+
+  try {
+    await stripeService.detachPaymentMethod(memberId, gymId, paymentMethodId);
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
 router.post("/gyms/:gymId/members/:memberId/stripe-subscription", requireBillingPermission("billing.create_subscription"), async (req, res): Promise<void> => {
   const gymId = parseGymId(req.params);
   const memberId = parseInt(String(req.params.memberId), 10);

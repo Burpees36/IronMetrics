@@ -177,6 +177,7 @@ export const ListMembersResponse = zod.object({
       riskTier: zod.string().nullish(),
       lastVisitDate: zod.date().nullish(),
       attendanceCount30d: zod.number().nullish(),
+      linkedBillingMemberId: zod.number().nullish(),
       createdAt: zod.date(),
     }),
   ),
@@ -244,6 +245,7 @@ export const GetMemberResponse = zod
     riskTier: zod.string().nullish(),
     lastVisitDate: zod.date().nullish(),
     attendanceCount30d: zod.number().nullish(),
+    linkedBillingMemberId: zod.number().nullish(),
     createdAt: zod.date(),
   })
   .and(
@@ -351,6 +353,7 @@ export const UpdateMemberResponse = zod.object({
   riskTier: zod.string().nullish(),
   lastVisitDate: zod.date().nullish(),
   attendanceCount30d: zod.number().nullish(),
+  linkedBillingMemberId: zod.number().nullish(),
   createdAt: zod.date(),
 });
 
@@ -591,6 +594,7 @@ export const ConvertLeadToMemberResponse = zod.object({
   riskTier: zod.string().nullish(),
   lastVisitDate: zod.date().nullish(),
   attendanceCount30d: zod.number().nullish(),
+  linkedBillingMemberId: zod.number().nullish(),
   createdAt: zod.date(),
 });
 
@@ -1438,10 +1442,99 @@ export const ListPaymentMethodsResponseItem = zod.object({
   last4: zod.string().optional(),
   expMonth: zod.number().optional(),
   expYear: zod.number().optional(),
+  isDefault: zod.boolean().optional(),
 });
 export const ListPaymentMethodsResponse = zod.array(
   ListPaymentMethodsResponseItem,
 );
+
+/**
+ * @summary Set a payment method as default for member
+ */
+export const SetDefaultPaymentMethodParams = zod.object({
+  gymId: zod.coerce.number(),
+  memberId: zod.coerce.number(),
+  paymentMethodId: zod.coerce.string(),
+});
+
+export const SetDefaultPaymentMethodResponse = zod.object({
+  success: zod.boolean().optional(),
+});
+
+/**
+ * @summary Remove a payment method from member
+ */
+export const RemovePaymentMethodParams = zod.object({
+  gymId: zod.coerce.number(),
+  memberId: zod.coerce.number(),
+  paymentMethodId: zod.coerce.string(),
+});
+
+export const RemovePaymentMethodResponse = zod.object({
+  success: zod.boolean().optional(),
+});
+
+/**
+ * @summary Link another member's billing to this member (couples plan)
+ */
+export const LinkMemberBillingParams = zod.object({
+  gymId: zod.coerce.number(),
+  memberId: zod.coerce.number(),
+});
+
+export const LinkMemberBillingBody = zod.object({
+  linkedMemberId: zod.number(),
+});
+
+export const LinkMemberBillingResponse = zod.object({
+  success: zod.boolean().optional(),
+  primaryMemberId: zod.number().optional(),
+  linkedMemberId: zod.number().optional(),
+});
+
+/**
+ * @summary Unlink coupled billing for this member
+ */
+export const UnlinkMemberBillingParams = zod.object({
+  gymId: zod.coerce.number(),
+  memberId: zod.coerce.number(),
+});
+
+export const UnlinkMemberBillingResponse = zod.object({
+  success: zod.boolean().optional(),
+});
+
+/**
+ * @summary Get linked billing info for a member
+ */
+export const GetMemberLinkedBillingParams = zod.object({
+  gymId: zod.coerce.number(),
+  memberId: zod.coerce.number(),
+});
+
+export const GetMemberLinkedBillingResponse = zod.object({
+  isPrimaryPayer: zod.boolean().optional(),
+  isDependent: zod.boolean().optional(),
+  primaryPayer: zod
+    .object({
+      id: zod.number().optional(),
+      firstName: zod.string().optional(),
+      lastName: zod.string().optional(),
+      email: zod.string().optional(),
+    })
+    .nullish(),
+  dependents: zod
+    .array(
+      zod.object({
+        id: zod.number().optional(),
+        firstName: zod.string().optional(),
+        lastName: zod.string().optional(),
+        email: zod.string().optional(),
+        status: zod.string().optional(),
+      }),
+    )
+    .optional(),
+});
 
 /**
  * @summary Create Stripe-backed subscription

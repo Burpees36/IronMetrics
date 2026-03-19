@@ -48,13 +48,39 @@ export class StripeService {
       type: "card",
     });
 
+    const customer = await stripe.customers.retrieve(member.stripeCustomerId) as Stripe.Customer;
+    const defaultPmId = typeof customer.invoice_settings?.default_payment_method === "string"
+      ? customer.invoice_settings.default_payment_method
+      : customer.invoice_settings?.default_payment_method?.id;
+
     return methods.data.map((pm) => ({
       id: pm.id,
       brand: pm.card?.brand || "unknown",
       last4: pm.card?.last4 || "****",
       expMonth: pm.card?.exp_month,
       expYear: pm.card?.exp_year,
+      isDefault: pm.id === defaultPmId,
     }));
+  }
+
+  async setDefaultPaymentMethod(memberId: number, gymId: number, paymentMethodId: string): Promise<void> {
+    const [member] = await db.select().from(membersTable).where(and(eq(membersTable.id, memberId), eq(membersTable.gymId, gymId)));
+    if (!member?.stripeCustomerId) throw new Error("Member has no Stripe customer");
+
+    const stripe = await getUncachableStripeClient();
+    await stripe.customers.update(member.stripeCustomerId, {
+      invoice_settings: { default_payment_method: paymentMethodId },
+    });
+  }
+
+  async detachPaymentMethod(memberId: number, gymId: number, paymentMethodId: string): Promise<void> {
+    const [member] = await db.select().from(membersTable).where(and(eq(membersTable.id, memberId), eq(membersTable.gymId, gymId)));
+    if (!member?.stripeCustomerId) throw new Error("Member has no Stripe customer");
+
+    const stripe = await getUncachableStripeClient();
+    const pm = await stripe.paymentMethods.retrieve(paymentMethodId);
+    if (pm.customer !== member.stripeCustomerId) throw new Error("Payment method does not belong to this member");
+    await stripe.paymentMethods.detach(paymentMethodId);
   }
 
   async createStripeSubscription(
@@ -64,7 +90,11 @@ export class StripeService {
     paymentMethodId?: string,
     actor?: ActorInfo
   ): Promise<any> {
-    const customerId = await this.getOrCreateCustomer(memberId, gymId);
+    const [member] = await db.select().from(membersTable).where(and(eq(membersTable.id, memberId), eq(membersTable.gymId, gymId)));
+    if (!member) throw new Error("Member not found");
+
+    const billingMemberId = member.linkedBillingMemberId || memberId;
+    const customerId = await this.getOrCreateCustomer(billingMemberId, gymId);
     const [plan] = await db.select().from(membershipPlansTable).where(and(eq(membershipPlansTable.id, planId), eq(membershipPlansTable.gymId, gymId)));
     if (!plan) throw new Error("Plan not found");
 
@@ -121,7 +151,6 @@ export class StripeService {
       metadata: { gymId: String(gymId), memberId: String(memberId), planId: String(planId) },
     });
 
-    const [member] = await db.select().from(membersTable).where(eq(membersTable.id, memberId));
     const today = new Date().toISOString().split("T")[0];
 
     const subStatus = subscription.status === "active" ? "active" : "pending";
@@ -296,9 +325,12 @@ export class StripeService {
     if (amount <= 0) throw new Error("Amount must be positive");
     if (amount > 10000) throw new Error("Amount exceeds maximum allowed charge");
 
-    const customerId = await this.getOrCreateCustomer(memberId, gymId);
+    const [member] = await db.select().from(membersTable).where(and(eq(membersTable.id, memberId), eq(membersTable.gymId, gymId)));
+    if (!member) throw new Error("Member not found");
+
+    const billingMemberId = member.linkedBillingMemberId || memberId;
+    const customerId = await this.getOrCreateCustomer(billingMemberId, gymId);
     const stripe = await getUncachableStripeClient();
-    const [member] = await db.select().from(membersTable).where(eq(membersTable.id, memberId));
 
     const piParams: any = {
       amount: Math.round(amount * 100),

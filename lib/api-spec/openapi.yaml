@@ -1373,6 +1373,197 @@ paths:
                       type: integer
                     expYear:
                       type: integer
+                    isDefault:
+                      type: boolean
+
+  /gyms/{gymId}/members/{memberId}/payment-methods/{paymentMethodId}/set-default:
+    post:
+      operationId: setDefaultPaymentMethod
+      tags: [billing]
+      summary: Set a payment method as default for member
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: memberId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: paymentMethodId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+
+  /gyms/{gymId}/members/{memberId}/payment-methods/{paymentMethodId}:
+    delete:
+      operationId: removePaymentMethod
+      tags: [billing]
+      summary: Remove a payment method from member
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: memberId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: paymentMethodId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+
+  /gyms/{gymId}/members/{memberId}/link-billing:
+    post:
+      operationId: linkMemberBilling
+      tags: [members]
+      summary: Link another member's billing to this member (couples plan)
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: memberId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - linkedMemberId
+              properties:
+                linkedMemberId:
+                  type: integer
+      responses:
+        "200":
+          description: Linked successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  primaryMemberId:
+                    type: integer
+                  linkedMemberId:
+                    type: integer
+
+  /gyms/{gymId}/members/{memberId}/unlink-billing:
+    post:
+      operationId: unlinkMemberBilling
+      tags: [members]
+      summary: Unlink coupled billing for this member
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: memberId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Unlinked successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+
+  /gyms/{gymId}/members/{memberId}/linked-billing:
+    get:
+      operationId: getMemberLinkedBilling
+      tags: [members]
+      summary: Get linked billing info for a member
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: memberId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Linked billing info
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  isPrimaryPayer:
+                    type: boolean
+                  isDependent:
+                    type: boolean
+                  primaryPayer:
+                    type: object
+                    nullable: true
+                    properties:
+                      id:
+                        type: integer
+                      firstName:
+                        type: string
+                      lastName:
+                        type: string
+                      email:
+                        type: string
+                  dependents:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: integer
+                        firstName:
+                          type: string
+                        lastName:
+                          type: string
+                        email:
+                          type: string
+                        status:
+                          type: string
 
   /gyms/{gymId}/members/{memberId}/stripe-subscription:
     post:
@@ -3185,6 +3376,8 @@ components:
           type: ["string", "null"]
           format: date-time
         attendanceCount30d:
+          type: ["integer", "null"]
+        linkedBillingMemberId:
           type: ["integer", "null"]
         createdAt:
           type: string
