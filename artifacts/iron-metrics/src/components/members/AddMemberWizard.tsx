@@ -499,8 +499,8 @@ export function AddMemberWizard({ open, onOpenChange }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto overflow-x-hidden p-0">
-        <div className="px-6 pt-6 pb-4 border-b border-border">
+      <DialogContent className="max-w-xl max-h-[90vh] flex flex-col overflow-hidden p-0">
+        <div className="px-6 pt-6 pb-4 border-b border-border shrink-0">
           <div className="flex items-center gap-3 mb-4">
             <div className="h-10 w-10 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center">
               <UserPlus className="h-5 w-5 text-primary" />
@@ -543,7 +543,7 @@ export function AddMemberWizard({ open, onOpenChange }: Props) {
           </div>
         </div>
 
-        <div className="px-6 py-4 min-h-[280px]">
+        <div className="px-6 py-4 min-h-0 flex-1 overflow-y-auto">
           <AnimatePresence mode="wait">
             <motion.div
               key={step}
@@ -832,7 +832,7 @@ export function AddMemberWizard({ open, onOpenChange }: Props) {
           </AnimatePresence>
         </div>
 
-        <div className="px-6 py-4 border-t border-border flex items-center justify-between gap-3">
+        <div className="px-6 py-4 border-t border-border flex items-center justify-between gap-3 shrink-0">
           {stepIndex > 0 ? (
             <button
               onClick={goBack}
