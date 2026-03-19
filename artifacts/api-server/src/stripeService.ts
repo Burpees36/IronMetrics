@@ -110,7 +110,10 @@ export class StripeService {
     const stripe = await getUncachableStripeClient();
 
     if (paymentMethodId) {
-      await stripe.paymentMethods.attach(paymentMethodId, { customer: customerId });
+      const pm = await stripe.paymentMethods.retrieve(paymentMethodId);
+      if (!pm.customer || pm.customer !== customerId) {
+        await stripe.paymentMethods.attach(paymentMethodId, { customer: customerId });
+      }
       await stripe.customers.update(customerId, {
         invoice_settings: { default_payment_method: paymentMethodId },
       });

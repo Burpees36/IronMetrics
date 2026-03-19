@@ -140,6 +140,15 @@ router.post("/gyms/:gymId/members", async (req, res): Promise<void> => {
   const setupIntentId = typeof body.setupIntentId === "string" ? body.setupIntentId : null;
   const planId = body.planId ? parseInt(String(body.planId), 10) : null;
 
+  if (planId) {
+    const billingPermissions = req.billingPermissions || [];
+    const canCreateSub = billingPermissions.includes("billing.create_subscription") || req.gymRole === "owner" || req.gymRole === "admin";
+    if (!canCreateSub) {
+      res.status(403).json({ error: "You do not have permission to create subscriptions" });
+      return;
+    }
+  }
+
   let verifiedCustomerId: string | null = null;
   let verifiedPaymentMethodId: string | null = null;
 
