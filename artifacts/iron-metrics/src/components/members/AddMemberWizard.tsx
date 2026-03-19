@@ -272,9 +272,10 @@ export function AddMemberWizard({ open, onOpenChange }: Props) {
       });
 
       const cardElement = elements.create("payment", {
-        layout: "tabs",
-        paymentMethodOrder: ["card"],
+        layout: "accordion",
+        paymentMethodOrder: ["card", "us_bank_account"],
         fields: { billingDetails: { address: { country: "never", postalCode: "auto" } } },
+        wallets: { applePay: "never", googlePay: "never" },
       });
       setStripeElements(elements);
       setPaymentReady(true);
@@ -498,7 +499,7 @@ export function AddMemberWizard({ open, onOpenChange }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto p-0">
+      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto overflow-x-hidden p-0">
         <div className="px-6 pt-6 pb-4 border-b border-border">
           <div className="flex items-center gap-3 mb-4">
             <div className="h-10 w-10 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center">
@@ -745,7 +746,7 @@ export function AddMemberWizard({ open, onOpenChange }: Props) {
 
                   <div className="space-y-2">
                     <Label className="text-sm text-foreground font-medium flex items-center gap-1.5">
-                      <CreditCard className="h-4 w-4" /> Card Details
+                      <CreditCard className="h-4 w-4" /> Payment Method
                     </Label>
                     {stripeLoading && !paymentReady && (
                       <div className="flex items-center justify-center py-8 text-muted-foreground">
@@ -755,7 +756,7 @@ export function AddMemberWizard({ open, onOpenChange }: Props) {
                     )}
                     <div
                       ref={cardMountRef}
-                      className="min-h-[60px] rounded-lg border border-input p-3"
+                      className="min-h-[60px] rounded-lg overflow-hidden"
                       style={{ display: paymentReady ? "block" : stripeLoading ? "none" : "block" }}
                     />
                     {stripeError && (
@@ -768,7 +769,7 @@ export function AddMemberWizard({ open, onOpenChange }: Props) {
                   <div className="p-3 rounded-xl bg-muted/30 border border-border flex items-center gap-2">
                     <Shield className="h-4 w-4 text-muted-foreground shrink-0" />
                     <p className="text-xs text-muted-foreground">
-                      Card information is securely processed by Stripe. We never store card details on our servers.
+                      Payment information is securely processed by Stripe. We never store payment details on our servers.
                     </p>
                   </div>
                 </div>

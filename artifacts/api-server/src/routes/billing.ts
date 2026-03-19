@@ -205,7 +205,7 @@ router.post("/gyms/:gymId/onboarding/setup-intent", async (req, res): Promise<vo
 
     const setupIntent = await stripe.setupIntents.create({
       customer: customer.id,
-      payment_method_types: ["card"],
+      payment_method_types: ["card", "us_bank_account"],
     });
 
     res.json({
