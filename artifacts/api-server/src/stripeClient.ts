@@ -80,4 +80,10 @@ export async function initStripe(): Promise<void> {
   stripeSync.syncBackfill()
     .then(() => console.log("Stripe data synced"))
     .catch((err: any) => console.error("Error syncing Stripe data:", err.message));
+
+  console.log("Ensuring platform products/prices exist...");
+  const { ensurePlatformProducts } = await import("./platformStripeService");
+  ensurePlatformProducts()
+    .then(() => console.log("Platform products/prices ready"))
+    .catch((err: any) => console.warn("Platform product setup warning:", err.message));
 }

@@ -15,9 +15,9 @@
  * middleware because Stripe signature verification requires the raw
  * request body as a Buffer.
  *
- * Known weakness: CORS is configured with `origin: true`, which reflects
- * any requesting origin. In production this should be locked down to a
- * whitelist of allowed origins.
+ * CORS is configured via the ALLOWED_ORIGINS environment variable
+ * (comma-separated list of allowed origins). When not set, it defaults
+ * to allowing *.replit.dev and localhost for development.
  */
 import express, { type Express } from "express";
 import cors from "cors";
@@ -27,6 +27,9 @@ import { authMiddleware } from "./middlewares/authMiddleware";
 import { WebhookHandlers } from "./webhookHandlers";
 import router from "./routes";
 import paymentUpdatePublicRouter from "./routes/payment-update-public";
+import leadCaptureRouter from "./routes/lead-capture";
+import leadCaptureConfigRouter from "./routes/lead-capture-config";
+import retentionRouter from "./routes/retention";
 
 const app: Express = express();
 
@@ -69,9 +72,20 @@ app.post(
 );
 
 // --- Global middleware ---
-// Known weakness: `origin: true` mirrors any origin, making CORS effectively open.
-// Should be restricted to known frontend domains in production.
-app.use(cors({ credentials: true, origin: true }));
+const allowedOrigins = process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(",").map((o) => o.trim())
+  : [/\.replit\.dev$/, /localhost/];
+
+app.use(cors({
+  credentials: true,
+  origin: (origin, callback) => {
+    if (!origin) return callback(null, true);
+    const allowed = allowedOrigins.some((o) =>
+      o instanceof RegExp ? o.test(origin) : o === origin
+    );
+    callback(null, allowed);
+  },
+}));
 app.use(cookieParser());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -108,20 +122,34 @@ const paymentUpdateLimiter = rateLimit({
   validate: { ip: false, trustProxy: false },
 } as Partial<Options>);
 
+/** Lead capture limiter: 20 requests per 15-minute window (spam prevention for public forms). */
+const leadCaptureLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 20,
+  standardHeaders: "draft-7",
+  legacyHeaders: false,
+  message: { error: "Too many submissions. Please try again later." },
+  validate: { ip: false, trustProxy: false },
+} as Partial<Options>);
+
 // Apply rate limiters to their respective route prefixes
 app.use("/api/login", authLimiter);
 app.use("/api/callback", authLimiter);
 app.use("/api/payment-update", paymentUpdateLimiter);
+app.use("/api/lead-capture", leadCaptureLimiter);
 app.use("/api", apiLimiter);
 
-// Public routes that do not require authentication (e.g., payment update links)
+// Public routes that do not require authentication (e.g., payment update links, lead capture)
 app.use("/api", paymentUpdatePublicRouter);
+app.use("/api", leadCaptureRouter);
 
 // Authentication middleware — everything below this point requires a valid session
 app.use(authMiddleware);
 
 // Protected API routes — gym-scoped routes are further guarded by requireGymAccess
 app.use("/api", router);
+app.use("/api", leadCaptureConfigRouter);
+app.use("/api", retentionRouter);
 
 /** Global error handler — catches unhandled errors from any route or middleware. */
 app.use((err: any, _req: any, res: any, _next: any) => {

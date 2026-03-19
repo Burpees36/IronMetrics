@@ -136,6 +136,7 @@ router.post("/gyms/:gymId/ai/generate-outreach", async (req, res): Promise<void>
   res.json({
     ...content,
     confidence: parseFloat(content.confidence),
+    confidenceIsDefault: true,
   });
 });
 
@@ -162,14 +163,14 @@ router.post("/gyms/:gymId/ai/generate-brief", async (req, res): Promise<void> =>
       sql`(${membersTable.riskTier} = 'critical' OR ${membersTable.riskTier} = 'high')`)
   );
 
-  const active = activeCount?.count ?? 0;
-  const atRisk = atRiskMembers[0]?.count ?? 0;
-  const leads = leadCount?.count ?? 0;
+  const active = Number(activeCount?.count ?? 0);
+  const atRisk = Number(atRiskMembers[0]?.count ?? 0);
+  const leads = Number(leadCount?.count ?? 0);
 
   const briefContent = `## Weekly Owner Brief
 
 ### Current Snapshot
-- **${active} active members** (${cancelledCount?.count ?? 0} cancelled, ${holdCount?.count ?? 0} on hold)
+- **${active} active members** (${Number(cancelledCount?.count ?? 0)} cancelled, ${Number(holdCount?.count ?? 0)} on hold)
 - **MRR: $${mrr.toLocaleString()}** from ${subs.length} subscriptions
 - **${leads} leads** in pipeline
 - **${atRisk} at-risk members** flagged for intervention
@@ -200,6 +201,7 @@ router.post("/gyms/:gymId/ai/generate-brief", async (req, res): Promise<void> =>
   res.json({
     ...content,
     confidence: parseFloat(content.confidence),
+    confidenceIsDefault: true,
   });
 });
 

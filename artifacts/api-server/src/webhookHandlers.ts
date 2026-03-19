@@ -1,9 +1,10 @@
 import { getStripeSync, getUncachableStripeClient } from "./stripeClient";
-import { db, subscriptionsTable, paymentsTable, refundsTable, invoicesTable, membersTable, billingWebhookEventsTable } from "@workspace/db";
+import { db, subscriptionsTable, paymentsTable, refundsTable, invoicesTable, membersTable, billingWebhookEventsTable, gymsTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 import { billingAuditLogger } from "./billingAuditLogger";
 import { billingRecoveryService } from "./services/billing-recovery";
 import type Stripe from "stripe";
+import { getTierFromPriceId, type SubscriptionTier } from "./tierConfig";
 
 async function claimEvent(stripeEventId: string, eventType: string): Promise<boolean> {
   try {
@@ -310,6 +311,120 @@ async function handleChargeRefunded(charge: Stripe.Charge): Promise<void> {
   });
 }
 
+function isPlatformSubscription(sub: Stripe.Subscription): boolean {
+  return sub.metadata?.iron_metrics_platform === "true";
+}
+
+async function isPlatformInvoiceAsync(invoice: Stripe.Invoice): Promise<boolean> {
+  if (invoice.metadata?.iron_metrics_platform === "true") return true;
+
+  const subRef = invoice.parent?.subscription_details?.subscription;
+  const subscriptionId: string | null = typeof subRef === "string"
+    ? subRef
+    : (subRef?.id ?? null);
+
+  if (!subscriptionId) return false;
+
+  const [gym] = await db
+    .select({ id: gymsTable.id })
+    .from(gymsTable)
+    .where(eq(gymsTable.platformSubscriptionId, subscriptionId));
+
+  return !!gym;
+}
+
+function extractPlatformTierFromSubscription(sub: Stripe.Subscription): SubscriptionTier | null {
+  for (const item of sub.items.data) {
+    const priceId = item.price.id;
+    const tier = getTierFromPriceId(priceId);
+    if (tier) return tier;
+  }
+  const metaTier = sub.metadata?.tier as SubscriptionTier | undefined;
+  return metaTier ?? null;
+}
+
+function getSubscriptionPeriodEnd(sub: Stripe.Subscription): Date | null {
+  const firstItem = sub.items.data[0];
+  if (firstItem?.current_period_end) {
+    return new Date(firstItem.current_period_end * 1000);
+  }
+  return null;
+}
+
+async function handlePlatformSubscriptionActivated(sub: Stripe.Subscription): Promise<void> {
+  const gymIdStr = sub.metadata?.gymId;
+  if (!gymIdStr) return;
+
+  const gymId = parseInt(gymIdStr, 10);
+  if (isNaN(gymId)) return;
+
+  const tier = extractPlatformTierFromSubscription(sub);
+  if (!tier) {
+    console.warn(`[PLATFORM WEBHOOK] Could not determine tier for subscription ${sub.id} (gym ${gymId})`);
+    return;
+  }
+
+  await db.update(gymsTable).set({
+    subscriptionTier: tier,
+    platformSubscriptionId: sub.id,
+    platformCancelAtPeriodEnd: sub.cancel_at_period_end,
+    platformCurrentPeriodEnd: getSubscriptionPeriodEnd(sub),
+  }).where(eq(gymsTable.id, gymId));
+
+  console.log(`[PLATFORM WEBHOOK] Activated tier=${tier} for gym ${gymId}`);
+}
+
+interface PlatformSubscriptionUpdate {
+  platformCancelAtPeriodEnd: boolean;
+  platformCurrentPeriodEnd: Date | null;
+  subscriptionTier?: SubscriptionTier;
+  platformSubscriptionId?: string | null;
+}
+
+async function handlePlatformSubscriptionUpdated(sub: Stripe.Subscription): Promise<void> {
+  const gymIdStr = sub.metadata?.gymId;
+  if (!gymIdStr) return;
+
+  const gymId = parseInt(gymIdStr, 10);
+  if (isNaN(gymId)) return;
+
+  const updates: PlatformSubscriptionUpdate = {
+    platformCancelAtPeriodEnd: sub.cancel_at_period_end,
+    platformCurrentPeriodEnd: getSubscriptionPeriodEnd(sub),
+  };
+
+  if (sub.status === "active" || sub.status === "trialing") {
+    const tier = extractPlatformTierFromSubscription(sub);
+    if (tier) {
+      updates.subscriptionTier = tier;
+      updates.platformSubscriptionId = sub.id;
+    }
+  } else if (sub.status === "canceled") {
+    updates.subscriptionTier = "none";
+    updates.platformSubscriptionId = null;
+  }
+
+  await db.update(gymsTable).set(updates).where(eq(gymsTable.id, gymId));
+  console.log(`[PLATFORM WEBHOOK] Updated platform subscription for gym ${gymId}, status=${sub.status}, tier=${updates.subscriptionTier ?? "(unchanged)"}`);
+}
+
+async function handlePlatformSubscriptionDeleted(sub: Stripe.Subscription): Promise<void> {
+  const gymIdStr = sub.metadata?.gymId;
+  if (!gymIdStr) return;
+
+  const gymId = parseInt(gymIdStr, 10);
+  if (isNaN(gymId)) return;
+
+  await db.update(gymsTable).set({
+    subscriptionTier: "none",
+    platformSubscriptionId: null,
+    platformCancelAtPeriodEnd: false,
+    platformCurrentPeriodEnd: null,
+  }).where(eq(gymsTable.id, gymId));
+
+  console.log(`[PLATFORM WEBHOOK] Platform subscription deleted for gym ${gymId} — downgraded to none`);
+}
+
 async function handlePaymentMethodAttached(pm: Stripe.PaymentMethod): Promise<void> {
   const customerId = typeof pm.customer === "string" ? pm.customer : (pm.customer as any)?.id;
   if (!customerId) return;
@@ -364,21 +479,53 @@ export class WebhookHandlers {
 
     try {
       switch (eventType) {
-        case "customer.subscription.created":
-          await handleSubscriptionCreated(event.data.object as Stripe.Subscription);
+        case "customer.subscription.created": {
+          const sub = event.data.object as Stripe.Subscription;
+          if (isPlatformSubscription(sub)) {
+            await handlePlatformSubscriptionActivated(sub);
+          } else {
+            await handleSubscriptionCreated(sub);
+          }
           break;
-        case "customer.subscription.updated":
-          await handleSubscriptionUpdated(event.data.object as Stripe.Subscription);
+        }
+        case "customer.subscription.updated": {
+          const sub = event.data.object as Stripe.Subscription;
+          if (isPlatformSubscription(sub)) {
+            await handlePlatformSubscriptionUpdated(sub);
+          } else {
+            await handleSubscriptionUpdated(sub);
+          }
           break;
-        case "customer.subscription.deleted":
-          await handleSubscriptionDeleted(event.data.object as Stripe.Subscription);
+        }
+        case "customer.subscription.deleted": {
+          const sub = event.data.object as Stripe.Subscription;
+          if (isPlatformSubscription(sub)) {
+            await handlePlatformSubscriptionDeleted(sub);
+          } else {
+            await handleSubscriptionDeleted(sub);
+          }
           break;
-        case "invoice.payment_succeeded":
-          await handleInvoicePaymentSucceeded(event.data.object as Stripe.Invoice);
+        }
+        case "invoice.payment_succeeded": {
+          const inv = event.data.object as Stripe.Invoice;
+          const isPlatform = await isPlatformInvoiceAsync(inv);
+          if (isPlatform) {
+            console.log(`[PLATFORM WEBHOOK] invoice.payment_succeeded for platform subscription (invoice: ${inv.id}) — no additional action needed`);
+          } else {
+            await handleInvoicePaymentSucceeded(inv);
+          }
           break;
-        case "invoice.payment_failed":
-          await handleInvoicePaymentFailed(event.data.object as Stripe.Invoice);
+        }
+        case "invoice.payment_failed": {
+          const inv = event.data.object as Stripe.Invoice;
+          const isPlatform = await isPlatformInvoiceAsync(inv);
+          if (isPlatform) {
+            console.warn(`[PLATFORM WEBHOOK] invoice.payment_failed for platform subscription (invoice: ${inv.id}) — Stripe will retry and may cancel subscription`);
+          } else {
+            await handleInvoicePaymentFailed(inv);
+          }
           break;
+        }
         case "charge.refunded":
           await handleChargeRefunded(event.data.object as Stripe.Charge);
           break;

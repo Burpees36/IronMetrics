@@ -131,6 +131,21 @@ export function Onboarding() {
   const handleFinish = async () => {
     const ok = await updateStep("finish");
     if (!ok) return;
+
+    try {
+      const res = await fetch(`${API_BASE}/api/gyms/${activeGymId}/platform-billing`, {
+        credentials: "include",
+      });
+      if (res.ok) {
+        const billing = await res.json();
+        const hasPlan = billing.isBetaAccess || (billing.subscriptionTier && billing.subscriptionTier !== "none");
+        if (!hasPlan) {
+          setLocation("/plan-selection");
+          return;
+        }
+      }
+    } catch (_) {}
+
     setLocation("/dashboard");
   };
 

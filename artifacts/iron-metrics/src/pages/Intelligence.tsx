@@ -151,21 +151,35 @@ export function Intelligence() {
               <div className="lg:col-span-2 bg-card border border-border rounded-2xl p-4 md:p-6 shadow-sm">
                 <h3 className="text-base md:text-lg font-semibold text-foreground mb-4 md:mb-6">Index Composition</h3>
                 <div className="space-y-4 md:space-y-6">
-                  {rsi.breakdown.map((item: any, i: number) => (
+                  {rsi.breakdown.map((item: any, i: number) => {
+                    const formatValue = (metric: string, value: number) => {
+                      if (metric === "Churn Rate") return `${value.toFixed(1)}%`;
+                      if (metric === "Avg Revenue/Member") return `$${Math.round(value)}/mo`;
+                      if (metric === "Net Member Growth") return value >= 0 ? `+${value}` : `${value}`;
+                      if (metric === "Avg Tenure (months)") return value < 1 ? `${Math.round(value * 30)}d` : `${value.toFixed(1)} mo`;
+                      return String(value);
+                    };
+                    return (
                     <div key={i}>
-                      <div className="flex justify-between text-xs md:text-sm mb-2">
+                      <div className="flex justify-between text-xs md:text-sm mb-1">
                         <span className="font-medium text-foreground">{item.metric}</span>
                         <span className="text-muted-foreground">Weight: {item.weight}%</span>
                       </div>
-                      <div className="w-full h-2.5 md:h-3 bg-muted rounded-full overflow-hidden">
-                        <motion.div 
-                          initial={{ width: 0 }} animate={{ width: `${item.normalized}%` }}
-                          transition={{ duration: 1, delay: i * 0.1 }}
-                          className={`h-full ${item.normalized > 70 ? 'bg-emerald-500' : item.normalized > 40 ? 'bg-yellow-500' : 'bg-destructive'}`}
-                        />
+                      <div className="flex items-center gap-3">
+                        <div className="flex-1 h-2.5 md:h-3 bg-muted rounded-full overflow-hidden">
+                          <motion.div 
+                            initial={{ width: 0 }} animate={{ width: `${Math.max(item.normalized, 2)}%` }}
+                            transition={{ duration: 1, delay: i * 0.1 }}
+                            className={`h-full ${item.normalized > 70 ? 'bg-emerald-500' : item.normalized > 40 ? 'bg-yellow-500' : 'bg-destructive'}`}
+                          />
+                        </div>
+                        <span className={`text-xs font-mono min-w-[60px] text-right ${item.normalized > 70 ? 'text-emerald-500' : item.normalized > 40 ? 'text-yellow-500' : 'text-destructive'}`}>
+                          {formatValue(item.metric, item.value)}
+                        </span>
                       </div>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             </div>

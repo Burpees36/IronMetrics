@@ -1,11 +1,13 @@
 import React, { useEffect, useState } from "react";
 import { useGym } from "@/store/GymContext";
-import { useGetDashboardStats } from "@workspace/api-client-react";
+import { useGetDashboardStats, useGetMorningBriefing } from "@workspace/api-client-react";
 import { 
   Users, TrendingUp, AlertTriangle, CalendarCheck, 
-  ArrowUpRight, ArrowDownRight, Loader2, BrainCircuit, Rocket
+  ArrowUpRight, ArrowDownRight, Loader2, BrainCircuit, Rocket,
+  Sun, CreditCard, UserCheck, Calendar, ChevronRight, Sparkles,
+  ChevronDown, ChevronUp, UserPlus, Clock, DollarSign, Inbox
 } from "lucide-react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { AreaChart, Area, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
@@ -50,6 +52,197 @@ function OnboardingBanner({ gymId }: { gymId: number }) {
   );
 }
 
+const priorityConfig = {
+  critical: { bg: "bg-destructive/10", border: "border-destructive/20", text: "text-destructive", dot: "bg-destructive" },
+  warning: { bg: "bg-amber-500/10", border: "border-amber-500/20", text: "text-amber-500", dot: "bg-amber-500" },
+  info: { bg: "bg-blue-500/10", border: "border-blue-500/20", text: "text-blue-500", dot: "bg-blue-500" },
+  positive: { bg: "bg-emerald-500/10", border: "border-emerald-500/20", text: "text-emerald-500", dot: "bg-emerald-500" },
+};
+
+const iconMap: Record<string, React.ElementType> = {
+  alert: AlertTriangle,
+  warning: AlertTriangle,
+  billing: CreditCard,
+  leads: UserCheck,
+  schedule: Calendar,
+  positive: Sparkles,
+  engagement: Users,
+};
+
+function getGreeting(): string {
+  const hour = new Date().getHours();
+  if (hour < 12) return "Good morning";
+  if (hour < 17) return "Good afternoon";
+  return "Good evening";
+}
+
+function MorningBriefing({ gymId }: { gymId: number }) {
+  const { data: briefing, isLoading } = useGetMorningBriefing(gymId, {
+    query: { enabled: !!gymId }
+  });
+  const [collapsed, setCollapsed] = useState(false);
+
+  if (isLoading || !briefing) return null;
+
+  const snap = (briefing as any).snapshot;
+  const actionItems = (briefing.items || []).filter(
+    (item: any) => item.priority === "critical" || item.priority === "warning"
+  );
+  const positiveItems = (briefing.items || []).filter(
+    (item: any) => item.priority === "positive" || item.priority === "info"
+  );
+
+  const attentionCards = [
+    {
+      label: "Critical Members",
+      value: snap?.atRiskMembers || 0,
+      icon: AlertTriangle,
+      color: (snap?.atRiskMembers || 0) > 0 ? "text-destructive bg-destructive/10 border-destructive/20" : "text-muted-foreground bg-muted/20 border-border",
+      link: "/intelligence",
+    },
+    {
+      label: "Stale Leads",
+      value: snap?.staleLeads || 0,
+      icon: Clock,
+      color: (snap?.staleLeads || 0) > 0 ? "text-amber-500 bg-amber-500/10 border-amber-500/20" : "text-muted-foreground bg-muted/20 border-border",
+      link: "/leads",
+    },
+    {
+      label: "New Leads",
+      value: snap?.newLeads || 0,
+      icon: UserPlus,
+      color: (snap?.newLeads || 0) > 0 ? "text-emerald-500 bg-emerald-500/10 border-emerald-500/20" : "text-muted-foreground bg-muted/20 border-border",
+      link: "/leads",
+    },
+    {
+      label: "Overdue Payments",
+      value: snap?.failedPayments || 0,
+      icon: CreditCard,
+      color: (snap?.failedPayments || 0) > 0 ? "text-red-500 bg-red-500/10 border-red-500/20" : "text-muted-foreground bg-muted/20 border-border",
+      link: "/billing",
+    },
+  ];
+
+  const hasIssues = actionItems.length > 0;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: -10 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="bg-card border border-border rounded-2xl shadow-sm overflow-hidden"
+    >
+      <button
+        onClick={() => setCollapsed(!collapsed)}
+        className="w-full px-4 md:px-6 py-3 md:py-4 flex items-center justify-between hover:bg-muted/10 transition-colors text-left"
+      >
+        <div className="flex items-center gap-3">
+          <div className="p-2 rounded-lg bg-primary/10">
+            <Sun className="h-4 w-4 text-primary" />
+          </div>
+          <div>
+            <h3 className="text-sm md:text-base font-semibold text-foreground">{getGreeting()}</h3>
+            <p className="text-xs text-muted-foreground mt-0.5">Your daily brief — tap to {collapsed ? "expand" : "collapse"}</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          {collapsed && hasIssues && (
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-destructive/10 text-destructive">
+              {actionItems.length} action{actionItems.length !== 1 ? "s" : ""} needed
+            </span>
+          )}
+          {collapsed ? (
+            <ChevronDown className="h-4 w-4 text-muted-foreground" />
+          ) : (
+            <ChevronUp className="h-4 w-4 text-muted-foreground" />
+          )}
+        </div>
+      </button>
+
+      <AnimatePresence>
+        {!collapsed && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="overflow-hidden"
+          >
+            <div className="px-4 md:px-6 pb-4 md:pb-5 space-y-4">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
+                {attentionCards.map(card => (
+                  <Link key={card.label} href={card.link}>
+                    <div className={`rounded-xl border p-3 transition-colors hover:opacity-80 cursor-pointer ${card.color}`}>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <card.icon className="h-4 w-4" />
+                        <span className="text-xl font-bold">{card.value}</span>
+                      </div>
+                      <p className="text-[11px] font-medium opacity-80">{card.label}</p>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+
+              {actionItems.length > 0 && (
+                <div className="space-y-1.5">
+                  {actionItems.map((item: any, i: number) => {
+                    const config = priorityConfig[item.priority as keyof typeof priorityConfig] || priorityConfig.info;
+                    const Icon = iconMap[item.icon] || BrainCircuit;
+                    return (
+                      <div
+                        key={`action-${i}`}
+                        className="flex items-center gap-3 px-3 py-2 rounded-lg bg-muted/15 group"
+                      >
+                        <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${config.dot}`} />
+                        <Icon className={`h-3.5 w-3.5 shrink-0 ${config.text}`} />
+                        <span className="text-xs text-foreground flex-1">{item.message}</span>
+                        {item.link && item.action && (
+                          <Link href={item.link}>
+                            <span className="text-[11px] font-medium text-primary hover:text-primary/80 transition-colors flex items-center gap-0.5 whitespace-nowrap">
+                              {item.action}
+                              <ChevronRight className="h-3 w-3" />
+                            </span>
+                          </Link>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {positiveItems.length > 0 && (
+                <div className="space-y-1.5">
+                  {positiveItems.map((item: any, i: number) => {
+                    const config = priorityConfig[item.priority as keyof typeof priorityConfig] || priorityConfig.info;
+                    const Icon = iconMap[item.icon] || BrainCircuit;
+                    return (
+                      <div
+                        key={`positive-${i}`}
+                        className="flex items-center gap-3 px-3 py-2 rounded-lg group"
+                      >
+                        <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${config.dot}`} />
+                        <Icon className={`h-3.5 w-3.5 shrink-0 ${config.text}`} />
+                        <span className="text-xs text-muted-foreground flex-1">{item.message}</span>
+                        {item.link && item.action && (
+                          <Link href={item.link}>
+                            <span className="text-[11px] font-medium text-primary hover:text-primary/80 transition-colors flex items-center gap-0.5 whitespace-nowrap opacity-0 group-hover:opacity-100">
+                              {item.action}
+                              <ChevronRight className="h-3 w-3" />
+                            </span>
+                          </Link>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.div>
+  );
+}
+
 export function Dashboard() {
   const { activeGymId } = useGym();
   const { data: stats, isLoading } = useGetDashboardStats(activeGymId as number, {
@@ -82,8 +275,8 @@ export function Dashboard() {
 
   const kpis = [
     { title: "Active Members", value: stats.activeMembers, change: stats.newMembersThisMonth - stats.churnedThisMonth, icon: Users, suffix: "net this month" },
-    { title: "Monthly Revenue", value: `$${(stats.mrr / 1000).toFixed(1)}k`, change: stats.mrrGrowth, icon: TrendingUp, suffix: "% vs last month" },
-    { title: "Avg Weekly Attendance", value: stats.avgAttendancePerWeek.toFixed(1), change: stats.attendanceGrowth, icon: CalendarCheck, suffix: "% vs last week" },
+    { title: "Monthly Revenue", value: `$${(stats.mrr / 1000).toFixed(1)}k`, change: stats.mrrGrowth ?? undefined, icon: TrendingUp, suffix: stats.mrrGrowth != null ? "% vs last month" : "" },
+    { title: "Engagement Rate", value: `${stats.engagementRate.toFixed(1)}%`, change: stats.engagementChange, icon: CalendarCheck, suffix: "pp vs last week" },
     { title: "At Risk Members", value: stats.atRiskMembers, isNegative: true, icon: AlertTriangle, suffix: "need intervention" },
   ];
 
@@ -105,6 +298,8 @@ export function Dashboard() {
           </Link>
         </div>
       </header>
+
+      <MorningBriefing gymId={activeGymId} />
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-6">
         {kpis.map((kpi, i) => (
@@ -154,7 +349,7 @@ export function Dashboard() {
                   </linearGradient>
                 </defs>
                 <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{fill: 'hsl(var(--muted-foreground))', fontSize: 11}} dy={10} />
-                <YAxis axisLine={false} tickLine={false} tick={{fill: 'hsl(var(--muted-foreground))', fontSize: 11}} tickFormatter={(val) => `$${val/1000}k`} />
+                <YAxis axisLine={false} tickLine={false} tick={{fill: 'hsl(var(--muted-foreground))', fontSize: 11}} tickFormatter={(val) => val >= 1000 ? `$${(val/1000).toFixed(1)}k` : `$${val}`} />
                 <RechartsTooltip 
                   contentStyle={{ backgroundColor: 'hsl(var(--card))', borderColor: 'hsl(var(--border))', borderRadius: '8px', color: 'hsl(var(--foreground))' }}
                   itemStyle={{ color: 'hsl(var(--primary))' }}

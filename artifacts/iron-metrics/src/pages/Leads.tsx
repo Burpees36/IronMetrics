@@ -4,13 +4,14 @@ import { useListLeads, useUpdateLead, getListLeadsQueryKey, getGetLeadInsightsQu
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { motion } from "framer-motion";
-import { Loader2, Search, Plus, Target, BarChart3, AlertTriangle, CalendarClock } from "lucide-react";
+import { Loader2, Search, Plus, Target, BarChart3, AlertTriangle, CalendarClock, Globe } from "lucide-react";
 import { PipelineBoard } from "@/components/leads/PipelineBoard";
 import { LeadDetailDrawer } from "@/components/leads/LeadDetailDrawer";
 import { SummaryStrip } from "@/components/leads/SummaryStrip";
 import { SalesInsightsPanel } from "@/components/leads/SalesInsightsPanel";
 import { ConvertLeadDialog } from "@/components/leads/ConvertLeadDialog";
 import { AddLeadDialog } from "@/components/leads/AddLeadDialog";
+import { LeadCaptureSettings } from "@/components/leads/LeadCaptureSettings";
 import { computeStale, isFollowUpOverdue, PIPELINE_STAGES, STAGE_CONFIG } from "@/components/leads/lead-utils";
 
 type FilterType = "all" | "stale" | "needs_follow_up" | string;
@@ -27,6 +28,7 @@ export function Leads() {
   const [convertLead, setConvertLead] = useState<any>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [showInsights, setShowInsights] = useState(false);
+  const [showCaptureSettings, setShowCaptureSettings] = useState(false);
 
   const { data: leads, isLoading } = useListLeads(activeGymId as number, { search: search || undefined }, {
     query: { enabled: !!activeGymId, queryKey: getListLeadsQueryKey(activeGymId as number, { search: search || undefined }) }
@@ -111,6 +113,16 @@ export function Leads() {
     );
   }
 
+  if (showCaptureSettings) {
+    return (
+      <div className="h-full overflow-y-auto">
+        <div className="max-w-2xl mx-auto py-2">
+          <LeadCaptureSettings onClose={() => setShowCaptureSettings(false)} />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="h-full flex flex-col gap-4 overflow-hidden">
       <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0">
@@ -134,6 +146,13 @@ export function Leads() {
               className="w-full bg-card border border-border rounded-lg pl-9 pr-3 py-2 text-sm text-foreground focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all"
             />
           </div>
+          <button
+            onClick={() => setShowCaptureSettings(true)}
+            className="hidden sm:flex items-center gap-2 px-3 py-2 rounded-lg border border-border bg-card text-sm font-medium text-muted-foreground hover:text-emerald-600 dark:hover:text-emerald-400 hover:border-emerald-500/30 transition-all"
+          >
+            <Globe className="h-4 w-4" />
+            <span>Lead Capture</span>
+          </button>
           <button
             onClick={() => setShowInsights(!showInsights)}
             className={`hidden lg:flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-medium transition-all ${showInsights ? "bg-primary/15 border-primary/40 text-primary shadow-sm shadow-primary/10" : "bg-card border-border text-muted-foreground hover:text-primary hover:border-primary/30"}`}

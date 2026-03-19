@@ -5,6 +5,7 @@
  * Iron Metrics Gym Management Platform API
  * OpenAPI spec version: 0.1.0
  */
+import type { RevenueForecastDataSource } from "./revenueForecastDataSource";
 
 export interface RevenueForecast {
   currentMrr: number;
@@ -17,5 +18,6 @@ export interface RevenueForecast {
   expectedMrr12m: number;
   upsideMrr12m: number;
   downsideMrr12m: number;
+  dataSource?: RevenueForecastDataSource;
   assumptions: string[];
 }

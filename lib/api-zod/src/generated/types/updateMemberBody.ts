@@ -19,10 +19,15 @@ export interface UpdateMemberBody {
   /** @nullable */
   address?: string | null;
   /** @nullable */
+  city?: string | null;
+  /** @nullable */
+  state?: string | null;
+  /** @nullable */
   emergencyContactName?: string | null;
   /** @nullable */
   emergencyContactPhone?: string | null;
-  tags?: string[];
   /** @nullable */
   membershipType?: string | null;
+  waiverSigned?: boolean;
+  tags?: string[];
 }

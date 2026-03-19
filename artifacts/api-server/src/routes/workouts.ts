@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { eq, and, gte, lte, desc, count } from "drizzle-orm";
 import { db, workoutsTable, workoutResultsTable } from "@workspace/db";
 import { CreateWorkoutBody, LogWorkoutResultBody } from "@workspace/api-zod";
+import { requireProgrammingRead, requireProgrammingWrite } from "../middlewares/programmingRbac";
 
 const router: IRouter = Router();
 
@@ -11,23 +12,32 @@ function parseGymId(params: any): number | null {
   return isNaN(id) ? null : id;
 }
 
-router.get("/gyms/:gymId/workouts", async (req, res): Promise<void> => {
+router.get("/gyms/:gymId/workouts", requireProgrammingRead(), async (req, res): Promise<void> => {
   const gymId = parseGymId(req.params);
   if (!gymId) { res.status(400).json({ error: "Invalid gym ID" }); return; }
 
-  const workouts = await db.select().from(workoutsTable).where(eq(workoutsTable.gymId, gymId)).orderBy(desc(workoutsTable.createdAt));
+  const { startDate, endDate } = req.query;
+  const conditions: any[] = [eq(workoutsTable.gymId, gymId)];
+  if (startDate && typeof startDate === "string") {
+    conditions.push(gte(workoutsTable.workoutDate, startDate));
+  }
+  if (endDate && typeof endDate === "string") {
+    conditions.push(lte(workoutsTable.workoutDate, endDate));
+  }
+
+  const workouts = await db.select().from(workoutsTable).where(and(...conditions)).orderBy(desc(workoutsTable.createdAt));
 
   const workoutsWithCounts = await Promise.all(
     workouts.map(async (w) => {
       const [resultCountRes] = await db.select({ count: count() }).from(workoutResultsTable).where(eq(workoutResultsTable.workoutId, w.id));
-      return { ...w, resultCount: resultCountRes?.count ?? 0 };
+      return { ...w, resultCount: Number(resultCountRes?.count ?? 0) };
     })
   );
 
   res.json(workoutsWithCounts);
 });
 
-router.post("/gyms/:gymId/workouts", async (req, res): Promise<void> => {
+router.post("/gyms/:gymId/workouts", requireProgrammingWrite(), async (req, res): Promise<void> => {
   const gymId = parseGymId(req.params);
   if (!gymId) { res.status(400).json({ error: "Invalid gym ID" }); return; }
 
@@ -52,21 +62,27 @@ router.post("/gyms/:gymId/workouts", async (req, res): Promise<void> => {
   res.status(201).json({ ...workout, resultCount: 0 });
 });
 
-router.get("/gyms/:gymId/workouts/:workoutId/results", async (req, res): Promise<void> => {
+router.get("/gyms/:gymId/workouts/:workoutId/results", requireProgrammingRead(), async (req, res): Promise<void> => {
   const gymId = parseGymId(req.params);
   const raw = Array.isArray(req.params.workoutId) ? req.params.workoutId[0] : req.params.workoutId;
   const workoutId = parseInt(raw, 10);
   if (!gymId || isNaN(workoutId)) { res.status(400).json({ error: "Invalid IDs" }); return; }
 
-  const results = await db.select().from(workoutResultsTable).where(eq(workoutResultsTable.workoutId, workoutId)).orderBy(workoutResultsTable.rank);
+  const [workout] = await db.select().from(workoutsTable).where(and(eq(workoutsTable.id, workoutId), eq(workoutsTable.gymId, gymId)));
+  if (!workout) { res.status(404).json({ error: "Workout not found" }); return; }
+
+  const results = await db.select().from(workoutResultsTable).where(and(eq(workoutResultsTable.workoutId, workoutId), eq(workoutResultsTable.gymId, gymId))).orderBy(workoutResultsTable.rank);
   res.json(results);
 });
 
-router.post("/gyms/:gymId/workouts/:workoutId/results", async (req, res): Promise<void> => {
+router.post("/gyms/:gymId/workouts/:workoutId/results", requireProgrammingWrite(), async (req, res): Promise<void> => {
   const gymId = parseGymId(req.params);
   const raw = Array.isArray(req.params.workoutId) ? req.params.workoutId[0] : req.params.workoutId;
   const workoutId = parseInt(raw, 10);
   if (!gymId || isNaN(workoutId)) { res.status(400).json({ error: "Invalid IDs" }); return; }
+
+  const [workout] = await db.select().from(workoutsTable).where(and(eq(workoutsTable.id, workoutId), eq(workoutsTable.gymId, gymId)));
+  if (!workout) { res.status(404).json({ error: "Workout not found" }); return; }
 
   const parsed = LogWorkoutResultBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }

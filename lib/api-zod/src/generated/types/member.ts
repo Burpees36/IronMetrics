@@ -33,5 +33,7 @@ export interface Member {
   lastVisitDate?: Date | null;
   /** @nullable */
   attendanceCount30d?: number | null;
+  /** @nullable */
+  linkedBillingMemberId?: number | null;
   createdAt: Date;
 }

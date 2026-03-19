@@ -20,6 +20,7 @@ import { Switch } from "@/components/ui/switch";
 
 export interface SectionData {
   id: string;
+  dbId?: number;
   type: SectionType;
   title: string;
   instructions: string;
@@ -261,26 +262,33 @@ const QUICK_ADD_TYPES: { type: SectionType; label: string; icon: React.ReactNode
 interface QuickAddBarProps {
   onAdd: (type: SectionType) => void;
   onShowAll: () => void;
+  prominent?: boolean;
 }
 
-export function QuickAddBar({ onAdd, onShowAll }: QuickAddBarProps) {
+export function QuickAddBar({ onAdd, onShowAll, prominent }: QuickAddBarProps) {
+  const btnClass = prominent
+    ? "flex items-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-xl border-2 border-primary/30 bg-primary/5 hover:bg-primary/10 hover:border-primary/50 text-foreground shadow-sm hover:shadow-md transition-all"
+    : "flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg border border-dashed border-border hover:border-primary/40 hover:bg-primary/5 text-muted-foreground hover:text-foreground transition-all";
+
+  const iconSize = prominent ? "h-4 w-4 text-primary" : "h-3 w-3";
+
   return (
-    <div className="flex items-center gap-2 flex-wrap">
+    <div className={`flex items-center gap-2 flex-wrap ${prominent ? "justify-center" : ""}`}>
       {QUICK_ADD_TYPES.map((t) => (
         <button
           key={t.type}
           onClick={() => onAdd(t.type)}
-          className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg border border-dashed border-border hover:border-primary/40 hover:bg-primary/5 text-muted-foreground hover:text-foreground transition-all"
+          className={btnClass}
         >
-          <Plus className="h-3 w-3" />
+          <Plus className={iconSize} />
           {t.label}
         </button>
       ))}
       <button
         onClick={onShowAll}
-        className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg border border-dashed border-border hover:border-primary/40 hover:bg-primary/5 text-muted-foreground hover:text-foreground transition-all"
+        className={btnClass}
       >
-        <Settings2 className="h-3 w-3" />
+        <Settings2 className={iconSize} />
         More...
       </button>
     </div>

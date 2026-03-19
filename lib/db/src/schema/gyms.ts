@@ -1,4 +1,4 @@
-import { pgTable, text, serial, timestamp, integer, boolean } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, timestamp, integer, boolean, date } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -20,6 +20,18 @@ export const gymsTable = pgTable("gyms", {
   fromEmail: text("from_email"),
   fromName: text("from_name"),
   ownerId: text("owner_id").notNull(),
+  subscriptionTier: text("subscription_tier").notNull().default("none"),
+  isBetaAccess: boolean("is_beta_access").notNull().default(false),
+  stripeGymCustomerId: text("stripe_gym_customer_id"),
+  platformSubscriptionId: text("platform_subscription_id"),
+  platformCancelAtPeriodEnd: boolean("platform_cancel_at_period_end").notNull().default(false),
+  platformCurrentPeriodEnd: timestamp("platform_current_period_end", { withTimezone: true }),
+  taxEnabled: boolean("tax_enabled").notNull().default(false),
+  taxLabel: text("tax_label").default("Sales Tax"),
+  taxRate: text("tax_rate").default("0"),
+  taxJurisdiction: text("tax_jurisdiction"),
+  stripeTaxRateId: text("stripe_tax_rate_id"),
+  pastDuePolicy: text("past_due_policy").notNull().default("grace_period"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });
@@ -38,7 +50,7 @@ export const gymStaffTable = pgTable("gym_staff", {
   role: text("role").notNull().default("coach"),
   specialties: text("specialties").array().notNull().default([]),
   isActive: boolean("is_active").notNull().default(true),
-  joinDate: text("join_date"),
+  joinDate: date("join_date", { mode: "string" }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

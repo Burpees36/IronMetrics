@@ -262,6 +262,55 @@ paths:
               schema:
                 $ref: "#/components/schemas/Member"
 
+  /gyms/{gymId}/members/check-email:
+    get:
+      operationId: checkMemberEmail
+      tags: [members]
+      summary: Check if email is already in use by an existing member
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: email
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: excludeMemberId
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Email check result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EmailCheckResult"
+
+  /gyms/{gymId}/members/membership-types:
+    get:
+      operationId: listMembershipTypes
+      tags: [members]
+      summary: Get distinct membership types used in this gym
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of membership type strings
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string
+
   /gyms/{gymId}/members/{memberId}/notes:
     post:
       operationId: addMemberNote
@@ -1093,6 +1142,36 @@ paths:
               schema:
                 $ref: "#/components/schemas/MembershipPlan"
 
+  /gyms/{gymId}/plans/{planId}:
+    patch:
+      operationId: updateMembershipPlan
+      tags: [billing]
+      summary: Update a membership plan
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: planId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateMembershipPlanBody"
+      responses:
+        "200":
+          description: Updated plan
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MembershipPlan"
+
   /gyms/{gymId}/subscriptions:
     get:
       operationId: listSubscriptions
@@ -1222,6 +1301,43 @@ paths:
                   publishableKey:
                     type: string
 
+  /gyms/{gymId}/onboarding/setup-intent:
+    post:
+      operationId: createOnboardingSetupIntent
+      tags: [billing]
+      summary: Create a Stripe SetupIntent for member onboarding (no existing member required)
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+                name:
+                  type: string
+              required:
+                - email
+      responses:
+        "200":
+          description: SetupIntent created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  clientSecret:
+                    type: string
+                  customerId:
+                    type: string
+
   /gyms/{gymId}/members/{memberId}/setup-intent:
     post:
       operationId: createSetupIntent
@@ -1287,6 +1403,197 @@ paths:
                       type: integer
                     expYear:
                       type: integer
+                    isDefault:
+                      type: boolean
+
+  /gyms/{gymId}/members/{memberId}/payment-methods/{paymentMethodId}/set-default:
+    post:
+      operationId: setDefaultPaymentMethod
+      tags: [billing]
+      summary: Set a payment method as default for member
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: memberId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: paymentMethodId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+
+  /gyms/{gymId}/members/{memberId}/payment-methods/{paymentMethodId}:
+    delete:
+      operationId: removePaymentMethod
+      tags: [billing]
+      summary: Remove a payment method from member
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: memberId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: paymentMethodId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+
+  /gyms/{gymId}/members/{memberId}/link-billing:
+    post:
+      operationId: linkMemberBilling
+      tags: [members]
+      summary: Link another member's billing to this member (couples plan)
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: memberId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - linkedMemberId
+              properties:
+                linkedMemberId:
+                  type: integer
+      responses:
+        "200":
+          description: Linked successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  primaryMemberId:
+                    type: integer
+                  linkedMemberId:
+                    type: integer
+
+  /gyms/{gymId}/members/{memberId}/unlink-billing:
+    post:
+      operationId: unlinkMemberBilling
+      tags: [members]
+      summary: Unlink coupled billing for this member
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: memberId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Unlinked successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+
+  /gyms/{gymId}/members/{memberId}/linked-billing:
+    get:
+      operationId: getMemberLinkedBilling
+      tags: [members]
+      summary: Get linked billing info for a member
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: memberId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Linked billing info
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  isPrimaryPayer:
+                    type: boolean
+                  isDependent:
+                    type: boolean
+                  primaryPayer:
+                    type: object
+                    nullable: true
+                    properties:
+                      id:
+                        type: integer
+                      firstName:
+                        type: string
+                      lastName:
+                        type: string
+                      email:
+                        type: string
+                  dependents:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: integer
+                        firstName:
+                          type: string
+                        lastName:
+                          type: string
+                        email:
+                          type: string
+                        status:
+                          type: string
 
   /gyms/{gymId}/members/{memberId}/stripe-subscription:
     post:
@@ -2553,6 +2860,72 @@ paths:
               schema:
                 $ref: "#/components/schemas/RevenueForecast"
 
+  /gyms/{gymId}/intelligence/morning-briefing:
+    get:
+      operationId: getMorningBriefing
+      tags: [intelligence]
+      summary: Get morning briefing for gym owner
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Morning briefing with prioritized action items
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MorningBriefing"
+
+  /lead-capture/{gymSlug}:
+    post:
+      operationId: submitLeadCapture
+      tags: [leads]
+      summary: Public lead capture form submission (no auth required)
+      parameters:
+        - name: gymSlug
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LeadCaptureBody"
+      responses:
+        "201":
+          description: Lead captured successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+
+  /lead-capture/{gymSlug}/info:
+    get:
+      operationId: getLeadCaptureGymInfo
+      tags: [leads]
+      summary: Get public gym info for lead capture form
+      parameters:
+        - name: gymSlug
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Public gym info
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LeadCaptureGymInfo"
+
   # AI OPERATOR
   /gyms/{gymId}/ai/generate-outreach:
     post:
@@ -2856,6 +3229,505 @@ paths:
               schema:
                 $ref: "#/components/schemas/GymDocument"
 
+  /gyms/{gymId}/subscriptions/{subscriptionId}/change-plan:
+    post:
+      operationId: changePlan
+      tags: [billing]
+      summary: Change subscription plan (upgrade/downgrade)
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: subscriptionId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChangePlanBody"
+      responses:
+        "200":
+          description: Plan changed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChangePlanResponse"
+
+  /gyms/{gymId}/subscriptions/{subscriptionId}/preview-change:
+    post:
+      operationId: previewPlanChange
+      tags: [billing]
+      summary: Preview plan change proration
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: subscriptionId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                newPlanId:
+                  type: integer
+              required:
+                - newPlanId
+      responses:
+        "200":
+          description: Proration preview
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlanChangePreview"
+
+  /gyms/{gymId}/members/{memberId}/stripe-invoices:
+    get:
+      operationId: getMemberStripeInvoices
+      tags: [billing]
+      summary: Get member Stripe invoices with PDF/URL links
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: memberId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Stripe invoices
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/StripeInvoice"
+
+  /gyms/{gymId}/discount-codes:
+    get:
+      operationId: listDiscountCodes
+      tags: [billing]
+      summary: List discount codes for gym
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Discount codes
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DiscountCode"
+    post:
+      operationId: createDiscountCode
+      tags: [billing]
+      summary: Create a discount code
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateDiscountCodeBody"
+      responses:
+        "201":
+          description: Discount created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DiscountCode"
+
+  /gyms/{gymId}/discount-codes/{id}:
+    patch:
+      operationId: updateDiscountCode
+      tags: [billing]
+      summary: Activate/deactivate a discount code
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                isActive:
+                  type: boolean
+              required:
+                - isActive
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DiscountCode"
+
+  /gyms/{gymId}/subscriptions/{subscriptionId}/apply-discount:
+    post:
+      operationId: applyDiscountToSubscription
+      tags: [billing]
+      summary: Apply discount code to subscription
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: subscriptionId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                discountId:
+                  type: integer
+              required:
+                - discountId
+      responses:
+        "200":
+          description: Discount applied
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+
+  /gyms/{gymId}/subscriptions/{subscriptionId}/discount:
+    delete:
+      operationId: removeDiscountFromSubscription
+      tags: [billing]
+      summary: Remove discount from subscription
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: subscriptionId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Discount removed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+
+  /gyms/{gymId}/members/{memberId}/balance:
+    get:
+      operationId: getMemberBalance
+      tags: [billing]
+      summary: Get member account credit balance
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: memberId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Balance
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  balance:
+                    type: number
+    post:
+      operationId: adjustMemberBalance
+      tags: [billing]
+      summary: Add or remove account credit
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: memberId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdjustBalanceBody"
+      responses:
+        "200":
+          description: Balance adjusted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  newBalance:
+                    type: number
+
+  /gyms/{gymId}/tax-config:
+    get:
+      operationId: getTaxConfig
+      tags: [billing]
+      summary: Get gym tax configuration
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Tax config
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaxConfig"
+    post:
+      operationId: updateTaxConfig
+      tags: [billing]
+      summary: Create or update tax rate
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateTaxConfigBody"
+      responses:
+        "200":
+          description: Tax configured
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  stripeTaxRateId:
+                    type: string
+    delete:
+      operationId: disableTax
+      tags: [billing]
+      summary: Disable tax collection
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Tax disabled
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+
+  /gyms/{gymId}/members/{memberId}/holds:
+    get:
+      operationId: listMemberHolds
+      tags: [billing]
+      summary: List holds for a member
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: memberId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Holds list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ScheduledHold"
+    post:
+      operationId: createHold
+      tags: [billing]
+      summary: Schedule a hold on a member subscription
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: memberId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateHoldBody"
+      responses:
+        "201":
+          description: Hold created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScheduledHold"
+
+  /gyms/{gymId}/holds/{holdId}:
+    patch:
+      operationId: updateHold
+      tags: [billing]
+      summary: Update a hold
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: holdId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                endDate:
+                  type: string
+                reason:
+                  type: string
+      responses:
+        "200":
+          description: Hold updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScheduledHold"
+
+  /gyms/{gymId}/holds/{holdId}/cancel:
+    post:
+      operationId: cancelHold
+      tags: [billing]
+      summary: Cancel a hold
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: holdId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Hold cancelled
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScheduledHold"
+
+  /gyms/{gymId}/members/{memberId}/checkin-status:
+    get:
+      operationId: getCheckinStatus
+      tags: [billing]
+      summary: Check if member can check in (holds + past-due enforcement)
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: memberId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Check-in status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CheckinStatus"
+
 components:
   schemas:
     HealthStatus:
@@ -3034,6 +3906,8 @@ components:
           format: date-time
         attendanceCount30d:
           type: ["integer", "null"]
+        linkedBillingMemberId:
+          type: ["integer", "null"]
         createdAt:
           type: string
           format: date-time
@@ -3112,18 +3986,44 @@ components:
           type: ["string", "null"]
         address:
           type: ["string", "null"]
+        city:
+          type: ["string", "null"]
+        state:
+          type: ["string", "null"]
         emergencyContactName:
           type: ["string", "null"]
         emergencyContactPhone:
           type: ["string", "null"]
+        membershipType:
+          type: ["string", "null"]
+        waiverSigned:
+          type: boolean
         tags:
           type: array
           items:
             type: string
+        planId:
+          type: ["integer", "null"]
+          description: Optional membership plan ID to create a subscription
+        setupIntentId:
+          type: ["string", "null"]
+          description: Optional Stripe SetupIntent ID, verified server-side to extract customer and payment method
       required:
         - firstName
         - lastName
         - email
+
+    EmailCheckResult:
+      type: object
+      properties:
+        exists:
+          type: boolean
+        memberName:
+          type: ["string", "null"]
+        memberId:
+          type: ["integer", "null"]
+      required:
+        - exists
 
     UpdateMemberBody:
       type: object
@@ -3143,16 +4043,22 @@ components:
           type: ["string", "null"]
         address:
           type: ["string", "null"]
+        city:
+          type: ["string", "null"]
+        state:
+          type: ["string", "null"]
         emergencyContactName:
           type: ["string", "null"]
         emergencyContactPhone:
           type: ["string", "null"]
+        membershipType:
+          type: ["string", "null"]
+        waiverSigned:
+          type: boolean
         tags:
           type: array
           items:
             type: string
-        membershipType:
-          type: ["string", "null"]
 
     MemberNote:
       type: object
@@ -3839,6 +4745,21 @@ components:
         - price
         - billingInterval
 
+    UpdateMembershipPlanBody:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: ["string", "null"]
+        price:
+          type: number
+        billingInterval:
+          type: string
+          enum: [monthly, quarterly, annual, one_time]
+        isActive:
+          type: boolean
+
     Subscription:
       type: object
       properties:
@@ -3874,6 +4795,9 @@ components:
           format: date-time
         cancelReason:
           type: ["string", "null"]
+        billingInterval:
+          type: ["string", "null"]
+          enum: [monthly, quarterly, annual, one_time, null]
         createdAt:
           type: string
           format: date-time
@@ -4911,6 +5835,9 @@ components:
           type: number
         downsideMrr12m:
           type: number
+        dataSource:
+          type: string
+          enum: [invoices, subscriptions]
         assumptions:
           type: array
           items:
@@ -4927,6 +5854,101 @@ components:
         - upsideMrr12m
         - downsideMrr12m
         - assumptions
+
+    MorningBriefingItem:
+      type: object
+      properties:
+        icon:
+          type: string
+        priority:
+          type: string
+          enum: [critical, warning, info, positive]
+        message:
+          type: string
+        action:
+          type: ["string", "null"]
+        link:
+          type: ["string", "null"]
+      required: [icon, priority, message]
+
+    MorningBriefingSnapshot:
+      type: object
+      properties:
+        activeMembers:
+          type: number
+        mrr:
+          type: number
+        rsiScore:
+          type: number
+        rsiBand:
+          type: string
+        atRiskMembers:
+          type: number
+        revenueAtRisk:
+          type: number
+        engagementRate:
+          type: number
+        staleLeads:
+          type: number
+        failedPayments:
+          type: number
+        todayClasses:
+          type: number
+        classFillRate:
+          type: number
+
+    MorningBriefing:
+      type: object
+      properties:
+        date:
+          type: string
+        summary:
+          type: string
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/MorningBriefingItem"
+        snapshot:
+          $ref: "#/components/schemas/MorningBriefingSnapshot"
+      required: [date, summary, items, snapshot]
+
+    LeadCaptureBody:
+      type: object
+      properties:
+        firstName:
+          type: string
+        lastName:
+          type: string
+        email:
+          type: string
+          format: email
+        phone:
+          type: ["string", "null"]
+        notes:
+          type: ["string", "null"]
+      required: [firstName, lastName, email]
+
+    LeadCaptureGymInfo:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: ["string", "null"]
+        logoUrl:
+          type: ["string", "null"]
+        phone:
+          type: ["string", "null"]
+        email:
+          type: ["string", "null"]
+        address:
+          type: ["string", "null"]
+        city:
+          type: ["string", "null"]
+        state:
+          type: ["string", "null"]
+        website:
+          type: ["string", "null"]
 
     AiGeneratedContent:
       type: object
@@ -5100,10 +6122,12 @@ components:
           type: number
         revenueGrowth:
           type: number
-        avgAttendancePerWeek:
+        engagementRate:
           type: number
-        attendanceGrowth:
+          description: Percentage of active members who checked in at least once in the trailing 7 days
+        engagementChange:
           type: number
+          description: Week-over-week change in engagement rate (percentage points)
         classesThisWeek:
           type: integer
         openLeads:
@@ -5165,8 +6189,8 @@ components:
         - mrrGrowth
         - totalRevenue
         - revenueGrowth
-        - avgAttendancePerWeek
-        - attendanceGrowth
+        - engagementRate
+        - engagementChange
         - classesThisWeek
         - openLeads
         - atRiskMembers
@@ -5524,3 +6548,253 @@ components:
         - success
         - cardLast4
         - cardBrand
+
+    ChangePlanBody:
+      type: object
+      properties:
+        newPlanId:
+          type: integer
+        timing:
+          type: string
+          enum: [immediate, next_cycle]
+      required:
+        - newPlanId
+        - timing
+
+    ChangePlanResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        oldPlan:
+          type: string
+        newPlan:
+          type: string
+        timing:
+          type: string
+        prorationPreview:
+          type: ["object", "null"]
+          properties:
+            amountDue:
+              type: number
+            credit:
+              type: number
+
+    PlanChangePreview:
+      type: object
+      properties:
+        currentAmount:
+          type: number
+        newAmount:
+          type: number
+        prorationAmount:
+          type: ["number", "null"]
+        immediateCharge:
+          type: number
+        credit:
+          type: number
+
+    StripeInvoice:
+      type: object
+      properties:
+        id:
+          type: string
+        number:
+          type: ["string", "null"]
+        date:
+          type: ["string", "null"]
+        dueDate:
+          type: ["string", "null"]
+        amount:
+          type: number
+        amountPaid:
+          type: number
+        status:
+          type: ["string", "null"]
+        invoiceUrl:
+          type: ["string", "null"]
+        invoicePdf:
+          type: ["string", "null"]
+        description:
+          type: ["string", "null"]
+      required:
+        - id
+        - amount
+        - amountPaid
+
+    DiscountCode:
+      type: object
+      properties:
+        id:
+          type: integer
+        gymId:
+          type: integer
+        name:
+          type: string
+        code:
+          type: string
+        type:
+          type: string
+          enum: [percentage, fixed]
+        amount:
+          type: number
+        duration:
+          type: string
+          enum: [once, repeating, forever]
+        durationInMonths:
+          type: ["integer", "null"]
+        maxRedemptions:
+          type: ["integer", "null"]
+        timesRedeemed:
+          type: integer
+        isActive:
+          type: boolean
+        expiresAt:
+          type: ["string", "null"]
+        stripeCouponId:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+      required:
+        - id
+        - gymId
+        - name
+        - code
+        - type
+        - amount
+        - duration
+        - isActive
+
+    CreateDiscountCodeBody:
+      type: object
+      properties:
+        name:
+          type: string
+        code:
+          type: string
+        type:
+          type: string
+          enum: [percentage, fixed]
+        amount:
+          type: number
+        duration:
+          type: string
+          enum: [once, repeating, forever]
+        durationInMonths:
+          type: integer
+        maxRedemptions:
+          type: integer
+        expiresAt:
+          type: string
+      required:
+        - name
+        - code
+        - type
+        - amount
+
+    AdjustBalanceBody:
+      type: object
+      properties:
+        amount:
+          type: number
+        description:
+          type: string
+      required:
+        - amount
+        - description
+
+    TaxConfig:
+      type: object
+      properties:
+        taxEnabled:
+          type: boolean
+        taxLabel:
+          type: ["string", "null"]
+        taxRate:
+          type: number
+        taxJurisdiction:
+          type: ["string", "null"]
+        stripeTaxRateId:
+          type: ["string", "null"]
+
+    UpdateTaxConfigBody:
+      type: object
+      properties:
+        taxLabel:
+          type: string
+        taxRate:
+          type: number
+        taxJurisdiction:
+          type: string
+      required:
+        - taxLabel
+        - taxRate
+
+    ScheduledHold:
+      type: object
+      properties:
+        id:
+          type: integer
+        gymId:
+          type: integer
+        memberId:
+          type: integer
+        subscriptionId:
+          type: integer
+        status:
+          type: string
+          enum: [scheduled, active, completed, cancelled]
+        startDate:
+          type: string
+        endDate:
+          type: ["string", "null"]
+        reason:
+          type: ["string", "null"]
+        createdBy:
+          type: ["string", "null"]
+        createdByName:
+          type: ["string", "null"]
+        activatedAt:
+          type: ["string", "null"]
+        completedAt:
+          type: ["string", "null"]
+        cancelledAt:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+      required:
+        - id
+        - gymId
+        - memberId
+        - subscriptionId
+        - status
+        - startDate
+
+    CreateHoldBody:
+      type: object
+      properties:
+        subscriptionId:
+          type: integer
+        startDate:
+          type: string
+        endDate:
+          type: string
+        reason:
+          type: string
+      required:
+        - subscriptionId
+        - startDate
+
+    CheckinStatus:
+      type: object
+      properties:
+        allowed:
+          type: boolean
+        reason:
+          type: string
+        warning:
+          type: string
+        holdId:
+          type: integer
+      required:
+        - allowed

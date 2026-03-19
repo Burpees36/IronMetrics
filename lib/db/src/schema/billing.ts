@@ -288,3 +288,54 @@ export const paymentUpdateTokensTable = pgTable("payment_update_tokens", {
 ]);
 
 export type PaymentUpdateToken = typeof paymentUpdateTokensTable.$inferSelect;
+
+export const scheduledHoldsTable = pgTable("scheduled_holds", {
+  id: serial("id").primaryKey(),
+  gymId: integer("gym_id").notNull().references(() => gymsTable.id),
+  memberId: integer("member_id").notNull().references(() => membersTable.id),
+  subscriptionId: integer("subscription_id").notNull().references(() => subscriptionsTable.id),
+  status: text("status").notNull().default("scheduled"),
+  startDate: date("start_date", { mode: "string" }).notNull(),
+  endDate: date("end_date", { mode: "string" }),
+  reason: text("reason"),
+  createdBy: text("created_by"),
+  createdByName: text("created_by_name"),
+  activatedAt: timestamp("activated_at", { withTimezone: true }),
+  endedAt: timestamp("ended_at", { withTimezone: true }),
+  cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
+}, (table) => [
+  index("idx_scheduled_holds_gym_status").on(table.gymId, table.status),
+  index("idx_scheduled_holds_member").on(table.memberId),
+  index("idx_scheduled_holds_subscription").on(table.subscriptionId),
+]);
+
+export const insertScheduledHoldSchema = createInsertSchema(scheduledHoldsTable).omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertScheduledHold = z.infer<typeof insertScheduledHoldSchema>;
+export type ScheduledHold = typeof scheduledHoldsTable.$inferSelect;
+
+export const discountCodesTable = pgTable("discount_codes", {
+  id: serial("id").primaryKey(),
+  gymId: integer("gym_id").notNull().references(() => gymsTable.id),
+  name: text("name").notNull(),
+  code: text("code").notNull(),
+  type: text("type").notNull().default("percentage"),
+  amount: numeric("amount", { precision: 10, scale: 2 }).notNull(),
+  duration: text("duration").notNull().default("once"),
+  durationInMonths: integer("duration_in_months"),
+  maxRedemptions: integer("max_redemptions"),
+  timesRedeemed: integer("times_redeemed").notNull().default(0),
+  expiresAt: timestamp("expires_at", { withTimezone: true }),
+  isActive: boolean("is_active").notNull().default(true),
+  stripeCouponId: text("stripe_coupon_id"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
+}, (table) => [
+  index("idx_discount_codes_gym").on(table.gymId),
+  index("idx_discount_codes_gym_code").on(table.gymId, table.code),
+]);
+
+export const insertDiscountCodeSchema = createInsertSchema(discountCodesTable).omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertDiscountCode = z.infer<typeof insertDiscountCodeSchema>;
+export type DiscountCode = typeof discountCodesTable.$inferSelect;

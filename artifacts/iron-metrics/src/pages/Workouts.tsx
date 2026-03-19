@@ -1,12 +1,21 @@
 import React, { useState, useMemo, useCallback } from "react";
 import { useGym } from "@/store/GymContext";
 import {
-  useListWorkouts,
-  useCreateWorkout,
-  useLogWorkoutResult,
+  useListProgrammingDays,
+  useCreateProgrammingDay,
+  useUpdateProgrammingDay,
+  useDeleteProgrammingDay,
+  useToggleProgrammingDayPublish,
+  useDuplicateProgrammingDay,
+  useAddProgrammingSection,
+  useUpdateProgrammingSection,
+  useDeleteProgrammingSection,
+  useReorderProgrammingSections,
+  useLogSectionResult,
   useListMembers,
-  getListWorkoutsQueryKey,
+  getListProgrammingDaysQueryKey,
 } from "@workspace/api-client-react";
+import type { ProgrammingDayWithSections } from "@workspace/api-client-react";
 import { useAuth } from "@workspace/replit-auth-web";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
@@ -18,6 +27,7 @@ import {
   Rocket,
   CalendarDays,
   Dumbbell,
+  Eye,
 } from "lucide-react";
 
 import { DateNavigation } from "@/components/programming/DateNavigation";
@@ -60,59 +70,67 @@ function getWeekDates(date: Date): string[] {
   return dates;
 }
 
-interface WorkoutWithSections {
-  id: number;
-  title: string;
-  description?: string | null;
-  workoutDate: string;
-  type: string;
-  movements: string[];
-  resultCount: number;
-}
-
-function workoutsToDay(workouts: WorkoutWithSections[]): {
-  date: string;
-  title: string;
-  status: "draft" | "published";
-  sections: SectionData[];
-  resultCount: number;
-  workoutIds: number[];
-} | null {
-  if (workouts.length === 0) return null;
-
-  const first = workouts[0];
-  const sections: SectionData[] = workouts.map((w) => {
-    const typeMapping: Record<string, string> = {
-      amrap: "conditioning",
-      for_time: "conditioning",
-      emom: "conditioning",
+function programmingDayToData(day: ProgrammingDayWithSections): ProgrammingDayData {
+  const sections: SectionData[] = day.sections.map((s) => {
+    const sectionTypeMap: Record<string, string> = {
+      warmup: "warmup",
       strength: "strength",
+      conditioning: "conditioning",
+      skill: "skill",
+      cooldown: "cooldown",
+      wod: "conditioning",
+      accessory: "accessory",
       custom: "custom",
     };
-    const sectionType = typeMapping[w.type] || w.type || "conditioning";
-
     return {
-      id: `workout-${w.id}`,
-      type: sectionType as any,
-      title: w.title,
-      instructions: w.description || "",
-      movements: w.movements || [],
-      timeCap: "",
-      stimulus: "",
-      scalingNotes: "",
-      coachNotes: "",
-      memberNotes: "",
-      trackResults: true,
+      id: `section-${s.id}`,
+      dbId: s.id,
+      type: sectionTypeMap[s.sectionType] || "conditioning",
+      title: s.title,
+      instructions: s.instructions || "",
+      movements: s.movements || [],
+      timeCap: s.timeCap || "",
+      stimulus: s.intendedStimulus || "",
+      scalingNotes: s.scalingNotes || "",
+      coachNotes: s.coachNotes || "",
+      memberNotes: s.memberNotes || "",
+      trackResults: s.resultTrackingEnabled,
     };
   });
 
   return {
-    date: first.workoutDate,
-    title: workouts.length === 1 ? first.title : `${first.workoutDate} Programming`,
-    status: "published",
+    dayId: day.id,
+    date: day.date,
+    title: day.title,
+    status: (day.status === "archived" ? "draft" : day.status) as "draft" | "published",
     sections,
-    resultCount: workouts.reduce((sum, w) => sum + w.resultCount, 0),
-    workoutIds: workouts.map((w) => w.id),
+  };
+}
+
+function sectionDataToApiBody(section: SectionData, orderIndex: number) {
+  const sectionTypeMap: Record<string, string> = {
+    warmup: "warmup",
+    strength: "strength",
+    conditioning: "conditioning",
+    skill: "skill",
+    cooldown: "cooldown",
+    accessory: "accessory",
+    custom: "custom",
+    notes: "custom",
+    mobility: "custom",
+  };
+  return {
+    orderIndex,
+    sectionType: sectionTypeMap[section.type] || "conditioning",
+    title: section.title,
+    instructions: section.instructions || null,
+    timeCap: section.timeCap || null,
+    intendedStimulus: section.stimulus || null,
+    scalingNotes: section.scalingNotes || null,
+    coachNotes: section.coachNotes || null,
+    memberNotes: section.memberNotes || null,
+    resultTrackingEnabled: section.trackResults,
+    movements: section.movements.length > 0 ? section.movements : [],
   };
 }
 
@@ -192,6 +210,18 @@ function EmptyOnboarding({ onCreateFirst }: { onCreateFirst: () => void }) {
           </div>
         ))}
       </div>
+      <div className="max-w-lg mx-auto mt-10 p-5 rounded-xl border border-primary/20 bg-primary/5 text-left">
+        <p className="text-sm font-semibold text-foreground mb-2 flex items-center gap-2">
+          <Eye className="h-4 w-4 text-primary" />
+          Draft vs. Published
+        </p>
+        <p className="text-xs text-muted-foreground leading-relaxed">
+          Workouts start as <span className="font-medium text-foreground">drafts</span> visible only to staff.
+          When you <span className="font-medium text-foreground">publish</span> a workout, it becomes visible to
+          all your members so they can view the programming and log their results. You can unpublish at any time
+          to hide it again.
+        </p>
+      </div>
     </motion.div>
   );
 }
@@ -206,71 +236,160 @@ export function Workouts() {
   const [viewMode, setViewMode] = useState<"day" | "week">("day");
   const [panelOpen, setPanelOpen] = useState(false);
   const [editData, setEditData] = useState<ProgrammingDayData | null>(null);
-  const [duplicateTarget, setDuplicateTarget] = useState<string | null>(null);
+  const [deleteConfirmDay, setDeleteConfirmDay] = useState<ProgrammingDayWithSections | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
 
   const dateStr = toDateString(selectedDate);
   const weekDates = useMemo(() => getWeekDates(selectedDate), [dateStr]);
 
-  const startDate = viewMode === "day" ? dateStr : weekDates[0];
-  const endDate = viewMode === "day" ? dateStr : weekDates[6];
+  const staffStartDate = viewMode === "day" ? dateStr : weekDates[0];
+  const staffEndDate = viewMode === "day" ? dateStr : weekDates[6];
 
-  const { data: workouts, isLoading: workoutsLoading } = useListWorkouts(
+  const memberRangeStart = useMemo(() => {
+    const d = new Date(selectedDate);
+    d.setDate(d.getDate() - 30);
+    return toDateString(d);
+  }, [dateStr]);
+
+  const memberRangeEnd = useMemo(() => {
+    const d = new Date(selectedDate);
+    d.setDate(d.getDate() + 14);
+    return toDateString(d);
+  }, [dateStr]);
+
+  const startDate = isStaff ? staffStartDate : memberRangeStart;
+  const endDate = isStaff ? staffEndDate : memberRangeEnd;
+
+  const { data: programmingDays, isLoading: programmingLoading } = useListProgrammingDays(
     activeGymId as number,
     { startDate, endDate },
-    { query: { enabled: !!activeGymId } }
+    { query: { enabled: !!activeGymId && !roleLoading } }
   );
 
   const { user: currentUser } = useAuth();
   const { data: membersList } = useListMembers(
     activeGymId as number,
     undefined,
-    { query: { enabled: !!activeGymId && !isStaff } }
+    { query: { enabled: !!activeGymId && !roleLoading } }
   );
 
+  const allMembers = useMemo(() => {
+    if (!membersList) return [];
+    const raw = (membersList as { members?: unknown }).members || membersList;
+    return Array.isArray(raw) ? (raw as import("@workspace/api-client-react").Member[]) : [];
+  }, [membersList]);
+
   const currentMemberId = useMemo(() => {
-    if (!currentUser?.email || !membersList) return null;
-    const members = (membersList as any).members || membersList;
-    if (!Array.isArray(members)) return null;
-    const match = members.find(
-      (m: any) => m.email === currentUser.email
-    );
+    if (!currentUser?.email || allMembers.length === 0) return null;
+    const match = allMembers.find((m) => m.email === currentUser.email);
     return match?.id ?? null;
-  }, [currentUser, membersList]);
+  }, [currentUser, allMembers]);
 
-  const createWorkoutMutation = useCreateWorkout();
-  const logResultMutation = useLogWorkoutResult();
+  const createDayMutation = useCreateProgrammingDay();
+  const updateDayMutation = useUpdateProgrammingDay();
+  const deleteDayMutation = useDeleteProgrammingDay();
+  const togglePublishMutation = useToggleProgrammingDayPublish();
+  const duplicateDayMutation = useDuplicateProgrammingDay();
+  const addSectionMutation = useAddProgrammingSection();
+  const updateSectionMutation = useUpdateProgrammingSection();
+  const deleteSectionMutation = useDeleteProgrammingSection();
+  const reorderSectionsMutation = useReorderProgrammingSections();
+  const logSectionResultMutation = useLogSectionResult();
 
-  const workoutsByDate = useMemo(() => {
-    const map: Record<string, WorkoutWithSections[]> = {};
-    if (!workouts) return map;
-    for (const w of workouts as WorkoutWithSections[]) {
-      const d = w.workoutDate;
-      if (!map[d]) map[d] = [];
-      map[d].push(w);
+  const invalidateProgramming = useCallback(() => {
+    if (activeGymId) {
+      queryClient.invalidateQueries({
+        queryKey: getListProgrammingDaysQueryKey(activeGymId),
+      });
+    }
+  }, [activeGymId, queryClient]);
+
+  const daysByDate = useMemo(() => {
+    const map: Record<string, ProgrammingDayWithSections> = {};
+    if (!programmingDays) return map;
+    for (const day of programmingDays as ProgrammingDayWithSections[]) {
+      map[day.date] = day;
     }
     return map;
-  }, [workouts]);
+  }, [programmingDays]);
 
   const handleSave = useCallback(
     async (data: ProgrammingDayData) => {
       if (!activeGymId) return;
+      setIsSaving(true);
       try {
-        for (const section of data.sections) {
-          await createWorkoutMutation.mutateAsync({
+        if (data.dayId) {
+          const dayId = data.dayId;
+          await updateDayMutation.mutateAsync({
+            gymId: activeGymId,
+            dayId,
+            data: {
+              date: data.date,
+              title: data.title,
+              status: data.status,
+            },
+          });
+
+          const existingDay = (programmingDays as ProgrammingDayWithSections[] || []).find(d => d.id === dayId);
+          const existingSectionIds = new Set(existingDay?.sections.map(s => s.id) || []);
+
+          const incomingDbIds = new Set(
+            data.sections
+              .filter(s => s.dbId)
+              .map(s => s.dbId as number)
+          );
+
+          for (const existing of (existingDay?.sections || [])) {
+            if (!incomingDbIds.has(existing.id)) {
+              await deleteSectionMutation.mutateAsync({
+                gymId: activeGymId,
+                dayId,
+                sectionId: existing.id,
+              });
+            }
+          }
+
+          const sectionDbIds: number[] = [];
+          for (let i = 0; i < data.sections.length; i++) {
+            const section = data.sections[i];
+            if (section.dbId && existingSectionIds.has(section.dbId)) {
+              await updateSectionMutation.mutateAsync({
+                gymId: activeGymId,
+                dayId,
+                sectionId: section.dbId,
+                data: sectionDataToApiBody(section, i),
+              });
+              sectionDbIds.push(section.dbId);
+            } else {
+              const newSection = await addSectionMutation.mutateAsync({
+                gymId: activeGymId,
+                dayId,
+                data: sectionDataToApiBody(section, i),
+              });
+              sectionDbIds.push(newSection.id);
+            }
+          }
+
+          if (sectionDbIds.length > 1) {
+            await reorderSectionsMutation.mutateAsync({
+              gymId: activeGymId,
+              dayId,
+              data: { sectionIds: sectionDbIds },
+            });
+          }
+        } else {
+          await createDayMutation.mutateAsync({
             gymId: activeGymId,
             data: {
-              title: section.title,
-              description: section.instructions || undefined,
-              workoutDate: data.date,
-              type: section.type,
-              movements:
-                section.movements.length > 0 ? section.movements : undefined,
+              date: data.date,
+              title: data.title,
+              status: data.status,
+              sections: data.sections.map((s, idx) => sectionDataToApiBody(s, idx)),
             },
           });
         }
-        queryClient.invalidateQueries({
-          queryKey: getListWorkoutsQueryKey(activeGymId),
-        });
+
+        invalidateProgramming();
         toast({
           title: data.status === "published" ? "Programming Published" : "Draft Saved",
           description: `${data.title} for ${new Date(data.date + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })} has been saved.`,
@@ -283,28 +402,108 @@ export function Workouts() {
           description: error?.data?.error || error?.message || "Failed to save programming. Please try again.",
           variant: "destructive",
         });
+      } finally {
+        setIsSaving(false);
       }
     },
-    [activeGymId, createWorkoutMutation, queryClient, toast]
+    [activeGymId, programmingDays, createDayMutation, updateDayMutation, deleteSectionMutation, updateSectionMutation, addSectionMutation, reorderSectionsMutation, invalidateProgramming, toast]
+  );
+
+  const handleTogglePublish = useCallback(
+    async (day: ProgrammingDayWithSections) => {
+      if (!activeGymId) return;
+      try {
+        await togglePublishMutation.mutateAsync({
+          gymId: activeGymId,
+          dayId: day.id,
+        });
+        invalidateProgramming();
+        toast({
+          title: day.status === "published" ? "Unpublished" : "Published",
+          description: `Programming for ${new Date(day.date + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })} has been ${day.status === "published" ? "unpublished" : "published"}.`,
+        });
+      } catch (error: any) {
+        toast({
+          title: "Error",
+          description: error?.data?.error || error?.message || "Failed to update publish status.",
+          variant: "destructive",
+        });
+      }
+    },
+    [activeGymId, togglePublishMutation, invalidateProgramming, toast]
+  );
+
+  const handleDelete = useCallback(
+    async (day: ProgrammingDayWithSections) => {
+      if (!activeGymId) return;
+      try {
+        await deleteDayMutation.mutateAsync({
+          gymId: activeGymId,
+          dayId: day.id,
+        });
+        invalidateProgramming();
+        setDeleteConfirmDay(null);
+        toast({
+          title: "Programming Deleted",
+          description: `${day.title} has been removed.`,
+        });
+      } catch (error: any) {
+        toast({
+          title: "Error",
+          description: error?.data?.error || error?.message || "Failed to delete programming.",
+          variant: "destructive",
+        });
+      }
+    },
+    [activeGymId, deleteDayMutation, invalidateProgramming, toast]
+  );
+
+  const handleDuplicate = useCallback(
+    async (day: ProgrammingDayWithSections) => {
+      if (!activeGymId) return;
+      const tomorrow = new Date(selectedDate);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      try {
+        await duplicateDayMutation.mutateAsync({
+          gymId: activeGymId,
+          dayId: day.id,
+          data: { date: toDateString(tomorrow) },
+        });
+        invalidateProgramming();
+        toast({
+          title: "Day Duplicated",
+          description: `${day.title} has been duplicated to ${tomorrow.toLocaleDateString("en-US", { month: "short", day: "numeric" })}.`,
+        });
+      } catch (error: any) {
+        toast({
+          title: "Error",
+          description: error?.data?.error || error?.message || "Failed to duplicate programming.",
+          variant: "destructive",
+        });
+      }
+    },
+    [activeGymId, duplicateDayMutation, selectedDate, invalidateProgramming, toast]
   );
 
   const handleLogResult = useCallback(
-    (workoutId: number, result: { result: string; notes: string; isRx: boolean; isPr: boolean }) => {
+    (dayId: number, sectionId: number, result: { result: string; notes: string; isRx: boolean; isPr: boolean }, targetMemberId?: number) => {
       if (!activeGymId) return;
-      if (!currentMemberId) {
+      const memberId = targetMemberId ?? currentMemberId;
+      if (!memberId) {
         toast({
           title: "Unable to log result",
-          description: "Your member profile could not be found. Please contact your gym.",
+          description: "No member selected. Please select a member or contact your gym.",
           variant: "destructive",
         });
         return;
       }
-      logResultMutation.mutate(
+      logSectionResultMutation.mutate(
         {
           gymId: activeGymId,
-          workoutId,
+          dayId,
+          sectionId,
           data: {
-            memberId: currentMemberId,
+            memberId,
             result: result.result,
             notes: result.notes || undefined,
             isRx: result.isRx,
@@ -313,50 +512,52 @@ export function Workouts() {
         },
         {
           onSuccess: () => {
-            queryClient.invalidateQueries({
-              queryKey: getListWorkoutsQueryKey(activeGymId),
-            });
+            invalidateProgramming();
             toast({
               title: "Result Logged",
               description: "Your result has been recorded.",
             });
           },
-          onError: () => {
-            toast({
-              title: "Error",
-              description: "Failed to log result.",
-              variant: "destructive",
-            });
+          onError: (error: any) => {
+            const errData = error?.data || {};
+            if (errData.existing) {
+              toast({
+                title: "Already Logged",
+                description: "You have already submitted a result for this section.",
+                variant: "destructive",
+              });
+            } else {
+              toast({
+                title: "Error",
+                description: errData.error || error?.message || "Failed to log result.",
+                variant: "destructive",
+              });
+            }
           },
         }
       );
     },
-    [activeGymId, currentMemberId, logResultMutation, queryClient, toast]
+    [activeGymId, currentMemberId, logSectionResultMutation, invalidateProgramming, toast]
   );
 
-  const handleDuplicate = useCallback(
-    (sourceDate: string) => {
-      const sourceWorkouts = workoutsByDate[sourceDate];
-      if (!sourceWorkouts || sourceWorkouts.length === 0) return;
-
-      const dayData = workoutsToDay(sourceWorkouts);
-      if (!dayData) return;
-
-      const tomorrow = new Date(selectedDate);
-      tomorrow.setDate(tomorrow.getDate() + 1);
-
-      setEditData({
-        date: toDateString(tomorrow),
-        title: dayData.title + " (Copy)",
-        status: "draft",
-        sections: dayData.sections.map((s) => ({
-          ...s,
-          id: `section-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-        })),
-      });
-      setPanelOpen(true);
+  const handleEditResult = useCallback(
+    async (dayId: number, sectionId: number, resultId: number, result: { result: string; notes: string; isRx: boolean; isPr: boolean }) => {
+      if (!activeGymId) return;
+      try {
+        const response = await fetch(`/api/gyms/${activeGymId}/programming/${dayId}/sections/${sectionId}/results/${resultId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify(result),
+        });
+        if (!response.ok) throw new Error("Failed to update result");
+        invalidateProgramming();
+        toast({ title: "Result Updated", description: "Your result has been updated." });
+      } catch (error: any) {
+        toast({ title: "Error", description: error.message || "Failed to update result.", variant: "destructive" });
+      }
     },
-    [workoutsByDate, selectedDate]
+    [activeGymId, invalidateProgramming, toast]
   );
 
   if (!activeGymId) {
@@ -369,11 +570,12 @@ export function Workouts() {
     );
   }
 
-  if (workoutsLoading || roleLoading) {
+  if (programmingLoading || roleLoading) {
     return <LoadingSkeleton />;
   }
 
   if (!isStaff) {
+    const allDays = (programmingDays || []) as ProgrammingDayWithSections[];
     return (
       <div className="space-y-6 pb-10">
         <header className="flex items-center gap-3 mb-1">
@@ -391,17 +593,22 @@ export function Workouts() {
         </header>
 
         <MemberProgrammingView
-          workouts={(workouts || []) as WorkoutWithSections[]}
+          days={allDays}
           selectedDate={selectedDate}
+          onSelectedDateChange={setSelectedDate}
           onLogResult={handleLogResult}
-          isLoggingResult={logResultMutation.isPending}
+          onEditResult={handleEditResult}
+          currentMemberId={currentMemberId}
+          isLoggingResult={logSectionResultMutation.isPending}
+          gymId={activeGymId}
+          isStaff={false}
+          membersList={allMembers}
         />
       </div>
     );
   }
 
-  const hasAnyWorkouts =
-    workouts && (workouts as WorkoutWithSections[]).length > 0;
+  const hasAnyDays = programmingDays && (programmingDays as ProgrammingDayWithSections[]).length > 0;
 
   return (
     <div className="space-y-6 pb-10">
@@ -438,7 +645,7 @@ export function Workouts() {
         onViewModeChange={setViewMode}
       />
 
-      {!hasAnyWorkouts && viewMode === "day" ? (
+      {!hasAnyDays && viewMode === "day" ? (
         <EmptyOnboarding
           onCreateFirst={() => {
             setEditData(null);
@@ -447,38 +654,39 @@ export function Workouts() {
         />
       ) : viewMode === "day" ? (
         <div className="space-y-4">
-          {workoutsByDate[dateStr] ? (
+          {daysByDate[dateStr] ? (
             (() => {
-              const day = workoutsToDay(workoutsByDate[dateStr]);
-              if (!day) return null;
+              const day = daysByDate[dateStr];
+              const hasTrackableSections = day.sections.some(s => s.resultTrackingEnabled);
               return (
-                <DayCard
-                  date={day.date}
-                  title={day.title}
-                  status={day.status}
-                  sections={day.sections}
-                  resultCount={day.resultCount}
-                  isStaff={isStaff}
-                  onEdit={() => {
-                    setEditData({
-                      date: day.date,
-                      title: day.title,
-                      status: day.status,
-                      sections: day.sections,
-                    });
-                    setPanelOpen(true);
-                  }}
-                  onDuplicate={() => handleDuplicate(day.date)}
-                  onTogglePublish={() => {
-                    toast({
-                      title:
-                        day.status === "published"
-                          ? "Unpublished"
-                          : "Published",
-                      description: `Programming for ${new Date(day.date + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })} has been ${day.status === "published" ? "unpublished" : "published"}.`,
-                    });
-                  }}
-                />
+                <>
+                  <DayCard
+                    day={day}
+                    isStaff={isStaff}
+                    onEdit={() => {
+                      setEditData(programmingDayToData(day));
+                      setPanelOpen(true);
+                    }}
+                    onDuplicate={() => handleDuplicate(day)}
+                    onTogglePublish={() => handleTogglePublish(day)}
+                    onDelete={() => setDeleteConfirmDay(day)}
+                  />
+                  {hasTrackableSections && (
+                    <MemberProgrammingView
+                      days={[day]}
+                      selectedDate={selectedDate}
+                      onSelectedDateChange={setSelectedDate}
+                      onLogResult={handleLogResult}
+                      onEditResult={handleEditResult}
+                      currentMemberId={currentMemberId}
+                      isLoggingResult={logSectionResultMutation.isPending}
+                      gymId={activeGymId}
+                      isStaff={true}
+                      membersList={allMembers}
+                      showNavigation={false}
+                    />
+                  )}
+                </>
               );
             })()
           ) : (
@@ -514,8 +722,8 @@ export function Workouts() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {weekDates.map((d, i) => {
-            const dayWorkouts = workoutsByDate[d];
-            if (!dayWorkouts || dayWorkouts.length === 0) {
+            const day = daysByDate[d];
+            if (!day) {
               return (
                 <motion.div
                   key={d}
@@ -548,38 +756,19 @@ export function Workouts() {
               );
             }
 
-            const day = workoutsToDay(dayWorkouts);
-            if (!day) return null;
-
             return (
               <DayCard
                 key={d}
-                date={day.date}
-                title={day.title}
-                status={day.status}
-                sections={day.sections}
-                resultCount={day.resultCount}
+                day={day}
                 isStaff={isStaff}
                 animationDelay={i * 0.05}
                 onEdit={() => {
-                  setEditData({
-                    date: day.date,
-                    title: day.title,
-                    status: day.status,
-                    sections: day.sections,
-                  });
+                  setEditData(programmingDayToData(day));
                   setPanelOpen(true);
                 }}
-                onDuplicate={() => handleDuplicate(day.date)}
-                onTogglePublish={() => {
-                  toast({
-                    title:
-                      day.status === "published"
-                        ? "Unpublished"
-                        : "Published",
-                    description: `Programming updated.`,
-                  });
-                }}
+                onDuplicate={() => handleDuplicate(day)}
+                onTogglePublish={() => handleTogglePublish(day)}
+                onDelete={() => setDeleteConfirmDay(day)}
               />
             );
           })}
@@ -593,10 +782,33 @@ export function Workouts() {
           setEditData(null);
         }}
         onSave={handleSave}
-        isSaving={createWorkoutMutation.isPending}
+        isSaving={isSaving}
         initialDate={dateStr}
         initialData={editData}
       />
+
+      <AlertDialog
+        open={!!deleteConfirmDay}
+        onOpenChange={(open) => !open && setDeleteConfirmDay(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Programming Day?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will archive <strong>{deleteConfirmDay?.title}</strong> and remove it from the member view. This action cannot be easily undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => deleteConfirmDay && handleDelete(deleteConfirmDay)}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleteDayMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

@@ -39,31 +39,59 @@ router.get("/gyms/:gymId/reports/dashboard", async (req, res): Promise<void> => 
 
   const now = new Date();
   const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+  const twoWeeksAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
   const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
 
+  /**
+   * Member Engagement Rate: percentage of active members who checked in
+   * at least once in the trailing 7 days. 
+   *
+   * Formula: (unique members with ≥1 check-in this week / total active members) × 100
+   *
+   * Also computes the prior-week engagement rate for a week-over-week
+   * change indicator on the dashboard KPI card.
+   */
   const weeklyAttendance = await db.select().from(attendanceTable).where(and(eq(attendanceTable.gymId, gymId), gte(attendanceTable.checkinTime, weekAgo)));
-  const avgAttendancePerWeek = weeklyAttendance.length;
+  const uniqueMembersThisWeek = new Set(weeklyAttendance.map(a => a.memberId)).size;
+
+  const priorWeekAttendance = await db.select().from(attendanceTable).where(
+    and(eq(attendanceTable.gymId, gymId), gte(attendanceTable.checkinTime, twoWeeksAgo), sql`${attendanceTable.checkinTime} < ${weekAgo}`)
+  );
+  const uniqueMembersPriorWeek = new Set(priorWeekAttendance.map(a => a.memberId)).size;
 
   const [classesThisWeek] = await db.select({ count: count() }).from(classesTable).where(and(eq(classesTable.gymId, gymId), gte(classesTable.startTime, weekAgo)));
 
   const newMembersThisMonth = await db.select({ count: count() }).from(membersTable).where(and(eq(membersTable.gymId, gymId), gte(membersTable.joinDate, monthAgo.toISOString().split("T")[0])));
-  const newCount = newMembersThisMonth[0]?.count ?? 0;
+  const newCount = Number(newMembersThisMonth[0]?.count ?? 0);
 
-  const active = activeCount?.count ?? 0;
-  const cancelled = cancelledCount?.count ?? 0;
-  const hold = holdCount?.count ?? 0;
-  const total = totalCount?.count ?? 0;
+  const active = Number(activeCount?.count ?? 0);
+  const cancelled = Number(cancelledCount?.count ?? 0);
+  const hold = Number(holdCount?.count ?? 0);
+  const total = Number(totalCount?.count ?? 0);
   const churnRate = total > 0 ? Math.round((cancelled / total) * 1000) / 10 : 0;
 
   const atRiskMembers = await db.select({ count: count() }).from(membersTable).where(
     and(eq(membersTable.gymId, gymId), eq(membersTable.status, "active"),
       sql`(${membersTable.riskTier} = 'critical' OR ${membersTable.riskTier} = 'high')`)
   );
-  const atRiskCount = atRiskMembers[0]?.count ?? 0;
+  const atRiskCount = Number(atRiskMembers[0]?.count ?? 0);
+
+  const engagementRate = active > 0 ? Math.round((uniqueMembersThisWeek / active) * 1000) / 10 : 0;
+  const priorEngagementRate = active > 0 ? Math.round((uniqueMembersPriorWeek / active) * 1000) / 10 : 0;
+  const engagementChange = Math.round((engagementRate - priorEngagementRate) * 10) / 10;
 
   const avgRevPerMember = subs.length > 0 ? mrr / subs.length : 0;
   const netGrowth = active - cancelled;
-  const avgTenure = 8.5;
+
+  const allMembersForTenure = await db.select().from(membersTable).where(eq(membersTable.gymId, gymId));
+  const tenures = allMembersForTenure
+    .filter(m => m.joinDate || m.createdAt)
+    .map(m => {
+      const end = m.status === "cancelled" && m.updatedAt ? new Date(m.updatedAt) : now;
+      const start = new Date(m.joinDate || m.createdAt!);
+      return Math.max(0, (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24 * 30));
+    });
+  const avgTenure = tenures.length > 0 ? Math.round((tenures.reduce((s, t) => s + t, 0) / tenures.length) * 10) / 10 : 0;
   const rsiResult = computeRSI(churnRate, avgRevPerMember, netGrowth, avgTenure);
   const rsiScore = rsiResult.score;
   const rsiBand = rsiResult.band;
@@ -72,14 +100,23 @@ router.get("/gyms/:gymId/reports/dashboard", async (req, res): Promise<void> => 
   const allInvoices = await db.select().from(invoicesTable).where(eq(invoicesTable.gymId, gymId));
   const collectionRate = allInvoices.length > 0 ? Math.round((paidInvoices.length / allInvoices.length) * 1000) / 10 : 100;
 
+  const invoicesByMonth: Record<string, number> = {};
+  for (const inv of paidInvoices) {
+    if (!inv.paidAt) continue;
+    const monthKey = new Date(inv.paidAt).toISOString().slice(0, 7);
+    invoicesByMonth[monthKey] = (invoicesByMonth[monthKey] ?? 0) + parseFloat(inv.amount || "0");
+  }
+
   const months = [];
+  const currentMonthKey = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 7);
   for (let i = 11; i >= 0; i--) {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    const scale = 1 - (i * 0.02);
+    const monthKey = d.toISOString().slice(0, 7);
+    const invoiceRev = invoicesByMonth[monthKey] ?? 0;
+    const revenue = invoiceRev > 0 ? Math.round(invoiceRev) : (monthKey === currentMonthKey ? Math.round(mrr) : 0);
     months.push({
-      month: d.toISOString().slice(0, 7),
-      revenue: Math.round(mrr * scale),
-      members: Math.max(1, active - i),
+      month: monthKey,
+      revenue,
     });
   }
 
@@ -100,13 +137,18 @@ router.get("/gyms/:gymId/reports/dashboard", async (req, res): Promise<void> => 
     newMembersThisMonth: newCount,
     churnedThisMonth: cancelled,
     mrr,
-    mrrGrowth: mrr > 0 ? Math.round(churnRate > 0 ? -churnRate : 2.0) : 0,
+    mrrGrowth: (() => {
+      const currentRev = months[months.length - 1]?.revenue ?? 0;
+      const prevRev = months[months.length - 2]?.revenue ?? 0;
+      if (prevRev > 0) return Math.round(((currentRev - prevRev) / prevRev) * 1000) / 10;
+      return null;
+    })(),
     totalRevenue: mrr * 12,
-    revenueGrowth: mrr > 0 ? Math.round((1 - churnRate / 100) * 100) / 10 : 0,
-    avgAttendancePerWeek,
-    attendanceGrowth: 0,
-    classesThisWeek: classesThisWeek?.count ?? 0,
-    openLeads: openLeadCount?.count ?? 0,
+    revenueGrowth: null,
+    engagementRate,
+    engagementChange,
+    classesThisWeek: Number(classesThisWeek?.count ?? 0),
+    openLeads: Number(openLeadCount?.count ?? 0),
     atRiskMembers: atRiskCount,
     failedPayments: failedSubs.length,
     collectionRate,
@@ -131,10 +173,10 @@ router.get("/gyms/:gymId/reports/membership", async (req, res): Promise<void> =>
   const [cancelledCount] = await db.select({ count: count() }).from(membersTable).where(and(eq(membersTable.gymId, gymId), eq(membersTable.status, "cancelled")));
   const [totalCount] = await db.select({ count: count() }).from(membersTable).where(eq(membersTable.gymId, gymId));
 
-  const total = totalCount?.count ?? 0;
-  const active = activeCount?.count ?? 0;
-  const cancelled = cancelledCount?.count ?? 0;
-  const hold = holdCount?.count ?? 0;
+  const total = Number(totalCount?.count ?? 0);
+  const active = Number(activeCount?.count ?? 0);
+  const cancelled = Number(cancelledCount?.count ?? 0);
+  const hold = Number(holdCount?.count ?? 0);
   const churnRate = total > 0 ? Math.round((cancelled / total) * 1000) / 10 : 0;
 
   const now = new Date();
@@ -144,7 +186,7 @@ router.get("/gyms/:gymId/reports/membership", async (req, res): Promise<void> =>
   const plans = await db.select().from(membershipPlansTable).where(eq(membershipPlansTable.gymId, gymId));
   const byPlan = await Promise.all(plans.map(async (p) => {
     const [subCount] = await db.select({ count: count() }).from(subscriptionsTable).where(and(eq(subscriptionsTable.planId, p.id), eq(subscriptionsTable.status, "active")));
-    const memberCount = subCount?.count ?? 0;
+    const memberCount = Number(subCount?.count ?? 0);
     return {
       planName: p.name,
       count: memberCount,
@@ -154,14 +196,24 @@ router.get("/gyms/:gymId/reports/membership", async (req, res): Promise<void> =>
 
   const netGrowth = active - cancelled;
 
+  const allMembersForTenure = await db.select().from(membersTable).where(eq(membersTable.gymId, gymId));
+  const tenureValues = allMembersForTenure
+    .filter(m => m.joinDate || m.createdAt)
+    .map(m => {
+      const end = m.status === "cancelled" && m.updatedAt ? new Date(m.updatedAt) : now;
+      const start = new Date(m.joinDate || m.createdAt!);
+      return Math.max(0, (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24 * 30));
+    });
+  const avgTenureMonths = tenureValues.length > 0 ? Math.round((tenureValues.reduce((s, t) => s + t, 0) / tenureValues.length) * 10) / 10 : 0;
+
   const months = [];
   for (let i = 5; i >= 0; i--) {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
     months.push({
       month: d.toISOString().slice(0, 7),
-      newMembers: i === 0 ? (newThisMonth?.count ?? 0) : Math.max(0, active - i),
+      newMembers: i === 0 ? Number(newThisMonth?.count ?? 0) : 0,
       churned: i === 0 ? cancelled : 0,
-      net: i === 0 ? netGrowth : Math.max(0, active - i),
+      net: i === 0 ? netGrowth : 0,
     });
   }
 
@@ -170,11 +222,11 @@ router.get("/gyms/:gymId/reports/membership", async (req, res): Promise<void> =>
     totalInactive: 0,
     totalOnHold: hold,
     totalCancelled: cancelled,
-    newThisMonth: newThisMonth?.count ?? 0,
+    newThisMonth: Number(newThisMonth?.count ?? 0),
     churnedThisMonth: cancelled,
     netGrowth,
     churnRate,
-    avgTenureMonths: 8.5,
+    avgTenureMonths,
     byPlan,
     growthByMonth: months,
   });
@@ -195,16 +247,34 @@ router.get("/gyms/:gymId/reports/revenue", async (req, res): Promise<void> => {
   const collectionRate = allInvoices.length > 0 ? Math.round((paidInvoices.length / allInvoices.length) * 1000) / 10 : 100;
 
   const avgRevenuePerMember = Math.round(mrr / activeMemberCount);
-  const ltv = Math.round(avgRevenuePerMember * 8.5);
 
+  const allMembersRev = await db.select().from(membersTable).where(eq(membersTable.gymId, gymId));
   const now = new Date();
+  const tenuresRev = allMembersRev
+    .filter(m => m.joinDate || m.createdAt)
+    .map(m => {
+      const end = m.status === "cancelled" && m.updatedAt ? new Date(m.updatedAt) : now;
+      const start = new Date(m.joinDate || m.createdAt!);
+      return Math.max(0, (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24 * 30));
+    });
+  const avgTenureRev = tenuresRev.length > 0 ? tenuresRev.reduce((s, t) => s + t, 0) / tenuresRev.length : 0;
+  const ltv = Math.round(avgRevenuePerMember * avgTenureRev);
+
+  const invoicesByMonthRev: Record<string, number> = {};
+  for (const inv of paidInvoices) {
+    if (!inv.paidAt) continue;
+    const monthKey = new Date(inv.paidAt).toISOString().slice(0, 7);
+    invoicesByMonthRev[monthKey] = (invoicesByMonthRev[monthKey] ?? 0) + parseFloat(inv.amount || "0");
+  }
+
   const byMonth = [];
+  const currentMonthKeyRev = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 7);
   for (let i = 11; i >= 0; i--) {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    const scale = 1 - (i * 0.02);
-    const membership = Math.round(mrr * scale);
-    const retail = 0;
-    byMonth.push({ month: d.toISOString().slice(0, 7), membership, retail, total: membership + retail });
+    const monthKey = d.toISOString().slice(0, 7);
+    const invoiceRev = invoicesByMonthRev[monthKey] ?? 0;
+    const membership = invoiceRev > 0 ? Math.round(invoiceRev) : (monthKey === currentMonthKeyRev ? Math.round(mrr) : 0);
+    byMonth.push({ month: monthKey, membership, retail: 0, total: membership });
   }
 
   res.json({
@@ -256,7 +326,7 @@ router.get("/gyms/:gymId/reports/attendance", async (req, res): Promise<void> =>
   const peakTime = peakHour ? `${peakHour.hour > 12 ? peakHour.hour - 12 : peakHour.hour}:00 ${peakHour.hour >= 12 ? 'PM' : 'AM'}` : "N/A";
 
   const [classCount] = await db.select({ count: count() }).from(classesTable).where(eq(classesTable.gymId, gymId));
-  const totalCapacity = (classCount?.count ?? 1) * 20;
+  const totalCapacity = Number(classCount?.count ?? 1) * 20;
   const capacityUtilization = Math.round((totalRecords / Math.max(totalCapacity, 1)) * 100);
 
   const trend = [];

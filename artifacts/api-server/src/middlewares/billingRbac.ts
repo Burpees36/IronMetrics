@@ -97,8 +97,8 @@ export function requireBillingPermission(...requiredPerms: BillingPermission[]) 
       return;
     }
 
-    (req as any).billingRole = role;
-    (req as any).billingPermissions = userPerms;
+    req.billingRole = role;
+    req.billingPermissions = userPerms;
     next();
   };
 }

@@ -1,4 +1,4 @@
-import { pgTable, text, serial, timestamp, integer, numeric, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, timestamp, integer, numeric, jsonb, date } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { gymsTable } from "./gyms";
@@ -69,7 +69,7 @@ export type KnowledgeIngestJob = typeof knowledgeIngestJobsTable.$inferSelect;
 export const recommendationChunkAuditTable = pgTable("recommendation_chunk_audit", {
   id: serial("id").primaryKey(),
   gymId: integer("gym_id").notNull().references(() => gymsTable.id),
-  periodStart: text("period_start").notNull(),
+  periodStart: date("period_start", { mode: "string" }).notNull(),
   recommendationType: text("recommendation_type").notNull(),
   chunkId: integer("chunk_id").notNull().references(() => knowledgeChunksTable.id),
   similarityScore: numeric("similarity_score", { precision: 5, scale: 4 }),

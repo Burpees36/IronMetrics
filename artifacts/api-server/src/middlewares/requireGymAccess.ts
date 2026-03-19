@@ -11,11 +11,9 @@
  *      - Otherwise → no role (access denied)
  *   4. Attach `gymRole` and `gymId` to the request for downstream handlers.
  *
- * Known weakness: `(req as any).gymRole` and `(req as any).gymId` use
- * unsafe type casting because Express's built-in Request type does not
- * include custom properties. A cleaner approach would be to extend the
- * Express Request interface via declaration merging or use a typed
- * middleware pattern with `res.locals`.
+ * Type safety: The Express Request interface is extended in
+ * `src/types/express.d.ts` via declaration merging, so `req.gymRole`
+ * and `req.gymId` are properly typed without unsafe `as any` casts.
  */
 import { type Request, type Response, type NextFunction } from "express";
 import { db, gymsTable, gymStaffTable } from "@workspace/db";
@@ -51,8 +49,8 @@ async function resolveGymRole(userId: string, gymId: number): Promise<{ role: st
  * Express middleware that gates access to gym-scoped routes.
  * Must be mounted on routes that include a `:gymId` parameter.
  *
- * On success, attaches `req.gymRole` and `req.gymId` to the request object
- * (via `(req as any)` — see known weakness above).
+ * On success, attaches `req.gymRole` and `req.gymId` to the request
+ * object using the extended Express Request interface.
  */
 export function requireGymAccess(req: Request, res: Response, next: NextFunction): void {
   if (!req.isAuthenticated()) {
@@ -83,10 +81,8 @@ export function requireGymAccess(req: Request, res: Response, next: NextFunction
       return;
     }
 
-    // Known weakness: uses `(req as any)` to attach custom properties
-    // because Express Request type is not extended with gymRole/gymId.
-    (req as any).gymRole = role;
-    (req as any).gymId = gymId;
+    req.gymRole = role;
+    req.gymId = gymId;
     next();
   }).catch((err) => {
     console.error("[GYM ACCESS ERROR]", err);

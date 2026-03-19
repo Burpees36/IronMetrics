@@ -7,7 +7,12 @@ import {
   useCreateStripeSubscription, useCreateOneTimeCharge, useListMembershipPlans,
   useCancelSubscription, usePauseSubscription, useResumeSubscription,
   getGetMemberBillingHistoryQueryKey, getListSubscriptionsQueryKey,
+  useSetDefaultPaymentMethod, useRemovePaymentMethod,
+  useGetMemberLinkedBilling, useLinkMemberBilling, useUnlinkMemberBilling,
+  getListPaymentMethodsQueryKey, getGetMemberLinkedBillingQueryKey,
+  useListMembers,
 } from "@workspace/api-client-react";
+import type { ApiError } from "@workspace/api-client-react/custom-fetch";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRoute, useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
@@ -16,7 +21,7 @@ import {
   Loader2, ArrowLeft, UserCircle, Mail, Phone, Calendar, Shield,
   MapPin, StickyNote, Clock, Edit, Pause, XCircle, Play, AlertTriangle,
   CheckCircle, Activity, CreditCard, Plus, DollarSign, Receipt, RefreshCw,
-  Send, Copy
+  Send, Copy, Star, Trash2, Link2, Unlink, Search, Users
 } from "lucide-react";
 import { Link } from "wouter";
 import {
@@ -30,6 +35,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { AddCardDialog } from "@/components/billing/AddCardDialog";
+import { ChangePlanDialog } from "@/components/billing/ChangePlanDialog";
+import { HoldsManager } from "@/components/billing/HoldsManager";
+import { InvoiceTable } from "@/components/billing/InvoiceTable";
+import { MemberBalance } from "@/components/billing/MemberBalance";
+import { SubscriptionDiscount } from "@/components/billing/SubscriptionDiscount";
 
 export function MemberDetail() {
   const { activeGymId } = useGym();
@@ -50,6 +61,7 @@ export function MemberDetail() {
   const [cancelSubDialog, setCancelSubDialog] = useState<number | null>(null);
   const [cancelReason, setCancelReason] = useState("");
   const [cancelAtPeriodEnd, setCancelAtPeriodEnd] = useState(true);
+  const [changePlanSub, setChangePlanSub] = useState<any>(null);
 
   const [editForm, setEditForm] = useState({
     firstName: "",
@@ -57,29 +69,43 @@ export function MemberDetail() {
     email: "",
     phone: "",
     address: "",
+    city: "",
+    state: "",
     emergencyContactName: "",
     emergencyContactPhone: "",
+    membershipType: "",
+    waiverSigned: false,
   });
+  const [editErrors, setEditErrors] = useState<Record<string, string>>({});
 
+  const memberEnabled = !!activeGymId && !!memberId;
   const { data: member, isLoading, isError } = useGetMember(activeGymId as number, memberId, {
-    query: { enabled: !!activeGymId && !!memberId } as any
+    query: { enabled: memberEnabled },
   });
 
   const { data: timeline } = useGetMemberTimeline(activeGymId as number, memberId, {
-    query: { enabled: !!activeGymId && !!memberId } as any
+    query: { enabled: memberEnabled },
   });
 
   const updateMutation = useUpdateMember();
   const addNoteMutation = useAddMemberNote();
 
+  const billingEnabled = !!activeGymId && !!memberId && activeTab === "billing";
   const { data: billingHistory } = useGetMemberBillingHistory(activeGymId as number, memberId, {
-    query: { enabled: !!activeGymId && !!memberId && activeTab === "billing" } as any
+    query: { enabled: billingEnabled },
   });
   const { data: paymentMethods } = useListPaymentMethods(activeGymId as number, memberId, {
-    query: { enabled: !!activeGymId && !!memberId && activeTab === "billing" } as any
+    query: { enabled: billingEnabled },
   });
   const { data: plans } = useListMembershipPlans(activeGymId as number, {
     query: { enabled: !!activeGymId && activeTab === "billing" }
+  });
+
+  const { data: linkedBilling } = useGetMemberLinkedBilling(activeGymId as number, memberId, {
+    query: { enabled: billingEnabled },
+  });
+  const { data: allMembers } = useListMembers(activeGymId as number, {}, {
+    query: { enabled: !!activeGymId && activeTab === "billing" },
   });
 
   const createChargeMutation = useCreateOneTimeCharge();
@@ -87,6 +113,17 @@ export function MemberDetail() {
   const cancelSubMutation = useCancelSubscription();
   const pauseSubMutation = usePauseSubscription();
   const resumeSubMutation = useResumeSubscription();
+  const setDefaultPmMutation = useSetDefaultPaymentMethod();
+  const removePmMutation = useRemovePaymentMethod();
+  const linkBillingMutation = useLinkMemberBilling();
+  const unlinkBillingMutation = useUnlinkMemberBilling();
+  const createSetupIntentMutation = useCreateSetupIntent();
+
+  const [addCardOpen, setAddCardOpen] = useState(false);
+  const [removePmConfirm, setRemovePmConfirm] = useState<string | null>(null);
+  const [linkOpen, setLinkOpen] = useState(false);
+  const [linkSearch, setLinkSearch] = useState("");
+  const [selectedLinkMember, setSelectedLinkMember] = useState<number | null>(null);
 
   const invalidateAll = () => {
     queryClient.invalidateQueries({ queryKey: getGetMemberQueryKey(activeGymId as number, memberId) });
@@ -98,6 +135,8 @@ export function MemberDetail() {
     invalidateAll();
     queryClient.invalidateQueries({ queryKey: getGetMemberBillingHistoryQueryKey(activeGymId as number, memberId) });
     queryClient.invalidateQueries({ queryKey: getListSubscriptionsQueryKey(activeGymId as number) });
+    queryClient.invalidateQueries({ queryKey: getListPaymentMethodsQueryKey(activeGymId as number, memberId) });
+    queryClient.invalidateQueries({ queryKey: getGetMemberLinkedBillingQueryKey(activeGymId as number, memberId) });
   };
 
   const [pauseSubConfirm, setPauseSubConfirm] = useState<number | null>(null);
@@ -159,7 +198,7 @@ export function MemberDetail() {
     }
   };
 
-  const isBillingMutating = createChargeMutation.isPending || createStripeSubMutation.isPending || cancelSubMutation.isPending || pauseSubMutation.isPending || resumeSubMutation.isPending;
+  const isBillingMutating = createChargeMutation.isPending || createStripeSubMutation.isPending || cancelSubMutation.isPending || pauseSubMutation.isPending || resumeSubMutation.isPending || setDefaultPmMutation.isPending || removePmMutation.isPending || linkBillingMutation.isPending || unlinkBillingMutation.isPending;
 
   const handleCreateCharge = () => {
     if (!activeGymId || !chargeForm.amount || !chargeForm.description) return;
@@ -240,6 +279,74 @@ export function MemberDetail() {
     );
   };
 
+  const handleSetDefaultPm = (paymentMethodId: string) => {
+    if (!activeGymId) return;
+    setDefaultPmMutation.mutate(
+      { gymId: activeGymId, memberId, paymentMethodId },
+      {
+        onSuccess: () => { toast({ title: "Default payment method updated" }); invalidateBilling(); },
+        onError: (err: any) => toast({ title: "Failed to set default", description: err?.response?.data?.error || err?.message, variant: "destructive" })
+      }
+    );
+  };
+
+  const handleRemovePm = (paymentMethodId: string) => {
+    if (!activeGymId) return;
+    removePmMutation.mutate(
+      { gymId: activeGymId, memberId, paymentMethodId },
+      {
+        onSuccess: () => { toast({ title: "Payment method removed" }); setRemovePmConfirm(null); invalidateBilling(); },
+        onError: (err: any) => { setRemovePmConfirm(null); toast({ title: "Failed to remove", description: err?.response?.data?.error || err?.message, variant: "destructive" }); }
+      }
+    );
+  };
+
+  const handleLinkBilling = () => {
+    if (!activeGymId || !selectedLinkMember) return;
+    linkBillingMutation.mutate(
+      { gymId: activeGymId, memberId, data: { linkedMemberId: selectedLinkMember } },
+      {
+        onSuccess: () => { toast({ title: "Billing linked successfully" }); setLinkOpen(false); setSelectedLinkMember(null); setLinkSearch(""); invalidateBilling(); },
+        onError: (err: any) => toast({ title: "Failed to link billing", description: err?.response?.data?.error || err?.message, variant: "destructive" })
+      }
+    );
+  };
+
+  const handleUnlinkBilling = () => {
+    if (!activeGymId) return;
+    unlinkBillingMutation.mutate(
+      { gymId: activeGymId, memberId },
+      {
+        onSuccess: () => { toast({ title: "Billing unlinked" }); invalidateBilling(); },
+        onError: (err: any) => toast({ title: "Failed to unlink", description: err?.response?.data?.error || err?.message, variant: "destructive" })
+      }
+    );
+  };
+
+  const [addingCardSecret, setAddingCardSecret] = useState<string | null>(null);
+
+  const handleAddCard = async () => {
+    if (!activeGymId) return;
+    createSetupIntentMutation.mutate(
+      { gymId: activeGymId, memberId },
+      {
+        onSuccess: (data: any) => {
+          if (data?.clientSecret) {
+            setAddingCardSecret(data.clientSecret);
+            setAddCardOpen(true);
+          }
+        },
+        onError: (err: any) => toast({ title: "Failed to start card setup", description: err?.response?.data?.error || err?.message, variant: "destructive" })
+      }
+    );
+  };
+
+  const linkedBillingData = linkedBilling as any;
+  const filteredLinkMembers = ((allMembers as any)?.members ?? []).filter((m: any) =>
+    m.id !== memberId &&
+    (linkSearch === "" || `${m.firstName} ${m.lastName} ${m.email}`.toLowerCase().includes(linkSearch.toLowerCase()))
+  ).slice(0, 10);
+
   const handleEditOpen = () => {
     if (member) {
       setEditForm({
@@ -248,27 +355,51 @@ export function MemberDetail() {
         email: member.email,
         phone: member.phone || "",
         address: member.address || "",
+        city: member.city || "",
+        state: member.state || "",
         emergencyContactName: member.emergencyContactName || "",
         emergencyContactPhone: member.emergencyContactPhone || "",
+        membershipType: member.membershipType || "",
+        waiverSigned: member.waiverSigned || false,
       });
+      setEditErrors({});
       setEditOpen(true);
     }
   };
 
   const handleEditSave = () => {
     if (!activeGymId) return;
+
+    const errors: Record<string, string> = {};
+    if (!editForm.firstName.trim()) errors.firstName = "First name is required";
+    if (!editForm.lastName.trim()) errors.lastName = "Last name is required";
+    if (!editForm.email.trim()) {
+      errors.email = "Email is required";
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(editForm.email.trim())) {
+      errors.email = "Invalid email format";
+    }
+    if (Object.keys(errors).length > 0) {
+      setEditErrors(errors);
+      return;
+    }
+    setEditErrors({});
+
     updateMutation.mutate(
       {
         gymId: activeGymId,
         memberId,
         data: {
-          firstName: editForm.firstName,
-          lastName: editForm.lastName,
-          email: editForm.email,
+          firstName: editForm.firstName.trim(),
+          lastName: editForm.lastName.trim(),
+          email: editForm.email.trim(),
           phone: editForm.phone || null,
           address: editForm.address || null,
+          city: editForm.city || null,
+          state: editForm.state || null,
           emergencyContactName: editForm.emergencyContactName || null,
           emergencyContactPhone: editForm.emergencyContactPhone || null,
+          membershipType: editForm.membershipType || null,
+          waiverSigned: editForm.waiverSigned,
         },
       },
       {
@@ -277,8 +408,14 @@ export function MemberDetail() {
           setEditOpen(false);
           invalidateAll();
         },
-        onError: () => {
-          toast({ title: "Error", description: "Failed to update member." });
+        onError: (err: ApiError) => {
+          const errData = err.data as { error?: string; fieldErrors?: Record<string, string> } | null;
+          const fieldErrors = errData?.fieldErrors;
+          if (fieldErrors) {
+            setEditErrors(fieldErrors);
+          } else {
+            toast({ title: "Error", description: errData?.error || "Failed to update member.", variant: "destructive" });
+          }
         },
       }
     );
@@ -516,7 +653,7 @@ export function MemberDetail() {
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-muted-foreground text-sm">Amount</span>
-                  <span className="text-foreground font-medium">${parseFloat(member.activeSubscription.amount).toFixed(2)}/mo</span>
+                  <span className="text-foreground font-medium">${parseFloat(member.activeSubscription.amount).toFixed(2)}</span>
                 </div>
                 {member.activeSubscription.currentPeriodEnd && (
                   <div className="flex justify-between items-center">
@@ -524,6 +661,18 @@ export function MemberDetail() {
                     <span className="text-foreground">{new Date(member.activeSubscription.currentPeriodEnd).toLocaleDateString()}</span>
                   </div>
                 )}
+              </div>
+            ) : member.membershipType ? (
+              <div className="space-y-3">
+                <div className="flex justify-between items-center">
+                  <span className="text-muted-foreground text-sm">Plan</span>
+                  <span className="text-foreground font-medium">{member.membershipType}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-muted-foreground text-sm">Status</span>
+                  <span className="px-2 py-0.5 rounded-full text-xs font-medium border bg-amber-500/10 text-amber-500 border-amber-500/20">No active billing</span>
+                </div>
+                <p className="text-xs text-muted-foreground">Subscription can be set up from the Billing tab.</p>
               </div>
             ) : (
               <p className="text-muted-foreground text-sm">No active subscription.</p>
@@ -734,7 +883,7 @@ export function MemberDetail() {
                       </div>
                       <div className="flex justify-between text-sm text-muted-foreground mb-1">
                         <span>Amount</span>
-                        <span className="text-foreground font-medium">${sub.amount}/mo</span>
+                        <span className="text-foreground font-medium">${sub.amount}{sub.billingInterval === "one_time" ? "" : `/${sub.billingInterval === "annual" ? "yr" : sub.billingInterval === "quarterly" ? "qtr" : "mo"}`}</span>
                       </div>
                       {sub.currentPeriodEnd && (
                         <div className="flex justify-between text-sm text-muted-foreground mb-1">
@@ -754,9 +903,17 @@ export function MemberDetail() {
                           <span className="text-xs font-medium text-orange-500">Payment action needed</span>
                         </div>
                       )}
-                      <div className="flex gap-2 mt-3 pt-3 border-t border-border">
+                      {sub.status === "active" && sub.stripeSubscriptionId && (
+                        <SubscriptionDiscount subscriptionId={sub.id} stripeSubscriptionId={sub.stripeSubscriptionId} />
+                      )}
+                      <div className="flex gap-2 mt-3 pt-3 border-t border-border flex-wrap">
                         {sub.status === "active" && (
                           <>
+                            {sub.stripeSubscriptionId && (
+                              <button disabled={isBillingMutating} onClick={() => setChangePlanSub(sub)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-primary/10 text-primary hover:bg-primary/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                                <Activity className="h-3 w-3" /> Change Plan
+                              </button>
+                            )}
                             <button disabled={isBillingMutating} onClick={() => handlePauseMemberSub(sub.id)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-yellow-500/10 text-yellow-500 hover:bg-yellow-500/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
                               <Pause className="h-3 w-3" /> Pause
                             </button>
@@ -785,9 +942,19 @@ export function MemberDetail() {
             </div>
 
             <div className="bg-card border border-border rounded-2xl p-6 shadow-sm">
-              <h3 className="text-lg font-semibold text-foreground flex items-center gap-2 mb-4">
-                <CreditCard className="h-5 w-5 text-primary" /> Payment Methods
-              </h3>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-foreground flex items-center gap-2">
+                  <CreditCard className="h-5 w-5 text-primary" /> Payment Methods
+                </h3>
+                <button
+                  onClick={handleAddCard}
+                  disabled={createSetupIntentMutation.isPending}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-primary/10 text-primary hover:bg-primary/20 transition-colors disabled:opacity-50"
+                >
+                  {createSetupIntentMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />}
+                  Add Card
+                </button>
+              </div>
               {methods.length > 0 ? (
                 <div className="space-y-3">
                   {methods.map((pm: any) => (
@@ -795,9 +962,33 @@ export function MemberDetail() {
                       <div className="flex items-center gap-3">
                         <CreditCard className="h-5 w-5 text-muted-foreground" />
                         <div>
-                          <p className="text-sm font-medium text-foreground capitalize">{pm.brand || "card"} •••• {pm.last4 || "****"}</p>
+                          <div className="flex items-center gap-2">
+                            <p className="text-sm font-medium text-foreground capitalize">{pm.brand || "card"} •••• {pm.last4 || "****"}</p>
+                            {pm.isDefault && (
+                              <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-primary/10 text-primary border border-primary/20">DEFAULT</span>
+                            )}
+                          </div>
                           {pm.expMonth && <p className="text-xs text-muted-foreground">Expires {pm.expMonth}/{pm.expYear}</p>}
                         </div>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        {!pm.isDefault && (
+                          <button
+                            onClick={() => handleSetDefaultPm(pm.id)}
+                            disabled={setDefaultPmMutation.isPending}
+                            title="Set as default"
+                            className="p-1.5 text-muted-foreground hover:text-primary rounded-lg hover:bg-primary/10 transition-colors disabled:opacity-50"
+                          >
+                            <Star className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+                        <button
+                          onClick={() => setRemovePmConfirm(pm.id)}
+                          title="Remove card"
+                          className="p-1.5 text-muted-foreground hover:text-destructive rounded-lg hover:bg-destructive/10 transition-colors"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
                       </div>
                     </div>
                   ))}
@@ -806,6 +997,95 @@ export function MemberDetail() {
                 <p className="text-muted-foreground text-sm">No payment methods on file.</p>
               )}
             </div>
+          </div>
+
+          <div className="bg-card border border-border rounded-2xl p-6 shadow-sm">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-foreground flex items-center gap-2">
+                <Users className="h-5 w-5 text-primary" /> Couples / Linked Billing
+              </h3>
+              {!linkedBillingData?.isPrimaryPayer && !linkedBillingData?.isDependent && (
+                <button
+                  onClick={() => setLinkOpen(true)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
+                >
+                  <Link2 className="h-3 w-3" /> Link Partner
+                </button>
+              )}
+            </div>
+
+            {linkedBillingData?.isPrimaryPayer && linkedBillingData.dependents?.length > 0 ? (
+              <div className="space-y-3">
+                <div className="p-3 bg-primary/5 border border-primary/20 rounded-xl">
+                  <p className="text-sm font-medium text-foreground flex items-center gap-2">
+                    <Star className="h-4 w-4 text-primary" /> Primary Payer
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">This member pays for the linked members below.</p>
+                </div>
+                {linkedBillingData.dependents.map((dep: any) => (
+                  <div key={dep.id} className="flex items-center justify-between p-3 bg-muted/20 border border-border rounded-xl">
+                    <div className="flex items-center gap-3">
+                      <UserCircle className="h-5 w-5 text-muted-foreground" />
+                      <div>
+                        <p className="text-sm font-medium text-foreground">{dep.firstName} {dep.lastName}</p>
+                        <p className="text-xs text-muted-foreground">{dep.email}</p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={handleUnlinkBilling}
+                      disabled={unlinkBillingMutation.isPending}
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-destructive/10 text-destructive hover:bg-destructive/20 transition-colors disabled:opacity-50"
+                    >
+                      {unlinkBillingMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Unlink className="h-3 w-3" />}
+                      Unlink
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : linkedBillingData?.isDependent && linkedBillingData.primaryPayer ? (
+              <div className="space-y-3">
+                <div className="p-3 bg-blue-500/5 border border-blue-500/20 rounded-xl">
+                  <p className="text-sm font-medium text-foreground flex items-center gap-2">
+                    <Link2 className="h-4 w-4 text-blue-500" /> Linked to Partner
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">Billing for this member is handled by their partner.</p>
+                </div>
+                <div className="flex items-center justify-between p-3 bg-muted/20 border border-border rounded-xl">
+                  <div className="flex items-center gap-3">
+                    <UserCircle className="h-5 w-5 text-muted-foreground" />
+                    <div>
+                      <p className="text-sm font-medium text-foreground">{linkedBillingData.primaryPayer.firstName} {linkedBillingData.primaryPayer.lastName}</p>
+                      <p className="text-xs text-muted-foreground">{linkedBillingData.primaryPayer.email} — pays for this member</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={handleUnlinkBilling}
+                    disabled={unlinkBillingMutation.isPending}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-destructive/10 text-destructive hover:bg-destructive/20 transition-colors disabled:opacity-50"
+                  >
+                    {unlinkBillingMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Unlink className="h-3 w-3" />}
+                    Unlink
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <p className="text-muted-foreground text-sm">No linked billing. Use "Link Partner" to set up a couples plan where one member pays for both.</p>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {bSubs.length > 0 && bSubs[0]?.id && (
+              <div className="bg-card border border-border rounded-2xl p-6 shadow-sm">
+                <HoldsManager memberId={memberId} subscriptionId={bSubs[0].id} onHoldChange={() => queryClient.invalidateQueries({ queryKey: getGetMemberBillingHistoryQueryKey(activeGymId as number, memberId) })} />
+              </div>
+            )}
+            <div className="bg-card border border-border rounded-2xl p-6 shadow-sm">
+              <MemberBalance memberId={memberId} />
+            </div>
+          </div>
+
+          <div className="bg-card border border-border rounded-2xl p-6 shadow-sm">
+            <InvoiceTable memberId={memberId} />
           </div>
 
           <div className="bg-card border border-border rounded-2xl shadow-sm overflow-hidden">
@@ -890,11 +1170,11 @@ export function MemberDetail() {
           <div className="space-y-4 py-2">
             <div className="space-y-2">
               <Label>Amount ($) *</Label>
-              <Input type="number" step="0.01" value={chargeForm.amount} onChange={(e) => setChargeForm({ ...chargeForm, amount: e.target.value })} placeholder="25.00" className="bg-background border-border" />
+              <Input type="number" step="0.01" value={chargeForm.amount} onChange={(e) => setChargeForm(f => ({ ...f, amount: e.target.value }))} placeholder="25.00" className="bg-background border-border" />
             </div>
             <div className="space-y-2">
               <Label>Description *</Label>
-              <Input value={chargeForm.description} onChange={(e) => setChargeForm({ ...chargeForm, description: e.target.value })} placeholder="e.g. Late cancel fee" className="bg-background border-border" />
+              <Input value={chargeForm.description} onChange={(e) => setChargeForm(f => ({ ...f, description: e.target.value }))} placeholder="e.g. Late cancel fee" className="bg-background border-border" />
             </div>
           </div>
           <DialogFooter>
@@ -919,7 +1199,7 @@ export function MemberDetail() {
                 <SelectTrigger className="bg-background border-border"><SelectValue placeholder="Select a plan" /></SelectTrigger>
                 <SelectContent>
                   {(plans ?? []).map((p: any) => (
-                    <SelectItem key={p.id} value={String(p.id)}>{p.name} — ${p.price}/{p.billingInterval || "mo"}</SelectItem>
+                    <SelectItem key={p.id} value={String(p.id)}>{p.name} — ${p.price}{p.billingInterval === "one_time" ? "" : `/${p.billingInterval === "annual" ? "yr" : p.billingInterval === "quarterly" ? "qtr" : "mo"}`}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -989,43 +1269,147 @@ export function MemberDetail() {
         </AlertDialogContent>
       </AlertDialog>
 
-      <Dialog open={editOpen} onOpenChange={setEditOpen}>
+      <AlertDialog open={removePmConfirm !== null} onOpenChange={() => setRemovePmConfirm(null)}>
+        <AlertDialogContent className="bg-card border-border">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove Payment Method</AlertDialogTitle>
+            <AlertDialogDescription>Are you sure you want to remove this card? This cannot be undone. If it is used for active subscriptions, those may fail.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="bg-transparent border-border hover:bg-secondary">Keep Card</AlertDialogCancel>
+            <AlertDialogAction onClick={() => removePmConfirm && handleRemovePm(removePmConfirm)} disabled={removePmMutation.isPending} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              {removePmMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              Remove Card
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <Dialog open={linkOpen} onOpenChange={(open) => { setLinkOpen(open); if (!open) { setLinkSearch(""); setSelectedLinkMember(null); } }}>
         <DialogContent className="bg-card border-border max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><Users className="h-5 w-5 text-primary" /> Link Partner Billing</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">Search for a member to link to this member's billing. The selected member's subscriptions will be billed to this member.</p>
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              value={linkSearch}
+              onChange={(e) => setLinkSearch(e.target.value)}
+              placeholder="Search by name or email..."
+              className="pl-9 bg-background border-border"
+            />
+          </div>
+          <div className="max-h-[200px] overflow-y-auto space-y-1">
+            {filteredLinkMembers.map((m: any) => (
+              <button
+                key={m.id}
+                onClick={() => setSelectedLinkMember(m.id)}
+                className={`w-full flex items-center gap-3 p-3 rounded-xl text-left transition-colors ${
+                  selectedLinkMember === m.id ? "bg-primary/10 border border-primary/30" : "bg-muted/20 border border-transparent hover:bg-muted/40"
+                }`}
+              >
+                <UserCircle className="h-5 w-5 text-muted-foreground shrink-0" />
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-foreground truncate">{m.firstName} {m.lastName}</p>
+                  <p className="text-xs text-muted-foreground truncate">{m.email}</p>
+                </div>
+                {selectedLinkMember === m.id && <CheckCircle className="h-4 w-4 text-primary ml-auto shrink-0" />}
+              </button>
+            ))}
+            {linkSearch && filteredLinkMembers.length === 0 && (
+              <p className="text-sm text-muted-foreground text-center py-4">No members found.</p>
+            )}
+          </div>
+          <DialogFooter>
+            <button onClick={() => setLinkOpen(false)} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors">Cancel</button>
+            <button onClick={handleLinkBilling} disabled={!selectedLinkMember || linkBillingMutation.isPending} className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground hover:bg-primary/90 rounded-lg font-medium transition-colors disabled:opacity-50">
+              {linkBillingMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+              Link Billing
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <AddCardDialog
+        open={addCardOpen}
+        onOpenChange={(open) => { setAddCardOpen(open); if (!open) setAddingCardSecret(null); }}
+        clientSecret={addingCardSecret}
+        onSuccess={() => { toast({ title: "Card added successfully" }); invalidateBilling(); }}
+      />
+
+      {changePlanSub && (
+        <ChangePlanDialog
+          open={!!changePlanSub}
+          onClose={() => setChangePlanSub(null)}
+          subscription={{ id: changePlanSub.id, planId: changePlanSub.planId, planName: changePlanSub.planName || "", amount: changePlanSub.amount || 0, memberId }}
+        />
+      )}
+
+      <Dialog open={editOpen} onOpenChange={setEditOpen}>
+        <DialogContent className="bg-card border-border max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Edit Member</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="edit-first">First Name</Label>
-                <Input id="edit-first" value={editForm.firstName} onChange={(e) => setEditForm({ ...editForm, firstName: e.target.value })} className="bg-background border-border" />
+              <div className="space-y-1.5">
+                <Label htmlFor="edit-first">First Name <span className="text-red-400">*</span></Label>
+                <Input id="edit-first" value={editForm.firstName} onChange={(e) => { setEditForm(f => ({ ...f, firstName: e.target.value })); setEditErrors(e2 => { const n = {...e2}; delete n.firstName; return n; }); }} className={`bg-background border-border ${editErrors.firstName ? "border-red-400" : ""}`} />
+                {editErrors.firstName && <p className="text-xs text-red-400">{editErrors.firstName}</p>}
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="edit-last">Last Name</Label>
-                <Input id="edit-last" value={editForm.lastName} onChange={(e) => setEditForm({ ...editForm, lastName: e.target.value })} className="bg-background border-border" />
+              <div className="space-y-1.5">
+                <Label htmlFor="edit-last">Last Name <span className="text-red-400">*</span></Label>
+                <Input id="edit-last" value={editForm.lastName} onChange={(e) => { setEditForm(f => ({ ...f, lastName: e.target.value })); setEditErrors(e2 => { const n = {...e2}; delete n.lastName; return n; }); }} className={`bg-background border-border ${editErrors.lastName ? "border-red-400" : ""}`} />
+                {editErrors.lastName && <p className="text-xs text-red-400">{editErrors.lastName}</p>}
               </div>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="edit-email">Email</Label>
-              <Input id="edit-email" type="email" value={editForm.email} onChange={(e) => setEditForm({ ...editForm, email: e.target.value })} className="bg-background border-border" />
+            <div className="space-y-1.5">
+              <Label htmlFor="edit-email">Email <span className="text-red-400">*</span></Label>
+              <Input id="edit-email" type="email" value={editForm.email} onChange={(e) => { setEditForm(f => ({ ...f, email: e.target.value })); setEditErrors(e2 => { const n = {...e2}; delete n.email; return n; }); }} className={`bg-background border-border ${editErrors.email ? "border-red-400" : ""}`} />
+              {editErrors.email && <p className="text-xs text-red-400">{editErrors.email}</p>}
             </div>
-            <div className="space-y-2">
+            <div className="space-y-1.5">
               <Label htmlFor="edit-phone">Phone</Label>
-              <Input id="edit-phone" value={editForm.phone} onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })} className="bg-background border-border" />
+              <Input id="edit-phone" value={editForm.phone} onChange={(e) => setEditForm(f => ({ ...f, phone: e.target.value }))} className="bg-background border-border" />
             </div>
-            <div className="space-y-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="edit-membership">Membership Plan</Label>
+              <Input id="edit-membership" value={editForm.membershipType} onChange={(e) => setEditForm(f => ({ ...f, membershipType: e.target.value }))} className="bg-background border-border" placeholder="e.g. Unlimited, 3x Week" />
+            </div>
+            <div className="space-y-1.5">
               <Label htmlFor="edit-address">Address</Label>
-              <Input id="edit-address" value={editForm.address} onChange={(e) => setEditForm({ ...editForm, address: e.target.value })} className="bg-background border-border" />
+              <Input id="edit-address" value={editForm.address} onChange={(e) => setEditForm(f => ({ ...f, address: e.target.value }))} className="bg-background border-border" />
             </div>
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="edit-city">City</Label>
+                <Input id="edit-city" value={editForm.city} onChange={(e) => setEditForm(f => ({ ...f, city: e.target.value }))} className="bg-background border-border" />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="edit-state">State</Label>
+                <Input id="edit-state" value={editForm.state} onChange={(e) => setEditForm(f => ({ ...f, state: e.target.value }))} className="bg-background border-border" placeholder="TX" />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
                 <Label htmlFor="edit-ec-name">Emergency Contact</Label>
-                <Input id="edit-ec-name" value={editForm.emergencyContactName} onChange={(e) => setEditForm({ ...editForm, emergencyContactName: e.target.value })} className="bg-background border-border" />
+                <Input id="edit-ec-name" value={editForm.emergencyContactName} onChange={(e) => setEditForm(f => ({ ...f, emergencyContactName: e.target.value }))} className="bg-background border-border" />
               </div>
-              <div className="space-y-2">
+              <div className="space-y-1.5">
                 <Label htmlFor="edit-ec-phone">EC Phone</Label>
-                <Input id="edit-ec-phone" value={editForm.emergencyContactPhone} onChange={(e) => setEditForm({ ...editForm, emergencyContactPhone: e.target.value })} className="bg-background border-border" />
+                <Input id="edit-ec-phone" value={editForm.emergencyContactPhone} onChange={(e) => setEditForm(f => ({ ...f, emergencyContactPhone: e.target.value }))} className="bg-background border-border" />
               </div>
+            </div>
+            <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/30 border border-border">
+              <input
+                type="checkbox"
+                id="edit-waiver-detail"
+                checked={editForm.waiverSigned}
+                onChange={(e) => setEditForm(f => ({ ...f, waiverSigned: e.target.checked }))}
+                className="rounded border-border"
+              />
+              <label htmlFor="edit-waiver-detail" className="text-sm text-foreground cursor-pointer">Liability Waiver Signed</label>
             </div>
           </div>
           <DialogFooter>

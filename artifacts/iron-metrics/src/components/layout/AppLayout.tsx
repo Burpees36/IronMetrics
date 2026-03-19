@@ -4,31 +4,39 @@ import { useAuth } from "@workspace/replit-auth-web";
 import { 
   Dumbbell, LayoutDashboard, BrainCircuit, Users, CalendarDays, 
   Target, CreditCard, Activity, Bot, LogOut, Loader2, Menu, X, BookOpen,
-  ShoppingBag, MessagesSquare, FileText, BarChart3, Settings, Sun, Moon
+  ShoppingBag, MessagesSquare, FileText, BarChart3, Settings, Sun, Moon, RefreshCw,
+  Lock
 } from "lucide-react";
 import { useGym } from "@/store/GymContext";
 import { useTheme } from "@/store/ThemeContext";
 import { useGetGym } from "@workspace/api-client-react";
 import { motion } from "framer-motion";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useGymTier } from "@/hooks/useGymTier";
 import {
   Sheet,
   SheetContent,
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 const NAV_ITEMS = [
-  { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-  { name: "Intelligence", href: "/intelligence", icon: BrainCircuit },
-  { name: "Members", href: "/members", icon: Users },
-  { name: "Schedule", href: "/schedule", icon: CalendarDays },
-  { name: "Leads", href: "/leads", icon: Target },
-  { name: "Billing", href: "/billing", icon: CreditCard },
-  { name: "Workouts", href: "/workouts", icon: Activity },
-  { name: "AI Operator", href: "/ai-operator", icon: Bot },
-  { name: "Resources", href: "/resources", icon: BookOpen },
-  { name: "Settings", href: "/settings", icon: Settings },
+  { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard, routeGroup: "dashboard" },
+  { name: "Intelligence", href: "/intelligence", icon: BrainCircuit, routeGroup: "intelligence" },
+  { name: "Members", href: "/members", icon: Users, routeGroup: "members", requiredTier: "growth" },
+  { name: "Schedule", href: "/schedule", icon: CalendarDays, routeGroup: "schedule", requiredTier: "growth" },
+  { name: "Leads", href: "/leads", icon: Target, routeGroup: "leads", requiredTier: "growth" },
+  { name: "Billing", href: "/billing", icon: CreditCard, routeGroup: "billing" },
+  { name: "Workouts", href: "/workouts", icon: Activity, routeGroup: "workouts", requiredTier: "growth" },
+  { name: "AI Operator", href: "/ai-operator", icon: Bot, routeGroup: "ai" },
+  { name: "Retention", href: "/retention", icon: RefreshCw, routeGroup: "retention" },
+  { name: "Resources", href: "/resources", icon: BookOpen, routeGroup: "resources" },
+  { name: "Settings", href: "/settings", icon: Settings, routeGroup: "settings" },
 ];
 
 const BOTTOM_NAV_ITEMS = [
@@ -52,13 +60,14 @@ function ThemeToggleButton({ className = "" }: { className?: string }) {
   );
 }
 
-function SidebarContent({ location, gym, gymLoading, user, logout, onNavigate }: {
+function SidebarContent({ location, gym, gymLoading, user, logout, onNavigate, canAccess }: {
   location: string;
   gym: any;
   gymLoading: boolean;
   user: any;
   logout: () => void;
   onNavigate?: () => void;
+  canAccess: (routeGroup: string) => boolean;
 }) {
   return (
     <div className="flex flex-col h-full justify-between">
@@ -79,6 +88,27 @@ function SidebarContent({ location, gym, gymLoading, user, logout, onNavigate }:
           <nav className="space-y-1">
             {NAV_ITEMS.map((item) => {
               const isActive = location.startsWith(item.href);
+              const isLocked = !canAccess(item.routeGroup);
+
+              if (isLocked) {
+                return (
+                  <Tooltip key={item.name} delayDuration={100}>
+                    <TooltipTrigger asChild>
+                      <Link href="/plan-selection" className="block" onClick={onNavigate}>
+                        <div className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-muted-foreground/50 cursor-pointer hover:bg-secondary/50 transition-all duration-200">
+                          <item.icon className="h-5 w-5" />
+                          <span className="text-sm flex-1">{item.name}</span>
+                          <Lock className="h-3.5 w-3.5 text-muted-foreground/50" />
+                        </div>
+                      </Link>
+                    </TooltipTrigger>
+                    <TooltipContent side="right">
+                      <p className="text-xs">Upgrade to unlock {item.name}</p>
+                    </TooltipContent>
+                  </Tooltip>
+                );
+              }
+
               return (
                 <Link key={item.name} href={item.href} className="block" onClick={onNavigate}>
                   <div className={`
@@ -131,6 +161,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const { activeGymId } = useGym();
   const isMobile = useIsMobile();
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const { canAccess } = useGymTier();
   
   const { data: gym, isLoading: gymLoading } = useGetGym(activeGymId as number, {
     query: { enabled: !!activeGymId }
@@ -175,6 +206,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               user={user}
               logout={logout}
               onNavigate={() => setDrawerOpen(false)}
+              canAccess={canAccess}
             />
           </SheetContent>
         </Sheet>
@@ -233,6 +265,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           gymLoading={gymLoading}
           user={user}
           logout={logout}
+          canAccess={canAccess}
         />
       </aside>
 

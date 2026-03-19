@@ -20,7 +20,7 @@ export function canViewSchedule(role: ScheduleRole): boolean {
 
 export function requireScheduleManage() {
   return (req: Request, res: Response, next: NextFunction): void => {
-    const role = (req as any).gymRole as string;
+    const role = req.gymRole;
     if (!role || !canManageSchedule(role as ScheduleRole)) {
       res.status(403).json({ error: "Only owners and admins can manage the schedule" });
       return;
@@ -31,7 +31,7 @@ export function requireScheduleManage() {
 
 export function requireScheduleOperate() {
   return (req: Request, res: Response, next: NextFunction): void => {
-    const role = (req as any).gymRole as string;
+    const role = req.gymRole;
     if (!role || !canOperateSchedule(role as ScheduleRole)) {
       res.status(403).json({ error: "Insufficient permissions for this operation" });
       return;

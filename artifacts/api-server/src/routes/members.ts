@@ -1,7 +1,12 @@
 import { Router, type IRouter } from "express";
-import { eq, and, ilike, or, count, desc } from "drizzle-orm";
-import { db, membersTable, memberNotesTable, timelineEventsTable, subscriptionsTable, attendanceTable } from "@workspace/db";
+import { eq, and, ilike, or, count, desc, ne, sql, inArray } from "drizzle-orm";
+import { db, membersTable, memberNotesTable, timelineEventsTable, subscriptionsTable, attendanceTable, membershipPlansTable } from "@workspace/db";
+import { stripeService } from "../stripeService";
+import { getStripeClient } from "../stripeClient";
 import { CreateMemberBody, UpdateMemberBody, AddMemberNoteBody } from "@workspace/api-zod";
+import { requireBillingPermission, requireBillingRead } from "../middlewares/billingRbac";
+
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const router: IRouter = Router();
 
@@ -58,10 +63,44 @@ router.get("/gyms/:gymId/members", async (req, res): Promise<void> => {
       ...m,
       riskScore: m.riskScore ? parseFloat(m.riskScore) : null,
     })),
-    total: totalResult?.count ?? 0,
+    total: Number(totalResult?.count ?? 0),
     limit,
     offset,
   });
+});
+
+router.get("/gyms/:gymId/members/check-email", async (req, res): Promise<void> => {
+  const gymId = parseGymId(req.params);
+  if (!gymId) { res.status(400).json({ error: "Invalid gym ID" }); return; }
+
+  const email = (req.query.email as string || "").trim().toLowerCase();
+  if (!email) { res.json({ exists: false }); return; }
+
+  const excludeId = req.query.excludeMemberId ? parseInt(req.query.excludeMemberId as string, 10) : null;
+
+  let conditions = [eq(membersTable.gymId, gymId), eq(sql`lower(${membersTable.email})`, email)];
+  if (excludeId) conditions.push(ne(membersTable.id, excludeId));
+
+  const [existing] = await db.select({ id: membersTable.id, firstName: membersTable.firstName, lastName: membersTable.lastName })
+    .from(membersTable).where(and(...conditions)).limit(1);
+
+  if (existing) {
+    res.json({ exists: true, memberName: `${existing.firstName} ${existing.lastName}`, memberId: existing.id });
+  } else {
+    res.json({ exists: false, memberName: null, memberId: null });
+  }
+});
+
+router.get("/gyms/:gymId/members/membership-types", async (req, res): Promise<void> => {
+  const gymId = parseGymId(req.params);
+  if (!gymId) { res.status(400).json({ error: "Invalid gym ID" }); return; }
+
+  const rows = await db.selectDistinct({ membershipType: membersTable.membershipType })
+    .from(membersTable)
+    .where(and(eq(membersTable.gymId, gymId), sql`${membersTable.membershipType} IS NOT NULL AND ${membersTable.membershipType} != ''`))
+    .orderBy(membersTable.membershipType);
+
+  res.json(rows.map(r => r.membershipType as string));
 });
 
 router.post("/gyms/:gymId/members", async (req, res): Promise<void> => {
@@ -74,15 +113,87 @@ router.post("/gyms/:gymId/members", async (req, res): Promise<void> => {
     return;
   }
 
+  const fieldErrors: Record<string, string> = {};
+  if (!parsed.data.firstName?.trim()) fieldErrors.firstName = "First name is required";
+  if (!parsed.data.lastName?.trim()) fieldErrors.lastName = "Last name is required";
+  if (!parsed.data.email?.trim()) fieldErrors.email = "Email is required";
+  else if (!EMAIL_REGEX.test(parsed.data.email.trim())) fieldErrors.email = "Invalid email format";
+
+  if (Object.keys(fieldErrors).length > 0) {
+    res.status(400).json({ error: "Validation failed", fieldErrors });
+    return;
+  }
+
+  const emailLower = parsed.data.email.trim().toLowerCase();
+  const [dup] = await db.select({ id: membersTable.id })
+    .from(membersTable)
+    .where(and(eq(membersTable.gymId, gymId), eq(sql`lower(${membersTable.email})`, emailLower)))
+    .limit(1);
+
+  if (dup) {
+    res.status(409).json({ error: "A member with this email already exists", fieldErrors: { email: "This email is already in use" } });
+    return;
+  }
+
   const today = new Date().toISOString().split("T")[0];
+  const body = req.body as Record<string, unknown>;
+  const setupIntentId = typeof body.setupIntentId === "string" ? body.setupIntentId : null;
+  const planId = body.planId ? parseInt(String(body.planId), 10) : null;
+
+  if (planId) {
+    const billingPermissions = req.billingPermissions || [];
+    const canCreateSub = billingPermissions.includes("billing.create_subscription") || req.gymRole === "owner" || req.gymRole === "admin";
+    if (!canCreateSub) {
+      res.status(403).json({ error: "You do not have permission to create subscriptions" });
+      return;
+    }
+  }
+
+  let verifiedCustomerId: string | null = null;
+  let verifiedPaymentMethodId: string | null = null;
+
+  if (setupIntentId && planId) {
+    try {
+      const stripe = await getStripeClient();
+      const intent = await stripe.setupIntents.retrieve(setupIntentId, {
+        expand: ["customer"],
+      });
+      if (intent.status !== "succeeded") {
+        res.status(400).json({ error: "Payment setup has not been completed" });
+        return;
+      }
+      const customer = typeof intent.customer === "string"
+        ? await stripe.customers.retrieve(intent.customer)
+        : intent.customer;
+      if (!customer || customer.deleted) {
+        res.status(400).json({ error: "Invalid customer for setup intent" });
+        return;
+      }
+      const customerMeta = (customer as { metadata?: Record<string, string> }).metadata || {};
+      if (customerMeta.gymId !== String(gymId) || customerMeta.source !== "onboarding") {
+        res.status(403).json({ error: "Setup intent does not belong to this gym" });
+        return;
+      }
+      verifiedCustomerId = customer.id;
+      verifiedPaymentMethodId = typeof intent.payment_method === "string" ? intent.payment_method : null;
+    } catch (err: unknown) {
+      res.status(400).json({ error: "Invalid setup intent" });
+      return;
+    }
+  }
+
   const [member] = await db
     .insert(membersTable)
     .values({
       ...parsed.data,
+      firstName: parsed.data.firstName.trim(),
+      lastName: parsed.data.lastName.trim(),
+      email: parsed.data.email.trim().toLowerCase(),
       gymId,
       status: "active",
       joinDate: today,
       tags: parsed.data.tags || [],
+      ...(verifiedCustomerId ? { stripeCustomerId: verifiedCustomerId } : {}),
     })
     .returning();
 
@@ -95,9 +206,26 @@ router.post("/gyms/:gymId/members", async (req, res): Promise<void> => {
     date: new Date(),
   });
 
+  let subscriptionResult = null;
+  let subscriptionError = null;
+
+  if (planId && verifiedPaymentMethodId) {
+    try {
+      subscriptionResult = await stripeService.createStripeSubscription(
+        member.id, gymId, planId, verifiedPaymentMethodId
+      );
+    } catch (err: unknown) {
+      subscriptionError = err instanceof Error ? err.message : "Failed to create subscription";
+    }
+  } else if (planId && !setupIntentId) {
+    subscriptionError = "Payment setup required for subscription activation";
+  }
+
   res.status(201).json({
     ...member,
     riskScore: member.riskScore ? parseFloat(member.riskScore) : null,
+    subscription: subscriptionResult || undefined,
+    subscriptionError: subscriptionError || undefined,
   });
 });
 
@@ -127,9 +255,33 @@ router.get("/gyms/:gymId/members/:memberId", async (req, res): Promise<void> => 
     .limit(20);
 
   const [activeSub] = await db
-    .select()
+    .select({
+      id: subscriptionsTable.id,
+      gymId: subscriptionsTable.gymId,
+      memberId: subscriptionsTable.memberId,
+      memberName: subscriptionsTable.memberName,
+      planId: subscriptionsTable.planId,
+      planName: subscriptionsTable.planName,
+      status: subscriptionsTable.status,
+      amount: subscriptionsTable.amount,
+      failedPayments: subscriptionsTable.failedPayments,
+      stripeSubscriptionId: subscriptionsTable.stripeSubscriptionId,
+      stripePriceId: subscriptionsTable.stripePriceId,
+      currentPeriodStart: subscriptionsTable.currentPeriodStart,
+      currentPeriodEnd: subscriptionsTable.currentPeriodEnd,
+      cancelledAt: subscriptionsTable.cancelledAt,
+      cancelReason: subscriptionsTable.cancelReason,
+      createdAt: subscriptionsTable.createdAt,
+      updatedAt: subscriptionsTable.updatedAt,
+      billingInterval: membershipPlansTable.billingInterval,
+    })
     .from(subscriptionsTable)
-    .where(and(eq(subscriptionsTable.memberId, memberId), eq(subscriptionsTable.status, "active")));
+    .leftJoin(membershipPlansTable, eq(subscriptionsTable.planId, membershipPlansTable.id))
+    .where(and(
+      eq(subscriptionsTable.memberId, memberId),
+      inArray(subscriptionsTable.status, ["active", "past_due", "on_hold", "paused", "cancel_at_period_end"])
+    ))
+    .orderBy(desc(subscriptionsTable.createdAt));
 
   res.json({
     ...member,
@@ -152,9 +304,48 @@ router.patch("/gyms/:gymId/members/:memberId", async (req, res): Promise<void> =
     return;
   }
 
+  const fieldErrors: Record<string, string> = {};
+  const data = parsed.data;
+
+  if (data.firstName !== undefined && !data.firstName.trim()) {
+    fieldErrors.firstName = "First name is required";
+  }
+  if (data.lastName !== undefined && !data.lastName.trim()) {
+    fieldErrors.lastName = "Last name is required";
+  }
+  if (data.email !== undefined) {
+    if (!data.email.trim()) {
+      fieldErrors.email = "Email is required";
+    } else if (!EMAIL_REGEX.test(data.email.trim())) {
+      fieldErrors.email = "Invalid email format";
+    } else {
+      const [existing] = await db
+        .select({ id: membersTable.id })
+        .from(membersTable)
+        .where(and(
+          eq(membersTable.gymId, gymId),
+          eq(sql`lower(${membersTable.email})`, data.email.trim().toLowerCase()),
+          ne(membersTable.id, memberId)
+        ))
+        .limit(1);
+      if (existing) {
+        fieldErrors.email = "This email is already in use";
+      }
+    }
+  }
+
+  if (Object.keys(fieldErrors).length > 0) {
+    res.status(400).json({ error: "Validation failed", fieldErrors });
+    return;
+  }
+
+  if (data.email) {
+    data.email = data.email.trim().toLowerCase();
+  }
+
   const [member] = await db
     .update(membersTable)
-    .set(parsed.data)
+    .set(data)
     .where(and(eq(membersTable.id, memberId), eq(membersTable.gymId, gymId)))
     .returning();
 
@@ -203,23 +394,22 @@ router.get("/gyms/:gymId/members/:memberId/timeline", async (req, res): Promise<
 });
 
 const VALID_STATUSES = ["active", "inactive", "hold", "cancelled", "prospect"];
-const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 
-function normalizePhone(phone: string): string {
+export function normalizePhone(phone: string): string {
   const digits = phone.replace(/[^\d+]/g, "");
   if (digits.length === 10) return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
   return digits || phone.trim();
 }
 
-function isValidCalendarDate(dateStr: string): boolean {
+export function isValidCalendarDate(dateStr: string): boolean {
   const d = new Date(dateStr + "T00:00:00");
   if (isNaN(d.getTime())) return false;
   const [y, m, day] = dateStr.split("-").map(Number);
   return d.getFullYear() === y && d.getMonth() + 1 === m && d.getDate() === day;
 }
 
-function parseImportDate(val: string): string | null {
+export function parseImportDate(val: string): string | null {
   if (!val) return null;
   const trimmed = val.trim();
   if (DATE_REGEX.test(trimmed)) {
@@ -273,7 +463,7 @@ function safeStr(val: any): string {
   return String(val);
 }
 
-function sanitizeRow(row: ImportRow): ImportRow {
+export function sanitizeRow(row: ImportRow): ImportRow {
   return {
     firstName: safeStr(row.firstName),
     lastName: safeStr(row.lastName),
@@ -293,7 +483,7 @@ function sanitizeRow(row: ImportRow): ImportRow {
   };
 }
 
-function validateRow(row: ImportRow, rowIndex: number): Omit<ValidatedRow, "isDuplicate" | "duplicateOf"> {
+export function validateRow(row: ImportRow, rowIndex: number): Omit<ValidatedRow, "isDuplicate" | "duplicateOf"> {
   const safe = sanitizeRow(row);
   const errors: string[] = [];
   if (!safe.firstName?.trim()) errors.push("First name is required");
@@ -494,6 +684,360 @@ router.post("/gyms/:gymId/members/import/confirm", async (req, res): Promise<voi
   }
 
   res.json(results);
+});
+
+router.post("/gyms/:gymId/members/import/wodify/preview", async (req, res): Promise<void> => {
+  const gymId = parseGymId(req.params);
+  if (!gymId) { res.status(400).json({ error: "Invalid gym ID" }); return; }
+
+  const { rows: rawRows } = req.body as { rows: Record<string, string>[] };
+  if (!Array.isArray(rawRows) || rawRows.length === 0) {
+    res.status(400).json({ error: "No rows provided" });
+    return;
+  }
+  if (rawRows.length > 5000) {
+    res.status(400).json({ error: "Maximum 5,000 rows per import" });
+    return;
+  }
+
+  function getCol(row: Record<string, string>, ...candidates: string[]): string {
+    for (const c of candidates) {
+      if (row[c] !== undefined && row[c] !== null) return String(row[c]).trim();
+    }
+    return "";
+  }
+
+  function parseWodifyAmount(val: string): number {
+    if (!val) return 0;
+    const cleaned = val.replace(/[^0-9.\-eE]/g, "");
+    if (!cleaned) return 0;
+    const num = parseFloat(cleaned);
+    return isNaN(num) ? 0 : Math.round(num * 100) / 100;
+  }
+
+  function parseWodifyDate(val: string): string | null {
+    if (!val) return null;
+    const isoMatch = val.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (isoMatch) return val;
+    const usMatch = val.match(/^([A-Za-z]+)\s+(\d{1,2}),\s*(\d{4})$/);
+    if (usMatch) {
+      const months: Record<string, string> = { jan: "01", feb: "02", mar: "03", apr: "04", may: "05", jun: "06", jul: "07", aug: "08", sep: "09", oct: "10", nov: "11", dec: "12" };
+      const m = months[usMatch[1].toLowerCase().slice(0, 3)];
+      if (m) return `${usMatch[3]}-${m}-${usMatch[2].padStart(2, "0")}`;
+    }
+    return null;
+  }
+
+  interface WodifyMember {
+    clientId: string;
+    firstName: string;
+    lastName: string;
+    email: string;
+    memberships: { name: string; type: string; amount: number; paymentPlan: string; autoRenew: boolean; startDate: string | null; expirationDate: string | null }[];
+    primaryMembership: string;
+    totalMonthlyRevenue: number;
+    paymentMethod: string;
+    emailSubscribed: boolean;
+    location: string;
+    programs: string[];
+    joinDate: string | null;
+  }
+
+  const memberMap = new Map<string, WodifyMember>();
+  const emailToKey = new Map<string, string>();
+
+  for (const row of rawRows) {
+    const clientId = getCol(row, "Client ID");
+    const clientName = getCol(row, "Client Name");
+    const email = getCol(row, "Email", "Clients → Email", "Clients  Email");
+    const membership = getCol(row, "Membership");
+    const membershipType = getCol(row, "Membership Type");
+    const paymentPlan = getCol(row, "Payment Plan");
+    const paymentMethod = getCol(row, "Default Payment Method", "Clients → Default Payment Method", "Clients  Default Payment Method");
+    const startDate = getCol(row, "Start Date");
+    const expirationDate = getCol(row, "Expiration Date");
+    const autoRenew = getCol(row, "Membership Autorenew");
+    const commitmentTotal = getCol(row, "Autorenew Commitment Total", "Commitment Total");
+    const emailSub = getCol(row, "Mass Email Subscribed", "Clients → Mass Email Subscribed", "Clients  Mass Email Subscribed");
+    const location = getCol(row, "Location");
+    const programs = getCol(row, "Programs");
+
+    if (!clientId && !email) continue;
+
+    const normalizedEmail = email ? email.toLowerCase().trim() : "";
+    let key = clientId || normalizedEmail;
+
+    if (normalizedEmail && emailToKey.has(normalizedEmail) && !memberMap.has(key)) {
+      key = emailToKey.get(normalizedEmail)!;
+    }
+
+    const amount = parseWodifyAmount(commitmentTotal);
+    const parsedStart = parseWodifyDate(startDate);
+
+    const nameParts = clientName.split(/\s+/);
+    const firstName = nameParts[0] || "";
+    const lastName = nameParts.slice(1).join(" ") || "";
+
+    if (!memberMap.has(key)) {
+      memberMap.set(key, {
+        clientId: clientId,
+        firstName,
+        lastName,
+        email: email.toLowerCase().trim(),
+        memberships: [],
+        primaryMembership: "",
+        totalMonthlyRevenue: 0,
+        paymentMethod,
+        emailSubscribed: emailSub.toLowerCase() !== "not subscribed",
+        location,
+        programs: [],
+        joinDate: parsedStart,
+      });
+      if (normalizedEmail) emailToKey.set(normalizedEmail, key);
+    }
+
+    const member = memberMap.get(key)!;
+
+    if (!member.email && normalizedEmail) member.email = normalizedEmail;
+    if (normalizedEmail && !emailToKey.has(normalizedEmail)) emailToKey.set(normalizedEmail, key);
+    if (!member.paymentMethod && paymentMethod) member.paymentMethod = paymentMethod;
+
+    member.memberships.push({
+      name: membership,
+      type: membershipType,
+      amount,
+      paymentPlan,
+      autoRenew: autoRenew.toLowerCase().includes("auto"),
+      startDate: parsedStart,
+      expirationDate: parseWodifyDate(expirationDate),
+    });
+
+    if (parsedStart && (!member.joinDate || parsedStart < member.joinDate)) {
+      member.joinDate = parsedStart;
+    }
+
+    if (programs) {
+      const progList = programs.split(",").map(p => p.trim()).filter(Boolean);
+      for (const p of progList) {
+        if (!member.programs.includes(p)) member.programs.push(p);
+      }
+    }
+  }
+
+  for (const member of memberMap.values()) {
+    const nonZeroMemberships = member.memberships.filter(m => m.amount > 0);
+    member.totalMonthlyRevenue = member.memberships.reduce((sum, m) => sum + m.amount, 0);
+
+    if (nonZeroMemberships.length > 0) {
+      const primary = nonZeroMemberships.reduce((a, b) => a.amount > b.amount ? a : b);
+      member.primaryMembership = primary.name || primary.paymentPlan || "Unknown";
+    } else if (member.memberships.length > 0) {
+      member.primaryMembership = member.memberships[0].name || member.memberships[0].paymentPlan || "Complimentary";
+    }
+  }
+
+  const members = Array.from(memberMap.values()).filter(m => m.email);
+  const existingMembers = await db
+    .select({ id: membersTable.id, firstName: membersTable.firstName, lastName: membersTable.lastName, email: membersTable.email })
+    .from(membersTable)
+    .where(eq(membersTable.gymId, gymId));
+  const existingEmails = new Set(existingMembers.map(m => m.email.toLowerCase()));
+
+  const previewMembers = members.map((m, i) => ({
+    rowIndex: i,
+    data: {
+      firstName: m.firstName,
+      lastName: m.lastName,
+      email: m.email,
+      membershipType: m.primaryMembership,
+      joinDate: m.joinDate || new Date().toISOString().split("T")[0],
+      status: "active",
+      tags: m.emailSubscribed ? "" : "email-opt-out",
+    },
+    memberships: m.memberships,
+    totalMonthlyRevenue: m.totalMonthlyRevenue,
+    paymentMethod: m.paymentMethod,
+    emailSubscribed: m.emailSubscribed,
+    programCount: m.programs.length,
+    errors: [] as string[],
+    isDuplicate: false,
+    duplicateOf: undefined as { id: number; name: string; email: string } | undefined,
+  }));
+
+  for (const row of previewMembers) {
+    if (!row.data.firstName) row.errors.push("Missing first name");
+    if (!row.data.lastName) row.errors.push("Missing last name");
+    if (!row.data.email) row.errors.push("Missing email");
+    else if (!EMAIL_REGEX.test(row.data.email)) row.errors.push("Invalid email");
+
+    if (existingEmails.has(row.data.email.toLowerCase())) {
+      row.isDuplicate = true;
+      const existing = existingMembers.find(m => m.email.toLowerCase() === row.data.email.toLowerCase());
+      if (existing) row.duplicateOf = { id: existing.id, name: `${existing.firstName} ${existing.lastName}`, email: existing.email };
+    }
+  }
+
+  const csvEmailsSeen = new Map<string, number>();
+  for (const row of previewMembers) {
+    if (row.data.email && !row.isDuplicate && row.errors.length === 0) {
+      const email = row.data.email.toLowerCase();
+      if (csvEmailsSeen.has(email)) {
+        row.isDuplicate = true;
+        row.errors.push(`Duplicate of row ${csvEmailsSeen.get(email)! + 1}`);
+      } else {
+        csvEmailsSeen.set(email, row.rowIndex);
+      }
+    }
+  }
+
+  const membershipBreakdown: Record<string, number> = {};
+  for (const m of members) {
+    const key = m.primaryMembership || "Unknown";
+    membershipBreakdown[key] = (membershipBreakdown[key] || 0) + 1;
+  }
+
+  const totalMRR = members.reduce((sum, m) => sum + m.totalMonthlyRevenue, 0);
+  const validRows = previewMembers.filter(r => r.errors.length === 0 && !r.isDuplicate).length;
+
+  res.json({
+    rows: previewMembers,
+    summary: {
+      totalRows: rawRows.length,
+      uniqueMembers: members.length,
+      validRows,
+      invalidRows: previewMembers.filter(r => r.errors.length > 0).length,
+      duplicateRows: previewMembers.filter(r => r.isDuplicate).length,
+      totalMRR: Math.round(totalMRR * 100) / 100,
+      membershipBreakdown,
+      emailOptOuts: members.filter(m => !m.emailSubscribed).length,
+    },
+  });
+});
+
+router.post("/gyms/:gymId/members/:memberId/link-billing", requireBillingPermission("billing.create_subscription"), async (req, res): Promise<void> => {
+  const gymId = parseGymId(req.params);
+  const memberId = parseMemberId(req.params);
+  if (!gymId || !memberId) { res.status(400).json({ error: "Invalid IDs" }); return; }
+
+  const { linkedMemberId } = req.body;
+  if (!linkedMemberId || linkedMemberId === memberId) {
+    res.status(400).json({ error: "Invalid linked member ID" });
+    return;
+  }
+
+  try {
+    const [primary] = await db.select().from(membersTable).where(and(eq(membersTable.id, memberId), eq(membersTable.gymId, gymId)));
+    const [secondary] = await db.select().from(membersTable).where(and(eq(membersTable.id, linkedMemberId), eq(membersTable.gymId, gymId)));
+    if (!primary || !secondary) { res.status(404).json({ error: "Member not found" }); return; }
+
+    if (secondary.linkedBillingMemberId) {
+      res.status(400).json({ error: "That member is already linked to another member's billing" });
+      return;
+    }
+    if (primary.linkedBillingMemberId) {
+      res.status(400).json({ error: "Primary member is already linked to another member's billing" });
+      return;
+    }
+
+    await db.update(membersTable).set({ linkedBillingMemberId: memberId }).where(eq(membersTable.id, linkedMemberId));
+
+    await db.insert(timelineEventsTable).values([
+      { memberId, gymId, type: "billing_link", title: "Couples billing linked", description: `Now paying for ${secondary.firstName} ${secondary.lastName}` },
+      { memberId: linkedMemberId, gymId, type: "billing_link", title: "Couples billing linked", description: `Billing linked to ${primary.firstName} ${primary.lastName}` },
+    ]);
+
+    res.json({ success: true, primaryMemberId: memberId, linkedMemberId });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+router.post("/gyms/:gymId/members/:memberId/unlink-billing", requireBillingPermission("billing.create_subscription"), async (req, res): Promise<void> => {
+  const gymId = parseGymId(req.params);
+  const memberId = parseMemberId(req.params);
+  if (!gymId || !memberId) { res.status(400).json({ error: "Invalid IDs" }); return; }
+
+  try {
+    const linkedMembers = await db.select().from(membersTable).where(
+      and(eq(membersTable.linkedBillingMemberId, memberId), eq(membersTable.gymId, gymId))
+    );
+
+    if (linkedMembers.length === 0) {
+      const [self] = await db.select().from(membersTable).where(and(eq(membersTable.id, memberId), eq(membersTable.gymId, gymId)));
+      if (self?.linkedBillingMemberId) {
+        await db.update(membersTable).set({ linkedBillingMemberId: null }).where(eq(membersTable.id, memberId));
+
+        const [primaryMember] = await db.select().from(membersTable).where(eq(membersTable.id, self.linkedBillingMemberId));
+        await db.insert(timelineEventsTable).values([
+          { memberId, gymId, type: "billing_unlink", title: "Couples billing unlinked", description: `Billing separated from ${primaryMember?.firstName || "member"} ${primaryMember?.lastName || ""}` },
+          { memberId: self.linkedBillingMemberId, gymId, type: "billing_unlink", title: "Couples billing unlinked", description: `No longer paying for ${self.firstName} ${self.lastName}` },
+        ]);
+
+        res.json({ success: true });
+        return;
+      }
+      res.status(400).json({ error: "No linked billing found" });
+      return;
+    }
+
+    for (const lm of linkedMembers) {
+      await db.update(membersTable).set({ linkedBillingMemberId: null }).where(eq(membersTable.id, lm.id));
+      await db.insert(timelineEventsTable).values([
+        { memberId: lm.id, gymId, type: "billing_unlink", title: "Couples billing unlinked", description: `Billing separated from ${(await db.select().from(membersTable).where(eq(membersTable.id, memberId)))[0]?.firstName || "member"}` },
+      ]);
+    }
+
+    const [primary] = await db.select().from(membersTable).where(eq(membersTable.id, memberId));
+    await db.insert(timelineEventsTable).values({
+      memberId, gymId, type: "billing_unlink", title: "Couples billing unlinked",
+      description: `Removed billing link for ${linkedMembers.map(m => `${m.firstName} ${m.lastName}`).join(", ")}`,
+    });
+
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+router.get("/gyms/:gymId/members/:memberId/linked-billing", requireBillingRead(), async (req, res): Promise<void> => {
+  const gymId = parseGymId(req.params);
+  const memberId = parseMemberId(req.params);
+  if (!gymId || !memberId) { res.status(400).json({ error: "Invalid IDs" }); return; }
+
+  try {
+    const [member] = await db.select().from(membersTable).where(and(eq(membersTable.id, memberId), eq(membersTable.gymId, gymId)));
+    if (!member) { res.status(404).json({ error: "Member not found" }); return; }
+
+    const dependents = await db.select({
+      id: membersTable.id,
+      firstName: membersTable.firstName,
+      lastName: membersTable.lastName,
+      email: membersTable.email,
+      status: membersTable.status,
+    }).from(membersTable).where(
+      and(eq(membersTable.linkedBillingMemberId, memberId), eq(membersTable.gymId, gymId))
+    );
+
+    let primaryPayer = null;
+    if (member.linkedBillingMemberId) {
+      const [payer] = await db.select({
+        id: membersTable.id,
+        firstName: membersTable.firstName,
+        lastName: membersTable.lastName,
+        email: membersTable.email,
+      }).from(membersTable).where(eq(membersTable.id, member.linkedBillingMemberId));
+      primaryPayer = payer || null;
+    }
+
+    res.json({
+      isPrimaryPayer: dependents.length > 0,
+      isDependent: !!member.linkedBillingMemberId,
+      primaryPayer,
+      dependents,
+    });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
 });
 
 export default router;

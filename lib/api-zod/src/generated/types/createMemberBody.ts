@@ -17,8 +17,25 @@ export interface CreateMemberBody {
   /** @nullable */
   address?: string | null;
   /** @nullable */
+  city?: string | null;
+  /** @nullable */
+  state?: string | null;
+  /** @nullable */
   emergencyContactName?: string | null;
   /** @nullable */
   emergencyContactPhone?: string | null;
+  /** @nullable */
+  membershipType?: string | null;
+  waiverSigned?: boolean;
   tags?: string[];
+  /**
+   * Optional membership plan ID to create a subscription
+   * @nullable
+   */
+  planId?: number | null;
+  /**
+   * Optional Stripe SetupIntent ID, verified server-side to extract customer and payment method
+   * @nullable
+   */
+  setupIntentId?: string | null;
 }
