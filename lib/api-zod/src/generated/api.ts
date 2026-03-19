@@ -288,6 +288,15 @@ export const GetMemberResponse = zod
           stripeSubscriptionId: zod.string().nullish(),
           cancelledAt: zod.date().nullish(),
           cancelReason: zod.string().nullish(),
+          billingInterval: zod
+            .union([
+              zod.literal("monthly"),
+              zod.literal("quarterly"),
+              zod.literal("annual"),
+              zod.literal("one_time"),
+              zod.literal(null),
+            ])
+            .nullish(),
           createdAt: zod.date(),
         })
         .optional(),
@@ -1270,6 +1279,37 @@ export const CreateMembershipPlanBody = zod.object({
 });
 
 /**
+ * @summary Update a membership plan
+ */
+export const UpdateMembershipPlanParams = zod.object({
+  gymId: zod.coerce.number(),
+  planId: zod.coerce.number(),
+});
+
+export const UpdateMembershipPlanBody = zod.object({
+  name: zod.string().optional(),
+  description: zod.string().nullish(),
+  price: zod.number().optional(),
+  billingInterval: zod
+    .enum(["monthly", "quarterly", "annual", "one_time"])
+    .optional(),
+  isActive: zod.boolean().optional(),
+});
+
+export const UpdateMembershipPlanResponse = zod.object({
+  id: zod.number(),
+  gymId: zod.number(),
+  name: zod.string(),
+  description: zod.string().nullish(),
+  price: zod.number(),
+  billingInterval: zod.enum(["monthly", "quarterly", "annual", "one_time"]),
+  sessionsPerMonth: zod.number().nullish(),
+  isActive: zod.boolean(),
+  memberCount: zod.number(),
+  createdAt: zod.date(),
+});
+
+/**
  * @summary List member subscriptions
  */
 export const ListSubscriptionsParams = zod.object({
@@ -1303,6 +1343,15 @@ export const ListSubscriptionsResponseItem = zod.object({
   stripeSubscriptionId: zod.string().nullish(),
   cancelledAt: zod.date().nullish(),
   cancelReason: zod.string().nullish(),
+  billingInterval: zod
+    .union([
+      zod.literal("monthly"),
+      zod.literal("quarterly"),
+      zod.literal("annual"),
+      zod.literal("one_time"),
+      zod.literal(null),
+    ])
+    .nullish(),
   createdAt: zod.date(),
 });
 export const ListSubscriptionsResponse = zod.array(
@@ -1358,6 +1407,15 @@ export const UpdateSubscriptionResponse = zod.object({
   stripeSubscriptionId: zod.string().nullish(),
   cancelledAt: zod.date().nullish(),
   cancelReason: zod.string().nullish(),
+  billingInterval: zod
+    .union([
+      zod.literal("monthly"),
+      zod.literal("quarterly"),
+      zod.literal("annual"),
+      zod.literal("one_time"),
+      zod.literal(null),
+    ])
+    .nullish(),
   createdAt: zod.date(),
 });
 
@@ -1583,6 +1641,15 @@ export const GetMemberBillingHistoryResponse = zod.object({
         stripeSubscriptionId: zod.string().nullish(),
         cancelledAt: zod.date().nullish(),
         cancelReason: zod.string().nullish(),
+        billingInterval: zod
+          .union([
+            zod.literal("monthly"),
+            zod.literal("quarterly"),
+            zod.literal("annual"),
+            zod.literal("one_time"),
+            zod.literal(null),
+          ])
+          .nullish(),
         createdAt: zod.date(),
       }),
     )
@@ -1677,6 +1744,15 @@ export const CancelSubscriptionResponse = zod.object({
   stripeSubscriptionId: zod.string().nullish(),
   cancelledAt: zod.date().nullish(),
   cancelReason: zod.string().nullish(),
+  billingInterval: zod
+    .union([
+      zod.literal("monthly"),
+      zod.literal("quarterly"),
+      zod.literal("annual"),
+      zod.literal("one_time"),
+      zod.literal(null),
+    ])
+    .nullish(),
   createdAt: zod.date(),
 });
 
@@ -1711,6 +1787,15 @@ export const PauseSubscriptionResponse = zod.object({
   stripeSubscriptionId: zod.string().nullish(),
   cancelledAt: zod.date().nullish(),
   cancelReason: zod.string().nullish(),
+  billingInterval: zod
+    .union([
+      zod.literal("monthly"),
+      zod.literal("quarterly"),
+      zod.literal("annual"),
+      zod.literal("one_time"),
+      zod.literal(null),
+    ])
+    .nullish(),
   createdAt: zod.date(),
 });
 
@@ -1745,6 +1830,15 @@ export const ResumeSubscriptionResponse = zod.object({
   stripeSubscriptionId: zod.string().nullish(),
   cancelledAt: zod.date().nullish(),
   cancelReason: zod.string().nullish(),
+  billingInterval: zod
+    .union([
+      zod.literal("monthly"),
+      zod.literal("quarterly"),
+      zod.literal("annual"),
+      zod.literal("one_time"),
+      zod.literal(null),
+    ])
+    .nullish(),
   createdAt: zod.date(),
 });
 

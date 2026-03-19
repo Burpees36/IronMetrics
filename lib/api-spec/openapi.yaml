@@ -1142,6 +1142,36 @@ paths:
               schema:
                 $ref: "#/components/schemas/MembershipPlan"
 
+  /gyms/{gymId}/plans/{planId}:
+    patch:
+      operationId: updateMembershipPlan
+      tags: [billing]
+      summary: Update a membership plan
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: planId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateMembershipPlanBody"
+      responses:
+        "200":
+          description: Updated plan
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MembershipPlan"
+
   /gyms/{gymId}/subscriptions:
     get:
       operationId: listSubscriptions
@@ -4715,6 +4745,21 @@ components:
         - price
         - billingInterval
 
+    UpdateMembershipPlanBody:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: ["string", "null"]
+        price:
+          type: number
+        billingInterval:
+          type: string
+          enum: [monthly, quarterly, annual, one_time]
+        isActive:
+          type: boolean
+
     Subscription:
       type: object
       properties:
@@ -4750,6 +4795,9 @@ components:
           format: date-time
         cancelReason:
           type: ["string", "null"]
+        billingInterval:
+          type: ["string", "null"]
+          enum: [monthly, quarterly, annual, one_time, null]
         createdAt:
           type: string
           format: date-time

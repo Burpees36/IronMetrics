@@ -5,6 +5,7 @@
  * Iron Metrics Gym Management Platform API
  * OpenAPI spec version: 0.1.0
  */
+import type { SubscriptionBillingInterval } from "./subscriptionBillingInterval";
 import type { SubscriptionStatus } from "./subscriptionStatus";
 
 export interface Subscription {
@@ -27,5 +28,7 @@ export interface Subscription {
   cancelledAt?: Date | null;
   /** @nullable */
   cancelReason?: string | null;
+  /** @nullable */
+  billingInterval?: SubscriptionBillingInterval;
   createdAt: Date;
 }

@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { useGym } from "@/store/GymContext";
 import {
   useListMembershipPlans, useListSubscriptions, useListMembers, useListPayments, useListRefunds,
-  useCreateMembershipPlan, useCreateSubscription, useGetBillingSummary, useGetCancelledMembers,
+  useCreateMembershipPlan, useUpdateMembershipPlan, useCreateSubscription, useGetBillingSummary, useGetCancelledMembers,
   useCancelSubscription, usePauseSubscription, useResumeSubscription,
   getListMembershipPlansQueryKey, getListSubscriptionsQueryKey, getGetBillingSummaryQueryKey,
   getListPaymentsQueryKey, getListRefundsQueryKey, getGetCancelledMembersQueryKey,
@@ -15,7 +15,7 @@ import {
   Loader2, CreditCard, DollarSign, Users, TrendingUp, Plus, AlertTriangle,
   UserMinus, ChevronLeft, ChevronRight, Pause, Play, XCircle, MoreHorizontal,
   Receipt, RefreshCw, ArrowDownRight, Clock, Send, Copy, Link as LinkIcon,
-  Tag, Settings
+  Tag, Settings, Pencil
 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
@@ -73,6 +73,7 @@ export function Billing() {
   );
 
   const createPlanMutation = useCreateMembershipPlan();
+  const updatePlanMutation = useUpdateMembershipPlan();
   const createSubMutation = useCreateSubscription();
   const cancelMutation = useCancelSubscription();
   const pauseMutation = usePauseSubscription();
@@ -80,6 +81,8 @@ export function Billing() {
 
   const [planOpen, setPlanOpen] = useState(false);
   const [planForm, setPlanForm] = useState({ name: "", price: "", billingInterval: "monthly", description: "" });
+  const [editPlan, setEditPlan] = useState<any | null>(null);
+  const [editPlanForm, setEditPlanForm] = useState({ name: "", price: "", billingInterval: "monthly", description: "", isActive: true });
 
   const [subOpen, setSubOpen] = useState(false);
   const [subForm, setSubForm] = useState({ memberId: "", planId: "" });
@@ -209,6 +212,41 @@ export function Billing() {
           setPlanForm({ name: "", price: "", billingInterval: "monthly", description: "" });
         },
         onError: (err: any) => toast({ title: "Failed to create plan", description: err?.response?.data?.error || err?.message || "An unexpected error occurred. Please try again.", variant: "destructive" })
+      }
+    );
+  };
+
+  const openEditPlan = (plan: any) => {
+    setEditPlan(plan);
+    setEditPlanForm({
+      name: plan.name, price: String(plan.price),
+      billingInterval: plan.billingInterval || "monthly",
+      description: plan.description || "",
+      isActive: plan.isActive !== false,
+    });
+  };
+
+  const handleUpdatePlan = () => {
+    if (!editPlan || !editPlanForm.name || !editPlanForm.price) return;
+    updatePlanMutation.mutate(
+      {
+        gymId: activeGymId!,
+        planId: editPlan.id,
+        data: {
+          name: editPlanForm.name,
+          price: parseFloat(editPlanForm.price),
+          billingInterval: editPlanForm.billingInterval as any,
+          description: editPlanForm.description || undefined,
+          isActive: editPlanForm.isActive,
+        },
+      },
+      {
+        onSuccess: () => {
+          invalidateBilling();
+          toast({ title: "Plan updated", description: `${editPlanForm.name} has been updated.` });
+          setEditPlan(null);
+        },
+        onError: (err: any) => toast({ title: "Failed to update plan", description: err?.response?.data?.error || err?.message || "An unexpected error occurred.", variant: "destructive" }),
       }
     );
   };
@@ -492,20 +530,33 @@ export function Billing() {
                   <th className="px-6 py-4 font-semibold">Interval</th>
                   <th className="px-6 py-4 font-semibold">Active Members</th>
                   <th className="px-6 py-4 font-semibold">Revenue</th>
+                  <th className="px-6 py-4 font-semibold text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
                 {plans?.map((plan: any, i: number) => (
                   <motion.tr key={plan.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }} className="hover:bg-secondary transition-colors">
-                    <td className="px-6 py-4 font-semibold text-foreground">{plan.name}</td>
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold text-foreground">{plan.name}</span>
+                        {plan.isActive === false && (
+                          <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-muted text-muted-foreground border border-border">Inactive</span>
+                        )}
+                      </div>
+                    </td>
                     <td className="px-6 py-4 text-foreground">${plan.price}</td>
                     <td className="px-6 py-4 text-muted-foreground capitalize">{plan.billingInterval === "one_time" ? "One-Time" : plan.billingInterval || "monthly"}</td>
                     <td className="px-6 py-4 text-foreground">{plan.memberCount}</td>
                     <td className="px-6 py-4 text-foreground font-medium">${(plan.memberCount * plan.price).toLocaleString()}</td>
+                    <td className="px-6 py-4 text-right">
+                      <button onClick={() => openEditPlan(plan)} className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors" title="Edit plan">
+                        <Pencil className="h-4 w-4" />
+                      </button>
+                    </td>
                   </motion.tr>
                 ))}
                 {(!plans || plans.length === 0) && (
-                  <tr><td colSpan={5} className="px-6 py-12 text-center text-muted-foreground">No plans configured yet.</td></tr>
+                  <tr><td colSpan={6} className="px-6 py-12 text-center text-muted-foreground">No plans configured yet.</td></tr>
                 )}
               </tbody>
             </table>
@@ -546,7 +597,7 @@ export function Billing() {
                       </button>
                     </td>
                     <td className="px-6 py-4 text-muted-foreground">{sub.planName}</td>
-                    <td className="px-6 py-4 text-foreground">${typeof sub.amount === "number" ? sub.amount : parseFloat(sub.amount || "0")}/mo</td>
+                    <td className="px-6 py-4 text-foreground">${typeof sub.amount === "number" ? sub.amount : parseFloat(sub.amount || "0")}{sub.billingInterval === "one_time" ? "" : `/${sub.billingInterval === "annual" ? "yr" : sub.billingInterval === "quarterly" ? "qtr" : "mo"}`}</td>
                     <td className="px-6 py-4">
                       <span className={`px-2.5 py-1 rounded-full text-xs font-medium border ${statusColor(sub.status)}`}>
                         {sub.status === "cancel_at_period_end" ? "Cancelling" : sub.status.charAt(0).toUpperCase() + sub.status.slice(1)}
@@ -848,6 +899,60 @@ export function Billing() {
             >
               {createPlanMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
               Create Plan
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!editPlan} onOpenChange={() => setEditPlan(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Plan</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label>Name *</Label>
+              <Input value={editPlanForm.name} onChange={(e) => setEditPlanForm({ ...editPlanForm, name: e.target.value })} />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Price *</Label>
+                <Input type="number" min="0" step="0.01" value={editPlanForm.price} onChange={(e) => setEditPlanForm({ ...editPlanForm, price: e.target.value })} />
+              </div>
+              <div className="space-y-2">
+                <Label>Billing Interval</Label>
+                <Select value={editPlanForm.billingInterval} onValueChange={(v) => setEditPlanForm({ ...editPlanForm, billingInterval: v })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="monthly">Monthly</SelectItem>
+                    <SelectItem value="quarterly">Quarterly</SelectItem>
+                    <SelectItem value="annual">Annual</SelectItem>
+                    <SelectItem value="one_time">One-Time</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Description</Label>
+              <Textarea value={editPlanForm.description} onChange={(e) => setEditPlanForm({ ...editPlanForm, description: e.target.value })} rows={2} />
+            </div>
+            <div className="flex items-center gap-3">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={editPlanForm.isActive} onChange={(e) => setEditPlanForm({ ...editPlanForm, isActive: e.target.checked })} className="accent-primary" />
+                <span className="text-sm text-foreground">Active</span>
+              </label>
+              <span className="text-xs text-muted-foreground">{editPlanForm.isActive ? "Plan is visible and available for new subscriptions" : "Plan is hidden from new subscriptions"}</span>
+            </div>
+          </div>
+          <DialogFooter>
+            <button onClick={() => setEditPlan(null)} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors">Cancel</button>
+            <button
+              onClick={handleUpdatePlan}
+              disabled={updatePlanMutation.isPending || !editPlanForm.name || !editPlanForm.price}
+              className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground hover:bg-primary/90 rounded-lg font-medium transition-colors disabled:opacity-50"
+            >
+              {updatePlanMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+              Save Changes
             </button>
           </DialogFooter>
         </DialogContent>

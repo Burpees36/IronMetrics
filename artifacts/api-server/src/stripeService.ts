@@ -447,7 +447,29 @@ export class StripeService {
   }
 
   async getMemberBillingHistory(memberId: number, gymId: number): Promise<any> {
-    const subs = await db.select().from(subscriptionsTable).where(and(eq(subscriptionsTable.memberId, memberId), eq(subscriptionsTable.gymId, gymId)));
+    const subs = await db.select({
+      id: subscriptionsTable.id,
+      gymId: subscriptionsTable.gymId,
+      memberId: subscriptionsTable.memberId,
+      memberName: subscriptionsTable.memberName,
+      planId: subscriptionsTable.planId,
+      planName: subscriptionsTable.planName,
+      status: subscriptionsTable.status,
+      amount: subscriptionsTable.amount,
+      failedPayments: subscriptionsTable.failedPayments,
+      stripeSubscriptionId: subscriptionsTable.stripeSubscriptionId,
+      stripePriceId: subscriptionsTable.stripePriceId,
+      currentPeriodStart: subscriptionsTable.currentPeriodStart,
+      currentPeriodEnd: subscriptionsTable.currentPeriodEnd,
+      cancelledAt: subscriptionsTable.cancelledAt,
+      cancelReason: subscriptionsTable.cancelReason,
+      createdAt: subscriptionsTable.createdAt,
+      updatedAt: subscriptionsTable.updatedAt,
+      billingInterval: membershipPlansTable.billingInterval,
+    })
+      .from(subscriptionsTable)
+      .leftJoin(membershipPlansTable, eq(subscriptionsTable.planId, membershipPlansTable.id))
+      .where(and(eq(subscriptionsTable.memberId, memberId), eq(subscriptionsTable.gymId, gymId)));
     const payments = await db.select().from(paymentsTable).where(and(eq(paymentsTable.memberId, memberId), eq(paymentsTable.gymId, gymId)));
     const invoices = await db.select().from(invoicesTable).where(and(eq(invoicesTable.memberId, memberId), eq(invoicesTable.gymId, gymId)));
 

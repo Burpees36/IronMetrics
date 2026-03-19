@@ -159,6 +159,7 @@ import type {
   UpdateHoldBody,
   UpdateLeadBody,
   UpdateMemberBody,
+  UpdateMembershipPlanBody,
   UpdateProgrammingDayBody,
   UpdateProgrammingSectionBody,
   UpdateStaffBody,
@@ -4142,6 +4143,98 @@ export const useCreateMembershipPlan = <
   TContext
 > => {
   return useMutation(getCreateMembershipPlanMutationOptions(options));
+};
+
+/**
+ * @summary Update a membership plan
+ */
+export const getUpdateMembershipPlanUrl = (gymId: number, planId: number) => {
+  return `/api/gyms/${gymId}/plans/${planId}`;
+};
+
+export const updateMembershipPlan = async (
+  gymId: number,
+  planId: number,
+  updateMembershipPlanBody: UpdateMembershipPlanBody,
+  options?: RequestInit,
+): Promise<MembershipPlan> => {
+  return customFetch<MembershipPlan>(
+    getUpdateMembershipPlanUrl(gymId, planId),
+    {
+      ...options,
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(updateMembershipPlanBody),
+    },
+  );
+};
+
+export const getUpdateMembershipPlanMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateMembershipPlan>>,
+    TError,
+    { gymId: number; planId: number; data: BodyType<UpdateMembershipPlanBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateMembershipPlan>>,
+  TError,
+  { gymId: number; planId: number; data: BodyType<UpdateMembershipPlanBody> },
+  TContext
+> => {
+  const mutationKey = ["updateMembershipPlan"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateMembershipPlan>>,
+    { gymId: number; planId: number; data: BodyType<UpdateMembershipPlanBody> }
+  > = (props) => {
+    const { gymId, planId, data } = props ?? {};
+
+    return updateMembershipPlan(gymId, planId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateMembershipPlanMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateMembershipPlan>>
+>;
+export type UpdateMembershipPlanMutationBody =
+  BodyType<UpdateMembershipPlanBody>;
+export type UpdateMembershipPlanMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Update a membership plan
+ */
+export const useUpdateMembershipPlan = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateMembershipPlan>>,
+    TError,
+    { gymId: number; planId: number; data: BodyType<UpdateMembershipPlanBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateMembershipPlan>>,
+  TError,
+  { gymId: number; planId: number; data: BodyType<UpdateMembershipPlanBody> },
+  TContext
+> => {
+  return useMutation(getUpdateMembershipPlanMutationOptions(options));
 };
 
 /**

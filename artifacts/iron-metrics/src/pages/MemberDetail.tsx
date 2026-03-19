@@ -883,7 +883,7 @@ export function MemberDetail() {
                       </div>
                       <div className="flex justify-between text-sm text-muted-foreground mb-1">
                         <span>Amount</span>
-                        <span className="text-foreground font-medium">${sub.amount}/mo</span>
+                        <span className="text-foreground font-medium">${sub.amount}{sub.billingInterval === "one_time" ? "" : `/${sub.billingInterval === "annual" ? "yr" : sub.billingInterval === "quarterly" ? "qtr" : "mo"}`}</span>
                       </div>
                       {sub.currentPeriodEnd && (
                         <div className="flex justify-between text-sm text-muted-foreground mb-1">

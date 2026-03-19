@@ -165,6 +165,20 @@ export const SubscriptionStatus = {
   trial: "trial",
 } as const;
 
+/**
+ * @nullable
+ */
+export type SubscriptionBillingInterval =
+  | (typeof SubscriptionBillingInterval)[keyof typeof SubscriptionBillingInterval]
+  | null;
+
+export const SubscriptionBillingInterval = {
+  monthly: "monthly",
+  quarterly: "quarterly",
+  annual: "annual",
+  one_time: "one_time",
+} as const;
+
 export interface Subscription {
   id: number;
   gymId: number;
@@ -185,6 +199,8 @@ export interface Subscription {
   cancelledAt?: string | null;
   /** @nullable */
   cancelReason?: string | null;
+  /** @nullable */
+  billingInterval?: SubscriptionBillingInterval;
   createdAt: string;
 }
 
@@ -734,6 +750,25 @@ export interface CreateMembershipPlanBody {
   billingInterval: CreateMembershipPlanBodyBillingInterval;
   /** @nullable */
   sessionsPerMonth?: number | null;
+}
+
+export type UpdateMembershipPlanBodyBillingInterval =
+  (typeof UpdateMembershipPlanBodyBillingInterval)[keyof typeof UpdateMembershipPlanBodyBillingInterval];
+
+export const UpdateMembershipPlanBodyBillingInterval = {
+  monthly: "monthly",
+  quarterly: "quarterly",
+  annual: "annual",
+  one_time: "one_time",
+} as const;
+
+export interface UpdateMembershipPlanBody {
+  name?: string;
+  /** @nullable */
+  description?: string | null;
+  price?: number;
+  billingInterval?: UpdateMembershipPlanBodyBillingInterval;
+  isActive?: boolean;
 }
 
 export interface CreateSubscriptionBody {

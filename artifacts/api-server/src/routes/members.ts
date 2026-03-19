@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, and, ilike, or, count, desc, ne, sql } from "drizzle-orm";
+import { eq, and, ilike, or, count, desc, ne, sql, inArray } from "drizzle-orm";
 import { db, membersTable, memberNotesTable, timelineEventsTable, subscriptionsTable, attendanceTable, membershipPlansTable } from "@workspace/db";
 import { stripeService } from "../stripeService";
 import { getStripeClient } from "../stripeClient";
@@ -255,9 +255,33 @@ router.get("/gyms/:gymId/members/:memberId", async (req, res): Promise<void> => 
     .limit(20);
 
   const [activeSub] = await db
-    .select()
+    .select({
+      id: subscriptionsTable.id,
+      gymId: subscriptionsTable.gymId,
+      memberId: subscriptionsTable.memberId,
+      memberName: subscriptionsTable.memberName,
+      planId: subscriptionsTable.planId,
+      planName: subscriptionsTable.planName,
+      status: subscriptionsTable.status,
+      amount: subscriptionsTable.amount,
+      failedPayments: subscriptionsTable.failedPayments,
+      stripeSubscriptionId: subscriptionsTable.stripeSubscriptionId,
+      stripePriceId: subscriptionsTable.stripePriceId,
+      currentPeriodStart: subscriptionsTable.currentPeriodStart,
+      currentPeriodEnd: subscriptionsTable.currentPeriodEnd,
+      cancelledAt: subscriptionsTable.cancelledAt,
+      cancelReason: subscriptionsTable.cancelReason,
+      createdAt: subscriptionsTable.createdAt,
+      updatedAt: subscriptionsTable.updatedAt,
+      billingInterval: membershipPlansTable.billingInterval,
+    })
     .from(subscriptionsTable)
-    .where(and(eq(subscriptionsTable.memberId, memberId), eq(subscriptionsTable.status, "active")));
+    .leftJoin(membershipPlansTable, eq(subscriptionsTable.planId, membershipPlansTable.id))
+    .where(and(
+      eq(subscriptionsTable.memberId, memberId),
+      inArray(subscriptionsTable.status, ["active", "past_due", "on_hold", "paused", "cancel_at_period_end"])
+    ))
+    .orderBy(desc(subscriptionsTable.createdAt));
 
   res.json({
     ...member,
