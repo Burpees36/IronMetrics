@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { motion } from "framer-motion";
 import {
   Users,
@@ -8,11 +8,14 @@ import {
   Pencil,
   BarChart3,
   Trash2,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import { getSectionTypeInfo, SectionData } from "./SectionEditor";
 import type { ProgrammingDayWithSections } from "@workspace/api-client-react";
 
 const LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+const PREVIEW_LINES = 3;
 
 interface DayCardProps {
   day: ProgrammingDayWithSections;
@@ -22,11 +25,6 @@ interface DayCardProps {
   onDelete?: () => void;
   isStaff: boolean;
   animationDelay?: number;
-}
-
-function truncateLines(text: string, maxLines: number): string {
-  const lines = text.split("\n").slice(0, maxLines);
-  return lines.join("\n");
 }
 
 function sectionTypeToUiType(sectionType: string): string {
@@ -58,7 +56,13 @@ export function DayCard({
     day: "numeric",
   });
 
+  const [expanded, setExpanded] = useState(false);
   const scoredSections = day.sections.filter((s) => s.resultTrackingEnabled).length;
+
+  const hasOverflow = day.sections.some((s) => {
+    if (!s.instructions) return false;
+    return s.instructions.split("\n").length > PREVIEW_LINES;
+  });
 
   return (
     <motion.div
@@ -129,9 +133,11 @@ export function DayCard({
             const uiType = sectionTypeToUiType(section.sectionType);
             const typeInfo = getSectionTypeInfo(uiType);
             const letter = LETTERS[i] || String(i + 1);
-            const contentPreview = section.instructions
-              ? truncateLines(section.instructions, 3)
-              : "";
+            const lines = section.instructions ? section.instructions.split("\n") : [];
+            const isTruncated = !expanded && lines.length > PREVIEW_LINES;
+            const displayText = isTruncated
+              ? lines.slice(0, PREVIEW_LINES).join("\n")
+              : section.instructions || "";
 
             return (
               <div key={section.id} className="space-y-1">
@@ -147,9 +153,9 @@ export function DayCard({
                     <BarChart3 className="h-3 w-3 text-primary shrink-0 ml-auto" />
                   )}
                 </div>
-                {contentPreview && (
-                  <p className="text-xs text-muted-foreground whitespace-pre-line leading-relaxed pl-7 line-clamp-3">
-                    {contentPreview}
+                {displayText && (
+                  <p className="text-xs text-muted-foreground whitespace-pre-line leading-relaxed pl-7">
+                    {displayText}
                   </p>
                 )}
               </div>
@@ -164,6 +170,24 @@ export function DayCard({
               <BarChart3 className="h-3.5 w-3.5" />
               {scoredSections} scored
             </span>
+          )}
+          {hasOverflow && (
+            <button
+              onClick={() => setExpanded(!expanded)}
+              className="ml-auto flex items-center gap-1 text-primary hover:text-primary/80 font-medium transition-colors"
+            >
+              {expanded ? (
+                <>
+                  Show less
+                  <ChevronUp className="h-3.5 w-3.5" />
+                </>
+              ) : (
+                <>
+                  Show more
+                  <ChevronDown className="h-3.5 w-3.5" />
+                </>
+              )}
+            </button>
           )}
         </div>
       </div>

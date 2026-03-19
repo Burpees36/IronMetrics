@@ -27,6 +27,7 @@ import {
   Rocket,
   CalendarDays,
   Dumbbell,
+  Eye,
 } from "lucide-react";
 
 import { DateNavigation } from "@/components/programming/DateNavigation";
@@ -208,6 +209,18 @@ function EmptyOnboarding({ onCreateFirst }: { onCreateFirst: () => void }) {
             <p className="text-xs text-muted-foreground mt-1">{item.desc}</p>
           </div>
         ))}
+      </div>
+      <div className="max-w-lg mx-auto mt-10 p-5 rounded-xl border border-primary/20 bg-primary/5 text-left">
+        <p className="text-sm font-semibold text-foreground mb-2 flex items-center gap-2">
+          <Eye className="h-4 w-4 text-primary" />
+          Draft vs. Published
+        </p>
+        <p className="text-xs text-muted-foreground leading-relaxed">
+          Workouts start as <span className="font-medium text-foreground">drafts</span> visible only to staff.
+          When you <span className="font-medium text-foreground">publish</span> a workout, it becomes visible to
+          all your members so they can view the programming and log their results. You can unpublish at any time
+          to hide it again.
+        </p>
       </div>
     </motion.div>
   );

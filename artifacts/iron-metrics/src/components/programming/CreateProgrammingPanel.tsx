@@ -288,17 +288,14 @@ export function CreateProgrammingPanel({
               </AnimatePresence>
 
               {sections.length === 0 && !showTypePicker ? (
-                <div className="text-center py-10 border border-dashed border-border rounded-xl bg-muted/10">
-                  <div className="h-12 w-12 bg-muted rounded-xl flex items-center justify-center mx-auto mb-3">
-                    <Plus className="h-6 w-6 text-muted-foreground" />
-                  </div>
-                  <p className="text-sm font-medium text-muted-foreground mb-1">
+                <div className="text-center py-8 border border-dashed border-border rounded-xl bg-muted/10">
+                  <p className="text-sm font-medium text-foreground mb-1">
                     Start building your workout
                   </p>
-                  <p className="text-xs text-muted-foreground mb-4">
-                    Add sections like warm-up, strength, conditioning
+                  <p className="text-xs text-muted-foreground mb-5">
+                    Pick a section type to get started
                   </p>
-                  <QuickAddBar onAdd={addSection} onShowAll={() => setShowTypePicker(true)} />
+                  <QuickAddBar onAdd={addSection} onShowAll={() => setShowTypePicker(true)} prominent />
                 </div>
               ) : (
                 <QuickAddBar onAdd={addSection} onShowAll={() => setShowTypePicker(true)} />
