@@ -20,6 +20,7 @@ import { Switch } from "@/components/ui/switch";
 
 export interface SectionData {
   id: string;
+  dbId?: number;
   type: SectionType;
   title: string;
   instructions: string;

@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, and, gte, lte, desc, asc, sql } from "drizzle-orm";
+import { eq, and, gte, lte, desc, asc, sql, ne } from "drizzle-orm";
 import {
   db,
   programmingDaysTable,
@@ -11,6 +11,7 @@ import {
   requireProgrammingWrite,
   isStaffRole,
   stripCoachNotesFromDay,
+  type ProgrammingRole,
 } from "../middlewares/programmingRbac";
 
 const router: IRouter = Router();
@@ -88,10 +89,12 @@ router.get(
     if (!isStaffRole(role)) {
       conditions.push(eq(programmingDaysTable.status, "published"));
     } else if (status && typeof status === "string") {
-      const validStatuses = ["draft", "published", "archived"];
-      if (validStatuses.includes(status)) {
-        conditions.push(eq(programmingDaysTable.status, status as any));
+      const validStatuses = ["draft", "published", "archived"] as const;
+      if (validStatuses.includes(status as (typeof validStatuses)[number])) {
+        conditions.push(eq(programmingDaysTable.status, status as (typeof validStatuses)[number]));
       }
+    } else {
+      conditions.push(ne(programmingDaysTable.status, "archived"));
     }
 
     if (startDate && typeof startDate === "string") {
@@ -632,6 +635,8 @@ router.post(
       return;
     }
 
+    const role = req.programmingRole as ProgrammingRole;
+    const userId = req.user!.id;
     const { membersTable } = await import("@workspace/db");
     const [member] = await db
       .select()
@@ -640,6 +645,27 @@ router.post(
 
     if (!member) {
       res.status(404).json({ error: "Member not found" });
+      return;
+    }
+
+    if (!isStaffRole(role) && member.email !== userId) {
+      res.status(403).json({ error: "You can only log results for yourself" });
+      return;
+    }
+
+    const [existingResult] = await db
+      .select()
+      .from(workoutResultsTable)
+      .where(
+        and(
+          eq(workoutResultsTable.programmingSectionId, sectionId),
+          eq(workoutResultsTable.memberId, memberId),
+          eq(workoutResultsTable.gymId, gymId)
+        )
+      );
+
+    if (existingResult) {
+      res.status(409).json({ error: "You have already logged a result for this section", existing: existingResult });
       return;
     }
 
@@ -728,6 +754,73 @@ router.get(
       .orderBy(workoutResultsTable.rank);
 
     res.json(results);
+  }
+);
+
+router.patch(
+  "/gyms/:gymId/programming/:dayId/sections/:sectionId/results/:resultId",
+  requireProgrammingRead(),
+  async (req, res): Promise<void> => {
+    const gymId = parseGymId(req.params);
+    const dayId = parseDayId(req.params);
+    const sectionId = parseSectionId(req.params);
+    const raw = Array.isArray(req.params.resultId) ? req.params.resultId[0] : req.params.resultId;
+    const resultId = parseInt(raw, 10);
+    if (!gymId || !dayId || !sectionId || isNaN(resultId)) {
+      res.status(400).json({ error: "Invalid IDs" });
+      return;
+    }
+
+    const day = await verifyDayBelongsToGym(dayId, gymId);
+    if (!day) {
+      res.status(404).json({ error: "Programming day not found" });
+      return;
+    }
+
+    const [existing] = await db
+      .select()
+      .from(workoutResultsTable)
+      .where(
+        and(
+          eq(workoutResultsTable.id, resultId),
+          eq(workoutResultsTable.programmingSectionId, sectionId),
+          eq(workoutResultsTable.gymId, gymId)
+        )
+      );
+
+    if (!existing) {
+      res.status(404).json({ error: "Result not found" });
+      return;
+    }
+
+    const role = req.programmingRole as ProgrammingRole;
+    const userId = req.user!.id;
+    if (!isStaffRole(role)) {
+      const { membersTable } = await import("@workspace/db");
+      const [member] = await db
+        .select()
+        .from(membersTable)
+        .where(and(eq(membersTable.id, existing.memberId), eq(membersTable.gymId, gymId)));
+      if (!member || member.email !== userId) {
+        res.status(403).json({ error: "You can only edit your own results" });
+        return;
+      }
+    }
+
+    const { result, notes, isRx, isPr } = req.body;
+    const updates: Partial<{ result: string; notes: string | null; isRx: boolean; isPr: boolean }> = {};
+    if (result !== undefined) updates.result = result;
+    if (notes !== undefined) updates.notes = notes;
+    if (isRx !== undefined) updates.isRx = isRx;
+    if (isPr !== undefined) updates.isPr = isPr;
+
+    const [updated] = await db
+      .update(workoutResultsTable)
+      .set(updates)
+      .where(eq(workoutResultsTable.id, resultId))
+      .returning();
+
+    res.json(updated);
   }
 );
 

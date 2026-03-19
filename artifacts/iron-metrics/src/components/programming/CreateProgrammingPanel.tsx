@@ -32,6 +32,7 @@ interface CreateProgrammingPanelProps {
 }
 
 export interface ProgrammingDayData {
+  dayId?: number;
   date: string;
   title: string;
   status: "draft" | "published";
@@ -108,6 +109,7 @@ export function CreateProgrammingPanel({
   const handleSave = (publishStatus: "draft" | "published") => {
     if (!validate()) return;
     onSave({
+      dayId: initialData?.dayId,
       date,
       title: title.trim(),
       status: publishStatus,

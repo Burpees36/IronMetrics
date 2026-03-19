@@ -7,20 +7,19 @@ import {
   Copy,
   Pencil,
   BarChart3,
+  Trash2,
 } from "lucide-react";
 import { getSectionTypeInfo, SectionData } from "./SectionEditor";
+import type { ProgrammingDayWithSections } from "@workspace/api-client-react";
 
 const LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
 interface DayCardProps {
-  date: string;
-  title: string;
-  status: "draft" | "published";
-  sections: SectionData[];
-  resultCount: number;
+  day: ProgrammingDayWithSections;
   onEdit?: () => void;
   onDuplicate?: () => void;
   onTogglePublish?: () => void;
+  onDelete?: () => void;
   isStaff: boolean;
   animationDelay?: number;
 }
@@ -30,25 +29,36 @@ function truncateLines(text: string, maxLines: number): string {
   return lines.join("\n");
 }
 
+function sectionTypeToUiType(sectionType: string): string {
+  const map: Record<string, string> = {
+    warmup: "warmup",
+    strength: "strength",
+    conditioning: "conditioning",
+    skill: "skill",
+    cooldown: "cooldown",
+    wod: "conditioning",
+    accessory: "accessory",
+    custom: "custom",
+  };
+  return map[sectionType] || "conditioning";
+}
+
 export function DayCard({
-  date,
-  title,
-  status,
-  sections,
-  resultCount,
+  day,
   onEdit,
   onDuplicate,
   onTogglePublish,
+  onDelete,
   isStaff,
   animationDelay = 0,
 }: DayCardProps) {
-  const formattedDate = new Date(date + "T00:00:00").toLocaleDateString("en-US", {
+  const formattedDate = new Date(day.date + "T00:00:00").toLocaleDateString("en-US", {
     weekday: "short",
     month: "short",
     day: "numeric",
   });
 
-  const scoredSections = sections.filter((s) => s.trackResults).length;
+  const scoredSections = day.sections.filter((s) => s.resultTrackingEnabled).length;
 
   return (
     <motion.div
@@ -62,16 +72,16 @@ export function DayCard({
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-1">
               <h3 className="text-lg font-bold text-foreground truncate">
-                {title}
+                {day.title}
               </h3>
               <span
                 className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider shrink-0 ${
-                  status === "published"
+                  day.status === "published"
                     ? "bg-emerald-500/10 text-emerald-500 border border-emerald-500/20"
                     : "bg-amber-500/10 text-amber-500 border border-amber-500/20"
                 }`}
               >
-                {status}
+                {day.status}
               </span>
             </div>
             <p className="text-xs text-muted-foreground">{formattedDate}</p>
@@ -81,9 +91,9 @@ export function DayCard({
               <button
                 onClick={onTogglePublish}
                 className="h-8 w-8 flex items-center justify-center rounded-lg hover:bg-accent transition-colors"
-                title={status === "published" ? "Unpublish" : "Publish"}
+                title={day.status === "published" ? "Unpublish" : "Publish"}
               >
-                {status === "published" ? (
+                {day.status === "published" ? (
                   <EyeOff className="h-4 w-4 text-muted-foreground" />
                 ) : (
                   <Eye className="h-4 w-4 text-primary" />
@@ -103,13 +113,21 @@ export function DayCard({
               >
                 <Pencil className="h-4 w-4 text-muted-foreground" />
               </button>
+              <button
+                onClick={onDelete}
+                className="h-8 w-8 flex items-center justify-center rounded-lg hover:bg-destructive/10 text-destructive/60 hover:text-destructive transition-colors"
+                title="Delete day"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
             </div>
           )}
         </div>
 
         <div className="space-y-3">
-          {sections.map((section, i) => {
-            const typeInfo = getSectionTypeInfo(section.type);
+          {day.sections.map((section, i) => {
+            const uiType = sectionTypeToUiType(section.sectionType);
+            const typeInfo = getSectionTypeInfo(uiType);
             const letter = LETTERS[i] || String(i + 1);
             const contentPreview = section.instructions
               ? truncateLines(section.instructions, 3)
@@ -125,7 +143,7 @@ export function DayCard({
                   <span className="text-sm font-semibold text-foreground truncate">
                     {section.title}
                   </span>
-                  {section.trackResults && (
+                  {section.resultTrackingEnabled && (
                     <BarChart3 className="h-3 w-3 text-primary shrink-0 ml-auto" />
                   )}
                 </div>
@@ -140,17 +158,13 @@ export function DayCard({
         </div>
 
         <div className="flex items-center gap-4 pt-3 mt-3 border-t border-border text-xs text-muted-foreground">
-          <span>{sections.length} section{sections.length !== 1 ? "s" : ""}</span>
+          <span>{day.sections.length} section{day.sections.length !== 1 ? "s" : ""}</span>
           {scoredSections > 0 && (
             <span className="flex items-center gap-1">
               <BarChart3 className="h-3.5 w-3.5" />
               {scoredSections} scored
             </span>
           )}
-          <span className="flex items-center gap-1">
-            <Users className="h-3.5 w-3.5" />
-            {resultCount} results
-          </span>
         </div>
       </div>
     </motion.div>
