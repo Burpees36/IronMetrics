@@ -1,12 +1,14 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useGym } from "@/store/GymContext";
 import { useGetGym } from "@workspace/api-client-react";
+import { useLocation } from "wouter";
 import { motion } from "framer-motion";
 import { Building2, Users, Mail, CreditCard, Shield, Palette, Puzzle, AlertTriangle, Settings as SettingsIcon } from "lucide-react";
 import { GeneralSettings } from "@/components/settings/GeneralSettings";
 import { StaffSettings } from "@/components/settings/StaffSettings";
 import { EmailSettings } from "@/components/settings/EmailSettings";
 import { BillingSettings } from "@/components/settings/BillingSettings";
+import { PlatformBillingSettings } from "@/components/settings/PlatformBillingSettings";
 import { SecuritySettings } from "@/components/settings/SecuritySettings";
 import { BrandingSettings } from "@/components/settings/BrandingSettings";
 import { IntegrationsSettings } from "@/components/settings/IntegrationsSettings";
@@ -16,7 +18,8 @@ const SECTIONS = [
   { id: "general", label: "General", icon: Building2 },
   { id: "staff", label: "Staff & Access", icon: Users },
   { id: "email", label: "Email & Notifications", icon: Mail },
-  { id: "billing", label: "Billing & Plan", icon: CreditCard },
+  { id: "platform-billing", label: "Platform Subscription", icon: CreditCard },
+  { id: "billing", label: "Member Billing", icon: CreditCard },
   { id: "security", label: "Security", icon: Shield },
   { id: "branding", label: "Branding", icon: Palette },
   { id: "integrations", label: "Integrations", icon: Puzzle },
@@ -29,6 +32,15 @@ export function Settings() {
   const { activeGymId } = useGym();
   const [activeSection, setActiveSection] = useState<SectionId>("general");
   const { data: gym } = useGetGym(activeGymId as number, { query: { enabled: !!activeGymId } });
+  const [location] = useLocation();
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const section = params.get("section");
+    if (section && SECTIONS.some(s => s.id === section)) {
+      setActiveSection(section as SectionId);
+    }
+  }, [location]);
 
   if (!activeGymId) {
     return (
@@ -94,6 +106,7 @@ export function Settings() {
             {activeSection === "general" && <GeneralSettings gymId={activeGymId} />}
             {activeSection === "staff" && <StaffSettings gymId={activeGymId} />}
             {activeSection === "email" && <EmailSettings gymId={activeGymId} />}
+            {activeSection === "platform-billing" && <PlatformBillingSettings />}
             {activeSection === "billing" && <BillingSettings />}
             {activeSection === "security" && <SecuritySettings />}
             {activeSection === "branding" && <BrandingSettings gymId={activeGymId} />}

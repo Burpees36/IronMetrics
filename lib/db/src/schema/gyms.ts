@@ -20,6 +20,12 @@ export const gymsTable = pgTable("gyms", {
   fromEmail: text("from_email"),
   fromName: text("from_name"),
   ownerId: text("owner_id").notNull(),
+  subscriptionTier: text("subscription_tier").notNull().default("none"),
+  isBetaAccess: boolean("is_beta_access").notNull().default(false),
+  stripeGymCustomerId: text("stripe_gym_customer_id"),
+  platformSubscriptionId: text("platform_subscription_id"),
+  platformCancelAtPeriodEnd: boolean("platform_cancel_at_period_end").notNull().default(false),
+  platformCurrentPeriodEnd: timestamp("platform_current_period_end", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });
