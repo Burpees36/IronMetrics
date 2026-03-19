@@ -14,7 +14,8 @@ import { motion } from "framer-motion";
 import {
   Loader2, CreditCard, DollarSign, Users, TrendingUp, Plus, AlertTriangle,
   UserMinus, ChevronLeft, ChevronRight, Pause, Play, XCircle, MoreHorizontal,
-  Receipt, RefreshCw, ArrowDownRight, Clock, Send, Copy, Link as LinkIcon
+  Receipt, RefreshCw, ArrowDownRight, Clock, Send, Copy, Link as LinkIcon,
+  Tag, Settings
 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
@@ -23,8 +24,10 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
+import { DiscountManager } from "@/components/billing/DiscountManager";
+import { TaxSettings } from "@/components/billing/TaxSettings";
 
-type BillingTab = "plans" | "subscriptions" | "payments" | "refunds" | "cancelled";
+type BillingTab = "plans" | "subscriptions" | "payments" | "refunds" | "cancelled" | "discounts" | "settings";
 
 export function Billing() {
   const { activeGymId } = useGym();
@@ -289,6 +292,8 @@ export function Billing() {
     { key: "payments", label: "Payments", icon: DollarSign },
     { key: "refunds", label: "Refunds", icon: ArrowDownRight },
     { key: "cancelled", label: "Cancelled", icon: UserMinus },
+    { key: "discounts", label: "Discounts", icon: Tag },
+    { key: "settings", label: "Settings", icon: Settings },
   ];
 
   const statusColor = (status: string) => {
@@ -788,6 +793,16 @@ export function Billing() {
               </div>
             </>
           )}
+        </div>
+      )}
+
+      {activeTab === "discounts" && (
+        <DiscountManager />
+      )}
+
+      {activeTab === "settings" && (
+        <div className="space-y-6">
+          <TaxSettings />
         </div>
       )}
 

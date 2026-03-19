@@ -1,7 +1,9 @@
-import { db, gymsTable } from "@workspace/db";
+import { db, gymsTable, scheduledHoldsTable, subscriptionsTable, membersTable } from "@workspace/db";
+import { eq, and, lte, sql } from "drizzle-orm";
 import { billingRecoveryService } from "../services/billing-recovery";
 import { paymentUpdateTokenService } from "../services/payment-update-token";
 import { billingAuditLogger } from "../billingAuditLogger";
+import { getStripeClient } from "../stripeClient";
 
 const MAINTENANCE_INTERVAL_MS = 6 * 60 * 60 * 1000;
 
@@ -28,6 +30,8 @@ async function runMaintenanceForAllGyms(): Promise<void> {
   let totalTokensCleaned = 0;
   let totalRecoveriesArchived = 0;
   let totalGraceEscalated = 0;
+  let totalHoldsActivated = 0;
+  let totalHoldsEnded = 0;
   let totalErrors = 0;
 
   for (const gym of gyms) {
@@ -38,13 +42,16 @@ async function runMaintenanceForAllGyms(): Promise<void> {
       ]);
 
       const graceResult = await billingRecoveryService.evaluateGraceDeadlines(gym.id);
+      const holdResult = await processScheduledHolds(gym.id);
 
       totalTokensCleaned += tokensCleaned;
       totalRecoveriesArchived += recoveriesArchived;
       totalGraceEscalated += graceResult.escalated;
-      totalErrors += graceResult.errors;
+      totalHoldsActivated += holdResult.activated;
+      totalHoldsEnded += holdResult.ended;
+      totalErrors += graceResult.errors + holdResult.errors;
 
-      if (tokensCleaned > 0 || recoveriesArchived > 0 || graceResult.escalated > 0) {
+      if (tokensCleaned > 0 || recoveriesArchived > 0 || graceResult.escalated > 0 || holdResult.activated > 0 || holdResult.ended > 0) {
         await billingAuditLogger.log({
           gymId: gym.id,
           action: "maintenance.scheduled_run",
@@ -55,6 +62,8 @@ async function runMaintenanceForAllGyms(): Promise<void> {
             recoveriesArchived,
             graceEscalated: graceResult.escalated,
             graceErrors: graceResult.errors,
+            holdsActivated: holdResult.activated,
+            holdsEnded: holdResult.ended,
           },
         });
       }
@@ -67,8 +76,82 @@ async function runMaintenanceForAllGyms(): Promise<void> {
   console.log(
     `[billing-maintenance] Scheduled run complete: ${gyms.length} gyms processed, ` +
     `tokens=${totalTokensCleaned}, archived=${totalRecoveriesArchived}, ` +
-    `escalated=${totalGraceEscalated}, errors=${totalErrors}`
+    `escalated=${totalGraceEscalated}, holds_started=${totalHoldsActivated}, holds_ended=${totalHoldsEnded}, errors=${totalErrors}`
   );
+}
+
+async function processScheduledHolds(gymId: number): Promise<{ activated: number; ended: number; errors: number }> {
+  let activated = 0, ended = 0, errors = 0;
+  const today = new Date().toISOString().split("T")[0];
+
+  try {
+    const holdsToActivate = await db.select().from(scheduledHoldsTable)
+      .where(and(
+        eq(scheduledHoldsTable.gymId, gymId),
+        eq(scheduledHoldsTable.status, "scheduled"),
+        lte(scheduledHoldsTable.startDate, today)
+      ));
+
+    for (const hold of holdsToActivate) {
+      try {
+        await db.update(scheduledHoldsTable).set({ status: "active", activatedAt: new Date() })
+          .where(eq(scheduledHoldsTable.id, hold.id));
+
+        const [sub] = await db.select().from(subscriptionsTable).where(eq(subscriptionsTable.id, hold.subscriptionId));
+        if (sub?.stripeSubscriptionId) {
+          const stripe = await getStripeClient();
+          await stripe.subscriptions.update(sub.stripeSubscriptionId, { pause_collection: { behavior: "void" } });
+        }
+        await db.update(subscriptionsTable).set({ status: "on_hold" }).where(eq(subscriptionsTable.id, hold.subscriptionId));
+        await db.update(membersTable).set({ status: "hold" }).where(eq(membersTable.id, hold.memberId));
+        activated++;
+
+        await billingAuditLogger.log({
+          gymId, memberId: hold.memberId,
+          action: "hold.auto_activated", entityType: "hold", entityId: String(hold.id), source: "system",
+        });
+      } catch (err: any) {
+        errors++;
+        console.error(`[billing-maintenance] Error activating hold ${hold.id}:`, err.message);
+      }
+    }
+
+    const holdsToEnd = await db.select().from(scheduledHoldsTable)
+      .where(and(
+        eq(scheduledHoldsTable.gymId, gymId),
+        eq(scheduledHoldsTable.status, "active"),
+        sql`${scheduledHoldsTable.endDate} IS NOT NULL AND ${scheduledHoldsTable.endDate} <= ${today}`
+      ));
+
+    for (const hold of holdsToEnd) {
+      try {
+        await db.update(scheduledHoldsTable).set({ status: "completed", endedAt: new Date() })
+          .where(eq(scheduledHoldsTable.id, hold.id));
+
+        const [sub] = await db.select().from(subscriptionsTable).where(eq(subscriptionsTable.id, hold.subscriptionId));
+        if (sub?.stripeSubscriptionId) {
+          const stripe = await getStripeClient();
+          await stripe.subscriptions.update(sub.stripeSubscriptionId, { pause_collection: null });
+        }
+        await db.update(subscriptionsTable).set({ status: "active" }).where(eq(subscriptionsTable.id, hold.subscriptionId));
+        await db.update(membersTable).set({ status: "active" }).where(eq(membersTable.id, hold.memberId));
+        ended++;
+
+        await billingAuditLogger.log({
+          gymId, memberId: hold.memberId,
+          action: "hold.auto_completed", entityType: "hold", entityId: String(hold.id), source: "system",
+        });
+      } catch (err: any) {
+        errors++;
+        console.error(`[billing-maintenance] Error ending hold ${hold.id}:`, err.message);
+      }
+    }
+  } catch (err: any) {
+    errors++;
+    console.error(`[billing-maintenance] Error processing holds for gym ${gymId}:`, err.message);
+  }
+
+  return { activated, ended, errors };
 }
 
 export function startBillingMaintenanceScheduler(): void {

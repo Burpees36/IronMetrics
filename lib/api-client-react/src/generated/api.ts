@@ -17,9 +17,13 @@ import type {
 } from "@tanstack/react-query";
 
 import type {
+  AdjustBalanceBody,
+  AdjustMemberBalance200,
   AiGeneratedContent,
   AiTask,
   Announcement,
+  ApplyDiscountToSubscription200,
+  ApplyDiscountToSubscriptionBody,
   ApplyTemplateBody,
   Attendance,
   AttendanceReport,
@@ -29,8 +33,11 @@ import type {
   BillingSummary,
   CancelSubscriptionBody,
   CancelledMembersResponse,
+  ChangePlanBody,
+  ChangePlanResponse,
   CheckInBody,
   CheckMemberEmailParams,
+  CheckinStatus,
   ClassTemplate,
   ClassTemplateDetail,
   CohortData,
@@ -43,8 +50,10 @@ import type {
   CreateAnnouncementBody,
   CreateClassBody,
   CreateClassTemplateBody,
+  CreateDiscountCodeBody,
   CreateDocumentBody,
   CreateGymBody,
+  CreateHoldBody,
   CreateLeadActivityBody,
   CreateLeadBody,
   CreateMemberBody,
@@ -64,6 +73,8 @@ import type {
   CreateWorkoutBody,
   CreateWorkoutResultBody,
   DashboardStats,
+  DisableTax200,
+  DiscountCode,
   DuplicateProgrammingDayBody,
   EmailCheckResult,
   EmailStatusResponse,
@@ -72,6 +83,7 @@ import type {
   GenerateRecoveryLinkBody,
   GenerateRecoveryLinkResponse,
   GetCancelledMembersParams,
+  GetMemberBalance200,
   GetMemberBillingHistory200,
   GetMemberLinkedBilling200,
   GetStripePublishableKey200,
@@ -113,36 +125,46 @@ import type {
   PaymentUpdateCompleteResponse,
   PaymentUpdateSetupIntent,
   PaymentUpdateValidation,
+  PlanChangePreview,
+  PreviewPlanChangeBody,
   Product,
   ProgrammingDayWithSections,
   ProgrammingSection,
   RefundPaymentBody,
   RefundRecord,
+  RemoveDiscountFromSubscription200,
   RemovePaymentMethod200,
   ReorderSectionsBody,
   RetentionStabilityIndex,
   RevenueForecast,
   RevenueReport,
   Sale,
+  ScheduledHold,
   SendEmailResponse,
   SendRecoveryLinkResponse,
   SetDefaultPaymentMethod200,
   StaffMember,
+  StripeInvoice,
   SubmitLeadCapture201,
   Subscription,
   SuccessResponse,
+  TaxConfig,
   TimelineEvent,
   UnlinkMemberBilling200,
   UpdateAiTaskBody,
   UpdateClassBody,
   UpdateClassTemplateBody,
+  UpdateDiscountCodeBody,
   UpdateGymBody,
+  UpdateHoldBody,
   UpdateLeadBody,
   UpdateMemberBody,
   UpdateProgrammingDayBody,
   UpdateProgrammingSectionBody,
   UpdateStaffBody,
   UpdateSubscriptionBody,
+  UpdateTaxConfig200,
+  UpdateTaxConfigBody,
   ValidatePaymentUpdateTokenParams,
   Workout,
   WorkoutResult,
@@ -11597,3 +11619,1694 @@ export const useCreateDocument = <
 > => {
   return useMutation(getCreateDocumentMutationOptions(options));
 };
+
+/**
+ * @summary Change subscription plan (upgrade/downgrade)
+ */
+export const getChangePlanUrl = (gymId: number, subscriptionId: number) => {
+  return `/api/gyms/${gymId}/subscriptions/${subscriptionId}/change-plan`;
+};
+
+export const changePlan = async (
+  gymId: number,
+  subscriptionId: number,
+  changePlanBody: ChangePlanBody,
+  options?: RequestInit,
+): Promise<ChangePlanResponse> => {
+  return customFetch<ChangePlanResponse>(
+    getChangePlanUrl(gymId, subscriptionId),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(changePlanBody),
+    },
+  );
+};
+
+export const getChangePlanMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof changePlan>>,
+    TError,
+    { gymId: number; subscriptionId: number; data: BodyType<ChangePlanBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof changePlan>>,
+  TError,
+  { gymId: number; subscriptionId: number; data: BodyType<ChangePlanBody> },
+  TContext
+> => {
+  const mutationKey = ["changePlan"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof changePlan>>,
+    { gymId: number; subscriptionId: number; data: BodyType<ChangePlanBody> }
+  > = (props) => {
+    const { gymId, subscriptionId, data } = props ?? {};
+
+    return changePlan(gymId, subscriptionId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ChangePlanMutationResult = NonNullable<
+  Awaited<ReturnType<typeof changePlan>>
+>;
+export type ChangePlanMutationBody = BodyType<ChangePlanBody>;
+export type ChangePlanMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Change subscription plan (upgrade/downgrade)
+ */
+export const useChangePlan = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof changePlan>>,
+    TError,
+    { gymId: number; subscriptionId: number; data: BodyType<ChangePlanBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof changePlan>>,
+  TError,
+  { gymId: number; subscriptionId: number; data: BodyType<ChangePlanBody> },
+  TContext
+> => {
+  return useMutation(getChangePlanMutationOptions(options));
+};
+
+/**
+ * @summary Preview plan change proration
+ */
+export const getPreviewPlanChangeUrl = (
+  gymId: number,
+  subscriptionId: number,
+) => {
+  return `/api/gyms/${gymId}/subscriptions/${subscriptionId}/preview-change`;
+};
+
+export const previewPlanChange = async (
+  gymId: number,
+  subscriptionId: number,
+  previewPlanChangeBody: PreviewPlanChangeBody,
+  options?: RequestInit,
+): Promise<PlanChangePreview> => {
+  return customFetch<PlanChangePreview>(
+    getPreviewPlanChangeUrl(gymId, subscriptionId),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(previewPlanChangeBody),
+    },
+  );
+};
+
+export const getPreviewPlanChangeMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof previewPlanChange>>,
+    TError,
+    {
+      gymId: number;
+      subscriptionId: number;
+      data: BodyType<PreviewPlanChangeBody>;
+    },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof previewPlanChange>>,
+  TError,
+  {
+    gymId: number;
+    subscriptionId: number;
+    data: BodyType<PreviewPlanChangeBody>;
+  },
+  TContext
+> => {
+  const mutationKey = ["previewPlanChange"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof previewPlanChange>>,
+    {
+      gymId: number;
+      subscriptionId: number;
+      data: BodyType<PreviewPlanChangeBody>;
+    }
+  > = (props) => {
+    const { gymId, subscriptionId, data } = props ?? {};
+
+    return previewPlanChange(gymId, subscriptionId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type PreviewPlanChangeMutationResult = NonNullable<
+  Awaited<ReturnType<typeof previewPlanChange>>
+>;
+export type PreviewPlanChangeMutationBody = BodyType<PreviewPlanChangeBody>;
+export type PreviewPlanChangeMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Preview plan change proration
+ */
+export const usePreviewPlanChange = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof previewPlanChange>>,
+    TError,
+    {
+      gymId: number;
+      subscriptionId: number;
+      data: BodyType<PreviewPlanChangeBody>;
+    },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof previewPlanChange>>,
+  TError,
+  {
+    gymId: number;
+    subscriptionId: number;
+    data: BodyType<PreviewPlanChangeBody>;
+  },
+  TContext
+> => {
+  return useMutation(getPreviewPlanChangeMutationOptions(options));
+};
+
+/**
+ * @summary Get member Stripe invoices with PDF/URL links
+ */
+export const getGetMemberStripeInvoicesUrl = (
+  gymId: number,
+  memberId: number,
+) => {
+  return `/api/gyms/${gymId}/members/${memberId}/stripe-invoices`;
+};
+
+export const getMemberStripeInvoices = async (
+  gymId: number,
+  memberId: number,
+  options?: RequestInit,
+): Promise<StripeInvoice[]> => {
+  return customFetch<StripeInvoice[]>(
+    getGetMemberStripeInvoicesUrl(gymId, memberId),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetMemberStripeInvoicesQueryKey = (
+  gymId: number,
+  memberId: number,
+) => {
+  return [`/api/gyms/${gymId}/members/${memberId}/stripe-invoices`] as const;
+};
+
+export const getGetMemberStripeInvoicesQueryOptions = <
+  TData = Awaited<ReturnType<typeof getMemberStripeInvoices>>,
+  TError = ErrorType<unknown>,
+>(
+  gymId: number,
+  memberId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getMemberStripeInvoices>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ??
+    getGetMemberStripeInvoicesQueryKey(gymId, memberId);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getMemberStripeInvoices>>
+  > = ({ signal }) =>
+    getMemberStripeInvoices(gymId, memberId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!(gymId && memberId),
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getMemberStripeInvoices>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetMemberStripeInvoicesQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getMemberStripeInvoices>>
+>;
+export type GetMemberStripeInvoicesQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get member Stripe invoices with PDF/URL links
+ */
+
+export function useGetMemberStripeInvoices<
+  TData = Awaited<ReturnType<typeof getMemberStripeInvoices>>,
+  TError = ErrorType<unknown>,
+>(
+  gymId: number,
+  memberId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getMemberStripeInvoices>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetMemberStripeInvoicesQueryOptions(
+    gymId,
+    memberId,
+    options,
+  );
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary List discount codes for gym
+ */
+export const getListDiscountCodesUrl = (gymId: number) => {
+  return `/api/gyms/${gymId}/discount-codes`;
+};
+
+export const listDiscountCodes = async (
+  gymId: number,
+  options?: RequestInit,
+): Promise<DiscountCode[]> => {
+  return customFetch<DiscountCode[]>(getListDiscountCodesUrl(gymId), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListDiscountCodesQueryKey = (gymId: number) => {
+  return [`/api/gyms/${gymId}/discount-codes`] as const;
+};
+
+export const getListDiscountCodesQueryOptions = <
+  TData = Awaited<ReturnType<typeof listDiscountCodes>>,
+  TError = ErrorType<unknown>,
+>(
+  gymId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listDiscountCodes>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListDiscountCodesQueryKey(gymId);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listDiscountCodes>>
+  > = ({ signal }) => listDiscountCodes(gymId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!gymId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof listDiscountCodes>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListDiscountCodesQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listDiscountCodes>>
+>;
+export type ListDiscountCodesQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List discount codes for gym
+ */
+
+export function useListDiscountCodes<
+  TData = Awaited<ReturnType<typeof listDiscountCodes>>,
+  TError = ErrorType<unknown>,
+>(
+  gymId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listDiscountCodes>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListDiscountCodesQueryOptions(gymId, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Create a discount code
+ */
+export const getCreateDiscountCodeUrl = (gymId: number) => {
+  return `/api/gyms/${gymId}/discount-codes`;
+};
+
+export const createDiscountCode = async (
+  gymId: number,
+  createDiscountCodeBody: CreateDiscountCodeBody,
+  options?: RequestInit,
+): Promise<DiscountCode> => {
+  return customFetch<DiscountCode>(getCreateDiscountCodeUrl(gymId), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(createDiscountCodeBody),
+  });
+};
+
+export const getCreateDiscountCodeMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createDiscountCode>>,
+    TError,
+    { gymId: number; data: BodyType<CreateDiscountCodeBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createDiscountCode>>,
+  TError,
+  { gymId: number; data: BodyType<CreateDiscountCodeBody> },
+  TContext
+> => {
+  const mutationKey = ["createDiscountCode"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createDiscountCode>>,
+    { gymId: number; data: BodyType<CreateDiscountCodeBody> }
+  > = (props) => {
+    const { gymId, data } = props ?? {};
+
+    return createDiscountCode(gymId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateDiscountCodeMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createDiscountCode>>
+>;
+export type CreateDiscountCodeMutationBody = BodyType<CreateDiscountCodeBody>;
+export type CreateDiscountCodeMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Create a discount code
+ */
+export const useCreateDiscountCode = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createDiscountCode>>,
+    TError,
+    { gymId: number; data: BodyType<CreateDiscountCodeBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createDiscountCode>>,
+  TError,
+  { gymId: number; data: BodyType<CreateDiscountCodeBody> },
+  TContext
+> => {
+  return useMutation(getCreateDiscountCodeMutationOptions(options));
+};
+
+/**
+ * @summary Activate/deactivate a discount code
+ */
+export const getUpdateDiscountCodeUrl = (gymId: number, id: number) => {
+  return `/api/gyms/${gymId}/discount-codes/${id}`;
+};
+
+export const updateDiscountCode = async (
+  gymId: number,
+  id: number,
+  updateDiscountCodeBody: UpdateDiscountCodeBody,
+  options?: RequestInit,
+): Promise<DiscountCode> => {
+  return customFetch<DiscountCode>(getUpdateDiscountCodeUrl(gymId, id), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(updateDiscountCodeBody),
+  });
+};
+
+export const getUpdateDiscountCodeMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateDiscountCode>>,
+    TError,
+    { gymId: number; id: number; data: BodyType<UpdateDiscountCodeBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateDiscountCode>>,
+  TError,
+  { gymId: number; id: number; data: BodyType<UpdateDiscountCodeBody> },
+  TContext
+> => {
+  const mutationKey = ["updateDiscountCode"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateDiscountCode>>,
+    { gymId: number; id: number; data: BodyType<UpdateDiscountCodeBody> }
+  > = (props) => {
+    const { gymId, id, data } = props ?? {};
+
+    return updateDiscountCode(gymId, id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateDiscountCodeMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateDiscountCode>>
+>;
+export type UpdateDiscountCodeMutationBody = BodyType<UpdateDiscountCodeBody>;
+export type UpdateDiscountCodeMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Activate/deactivate a discount code
+ */
+export const useUpdateDiscountCode = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateDiscountCode>>,
+    TError,
+    { gymId: number; id: number; data: BodyType<UpdateDiscountCodeBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateDiscountCode>>,
+  TError,
+  { gymId: number; id: number; data: BodyType<UpdateDiscountCodeBody> },
+  TContext
+> => {
+  return useMutation(getUpdateDiscountCodeMutationOptions(options));
+};
+
+/**
+ * @summary Apply discount code to subscription
+ */
+export const getApplyDiscountToSubscriptionUrl = (
+  gymId: number,
+  subscriptionId: number,
+) => {
+  return `/api/gyms/${gymId}/subscriptions/${subscriptionId}/apply-discount`;
+};
+
+export const applyDiscountToSubscription = async (
+  gymId: number,
+  subscriptionId: number,
+  applyDiscountToSubscriptionBody: ApplyDiscountToSubscriptionBody,
+  options?: RequestInit,
+): Promise<ApplyDiscountToSubscription200> => {
+  return customFetch<ApplyDiscountToSubscription200>(
+    getApplyDiscountToSubscriptionUrl(gymId, subscriptionId),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(applyDiscountToSubscriptionBody),
+    },
+  );
+};
+
+export const getApplyDiscountToSubscriptionMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof applyDiscountToSubscription>>,
+    TError,
+    {
+      gymId: number;
+      subscriptionId: number;
+      data: BodyType<ApplyDiscountToSubscriptionBody>;
+    },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof applyDiscountToSubscription>>,
+  TError,
+  {
+    gymId: number;
+    subscriptionId: number;
+    data: BodyType<ApplyDiscountToSubscriptionBody>;
+  },
+  TContext
+> => {
+  const mutationKey = ["applyDiscountToSubscription"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof applyDiscountToSubscription>>,
+    {
+      gymId: number;
+      subscriptionId: number;
+      data: BodyType<ApplyDiscountToSubscriptionBody>;
+    }
+  > = (props) => {
+    const { gymId, subscriptionId, data } = props ?? {};
+
+    return applyDiscountToSubscription(
+      gymId,
+      subscriptionId,
+      data,
+      requestOptions,
+    );
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ApplyDiscountToSubscriptionMutationResult = NonNullable<
+  Awaited<ReturnType<typeof applyDiscountToSubscription>>
+>;
+export type ApplyDiscountToSubscriptionMutationBody =
+  BodyType<ApplyDiscountToSubscriptionBody>;
+export type ApplyDiscountToSubscriptionMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Apply discount code to subscription
+ */
+export const useApplyDiscountToSubscription = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof applyDiscountToSubscription>>,
+    TError,
+    {
+      gymId: number;
+      subscriptionId: number;
+      data: BodyType<ApplyDiscountToSubscriptionBody>;
+    },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof applyDiscountToSubscription>>,
+  TError,
+  {
+    gymId: number;
+    subscriptionId: number;
+    data: BodyType<ApplyDiscountToSubscriptionBody>;
+  },
+  TContext
+> => {
+  return useMutation(getApplyDiscountToSubscriptionMutationOptions(options));
+};
+
+/**
+ * @summary Remove discount from subscription
+ */
+export const getRemoveDiscountFromSubscriptionUrl = (
+  gymId: number,
+  subscriptionId: number,
+) => {
+  return `/api/gyms/${gymId}/subscriptions/${subscriptionId}/discount`;
+};
+
+export const removeDiscountFromSubscription = async (
+  gymId: number,
+  subscriptionId: number,
+  options?: RequestInit,
+): Promise<RemoveDiscountFromSubscription200> => {
+  return customFetch<RemoveDiscountFromSubscription200>(
+    getRemoveDiscountFromSubscriptionUrl(gymId, subscriptionId),
+    {
+      ...options,
+      method: "DELETE",
+    },
+  );
+};
+
+export const getRemoveDiscountFromSubscriptionMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof removeDiscountFromSubscription>>,
+    TError,
+    { gymId: number; subscriptionId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof removeDiscountFromSubscription>>,
+  TError,
+  { gymId: number; subscriptionId: number },
+  TContext
+> => {
+  const mutationKey = ["removeDiscountFromSubscription"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof removeDiscountFromSubscription>>,
+    { gymId: number; subscriptionId: number }
+  > = (props) => {
+    const { gymId, subscriptionId } = props ?? {};
+
+    return removeDiscountFromSubscription(
+      gymId,
+      subscriptionId,
+      requestOptions,
+    );
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RemoveDiscountFromSubscriptionMutationResult = NonNullable<
+  Awaited<ReturnType<typeof removeDiscountFromSubscription>>
+>;
+
+export type RemoveDiscountFromSubscriptionMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Remove discount from subscription
+ */
+export const useRemoveDiscountFromSubscription = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof removeDiscountFromSubscription>>,
+    TError,
+    { gymId: number; subscriptionId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof removeDiscountFromSubscription>>,
+  TError,
+  { gymId: number; subscriptionId: number },
+  TContext
+> => {
+  return useMutation(getRemoveDiscountFromSubscriptionMutationOptions(options));
+};
+
+/**
+ * @summary Get member account credit balance
+ */
+export const getGetMemberBalanceUrl = (gymId: number, memberId: number) => {
+  return `/api/gyms/${gymId}/members/${memberId}/balance`;
+};
+
+export const getMemberBalance = async (
+  gymId: number,
+  memberId: number,
+  options?: RequestInit,
+): Promise<GetMemberBalance200> => {
+  return customFetch<GetMemberBalance200>(
+    getGetMemberBalanceUrl(gymId, memberId),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetMemberBalanceQueryKey = (
+  gymId: number,
+  memberId: number,
+) => {
+  return [`/api/gyms/${gymId}/members/${memberId}/balance`] as const;
+};
+
+export const getGetMemberBalanceQueryOptions = <
+  TData = Awaited<ReturnType<typeof getMemberBalance>>,
+  TError = ErrorType<unknown>,
+>(
+  gymId: number,
+  memberId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getMemberBalance>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetMemberBalanceQueryKey(gymId, memberId);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getMemberBalance>>
+  > = ({ signal }) =>
+    getMemberBalance(gymId, memberId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!(gymId && memberId),
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getMemberBalance>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetMemberBalanceQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getMemberBalance>>
+>;
+export type GetMemberBalanceQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get member account credit balance
+ */
+
+export function useGetMemberBalance<
+  TData = Awaited<ReturnType<typeof getMemberBalance>>,
+  TError = ErrorType<unknown>,
+>(
+  gymId: number,
+  memberId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getMemberBalance>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetMemberBalanceQueryOptions(
+    gymId,
+    memberId,
+    options,
+  );
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Add or remove account credit
+ */
+export const getAdjustMemberBalanceUrl = (gymId: number, memberId: number) => {
+  return `/api/gyms/${gymId}/members/${memberId}/balance`;
+};
+
+export const adjustMemberBalance = async (
+  gymId: number,
+  memberId: number,
+  adjustBalanceBody: AdjustBalanceBody,
+  options?: RequestInit,
+): Promise<AdjustMemberBalance200> => {
+  return customFetch<AdjustMemberBalance200>(
+    getAdjustMemberBalanceUrl(gymId, memberId),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(adjustBalanceBody),
+    },
+  );
+};
+
+export const getAdjustMemberBalanceMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof adjustMemberBalance>>,
+    TError,
+    { gymId: number; memberId: number; data: BodyType<AdjustBalanceBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof adjustMemberBalance>>,
+  TError,
+  { gymId: number; memberId: number; data: BodyType<AdjustBalanceBody> },
+  TContext
+> => {
+  const mutationKey = ["adjustMemberBalance"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof adjustMemberBalance>>,
+    { gymId: number; memberId: number; data: BodyType<AdjustBalanceBody> }
+  > = (props) => {
+    const { gymId, memberId, data } = props ?? {};
+
+    return adjustMemberBalance(gymId, memberId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AdjustMemberBalanceMutationResult = NonNullable<
+  Awaited<ReturnType<typeof adjustMemberBalance>>
+>;
+export type AdjustMemberBalanceMutationBody = BodyType<AdjustBalanceBody>;
+export type AdjustMemberBalanceMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Add or remove account credit
+ */
+export const useAdjustMemberBalance = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof adjustMemberBalance>>,
+    TError,
+    { gymId: number; memberId: number; data: BodyType<AdjustBalanceBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof adjustMemberBalance>>,
+  TError,
+  { gymId: number; memberId: number; data: BodyType<AdjustBalanceBody> },
+  TContext
+> => {
+  return useMutation(getAdjustMemberBalanceMutationOptions(options));
+};
+
+/**
+ * @summary Get gym tax configuration
+ */
+export const getGetTaxConfigUrl = (gymId: number) => {
+  return `/api/gyms/${gymId}/tax-config`;
+};
+
+export const getTaxConfig = async (
+  gymId: number,
+  options?: RequestInit,
+): Promise<TaxConfig> => {
+  return customFetch<TaxConfig>(getGetTaxConfigUrl(gymId), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetTaxConfigQueryKey = (gymId: number) => {
+  return [`/api/gyms/${gymId}/tax-config`] as const;
+};
+
+export const getGetTaxConfigQueryOptions = <
+  TData = Awaited<ReturnType<typeof getTaxConfig>>,
+  TError = ErrorType<unknown>,
+>(
+  gymId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getTaxConfig>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetTaxConfigQueryKey(gymId);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getTaxConfig>>> = ({
+    signal,
+  }) => getTaxConfig(gymId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!gymId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getTaxConfig>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetTaxConfigQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getTaxConfig>>
+>;
+export type GetTaxConfigQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get gym tax configuration
+ */
+
+export function useGetTaxConfig<
+  TData = Awaited<ReturnType<typeof getTaxConfig>>,
+  TError = ErrorType<unknown>,
+>(
+  gymId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getTaxConfig>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetTaxConfigQueryOptions(gymId, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Create or update tax rate
+ */
+export const getUpdateTaxConfigUrl = (gymId: number) => {
+  return `/api/gyms/${gymId}/tax-config`;
+};
+
+export const updateTaxConfig = async (
+  gymId: number,
+  updateTaxConfigBody: UpdateTaxConfigBody,
+  options?: RequestInit,
+): Promise<UpdateTaxConfig200> => {
+  return customFetch<UpdateTaxConfig200>(getUpdateTaxConfigUrl(gymId), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(updateTaxConfigBody),
+  });
+};
+
+export const getUpdateTaxConfigMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateTaxConfig>>,
+    TError,
+    { gymId: number; data: BodyType<UpdateTaxConfigBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateTaxConfig>>,
+  TError,
+  { gymId: number; data: BodyType<UpdateTaxConfigBody> },
+  TContext
+> => {
+  const mutationKey = ["updateTaxConfig"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateTaxConfig>>,
+    { gymId: number; data: BodyType<UpdateTaxConfigBody> }
+  > = (props) => {
+    const { gymId, data } = props ?? {};
+
+    return updateTaxConfig(gymId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateTaxConfigMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateTaxConfig>>
+>;
+export type UpdateTaxConfigMutationBody = BodyType<UpdateTaxConfigBody>;
+export type UpdateTaxConfigMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Create or update tax rate
+ */
+export const useUpdateTaxConfig = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateTaxConfig>>,
+    TError,
+    { gymId: number; data: BodyType<UpdateTaxConfigBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateTaxConfig>>,
+  TError,
+  { gymId: number; data: BodyType<UpdateTaxConfigBody> },
+  TContext
+> => {
+  return useMutation(getUpdateTaxConfigMutationOptions(options));
+};
+
+/**
+ * @summary Disable tax collection
+ */
+export const getDisableTaxUrl = (gymId: number) => {
+  return `/api/gyms/${gymId}/tax-config`;
+};
+
+export const disableTax = async (
+  gymId: number,
+  options?: RequestInit,
+): Promise<DisableTax200> => {
+  return customFetch<DisableTax200>(getDisableTaxUrl(gymId), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getDisableTaxMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof disableTax>>,
+    TError,
+    { gymId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof disableTax>>,
+  TError,
+  { gymId: number },
+  TContext
+> => {
+  const mutationKey = ["disableTax"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof disableTax>>,
+    { gymId: number }
+  > = (props) => {
+    const { gymId } = props ?? {};
+
+    return disableTax(gymId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DisableTaxMutationResult = NonNullable<
+  Awaited<ReturnType<typeof disableTax>>
+>;
+
+export type DisableTaxMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Disable tax collection
+ */
+export const useDisableTax = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof disableTax>>,
+    TError,
+    { gymId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof disableTax>>,
+  TError,
+  { gymId: number },
+  TContext
+> => {
+  return useMutation(getDisableTaxMutationOptions(options));
+};
+
+/**
+ * @summary List holds for a member
+ */
+export const getListMemberHoldsUrl = (gymId: number, memberId: number) => {
+  return `/api/gyms/${gymId}/members/${memberId}/holds`;
+};
+
+export const listMemberHolds = async (
+  gymId: number,
+  memberId: number,
+  options?: RequestInit,
+): Promise<ScheduledHold[]> => {
+  return customFetch<ScheduledHold[]>(getListMemberHoldsUrl(gymId, memberId), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListMemberHoldsQueryKey = (gymId: number, memberId: number) => {
+  return [`/api/gyms/${gymId}/members/${memberId}/holds`] as const;
+};
+
+export const getListMemberHoldsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listMemberHolds>>,
+  TError = ErrorType<unknown>,
+>(
+  gymId: number,
+  memberId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listMemberHolds>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListMemberHoldsQueryKey(gymId, memberId);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listMemberHolds>>> = ({
+    signal,
+  }) => listMemberHolds(gymId, memberId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!(gymId && memberId),
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof listMemberHolds>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListMemberHoldsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listMemberHolds>>
+>;
+export type ListMemberHoldsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List holds for a member
+ */
+
+export function useListMemberHolds<
+  TData = Awaited<ReturnType<typeof listMemberHolds>>,
+  TError = ErrorType<unknown>,
+>(
+  gymId: number,
+  memberId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listMemberHolds>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListMemberHoldsQueryOptions(gymId, memberId, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Schedule a hold on a member subscription
+ */
+export const getCreateHoldUrl = (gymId: number, memberId: number) => {
+  return `/api/gyms/${gymId}/members/${memberId}/holds`;
+};
+
+export const createHold = async (
+  gymId: number,
+  memberId: number,
+  createHoldBody: CreateHoldBody,
+  options?: RequestInit,
+): Promise<ScheduledHold> => {
+  return customFetch<ScheduledHold>(getCreateHoldUrl(gymId, memberId), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(createHoldBody),
+  });
+};
+
+export const getCreateHoldMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createHold>>,
+    TError,
+    { gymId: number; memberId: number; data: BodyType<CreateHoldBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createHold>>,
+  TError,
+  { gymId: number; memberId: number; data: BodyType<CreateHoldBody> },
+  TContext
+> => {
+  const mutationKey = ["createHold"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createHold>>,
+    { gymId: number; memberId: number; data: BodyType<CreateHoldBody> }
+  > = (props) => {
+    const { gymId, memberId, data } = props ?? {};
+
+    return createHold(gymId, memberId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateHoldMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createHold>>
+>;
+export type CreateHoldMutationBody = BodyType<CreateHoldBody>;
+export type CreateHoldMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Schedule a hold on a member subscription
+ */
+export const useCreateHold = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createHold>>,
+    TError,
+    { gymId: number; memberId: number; data: BodyType<CreateHoldBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createHold>>,
+  TError,
+  { gymId: number; memberId: number; data: BodyType<CreateHoldBody> },
+  TContext
+> => {
+  return useMutation(getCreateHoldMutationOptions(options));
+};
+
+/**
+ * @summary Update a hold
+ */
+export const getUpdateHoldUrl = (gymId: number, holdId: number) => {
+  return `/api/gyms/${gymId}/holds/${holdId}`;
+};
+
+export const updateHold = async (
+  gymId: number,
+  holdId: number,
+  updateHoldBody: UpdateHoldBody,
+  options?: RequestInit,
+): Promise<ScheduledHold> => {
+  return customFetch<ScheduledHold>(getUpdateHoldUrl(gymId, holdId), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(updateHoldBody),
+  });
+};
+
+export const getUpdateHoldMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateHold>>,
+    TError,
+    { gymId: number; holdId: number; data: BodyType<UpdateHoldBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateHold>>,
+  TError,
+  { gymId: number; holdId: number; data: BodyType<UpdateHoldBody> },
+  TContext
+> => {
+  const mutationKey = ["updateHold"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateHold>>,
+    { gymId: number; holdId: number; data: BodyType<UpdateHoldBody> }
+  > = (props) => {
+    const { gymId, holdId, data } = props ?? {};
+
+    return updateHold(gymId, holdId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateHoldMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateHold>>
+>;
+export type UpdateHoldMutationBody = BodyType<UpdateHoldBody>;
+export type UpdateHoldMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Update a hold
+ */
+export const useUpdateHold = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateHold>>,
+    TError,
+    { gymId: number; holdId: number; data: BodyType<UpdateHoldBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateHold>>,
+  TError,
+  { gymId: number; holdId: number; data: BodyType<UpdateHoldBody> },
+  TContext
+> => {
+  return useMutation(getUpdateHoldMutationOptions(options));
+};
+
+/**
+ * @summary Cancel a hold
+ */
+export const getCancelHoldUrl = (gymId: number, holdId: number) => {
+  return `/api/gyms/${gymId}/holds/${holdId}/cancel`;
+};
+
+export const cancelHold = async (
+  gymId: number,
+  holdId: number,
+  options?: RequestInit,
+): Promise<ScheduledHold> => {
+  return customFetch<ScheduledHold>(getCancelHoldUrl(gymId, holdId), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getCancelHoldMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof cancelHold>>,
+    TError,
+    { gymId: number; holdId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof cancelHold>>,
+  TError,
+  { gymId: number; holdId: number },
+  TContext
+> => {
+  const mutationKey = ["cancelHold"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof cancelHold>>,
+    { gymId: number; holdId: number }
+  > = (props) => {
+    const { gymId, holdId } = props ?? {};
+
+    return cancelHold(gymId, holdId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CancelHoldMutationResult = NonNullable<
+  Awaited<ReturnType<typeof cancelHold>>
+>;
+
+export type CancelHoldMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Cancel a hold
+ */
+export const useCancelHold = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof cancelHold>>,
+    TError,
+    { gymId: number; holdId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof cancelHold>>,
+  TError,
+  { gymId: number; holdId: number },
+  TContext
+> => {
+  return useMutation(getCancelHoldMutationOptions(options));
+};
+
+/**
+ * @summary Check if member can check in (holds + past-due enforcement)
+ */
+export const getGetCheckinStatusUrl = (gymId: number, memberId: number) => {
+  return `/api/gyms/${gymId}/members/${memberId}/checkin-status`;
+};
+
+export const getCheckinStatus = async (
+  gymId: number,
+  memberId: number,
+  options?: RequestInit,
+): Promise<CheckinStatus> => {
+  return customFetch<CheckinStatus>(getGetCheckinStatusUrl(gymId, memberId), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetCheckinStatusQueryKey = (
+  gymId: number,
+  memberId: number,
+) => {
+  return [`/api/gyms/${gymId}/members/${memberId}/checkin-status`] as const;
+};
+
+export const getGetCheckinStatusQueryOptions = <
+  TData = Awaited<ReturnType<typeof getCheckinStatus>>,
+  TError = ErrorType<unknown>,
+>(
+  gymId: number,
+  memberId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getCheckinStatus>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetCheckinStatusQueryKey(gymId, memberId);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getCheckinStatus>>
+  > = ({ signal }) =>
+    getCheckinStatus(gymId, memberId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!(gymId && memberId),
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getCheckinStatus>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetCheckinStatusQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getCheckinStatus>>
+>;
+export type GetCheckinStatusQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Check if member can check in (holds + past-due enforcement)
+ */
+
+export function useGetCheckinStatus<
+  TData = Awaited<ReturnType<typeof getCheckinStatus>>,
+  TError = ErrorType<unknown>,
+>(
+  gymId: number,
+  memberId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getCheckinStatus>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetCheckinStatusQueryOptions(
+    gymId,
+    memberId,
+    options,
+  );
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}

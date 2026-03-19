@@ -1,0 +1,126 @@
+import React, { useState } from "react";
+import { useGym } from "@/store/GymContext";
+import {
+  useAdjustMemberBalance,
+  getMemberBalance, getGetMemberBalanceQueryOptions,
+} from "@workspace/api-client-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useToast } from "@/hooks/use-toast";
+import { Loader2, Wallet, Plus, Minus } from "lucide-react";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+
+interface Props {
+  memberId: number;
+}
+
+export function MemberBalance({ memberId }: Props) {
+  const { activeGymId } = useGym();
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [adjustOpen, setAdjustOpen] = useState(false);
+  const [form, setForm] = useState({ amount: "", description: "", type: "add" as "add" | "remove" });
+
+  const { data: balanceData, isLoading } = useQuery(
+    getGetMemberBalanceQueryOptions(activeGymId || 0, memberId, { query: { enabled: !!activeGymId && !!memberId } })
+  );
+
+  const adjustMutation = useAdjustMemberBalance();
+  const balance = (balanceData as any)?.balance ?? 0;
+
+  const handleAdjust = () => {
+    if (!activeGymId || !form.amount || !form.description) return;
+    const amount = parseFloat(form.amount) * (form.type === "remove" ? -1 : 1);
+    adjustMutation.mutate(
+      { gymId: activeGymId, memberId, data: { amount, description: form.description } },
+      {
+        onSuccess: (data: any) => {
+          toast({ title: "Balance Updated", description: `New balance: $${data.newBalance?.toFixed(2)}` });
+          queryClient.invalidateQueries({ queryKey: [`/api/gyms/${activeGymId}/members/${memberId}/balance`] });
+          setAdjustOpen(false);
+          setForm({ amount: "", description: "", type: "add" });
+        },
+        onError: (err: any) => toast({ title: "Error", description: err?.message || "Failed", variant: "destructive" }),
+      }
+    );
+  };
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <h4 className="text-sm font-medium text-white/70 flex items-center gap-2">
+          <Wallet className="w-4 h-4" /> Account Credit
+        </h4>
+        <button onClick={() => setAdjustOpen(true)} className="text-xs text-amber-400 hover:text-amber-300 flex items-center gap-1">
+          <Plus className="w-3 h-3" /> Adjust
+        </button>
+      </div>
+
+      <div className="p-3 rounded-lg bg-white/5 border border-white/10">
+        {isLoading ? (
+          <Loader2 className="w-4 h-4 animate-spin text-white/30" />
+        ) : (
+          <div className="flex items-center justify-between">
+            <span className="text-white/50 text-sm">Balance</span>
+            <span className={`text-lg font-semibold ${balance > 0 ? "text-green-400" : balance < 0 ? "text-red-400" : "text-white/50"}`}>
+              ${balance.toFixed(2)}
+            </span>
+          </div>
+        )}
+      </div>
+
+      <Dialog open={adjustOpen} onOpenChange={setAdjustOpen}>
+        <DialogContent className="sm:max-w-sm bg-[hsl(220,20%,12%)] border-white/10 text-white">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Wallet className="w-5 h-5 text-amber-400" /> Adjust Credit
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="flex gap-2">
+              <button
+                onClick={() => setForm(f => ({ ...f, type: "add" }))}
+                className={`flex-1 py-2 rounded-lg text-sm flex items-center justify-center gap-1 ${
+                  form.type === "add" ? "bg-green-500/20 text-green-400 border border-green-500/30" : "bg-white/5 text-white/50 border border-white/10"
+                }`}
+              >
+                <Plus className="w-3 h-3" /> Add Credit
+              </button>
+              <button
+                onClick={() => setForm(f => ({ ...f, type: "remove" }))}
+                className={`flex-1 py-2 rounded-lg text-sm flex items-center justify-center gap-1 ${
+                  form.type === "remove" ? "bg-red-500/20 text-red-400 border border-red-500/30" : "bg-white/5 text-white/50 border border-white/10"
+                }`}
+              >
+                <Minus className="w-3 h-3" /> Remove
+              </button>
+            </div>
+            <div>
+              <Label className="text-white/70">Amount ($)</Label>
+              <Input type="number" min="0.01" step="0.01" value={form.amount}
+                onChange={e => setForm(f => ({ ...f, amount: e.target.value }))}
+                className="bg-white/5 border-white/10 text-white mt-1" placeholder="25.00" />
+            </div>
+            <div>
+              <Label className="text-white/70">Description</Label>
+              <Input value={form.description}
+                onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
+                className="bg-white/5 border-white/10 text-white mt-1" placeholder="Referral bonus, comp class, etc." />
+            </div>
+          </div>
+          <DialogFooter>
+            <button onClick={() => setAdjustOpen(false)} className="px-4 py-2 text-sm text-white/60 hover:text-white">Cancel</button>
+            <button onClick={handleAdjust} disabled={!form.amount || !form.description || adjustMutation.isPending}
+              className="px-4 py-2 text-sm bg-amber-500 text-black rounded-lg hover:bg-amber-400 disabled:opacity-50 flex items-center gap-2">
+              {adjustMutation.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
+              {form.type === "add" ? "Add Credit" : "Deduct"}
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}

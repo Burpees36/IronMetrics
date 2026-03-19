@@ -26,6 +26,12 @@ export const gymsTable = pgTable("gyms", {
   platformSubscriptionId: text("platform_subscription_id"),
   platformCancelAtPeriodEnd: boolean("platform_cancel_at_period_end").notNull().default(false),
   platformCurrentPeriodEnd: timestamp("platform_current_period_end", { withTimezone: true }),
+  taxEnabled: boolean("tax_enabled").notNull().default(false),
+  taxLabel: text("tax_label").default("Sales Tax"),
+  taxRate: text("tax_rate").default("0"),
+  taxJurisdiction: text("tax_jurisdiction"),
+  stripeTaxRateId: text("stripe_tax_rate_id"),
+  pastDuePolicy: text("past_due_policy").notNull().default("grace_period"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

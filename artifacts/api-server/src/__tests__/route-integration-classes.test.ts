@@ -50,7 +50,10 @@ vi.mock("@workspace/db", () => {
               let data = tn === "classes" ? mockClasses :
                          tn === "gym_staff" ? mockStaff :
                          tn === "attendance" ? mockAttendance :
-                         tn === "members" ? mockMembers : [];
+                         tn === "members" ? mockMembers :
+                         tn === "scheduled_holds" ? [] :
+                         tn === "billing_recovery" ? [] :
+                         tn === "gyms" ? [{ id: 1, pastDuePolicy: "grace_period" }] : [];
               resolve(data.filter(r => matchesCondition(r, cond)));
             },
           };
@@ -102,6 +105,9 @@ vi.mock("@workspace/db", () => {
     attendanceTable: makeTable("attendance"),
     gymStaffTable: makeTable("gym_staff"),
     membersTable: makeTable("members"),
+    scheduledHoldsTable: makeTable("scheduled_holds"),
+    gymsTable: makeTable("gyms"),
+    billingRecoveryTable: makeTable("billing_recovery"),
   };
 });
 

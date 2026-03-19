@@ -36,6 +36,11 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AddCardDialog } from "@/components/billing/AddCardDialog";
+import { ChangePlanDialog } from "@/components/billing/ChangePlanDialog";
+import { HoldsManager } from "@/components/billing/HoldsManager";
+import { InvoiceTable } from "@/components/billing/InvoiceTable";
+import { MemberBalance } from "@/components/billing/MemberBalance";
+import { SubscriptionDiscount } from "@/components/billing/SubscriptionDiscount";
 
 export function MemberDetail() {
   const { activeGymId } = useGym();
@@ -56,6 +61,7 @@ export function MemberDetail() {
   const [cancelSubDialog, setCancelSubDialog] = useState<number | null>(null);
   const [cancelReason, setCancelReason] = useState("");
   const [cancelAtPeriodEnd, setCancelAtPeriodEnd] = useState(true);
+  const [changePlanSub, setChangePlanSub] = useState<any>(null);
 
   const [editForm, setEditForm] = useState({
     firstName: "",
@@ -897,9 +903,17 @@ export function MemberDetail() {
                           <span className="text-xs font-medium text-orange-500">Payment action needed</span>
                         </div>
                       )}
-                      <div className="flex gap-2 mt-3 pt-3 border-t border-border">
+                      {sub.status === "active" && sub.stripeSubscriptionId && (
+                        <SubscriptionDiscount subscriptionId={sub.id} stripeSubscriptionId={sub.stripeSubscriptionId} />
+                      )}
+                      <div className="flex gap-2 mt-3 pt-3 border-t border-border flex-wrap">
                         {sub.status === "active" && (
                           <>
+                            {sub.stripeSubscriptionId && (
+                              <button disabled={isBillingMutating} onClick={() => setChangePlanSub(sub)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-primary/10 text-primary hover:bg-primary/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                                <Activity className="h-3 w-3" /> Change Plan
+                              </button>
+                            )}
                             <button disabled={isBillingMutating} onClick={() => handlePauseMemberSub(sub.id)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-yellow-500/10 text-yellow-500 hover:bg-yellow-500/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
                               <Pause className="h-3 w-3" /> Pause
                             </button>
@@ -1057,6 +1071,21 @@ export function MemberDetail() {
             ) : (
               <p className="text-muted-foreground text-sm">No linked billing. Use "Link Partner" to set up a couples plan where one member pays for both.</p>
             )}
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {bSubs.length > 0 && bSubs[0]?.id && (
+              <div className="bg-card border border-border rounded-2xl p-6 shadow-sm">
+                <HoldsManager memberId={memberId} subscriptionId={bSubs[0].id} onHoldChange={() => queryClient.invalidateQueries({ queryKey: getGetMemberBillingHistoryQueryKey(activeGymId as number, memberId) })} />
+              </div>
+            )}
+            <div className="bg-card border border-border rounded-2xl p-6 shadow-sm">
+              <MemberBalance memberId={memberId} />
+            </div>
+          </div>
+
+          <div className="bg-card border border-border rounded-2xl p-6 shadow-sm">
+            <InvoiceTable memberId={memberId} />
           </div>
 
           <div className="bg-card border border-border rounded-2xl shadow-sm overflow-hidden">
@@ -1308,6 +1337,14 @@ export function MemberDetail() {
         clientSecret={addingCardSecret}
         onSuccess={() => { toast({ title: "Card added successfully" }); invalidateBilling(); }}
       />
+
+      {changePlanSub && (
+        <ChangePlanDialog
+          open={!!changePlanSub}
+          onClose={() => setChangePlanSub(null)}
+          subscription={{ id: changePlanSub.id, planId: changePlanSub.planId, planName: changePlanSub.planName || "", amount: changePlanSub.amount || 0, memberId }}
+        />
+      )}
 
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
         <DialogContent className="bg-card border-border max-w-md max-h-[90vh] overflow-y-auto">

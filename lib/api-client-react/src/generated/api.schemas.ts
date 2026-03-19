@@ -1806,6 +1806,201 @@ export interface PaymentUpdateCompleteResponse {
   cardBrand: string;
 }
 
+export type ChangePlanBodyTiming =
+  (typeof ChangePlanBodyTiming)[keyof typeof ChangePlanBodyTiming];
+
+export const ChangePlanBodyTiming = {
+  immediate: "immediate",
+  next_cycle: "next_cycle",
+} as const;
+
+export interface ChangePlanBody {
+  newPlanId: number;
+  timing: ChangePlanBodyTiming;
+}
+
+/**
+ * @nullable
+ */
+export type ChangePlanResponseProrationPreview = {
+  amountDue?: number;
+  credit?: number;
+} | null;
+
+export interface ChangePlanResponse {
+  success?: boolean;
+  oldPlan?: string;
+  newPlan?: string;
+  timing?: string;
+  /** @nullable */
+  prorationPreview?: ChangePlanResponseProrationPreview;
+}
+
+export interface PlanChangePreview {
+  currentAmount?: number;
+  newAmount?: number;
+  /** @nullable */
+  prorationAmount?: number | null;
+  immediateCharge?: number;
+  credit?: number;
+}
+
+export interface StripeInvoice {
+  id: string;
+  /** @nullable */
+  number?: string | null;
+  /** @nullable */
+  date?: string | null;
+  /** @nullable */
+  dueDate?: string | null;
+  amount: number;
+  amountPaid: number;
+  /** @nullable */
+  status?: string | null;
+  /** @nullable */
+  invoiceUrl?: string | null;
+  /** @nullable */
+  invoicePdf?: string | null;
+  /** @nullable */
+  description?: string | null;
+}
+
+export type DiscountCodeType =
+  (typeof DiscountCodeType)[keyof typeof DiscountCodeType];
+
+export const DiscountCodeType = {
+  percentage: "percentage",
+  fixed: "fixed",
+} as const;
+
+export type DiscountCodeDuration =
+  (typeof DiscountCodeDuration)[keyof typeof DiscountCodeDuration];
+
+export const DiscountCodeDuration = {
+  once: "once",
+  repeating: "repeating",
+  forever: "forever",
+} as const;
+
+export interface DiscountCode {
+  id: number;
+  gymId: number;
+  name: string;
+  code: string;
+  type: DiscountCodeType;
+  amount: number;
+  duration: DiscountCodeDuration;
+  /** @nullable */
+  durationInMonths?: number | null;
+  /** @nullable */
+  maxRedemptions?: number | null;
+  timesRedeemed?: number;
+  isActive: boolean;
+  /** @nullable */
+  expiresAt?: string | null;
+  /** @nullable */
+  stripeCouponId?: string | null;
+  createdAt?: string;
+}
+
+export type CreateDiscountCodeBodyType =
+  (typeof CreateDiscountCodeBodyType)[keyof typeof CreateDiscountCodeBodyType];
+
+export const CreateDiscountCodeBodyType = {
+  percentage: "percentage",
+  fixed: "fixed",
+} as const;
+
+export type CreateDiscountCodeBodyDuration =
+  (typeof CreateDiscountCodeBodyDuration)[keyof typeof CreateDiscountCodeBodyDuration];
+
+export const CreateDiscountCodeBodyDuration = {
+  once: "once",
+  repeating: "repeating",
+  forever: "forever",
+} as const;
+
+export interface CreateDiscountCodeBody {
+  name: string;
+  code: string;
+  type: CreateDiscountCodeBodyType;
+  amount: number;
+  duration?: CreateDiscountCodeBodyDuration;
+  durationInMonths?: number;
+  maxRedemptions?: number;
+  expiresAt?: string;
+}
+
+export interface AdjustBalanceBody {
+  amount: number;
+  description: string;
+}
+
+export interface TaxConfig {
+  taxEnabled?: boolean;
+  /** @nullable */
+  taxLabel?: string | null;
+  taxRate?: number;
+  /** @nullable */
+  taxJurisdiction?: string | null;
+  /** @nullable */
+  stripeTaxRateId?: string | null;
+}
+
+export interface UpdateTaxConfigBody {
+  taxLabel: string;
+  taxRate: number;
+  taxJurisdiction?: string;
+}
+
+export type ScheduledHoldStatus =
+  (typeof ScheduledHoldStatus)[keyof typeof ScheduledHoldStatus];
+
+export const ScheduledHoldStatus = {
+  scheduled: "scheduled",
+  active: "active",
+  completed: "completed",
+  cancelled: "cancelled",
+} as const;
+
+export interface ScheduledHold {
+  id: number;
+  gymId: number;
+  memberId: number;
+  subscriptionId: number;
+  status: ScheduledHoldStatus;
+  startDate: string;
+  /** @nullable */
+  endDate?: string | null;
+  /** @nullable */
+  reason?: string | null;
+  /** @nullable */
+  createdBy?: string | null;
+  /** @nullable */
+  createdByName?: string | null;
+  /** @nullable */
+  activatedAt?: string | null;
+  /** @nullable */
+  completedAt?: string | null;
+  /** @nullable */
+  cancelledAt?: string | null;
+  createdAt?: string;
+}
+
+export interface CreateHoldBody {
+  subscriptionId: number;
+  startDate: string;
+  endDate?: string;
+  reason?: string;
+}
+
+export interface CheckinStatus {
+  allowed: boolean;
+  reason?: string;
+  warning?: string;
+  holdId?: number;
+}
+
 export type ListMembersParams = {
   status?: string;
   search?: string;
@@ -1992,4 +2187,47 @@ export const ListProgrammingDaysStatus = {
 
 export type SubmitLeadCapture201 = {
   message?: string;
+};
+
+export type PreviewPlanChangeBody = {
+  newPlanId: number;
+};
+
+export type UpdateDiscountCodeBody = {
+  isActive: boolean;
+};
+
+export type ApplyDiscountToSubscriptionBody = {
+  discountId: number;
+};
+
+export type ApplyDiscountToSubscription200 = {
+  success?: boolean;
+};
+
+export type RemoveDiscountFromSubscription200 = {
+  success?: boolean;
+};
+
+export type GetMemberBalance200 = {
+  balance?: number;
+};
+
+export type AdjustMemberBalance200 = {
+  success?: boolean;
+  newBalance?: number;
+};
+
+export type UpdateTaxConfig200 = {
+  success?: boolean;
+  stripeTaxRateId?: string;
+};
+
+export type DisableTax200 = {
+  success?: boolean;
+};
+
+export type UpdateHoldBody = {
+  endDate?: string;
+  reason?: string;
 };

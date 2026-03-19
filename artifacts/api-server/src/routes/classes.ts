@@ -1,8 +1,35 @@
 import { Router, type IRouter } from "express";
 import { eq, and, gte, lte, desc, sql, lt } from "drizzle-orm";
-import { db, classesTable, attendanceTable, gymStaffTable } from "@workspace/db";
+import { db, classesTable, attendanceTable, gymStaffTable, scheduledHoldsTable, gymsTable } from "@workspace/db";
 import { CreateClassBody, UpdateClassBody } from "@workspace/api-zod";
 import { requireScheduleManage, requireScheduleOperate, canManageSchedule, type ScheduleRole } from "../middlewares/scheduleRbac";
+
+async function checkMemberBillingStatus(memberId: number, gymId: number): Promise<{ allowed: boolean; reason?: string }> {
+  const activeHolds = await db.select().from(scheduledHoldsTable)
+    .where(and(
+      eq(scheduledHoldsTable.memberId, memberId), eq(scheduledHoldsTable.gymId, gymId),
+      eq(scheduledHoldsTable.status, "active")
+    ));
+  if (activeHolds.length > 0) return { allowed: false, reason: "Member is on hold" };
+
+  const { billingRecoveryTable } = await import("@workspace/db");
+  const activeRecovery = await db.select().from(billingRecoveryTable)
+    .where(and(
+      eq(billingRecoveryTable.memberId, memberId), eq(billingRecoveryTable.gymId, gymId),
+      eq(billingRecoveryTable.status, "active")
+    ));
+
+  if (activeRecovery.length > 0) {
+    const [gym] = await db.select().from(gymsTable).where(eq(gymsTable.id, gymId));
+    const policy = gym?.pastDuePolicy || "grace_period";
+    if (policy === "strict") return { allowed: false, reason: "Payment past due — check-in blocked" };
+    const recovery = activeRecovery[0];
+    if (recovery.graceDeadline && new Date(recovery.graceDeadline) < new Date()) {
+      return { allowed: false, reason: "Grace period expired — payment required before check-in" };
+    }
+  }
+  return { allowed: true };
+}
 
 const router: IRouter = Router();
 
@@ -244,6 +271,13 @@ router.post("/gyms/:gymId/classes/:classId/checkin", requireScheduleOperate(), a
   const [member] = await db.select().from(membersTable).where(and(eq(membersTable.id, memberId), eq(membersTable.gymId, gymId)));
   if (!member) { res.status(404).json({ error: "Member not found" }); return; }
 
+  if (status === "checked_in") {
+    const billingCheck = await checkMemberBillingStatus(memberId, gymId);
+    if (!billingCheck.allowed) {
+      res.status(403).json({ error: billingCheck.reason || "Check-in blocked by billing policy" }); return;
+    }
+  }
+
   const [gymClass] = await db.select().from(classesTable).where(and(eq(classesTable.id, classId), eq(classesTable.gymId, gymId)));
   if (!gymClass) { res.status(404).json({ error: "Class not found" }); return; }
 
@@ -436,6 +470,13 @@ router.patch("/gyms/:gymId/classes/:classId/attendance/:attendanceId", requireSc
     and(eq(attendanceTable.id, attendanceId), eq(attendanceTable.classId, classId))
   );
   if (!existing) { res.status(404).json({ error: "Attendance record not found" }); return; }
+
+  if (newStatus === "checked_in" && existing.status !== "checked_in") {
+    const billingCheck = await checkMemberBillingStatus(existing.memberId, gymId);
+    if (!billingCheck.allowed) {
+      res.status(403).json({ error: billingCheck.reason || "Check-in blocked by billing policy" }); return;
+    }
+  }
 
   const oldStatus = existing.status;
 

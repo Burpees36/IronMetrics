@@ -3404,3 +3404,360 @@ export const CreateDocumentBody = zod.object({
   content: zod.string().nullish(),
   isRequired: zod.boolean().optional(),
 });
+
+/**
+ * @summary Change subscription plan (upgrade/downgrade)
+ */
+export const ChangePlanParams = zod.object({
+  gymId: zod.coerce.number(),
+  subscriptionId: zod.coerce.number(),
+});
+
+export const ChangePlanBody = zod.object({
+  newPlanId: zod.number(),
+  timing: zod.enum(["immediate", "next_cycle"]),
+});
+
+export const ChangePlanResponse = zod.object({
+  success: zod.boolean().optional(),
+  oldPlan: zod.string().optional(),
+  newPlan: zod.string().optional(),
+  timing: zod.string().optional(),
+  prorationPreview: zod
+    .object({
+      amountDue: zod.number().optional(),
+      credit: zod.number().optional(),
+    })
+    .nullish(),
+});
+
+/**
+ * @summary Preview plan change proration
+ */
+export const PreviewPlanChangeParams = zod.object({
+  gymId: zod.coerce.number(),
+  subscriptionId: zod.coerce.number(),
+});
+
+export const PreviewPlanChangeBody = zod.object({
+  newPlanId: zod.number(),
+});
+
+export const PreviewPlanChangeResponse = zod.object({
+  currentAmount: zod.number().optional(),
+  newAmount: zod.number().optional(),
+  prorationAmount: zod.number().nullish(),
+  immediateCharge: zod.number().optional(),
+  credit: zod.number().optional(),
+});
+
+/**
+ * @summary Get member Stripe invoices with PDF/URL links
+ */
+export const GetMemberStripeInvoicesParams = zod.object({
+  gymId: zod.coerce.number(),
+  memberId: zod.coerce.number(),
+});
+
+export const GetMemberStripeInvoicesResponseItem = zod.object({
+  id: zod.string(),
+  number: zod.string().nullish(),
+  date: zod.string().nullish(),
+  dueDate: zod.string().nullish(),
+  amount: zod.number(),
+  amountPaid: zod.number(),
+  status: zod.string().nullish(),
+  invoiceUrl: zod.string().nullish(),
+  invoicePdf: zod.string().nullish(),
+  description: zod.string().nullish(),
+});
+export const GetMemberStripeInvoicesResponse = zod.array(
+  GetMemberStripeInvoicesResponseItem,
+);
+
+/**
+ * @summary List discount codes for gym
+ */
+export const ListDiscountCodesParams = zod.object({
+  gymId: zod.coerce.number(),
+});
+
+export const ListDiscountCodesResponseItem = zod.object({
+  id: zod.number(),
+  gymId: zod.number(),
+  name: zod.string(),
+  code: zod.string(),
+  type: zod.enum(["percentage", "fixed"]),
+  amount: zod.number(),
+  duration: zod.enum(["once", "repeating", "forever"]),
+  durationInMonths: zod.number().nullish(),
+  maxRedemptions: zod.number().nullish(),
+  timesRedeemed: zod.number().optional(),
+  isActive: zod.boolean(),
+  expiresAt: zod.string().nullish(),
+  stripeCouponId: zod.string().nullish(),
+  createdAt: zod.string().optional(),
+});
+export const ListDiscountCodesResponse = zod.array(
+  ListDiscountCodesResponseItem,
+);
+
+/**
+ * @summary Create a discount code
+ */
+export const CreateDiscountCodeParams = zod.object({
+  gymId: zod.coerce.number(),
+});
+
+export const CreateDiscountCodeBody = zod.object({
+  name: zod.string(),
+  code: zod.string(),
+  type: zod.enum(["percentage", "fixed"]),
+  amount: zod.number(),
+  duration: zod.enum(["once", "repeating", "forever"]).optional(),
+  durationInMonths: zod.number().optional(),
+  maxRedemptions: zod.number().optional(),
+  expiresAt: zod.string().optional(),
+});
+
+/**
+ * @summary Activate/deactivate a discount code
+ */
+export const UpdateDiscountCodeParams = zod.object({
+  gymId: zod.coerce.number(),
+  id: zod.coerce.number(),
+});
+
+export const UpdateDiscountCodeBody = zod.object({
+  isActive: zod.boolean(),
+});
+
+export const UpdateDiscountCodeResponse = zod.object({
+  id: zod.number(),
+  gymId: zod.number(),
+  name: zod.string(),
+  code: zod.string(),
+  type: zod.enum(["percentage", "fixed"]),
+  amount: zod.number(),
+  duration: zod.enum(["once", "repeating", "forever"]),
+  durationInMonths: zod.number().nullish(),
+  maxRedemptions: zod.number().nullish(),
+  timesRedeemed: zod.number().optional(),
+  isActive: zod.boolean(),
+  expiresAt: zod.string().nullish(),
+  stripeCouponId: zod.string().nullish(),
+  createdAt: zod.string().optional(),
+});
+
+/**
+ * @summary Apply discount code to subscription
+ */
+export const ApplyDiscountToSubscriptionParams = zod.object({
+  gymId: zod.coerce.number(),
+  subscriptionId: zod.coerce.number(),
+});
+
+export const ApplyDiscountToSubscriptionBody = zod.object({
+  discountId: zod.number(),
+});
+
+export const ApplyDiscountToSubscriptionResponse = zod.object({
+  success: zod.boolean().optional(),
+});
+
+/**
+ * @summary Remove discount from subscription
+ */
+export const RemoveDiscountFromSubscriptionParams = zod.object({
+  gymId: zod.coerce.number(),
+  subscriptionId: zod.coerce.number(),
+});
+
+export const RemoveDiscountFromSubscriptionResponse = zod.object({
+  success: zod.boolean().optional(),
+});
+
+/**
+ * @summary Get member account credit balance
+ */
+export const GetMemberBalanceParams = zod.object({
+  gymId: zod.coerce.number(),
+  memberId: zod.coerce.number(),
+});
+
+export const GetMemberBalanceResponse = zod.object({
+  balance: zod.number().optional(),
+});
+
+/**
+ * @summary Add or remove account credit
+ */
+export const AdjustMemberBalanceParams = zod.object({
+  gymId: zod.coerce.number(),
+  memberId: zod.coerce.number(),
+});
+
+export const AdjustMemberBalanceBody = zod.object({
+  amount: zod.number(),
+  description: zod.string(),
+});
+
+export const AdjustMemberBalanceResponse = zod.object({
+  success: zod.boolean().optional(),
+  newBalance: zod.number().optional(),
+});
+
+/**
+ * @summary Get gym tax configuration
+ */
+export const GetTaxConfigParams = zod.object({
+  gymId: zod.coerce.number(),
+});
+
+export const GetTaxConfigResponse = zod.object({
+  taxEnabled: zod.boolean().optional(),
+  taxLabel: zod.string().nullish(),
+  taxRate: zod.number().optional(),
+  taxJurisdiction: zod.string().nullish(),
+  stripeTaxRateId: zod.string().nullish(),
+});
+
+/**
+ * @summary Create or update tax rate
+ */
+export const UpdateTaxConfigParams = zod.object({
+  gymId: zod.coerce.number(),
+});
+
+export const UpdateTaxConfigBody = zod.object({
+  taxLabel: zod.string(),
+  taxRate: zod.number(),
+  taxJurisdiction: zod.string().optional(),
+});
+
+export const UpdateTaxConfigResponse = zod.object({
+  success: zod.boolean().optional(),
+  stripeTaxRateId: zod.string().optional(),
+});
+
+/**
+ * @summary Disable tax collection
+ */
+export const DisableTaxParams = zod.object({
+  gymId: zod.coerce.number(),
+});
+
+export const DisableTaxResponse = zod.object({
+  success: zod.boolean().optional(),
+});
+
+/**
+ * @summary List holds for a member
+ */
+export const ListMemberHoldsParams = zod.object({
+  gymId: zod.coerce.number(),
+  memberId: zod.coerce.number(),
+});
+
+export const ListMemberHoldsResponseItem = zod.object({
+  id: zod.number(),
+  gymId: zod.number(),
+  memberId: zod.number(),
+  subscriptionId: zod.number(),
+  status: zod.enum(["scheduled", "active", "completed", "cancelled"]),
+  startDate: zod.string(),
+  endDate: zod.string().nullish(),
+  reason: zod.string().nullish(),
+  createdBy: zod.string().nullish(),
+  createdByName: zod.string().nullish(),
+  activatedAt: zod.string().nullish(),
+  completedAt: zod.string().nullish(),
+  cancelledAt: zod.string().nullish(),
+  createdAt: zod.string().optional(),
+});
+export const ListMemberHoldsResponse = zod.array(ListMemberHoldsResponseItem);
+
+/**
+ * @summary Schedule a hold on a member subscription
+ */
+export const CreateHoldParams = zod.object({
+  gymId: zod.coerce.number(),
+  memberId: zod.coerce.number(),
+});
+
+export const CreateHoldBody = zod.object({
+  subscriptionId: zod.number(),
+  startDate: zod.string(),
+  endDate: zod.string().optional(),
+  reason: zod.string().optional(),
+});
+
+/**
+ * @summary Update a hold
+ */
+export const UpdateHoldParams = zod.object({
+  gymId: zod.coerce.number(),
+  holdId: zod.coerce.number(),
+});
+
+export const UpdateHoldBody = zod.object({
+  endDate: zod.string().optional(),
+  reason: zod.string().optional(),
+});
+
+export const UpdateHoldResponse = zod.object({
+  id: zod.number(),
+  gymId: zod.number(),
+  memberId: zod.number(),
+  subscriptionId: zod.number(),
+  status: zod.enum(["scheduled", "active", "completed", "cancelled"]),
+  startDate: zod.string(),
+  endDate: zod.string().nullish(),
+  reason: zod.string().nullish(),
+  createdBy: zod.string().nullish(),
+  createdByName: zod.string().nullish(),
+  activatedAt: zod.string().nullish(),
+  completedAt: zod.string().nullish(),
+  cancelledAt: zod.string().nullish(),
+  createdAt: zod.string().optional(),
+});
+
+/**
+ * @summary Cancel a hold
+ */
+export const CancelHoldParams = zod.object({
+  gymId: zod.coerce.number(),
+  holdId: zod.coerce.number(),
+});
+
+export const CancelHoldResponse = zod.object({
+  id: zod.number(),
+  gymId: zod.number(),
+  memberId: zod.number(),
+  subscriptionId: zod.number(),
+  status: zod.enum(["scheduled", "active", "completed", "cancelled"]),
+  startDate: zod.string(),
+  endDate: zod.string().nullish(),
+  reason: zod.string().nullish(),
+  createdBy: zod.string().nullish(),
+  createdByName: zod.string().nullish(),
+  activatedAt: zod.string().nullish(),
+  completedAt: zod.string().nullish(),
+  cancelledAt: zod.string().nullish(),
+  createdAt: zod.string().optional(),
+});
+
+/**
+ * @summary Check if member can check in (holds + past-due enforcement)
+ */
+export const GetCheckinStatusParams = zod.object({
+  gymId: zod.coerce.number(),
+  memberId: zod.coerce.number(),
+});
+
+export const GetCheckinStatusResponse = zod.object({
+  allowed: zod.boolean(),
+  reason: zod.string().optional(),
+  warning: zod.string().optional(),
+  holdId: zod.number().optional(),
+});
