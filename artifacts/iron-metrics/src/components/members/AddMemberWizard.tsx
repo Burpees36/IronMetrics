@@ -663,14 +663,14 @@ export function AddMemberWizard({ open, onOpenChange }: Props) {
                               : "border-border bg-background text-muted-foreground hover:bg-muted/50"
                           }`}
                         >
-                          <div className="flex items-center justify-between">
-                            <div>
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="min-w-0 flex-1">
                               <span className="text-sm font-medium text-foreground">{plan.name}</span>
                               {plan.description && (
-                                <p className="text-xs text-muted-foreground mt-0.5">{plan.description}</p>
+                                <p className="text-xs text-muted-foreground mt-0.5 truncate">{plan.description}</p>
                               )}
                             </div>
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 shrink-0">
                               <span className="text-sm font-semibold text-primary">
                                 {formatPrice(plan.price, plan.billingInterval)}
                               </span>

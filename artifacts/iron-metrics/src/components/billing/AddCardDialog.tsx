@@ -49,12 +49,12 @@ export function AddCardDialog({ open, onOpenChange, clientSecret, onSuccess }: A
   const API_BASE = `${BASE_URL}api`.replace(/\/\//g, "/");
 
   const initStripe = useCallback(async () => {
-    if (!clientSecret || stripe) return;
+    if (!clientSecret || stripe || !activeGymId) return;
     setLoading(true);
     setError("");
 
     try {
-      const res = await fetch(`${API_BASE}/stripe/publishable-key`);
+      const res = await fetch(`${API_BASE}/gyms/${activeGymId}/stripe/publishable-key`);
       if (!res.ok) { setError("Failed to load payment system."); setLoading(false); return; }
       const { publishableKey } = await res.json();
 
