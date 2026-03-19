@@ -494,7 +494,7 @@ export function Billing() {
                   <motion.tr key={plan.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }} className="hover:bg-secondary transition-colors">
                     <td className="px-6 py-4 font-semibold text-foreground">{plan.name}</td>
                     <td className="px-6 py-4 text-foreground">${plan.price}</td>
-                    <td className="px-6 py-4 text-muted-foreground capitalize">{plan.billingInterval || "monthly"}</td>
+                    <td className="px-6 py-4 text-muted-foreground capitalize">{plan.billingInterval === "one_time" ? "One-Time" : plan.billingInterval || "monthly"}</td>
                     <td className="px-6 py-4 text-foreground">{plan.memberCount}</td>
                     <td className="px-6 py-4 text-foreground font-medium">${(plan.memberCount * plan.price).toLocaleString()}</td>
                   </motion.tr>
@@ -814,6 +814,7 @@ export function Billing() {
                     <SelectItem value="monthly">Monthly</SelectItem>
                     <SelectItem value="quarterly">Quarterly</SelectItem>
                     <SelectItem value="annual">Annual</SelectItem>
+                    <SelectItem value="one_time">One-Time</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -860,7 +861,7 @@ export function Billing() {
                 <SelectTrigger><SelectValue placeholder="Select a plan" /></SelectTrigger>
                 <SelectContent>
                   {(plans ?? []).map((p: any) => (
-                    <SelectItem key={p.id} value={String(p.id)}>{p.name} — ${p.price}/{p.billingInterval || "mo"}</SelectItem>
+                    <SelectItem key={p.id} value={String(p.id)}>{p.name} — ${p.price}{p.billingInterval === "one_time" ? "" : `/${p.billingInterval === "annual" ? "yr" : p.billingInterval === "quarterly" ? "qtr" : "mo"}`}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>

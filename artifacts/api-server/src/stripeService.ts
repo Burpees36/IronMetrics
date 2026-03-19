@@ -93,10 +93,19 @@ export class StripeService {
     const [member] = await db.select().from(membersTable).where(and(eq(membersTable.id, memberId), eq(membersTable.gymId, gymId)));
     if (!member) throw new Error("Member not found");
 
-    const billingMemberId = member.linkedBillingMemberId || memberId;
-    const customerId = await this.getOrCreateCustomer(billingMemberId, gymId);
     const [plan] = await db.select().from(membershipPlansTable).where(and(eq(membershipPlansTable.id, planId), eq(membershipPlansTable.gymId, gymId)));
     if (!plan) throw new Error("Plan not found");
+
+    if (plan.billingInterval === "one_time") {
+      const result = await this.createOneTimeCharge(
+        memberId, gymId, parseFloat(plan.price),
+        `${plan.name} — one-time purchase`, paymentMethodId, actor
+      );
+      return { ...result, isOneTime: true, planName: plan.name };
+    }
+
+    const billingMemberId = member.linkedBillingMemberId || memberId;
+    const customerId = await this.getOrCreateCustomer(billingMemberId, gymId);
 
     const stripe = await getUncachableStripeClient();
 

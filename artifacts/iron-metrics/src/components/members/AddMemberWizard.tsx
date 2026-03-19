@@ -97,6 +97,7 @@ function ReviewRow({ label, value, highlight }: { label: string; value: string; 
 
 function formatPrice(price: number, interval: string): string {
   const formatted = `$${price.toFixed(2)}`;
+  if (interval === "one_time") return formatted;
   const intervalLabel = interval === "monthly" ? "/mo" : interval === "quarterly" ? "/qtr" : interval === "annual" ? "/yr" : `/${interval}`;
   return `${formatted}${intervalLabel}`;
 }

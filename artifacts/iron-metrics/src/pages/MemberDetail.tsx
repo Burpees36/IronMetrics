@@ -1170,7 +1170,7 @@ export function MemberDetail() {
                 <SelectTrigger className="bg-background border-border"><SelectValue placeholder="Select a plan" /></SelectTrigger>
                 <SelectContent>
                   {(plans ?? []).map((p: any) => (
-                    <SelectItem key={p.id} value={String(p.id)}>{p.name} — ${p.price}/{p.billingInterval || "mo"}</SelectItem>
+                    <SelectItem key={p.id} value={String(p.id)}>{p.name} — ${p.price}{p.billingInterval === "one_time" ? "" : `/${p.billingInterval === "annual" ? "yr" : p.billingInterval === "quarterly" ? "qtr" : "mo"}`}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
