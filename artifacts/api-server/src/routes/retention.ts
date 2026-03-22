@@ -19,10 +19,44 @@ const DEFAULT_SEQUENCES = [
     triggerConfig: { type: "no_attendance", days: 10 },
     cooldownDays: 30,
     steps: [
-      { stepOrder: 1, actionType: "email", delayDays: 0, config: { subject: "We miss you at {{gym_name}}!", body: "Hi {{first_name}},\n\nWe noticed you haven't been in lately and wanted to check in. Everything okay?\n\nWe'd love to see you back — there's always a spot for you in class.\n\nSee you soon,\n{{gym_name}}" } },
-      { stepOrder: 2, actionType: "task", delayDays: 3, config: { title: "Personal check-in: {{first_name}} {{last_name}}", description: "Member hasn't attended in over a week. Send a personal text or give them a call to check in.", assignTo: "coach" } },
-      { stepOrder: 3, actionType: "email", delayDays: 7, config: { subject: "Your spot is waiting, {{first_name}}", body: "Hi {{first_name}},\n\nJust a quick note — we have some great classes coming up this week and would love to see you there.\n\nSometimes getting back in is the hardest part. We're here to help.\n\nBest,\n{{gym_name}}" } },
-      { stepOrder: 4, actionType: "task", delayDays: 14, config: { title: "Manager follow-up: {{first_name}} {{last_name}}", description: "Member has been disengaged for 3+ weeks. Consider a personal call from management to understand their situation.", assignTo: "owner" } },
+      { stepOrder: 1, actionType: "email", delayDays: 0, config: { 
+        subject: "We miss you at {{gym_name}}!", 
+        body: "Hi {{first_name}},\n\nWe noticed you haven't been in lately and wanted to check in. This is usually where people start slipping and we don't want that for you.\n\n" +
+          "Let’s make this simple:\n" +
+          "→ Pick one class this week\n" +
+          "→ Show up\n" +
+          "→ We’ll handle the rest\n\n" + 
+        "See you soon,\n{{gym_name}}" } },
+      { stepOrder: 2, actionType: "task", delayDays: 3, config: { 
+        title: "Personal check-in: {{first_name}} {{last_name}}",           
+        description:
+        "Call (do NOT text first).\n\n" +                                   
+        "Ask: 'What’s been getting in the way of coming in?'\n\n" +
+        "Listen fully. Then offer ONE solution:\n" +
+         "- New class time\n" +
+         "- Scaled programming\n" +
+         "- Accountability plan\n\n" +                                       
+        "GOAL: Get them verbally committed to their next class before ending the call.",
+        assignTo: "coach" } },
+      { stepOrder: 3, actionType: "email", delayDays: 7, config: { 
+      subject: "Let’s get one win this week, {{first_name}}",
+        body:
+          "Hi {{first_name}},\n\n" +
+          "You don’t need a perfect week — you just need one win.\n\n" +
+          "One class. That’s it.\n\n" +
+          "Momentum starts small, and we’ll build from there.\n\n" +
+          "We’ve got your back — just show up once this week.\n\n" +
+          "{{gym_name}}" } },
+      { stepOrder: 4, actionType: "task", delayDays: 14, config: { 
+      title: "Escalation: Owner outreach — {{first_name}}",
+        description:
+          "Member has not returned after initial outreach.\n\n" +
+          "Owner call or voice message required.\n\n" +
+          "Focus:\n" +
+          "- Reinforce value of membership\n" +
+          "- Offer adjustment (schedule, plan, hold)\n\n" +
+          "GOAL: Save membership or uncover true churn reason.",
+        assignTo: "owner" } },
     ],
   },
   {
@@ -32,22 +66,87 @@ const DEFAULT_SEQUENCES = [
     triggerConfig: { type: "risk_score", threshold: 50 },
     cooldownDays: 45,
     steps: [
-      { stepOrder: 1, actionType: "email", delayDays: 0, config: { subject: "How's it going, {{first_name}}?", body: "Hi {{first_name}},\n\nWe wanted to check in and see how you're doing with your training. Your goals matter to us.\n\nIf there's anything we can do to help — adjust your schedule, try a different class, or set new goals — just let us know.\n\n{{gym_name}}" } },
-      { stepOrder: 2, actionType: "task", delayDays: 5, config: { title: "Schedule 1-on-1 with {{first_name}} {{last_name}}", description: "Member showing moderate risk signals. Offer a complimentary goal-setting session or movement assessment.", assignTo: "coach" } },
-      { stepOrder: 3, actionType: "email", delayDays: 10, config: { subject: "New classes you might enjoy", body: "Hi {{first_name}},\n\nWe're always adding new programming and class times. Check out what's new — there might be something that fits your schedule better.\n\nWe're here to support your journey.\n\n{{gym_name}}" } },
+      { stepOrder: 1, actionType: "email", delayDays: 0, config: { 
+      subject: "Something’s off — let’s fix it",
+        body:
+          "Hey {{first_name}},\n\n" +
+          "Quick check — your attendance has dropped off a bit.\n\n" +
+          "That usually means one of three things:\n" +
+          "• Schedule isn’t working\n" +
+          "• Workouts feel off\n" +
+          "• Life got busy\n\n" +
+          "Totally normal — but if we don’t fix it now, it turns into quitting later.\n\n" +
+          "Let’s get ahead of it.\n\n" +
+          "Reply “YES” and we’ll set up a quick 10-minute plan.\n\n" +
+          "{{gym_name}}" } },
+      { stepOrder: 2, actionType: "task", delayDays: 5, config: { 
+      title: "Book goal review with {{first_name}}",
+        description:
+          "Schedule a 10-minute goal review.\n\n" +
+          "Agenda:\n" +
+          "1. Identify barrier\n" +
+          "2. Adjust training schedule\n" +
+          "3. Lock in next 2 class dates\n\n" +
+          "GOAL: Member leaves with a clear plan + booked classes.",
+        assignTo: "coach" } },
+      { stepOrder: 3, actionType: "email", delayDays: 10, config: { 
+      subject: "We adjusted things for you",
+        body:
+          "Hi {{first_name}},\n\n" +
+          "We’ve made some adjustments on our end to help you stay consistent.\n\n" +
+          "Now it just comes down to showing up.\n\n" +
+          "Even one or two classes this week puts you back on track.\n\n" +
+          "We’re here — let’s keep this moving.\n\n" +
+          "{{gym_name}}" } },
+      {
+        stepOrder: 4, actionType: "task", delayDays: 12, config: {
+          title: "Check attendance recovery — {{first_name}}",
+          description:
+            "Review if attendance improved.\n\n" +
+            "If NOT:\n" +
+            "- Escalate to owner\n" +
+            "- Consider membership adjustment or added support\n\n" +
+            "GOAL: Prevent progression to high-risk.",
+          assignTo: "coach" } },
     ],
   },
+
   {
     name: "Win Back",
     description: "Intensive outreach for high-risk members near cancellation",
     type: "win_back",
-    triggerConfig: { type: "risk_score", threshold: 75 },
+    triggerConfig: { type: "risk_score", threshold: 80 },
     cooldownDays: 60,
     steps: [
-      { stepOrder: 1, actionType: "task", delayDays: 0, config: { title: "URGENT: {{first_name}} {{last_name}} at high churn risk", description: "This member is at high risk of cancelling. Immediate personal outreach recommended — call or text today.", assignTo: "owner" } },
-      { stepOrder: 2, actionType: "email", delayDays: 1, config: { subject: "{{first_name}}, we want to help", body: "Hi {{first_name}},\n\nI wanted to reach out personally. We value your membership and want to make sure you're getting the most out of it.\n\nIf something isn't working — schedule, programming, anything — I'd love to chat and find a solution together.\n\nFeel free to reply to this email or call us anytime.\n\n{{gym_name}}" } },
-      { stepOrder: 3, actionType: "task", delayDays: 7, config: { title: "Follow-up call: {{first_name}} {{last_name}} win-back", description: "Follow up on previous outreach. Consider offering a modified membership, freeze option, or personal training session.", assignTo: "owner" } },
-      { stepOrder: 4, actionType: "email", delayDays: 14, config: { subject: "We'd love to have you back, {{first_name}}", body: "Hi {{first_name}},\n\nWe understand life gets busy. If you need a break, we offer membership holds. If there's something we can do differently, we're all ears.\n\nYour health and fitness journey matters to us — we're here whenever you're ready.\n\nWarmly,\n{{gym_name}}" } },
+      { stepOrder: 1, actionType: "task", delayDays: 0, config: { 
+        title: "URGENT: Call {{first_name}} {{last_name}} now",
+          description:
+            "High churn risk.\n\n" +
+            "Call immediately.\n\n" +
+            "Script:\n" +
+            "- 'Hey, I wanted to check in — haven’t seen you much lately.'\n" +
+            "- 'What’s been going on?'\n\n" +
+            "Offer solution:\n" +
+            "- Adjust plan\n" +
+            "- Schedule reset\n" +
+            "- Membership hold if needed\n\n" +
+            "GOAL: Get commitment or uncover churn reason.", 
+        assignTo: "owner" } },
+      { stepOrder: 2, actionType: "email", delayDays: 1, config: { 
+        subject: "{{first_name}}, we want to help", 
+        body: "Hi {{first_name}},\n\nI wanted to reach out personally. We value you and want to make sure you're getting the most out of this membership.\n\nIf something isn't working — schedule, programming, anything — I'd love to chat and find a solution together.\n\Reply or call us — we’ll make a plan that works.\n\n{{gym_name}}" } },
+      { stepOrder: 3, actionType: "task", delayDays: 7, config: { 
+      title: "Offer retention option — {{first_name}}",
+        description:
+          "If still disengaged, offer:\n" +
+          "- Membership downgrade\n" +
+          "- Temporary hold\n" +
+          "- Personal training intro\n\n" +
+          "GOAL: Keep them connected instead of cancelling.",
+        assignTo: "owner" } },
+      { stepOrder: 4, actionType: "email", delayDays: 14, config: { 
+        subject: "We'd love to have you back, {{first_name}}", 
+        body: "Hi {{first_name}},\n\nWe understand life gets busy. If you need a break, we offer membership holds. If there's something we can do differently, we're all ears.\n\nYour health and fitness journey matters to us — we're here whenever you're ready.\n\nWarmly,\n{{gym_name}}" } },
     ],
   },
   {
@@ -57,12 +156,44 @@ const DEFAULT_SEQUENCES = [
     triggerConfig: { type: "new_member_decline", joinDays: 90, inactiveDays: 7 },
     cooldownDays: 30,
     steps: [
-      { stepOrder: 1, actionType: "email", delayDays: 0, config: { subject: "Quick check-in, {{first_name}}!", body: "Hi {{first_name}},\n\nWelcome to the family! We noticed you might not have made it in recently and wanted to check in.\n\nStarting a new fitness routine can be tough. Here are some tips:\n• Try a different class time if your schedule changed\n• Don't worry about scaling — every workout is adjustable\n• Come say hi even if you're not sure what to do\n\nWe're here to help!\n\n{{gym_name}}" } },
-      { stepOrder: 2, actionType: "task", delayDays: 2, config: { title: "New member check-in: {{first_name}} {{last_name}}", description: "New member showing early disengagement. Personally reach out to help them feel welcome and address any barriers.", assignTo: "coach" } },
-      { stepOrder: 3, actionType: "email", delayDays: 7, config: { subject: "Your {{gym_name}} journey", body: "Hi {{first_name}},\n\nEvery fitness journey has ups and downs. The most important thing is showing up — even once this week.\n\nWe believe in you and we're here to support you every step of the way.\n\nSee you soon,\n{{gym_name}}" } },
-    ],
-  },
-];
+      { stepOrder: 1, actionType: "email", delayDays: 0, config: { 
+        subject: "Quick check-in, {{first_name}}!", 
+        body: "Hi {{first_name}},\n\nWelcome to the family! We noticed you might not have made it in recently and wanted to check in.\n\nStarting a new fitness routine can be tough. Here are some tips:\n• Try a different class time if your schedule changed\n• Don't worry about scaling — every workout is adjustable\n• Come say hi even if you're not sure what to do\n\nWe're here to help!\n\n{{gym_name}}" } },
+      { stepOrder: 2, actionType: "task", delayDays: 2, config: { 
+      title: "New member check-in — {{first_name}}",
+        description:
+          "Reach out personally.\n\n" +
+          "Ask:\n" +
+          "- How are they feeling?\n" +
+          "- Any confusion or hesitation?\n\n" +
+          "GOAL: Remove friction, make them feel welcome + schedule next class.",
+        assignTo: "coach" } },
+      { stepOrder: 3, actionType: "email", delayDays: 7, config: { 
+        subject: "Your {{gym_name}} journey", 
+        body:
+        "Hi {{first_name}},\n\n" +
+        "You don’t need to be perfect — you just need to be consistent.\n\n" +
+        "Every class you show up to builds momentum.\n\n" +
+        "We believe in you and we're here to support you every step of the way.\n\nSee you soon,\n {{gym_name}}" } },
+      {
+        stepOrder: 4,
+        actionType: "task",
+        delayDays: 10,
+        config: {
+          title: "Review first 2 weeks — {{first_name}}",
+          description:
+            "Check attendance.\n\n" +
+            "If <3 visits/week:\n" +
+            "- Adjust schedule\n" +
+            "- Reinforce habit expectations\n\n" +
+            "GOAL: Lock in routine before day 30.",
+          assignTo: "coach"
+        }
+      }
+   ]
+  } 
+]; 
+
 
 router.get("/gyms/:gymId/retention/sequences", async (req, res): Promise<void> => {
   try {
