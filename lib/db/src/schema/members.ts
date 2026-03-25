@@ -51,11 +51,16 @@ export const membersTable = pgTable("members", {
   waiverSigned: boolean("waiver_signed").notNull().default(false),
   stripeCustomerId: text("stripe_customer_id"),
   linkedBillingMemberId: integer("linked_billing_member_id"),
+  wodifyClientId: integer("wodify_client_id"),
+  monthlyRevenue: numeric("monthly_revenue"),
+  totalClassSignIns: integer("total_class_sign_ins"),
+  currentWeekstreak: integer("current_weekstreak"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 }, (table) => [
   index("idx_members_gym").on(table.gymId),
   index("idx_members_gym_status").on(table.gymId, table.status),
+  index("idx_members_wodify_client").on(table.gymId, table.wodifyClientId),
 ]);
 
 export const insertMemberSchema = createInsertSchema(membersTable).omit({ id: true, createdAt: true, updatedAt: true });
