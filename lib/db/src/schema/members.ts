@@ -21,7 +21,7 @@
  *   - `idx_members_gym`: Speeds up queries filtering by gym (most common pattern).
  *   - `idx_members_gym_status`: Optimizes the frequent "active members for gym X" query.
  */
-import { pgTable, text, serial, timestamp, integer, numeric, boolean, date, index } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, timestamp, integer, numeric, boolean, date, index, uniqueIndex } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { gymsTable } from "./gyms";
@@ -55,12 +55,14 @@ export const membersTable = pgTable("members", {
   monthlyRevenue: numeric("monthly_revenue"),
   totalClassSignIns: integer("total_class_sign_ins"),
   currentWeekstreak: integer("current_weekstreak"),
+  daysSinceLastAttendance: integer("days_since_last_attendance"),
+  isAtRisk: boolean("is_at_risk"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 }, (table) => [
   index("idx_members_gym").on(table.gymId),
   index("idx_members_gym_status").on(table.gymId, table.status),
-  index("idx_members_wodify_client").on(table.gymId, table.wodifyClientId),
+  uniqueIndex("idx_members_wodify_client").on(table.gymId, table.wodifyClientId),
 ]);
 
 export const insertMemberSchema = createInsertSchema(membersTable).omit({ id: true, createdAt: true, updatedAt: true });

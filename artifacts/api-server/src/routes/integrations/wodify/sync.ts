@@ -22,6 +22,8 @@ interface MemberUpsert {
   tags: string[];
   totalClassSignIns: number;
   currentWeekstreak: number;
+  daysSinceLastAttendance: number | null;
+  isAtRisk: boolean;
 }
 
 function parseWodifyDate(val: string | null | undefined): string | null {
@@ -79,6 +81,8 @@ export function normalizeClient(client: WodifyClient): MemberUpsert | null {
     tags,
     totalClassSignIns: client.total_class_sign_ins ?? 0,
     currentWeekstreak: client.current_weekstreak ?? 0,
+    daysSinceLastAttendance: client.days_since_last_attendance ?? null,
+    isAtRisk: client.is_at_risk ?? false,
   };
 }
 
@@ -170,7 +174,7 @@ export interface SyncResult {
   updated: number;
   skipped: number;
   errored: number;
-  errors: { wodifyClientId: number; error: string }[];
+  errors: { rowIndex: number; error: string; wodifyClientId?: number }[];
 }
 
 export async function runWodifySync(
@@ -197,6 +201,8 @@ export async function runWodifySync(
     errored: 0,
     errors: [],
   };
+
+  let rowIndex = 0;
 
   try {
     const client = createWodifyClient(apiKey);
@@ -238,6 +244,7 @@ export async function runWodifySync(
     const today = new Date().toISOString().split("T")[0];
 
     for (const wClient of wodifyClients) {
+      rowIndex++;
       const normalized = normalizeClient(wClient);
       if (!normalized) {
         result.skipped++;
@@ -283,6 +290,8 @@ export async function runWodifySync(
             monthlyRevenue: normalized.monthlyRevenue ?? undefined,
             totalClassSignIns: normalized.totalClassSignIns,
             currentWeekstreak: normalized.currentWeekstreak,
+            daysSinceLastAttendance: normalized.daysSinceLastAttendance,
+            isAtRisk: normalized.isAtRisk,
           }).where(eq(membersTable.id, existingId));
           result.updated++;
         } else {
@@ -304,6 +313,8 @@ export async function runWodifySync(
             monthlyRevenue: normalized.monthlyRevenue,
             totalClassSignIns: normalized.totalClassSignIns,
             currentWeekstreak: normalized.currentWeekstreak,
+            daysSinceLastAttendance: normalized.daysSinceLastAttendance,
+            isAtRisk: normalized.isAtRisk,
           }).returning();
 
           byEmail.set(normalized.email, newMember.id);
@@ -326,8 +337,9 @@ export async function runWodifySync(
         result.errored++;
         if (result.errors.length < 50) {
           result.errors.push({
-            wodifyClientId: normalized.wodifyClientId,
+            rowIndex,
             error: err.message || "Unexpected error",
+            wodifyClientId: normalized.wodifyClientId,
           });
         }
       }
@@ -346,7 +358,7 @@ export async function runWodifySync(
       skipped: result.skipped,
       errored: result.errored,
       totalRows: result.totalClients,
-      errorDetails: result.errors.length > 0 ? result.errors.slice(0, 50) as any : null,
+      errorDetails: result.errors.length > 0 ? result.errors.slice(0, 50) : null,
       completedAt: new Date(),
       metadata: {
         totalClients: result.totalClients,
@@ -359,7 +371,7 @@ export async function runWodifySync(
     result.status = "failed";
     await db.update(syncRunsTable).set({
       status: "failed",
-      errorDetails: [{ rowIndex: 0, error: err.message || "Sync failed" }] as any,
+      errorDetails: [{ rowIndex: 0, error: err.message || "Sync failed" }],
       completedAt: new Date(),
     }).where(eq(syncRunsTable.id, syncRun.id));
   }
