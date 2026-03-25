@@ -26,7 +26,7 @@ export function MembersStep({ gymId, onComplete, onSkip, onBack, isComplete }: S
   const [wodifyError, setWodifyError] = useState("");
   const [wodifyClientCount, setWodifyClientCount] = useState(0);
 
-  const onboardingApiBase = import.meta.env.BASE_URL.replace(/\/$/, "");
+  const onboardingApiBase = ((import.meta.env.VITE_API_URL || "") as string).replace(/\/$/, "");
   const {
     syncStatus: wodifySyncStatus,
     progress: wodifyProgress,

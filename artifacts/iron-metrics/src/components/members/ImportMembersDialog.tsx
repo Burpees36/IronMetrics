@@ -164,7 +164,7 @@ export function ImportMembersDialog({
   const [wodifyPreviewRows, setWodifyPreviewRows] = useState<WodifyPreviewRow[]>([]);
   const [wodifySummary, setWodifySummary] = useState<WodifySummary | null>(null);
 
-  const dialogApiBase = import.meta.env.BASE_URL.replace(/\/$/, "");
+  const dialogApiBase = ((import.meta.env.VITE_API_URL || "") as string).replace(/\/$/, "");
   const {
     syncStatus: wodifySyncStatus,
     progress: wodifyProgress,
