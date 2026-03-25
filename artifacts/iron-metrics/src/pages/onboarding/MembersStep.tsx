@@ -276,18 +276,24 @@ export function MembersStep({ gymId, onComplete, onSkip, onBack, isComplete }: S
                 <CheckCircle2 className="h-5 w-5 text-emerald-400" />
                 <p className="text-sm font-semibold text-emerald-400">Wodify Sync Complete</p>
               </div>
-              <div className="grid grid-cols-3 gap-4 text-center">
-                <div>
-                  <p className="text-lg font-bold text-foreground">{wodifySyncResult.created}</p>
-                  <p className="text-[10px] text-muted-foreground">New Members</p>
-                </div>
-                <div>
-                  <p className="text-lg font-bold text-foreground">{wodifySyncResult.updated}</p>
-                  <p className="text-[10px] text-muted-foreground">Updated</p>
-                </div>
+              <div className="grid grid-cols-2 gap-4 text-center">
                 <div>
                   <p className="text-lg font-bold text-foreground">{wodifySyncResult.totalClients}</p>
-                  <p className="text-[10px] text-muted-foreground">Total</p>
+                  <p className="text-[10px] text-muted-foreground">Total Members</p>
+                </div>
+                <div>
+                  <p className="text-lg font-bold text-foreground">${wodifySyncResult.totalMrr.toLocaleString()}</p>
+                  <p className="text-[10px] text-muted-foreground">Monthly Revenue</p>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4 text-center mt-2 pt-2 border-t border-emerald-500/10">
+                <div>
+                  <p className="text-sm font-semibold text-foreground">{wodifySyncResult.created}</p>
+                  <p className="text-[10px] text-muted-foreground">New</p>
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-foreground">{wodifySyncResult.updated}</p>
+                  <p className="text-[10px] text-muted-foreground">Updated</p>
                 </div>
               </div>
             </div>

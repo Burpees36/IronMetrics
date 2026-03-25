@@ -28,6 +28,7 @@ export interface SyncStatusData {
       totalClients?: number;
       totalMemberships?: number;
       updated?: number;
+      totalMrr?: number;
       progress?: SyncProgress;
     };
   } | null;
@@ -48,6 +49,7 @@ export interface SyncResult {
   updated: number;
   skipped: number;
   errored: number;
+  totalMrr: number;
 }
 
 interface UseWodifySyncPollingOptions {
@@ -141,6 +143,7 @@ export function useWodifySyncPolling({
             updated: meta?.updated ?? 0,
             skipped: latest.skipped ?? 0,
             errored: latest.errored ?? 0,
+            totalMrr: meta?.totalMrr ?? 0,
           });
         }
       }

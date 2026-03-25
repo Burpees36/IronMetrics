@@ -703,11 +703,16 @@ export function ImportMembersDialog({
                   </p>
                 </div>
 
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                  <SummaryCard label="Total Clients" value={wodifyApiCompletedResult.totalClients} icon={<Users className="h-4 w-4" />} color="text-foreground" />
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                  <SummaryCard label="Total Members" value={wodifyApiCompletedResult.totalClients} icon={<Users className="h-4 w-4" />} color="text-foreground" />
                   <SummaryCard label="New Members" value={wodifyApiCompletedResult.created} icon={<CheckCircle2 className="h-4 w-4" />} color="text-emerald-400" />
                   <SummaryCard label="Updated" value={wodifyApiCompletedResult.updated} icon={<RefreshCw className="h-4 w-4" />} color="text-blue-400" />
-                  <SummaryCard label="Errors" value={wodifyApiCompletedResult.errored} icon={<XCircle className="h-4 w-4" />} color="text-red-400" />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <SummaryCard label="Monthly Revenue" value={`$${wodifyApiCompletedResult.totalMrr.toLocaleString()}`} icon={<DollarSign className="h-4 w-4" />} color="text-emerald-400" />
+                  {wodifyApiCompletedResult.errored > 0 && (
+                    <SummaryCard label="Errors" value={wodifyApiCompletedResult.errored} icon={<XCircle className="h-4 w-4" />} color="text-red-400" />
+                  )}
                 </div>
 
                 <div className="bg-muted/20 border border-border rounded-lg px-3 py-2 flex items-start gap-2">

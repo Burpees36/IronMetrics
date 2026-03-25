@@ -379,18 +379,24 @@ export function WodifyConnectionCard() {
                   <CheckCircle2 className="h-5 w-5 text-emerald-400" />
                   <p className="text-sm font-semibold text-emerald-400">Sync Complete</p>
                 </div>
-                <div className="grid grid-cols-3 gap-3">
-                  <div className="text-center">
-                    <p className="text-lg font-bold text-foreground">{completedResult.created}</p>
-                    <p className="text-[10px] text-muted-foreground">New Members</p>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-lg font-bold text-foreground">{completedResult.updated}</p>
-                    <p className="text-[10px] text-muted-foreground">Updated</p>
-                  </div>
+                <div className="grid grid-cols-2 gap-3">
                   <div className="text-center">
                     <p className="text-lg font-bold text-foreground">{completedResult.totalClients}</p>
-                    <p className="text-[10px] text-muted-foreground">Total Clients</p>
+                    <p className="text-[10px] text-muted-foreground">Total Members</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-lg font-bold text-foreground">${completedResult.totalMrr.toLocaleString()}</p>
+                    <p className="text-[10px] text-muted-foreground">Monthly Revenue</p>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3 mt-2 pt-2 border-t border-emerald-500/10">
+                  <div className="text-center">
+                    <p className="text-sm font-semibold text-foreground">{completedResult.created}</p>
+                    <p className="text-[10px] text-muted-foreground">New</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-sm font-semibold text-foreground">{completedResult.updated}</p>
+                    <p className="text-[10px] text-muted-foreground">Updated</p>
                   </div>
                 </div>
                 {completedResult.errored > 0 && (
@@ -409,24 +415,26 @@ export function WodifyConnectionCard() {
           {state === "connected" && (
             <motion.div key="connected" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-3">
               {syncStatus?.latestSync && (
-                <div className="bg-muted/20 rounded-xl px-3 py-2.5 flex items-center gap-3 text-xs">
-                  <div className="flex-1 space-y-0.5">
+                <div className="bg-muted/20 rounded-xl px-3 py-2.5 text-xs space-y-1.5">
+                  <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <span className="text-muted-foreground">Last sync:</span>
-                      <span className="font-medium text-foreground">{timeAgo(syncStatus.latestSync.completedAt || syncStatus.latestSync.startedAt)}</span>
+                      <Users className="h-3 w-3 text-muted-foreground" />
+                      <span className="font-medium text-foreground">{syncStatus.latestSync.metadata?.totalClients ?? syncStatus.latestSync.totalRows} members</span>
                     </div>
-                    <div className="flex items-center gap-3 text-muted-foreground">
-                      <span className="flex items-center gap-1"><Users className="h-3 w-3" /> {syncStatus.latestSync.created} created</span>
-                      {(syncStatus.latestSync.metadata?.updated ?? 0) > 0 && (
-                        <span>{syncStatus.latestSync.metadata!.updated} updated</span>
-                      )}
-                    </div>
-                    {syncStatus.maskedKey && (
-                      <div className="text-muted-foreground/70">
-                        <span className="flex items-center gap-1"><Key className="h-3 w-3" /> API key: {syncStatus.maskedKey}</span>
-                      </div>
+                    {(syncStatus.latestSync.metadata?.totalMrr ?? 0) > 0 && (
+                      <span className="font-medium text-emerald-500">${(syncStatus.latestSync.metadata!.totalMrr as number).toLocaleString()}/mo</span>
                     )}
                   </div>
+                  <div className="flex items-center gap-2 text-muted-foreground">
+                    <span>Last sync: {timeAgo(syncStatus.latestSync.completedAt || syncStatus.latestSync.startedAt)}</span>
+                    <span>·</span>
+                    <span>{syncStatus.latestSync.created} new, {syncStatus.latestSync.metadata?.updated ?? 0} updated</span>
+                  </div>
+                  {syncStatus.maskedKey && (
+                    <div className="flex items-center gap-1 text-muted-foreground/70">
+                      <Key className="h-3 w-3" /> API key: {syncStatus.maskedKey}
+                    </div>
+                  )}
                 </div>
               )}
 

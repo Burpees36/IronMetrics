@@ -197,6 +197,7 @@ export interface SyncResult {
   updated: number;
   skipped: number;
   errored: number;
+  totalMrr: number;
   errors: { rowIndex: number; error: string; wodifyClientId?: number }[];
 }
 
@@ -230,6 +231,7 @@ export async function runWodifySync(
     updated: 0,
     skipped: 0,
     errored: 0,
+    totalMrr: 0,
     errors: [],
   };
 
@@ -289,6 +291,12 @@ export async function runWodifySync(
     }).where(eq(syncRunsTable.id, syncRun.id));
 
     const membershipMap = consolidateMemberships(wodifyMemberships);
+
+    let totalMrr = 0;
+    for (const summary of membershipMap.values()) {
+      totalMrr += summary.monthlyRevenue;
+    }
+    result.totalMrr = Math.round(totalMrr * 100) / 100;
 
     const existingMembers = await db
       .select({
@@ -448,6 +456,7 @@ export async function runWodifySync(
         totalClients: result.totalClients,
         totalMemberships: result.totalMemberships,
         updated: result.updated,
+        totalMrr: result.totalMrr,
         progress: completeProgress,
       },
     }).where(eq(syncRunsTable.id, syncRun.id));
