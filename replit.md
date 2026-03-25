@@ -56,6 +56,13 @@ Iron Metrics is built as a pnpm workspace monorepo using TypeScript.
 - **Database Indexes:** Foreign key columns across all tables have B-tree indexes for query performance (attendance, members, member_notes, timeline_events, leads, lead_activities, workouts, workout_results, programming_days, subscriptions). Composite indexes on common query patterns (e.g., gym+status, gym+date, member+date).
 - **Date Columns:** All date-only fields use PostgreSQL `date` type with `mode: "string"` in Drizzle, returning/accepting YYYY-MM-DD strings in the API (joinDate, birthDate, workoutDate, nextFollowUpDate, currentPeriodStart/End, dueDate, programming date).
 
+## Wodify Integration
+- **Field Map:** `docs/integrations/wodify-field-map.ts` — source-of-truth mapping between Wodify API/CSV entities and Iron Metrics schema. Documents every field's verification status (verified-csv, verified-docs, inferred-docs, needs-live-verify), transform logic, null handling, and Tier 1 priority.
+- **Integration Types:** `artifacts/api-server/src/routes/integrations/wodify/types.ts` — TypeScript interfaces for raw Wodify API response shapes and normalized Iron Metrics forms.
+- **API Probe:** `artifacts/api-server/src/routes/integrations/wodify/probe.ts` — one-time script to discover live Wodify API endpoints and verify field names. Run with `WODIFY_API_KEY=key npx tsx artifacts/api-server/src/routes/integrations/wodify/probe.ts`.
+- **Sync Order:** Clients → Memberships → Invoices → Class Sign-Ins → Classes/Programs (optional).
+- **Key Gaps:** 9 open questions requiring live API verification (documented in field map). Most critical: Q5 (does attendance endpoint exist?) and Q1 (client name field shape).
+
 ## External Dependencies
 
 - **Replit Auth:** For user authentication and authorization.
