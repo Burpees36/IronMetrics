@@ -15,7 +15,10 @@ Iron Metrics is built as a pnpm workspace monorepo using TypeScript.
 **Monorepo Structure:**
 - `artifacts/api-server/`: Express 5 API server.
 - `artifacts/iron-metrics/`: React + Vite frontend.
+- `artifacts/mockup-sandbox/`: Design prototyping sandbox (not part of sellable product).
 - `lib/`: Shared libraries including OpenAPI spec, generated API clients, Drizzle ORM schema, and Replit Auth hooks.
+
+**Audit Reference:** `.local/tier1-beta-audit.md` — current source of truth for Tier 1 beta readiness assessment. The old `IRON_METRICS_ANALYSIS.md` has been removed as stale.
 
 **Technology Stack:**
 - **Node.js:** 24, with pnpm as the package manager.

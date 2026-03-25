@@ -17,10 +17,10 @@ const INTEGRATIONS = [
     statusText: "Connected",
   },
   {
-    name: "Wodify",
-    desc: "Import members, classes, and workout data from Wodify.",
+    name: "Wodify CSV Import",
+    desc: "Import member data from Wodify CSV exports. Manual upload — not a live sync.",
     status: "available" as const,
-    statusText: "Available",
+    statusText: "Beta",
   },
   {
     name: "SMS Provider",

@@ -8,7 +8,7 @@ import { Loader2, Search, Plus, Filter, MoreHorizontal, UserCircle, Upload, File
 import { ImportMembersDialog } from "@/components/members/ImportMembersDialog";
 import { AddMemberWizard } from "@/components/members/AddMemberWizard";
 import { Link, useLocation } from "wouter";
-import { useIsMobile } from "@/hooks/use-mobile";
+import { useIsMobile } from "@/hooks/useMobile";
 import { useToast } from "@/hooks/use-toast";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";

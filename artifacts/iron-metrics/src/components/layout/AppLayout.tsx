@@ -11,7 +11,7 @@ import { useGym } from "@/store/GymContext";
 import { useTheme } from "@/store/ThemeContext";
 import { useGetGym } from "@workspace/api-client-react";
 import { motion } from "framer-motion";
-import { useIsMobile } from "@/hooks/use-mobile";
+import { useIsMobile } from "@/hooks/useMobile";
 import { useGymTier } from "@/hooks/useGymTier";
 import {
   Sheet,
