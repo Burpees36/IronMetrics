@@ -24,3 +24,4 @@ export * from "./ai";
 export * from "./recommendations";
 export * from "./knowledge";
 export * from "./retention";
+export * from "./sync";

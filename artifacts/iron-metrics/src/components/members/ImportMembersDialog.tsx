@@ -304,7 +304,7 @@ export function ImportMembersDialog({
       const apiBase = import.meta.env.BASE_URL.replace(/\/$/, "");
       const resp = await fetch(`${apiBase}/api/gyms/${activeGymId}/members/import/confirm`, {
         method: "POST",
-        body: JSON.stringify({ rows }),
+        body: JSON.stringify({ rows, source: isWodify ? "wodify" : "csv", fileName }),
         headers: { "Content-Type": "application/json" },
         credentials: "include",
       });
@@ -312,7 +312,7 @@ export function ImportMembersDialog({
       if (!resp.ok) throw new Error(data.error || "Import failed");
       setResults(data);
       setStep(isWodify ? "wodify-results" : "results");
-      if (data.created > 0) onImportComplete?.();
+      onImportComplete?.();
     } catch (err: any) {
       toast({ title: "Import failed", description: err?.message || "Something went wrong", variant: "destructive" });
       setStep(isWodify ? "wodify-preview" : "preview");

@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { eq, and } from "drizzle-orm";
-import { db, membersTable, timelineEventsTable } from "@workspace/db";
+import { db, membersTable, timelineEventsTable, syncRunsTable } from "@workspace/db";
 import { parseGymId, EMAIL_REGEX } from "./helpers";
 import { validateRow, sanitizeRow, normalizePhone, parseImportDate, type ImportRow, type ValidatedRow } from "./import-utils";
 
@@ -101,7 +101,7 @@ router.post("/gyms/:gymId/members/import/confirm", async (req, res): Promise<voi
   const gymId = parseGymId(req.params);
   if (!gymId) { res.status(400).json({ error: "Invalid gym ID" }); return; }
 
-  const { rows } = req.body as { rows: ImportRow[] };
+  const { rows, source, fileName } = req.body as { rows: ImportRow[]; source?: string; fileName?: string };
   if (!Array.isArray(rows) || rows.length === 0) {
     res.status(400).json({ error: "No rows to import" });
     return;
@@ -110,6 +110,15 @@ router.post("/gyms/:gymId/members/import/confirm", async (req, res): Promise<voi
     res.status(400).json({ error: "Maximum 5,000 rows per import" });
     return;
   }
+
+  const [syncRun] = await db.insert(syncRunsTable).values({
+    gymId,
+    source: source || "csv",
+    status: "running",
+    fileName: fileName || null,
+    totalRows: rows.length,
+    triggeredBy: (req as any).user?.claims?.sub || "unknown",
+  }).returning();
 
   const existingMembers = await db
     .select({ email: membersTable.email })
@@ -123,6 +132,7 @@ router.post("/gyms/:gymId/members/import/confirm", async (req, res): Promise<voi
     skipped: 0,
     errored: 0,
     errors: [] as { rowIndex: number; error: string }[],
+    syncRunId: syncRun.id,
   };
 
   const today = new Date().toISOString().split("T")[0];
@@ -175,8 +185,8 @@ router.post("/gyms/:gymId/members/import/confirm", async (req, res): Promise<voi
           memberId: member.id,
           gymId,
           type: "imported",
-          title: "Imported from CSV",
-          description: `${member.firstName} ${member.lastName} was imported via CSV upload`,
+          title: `Imported from ${source === "wodify" ? "Wodify" : "CSV"}`,
+          description: `${member.firstName} ${member.lastName} was imported via ${source === "wodify" ? "Wodify" : "CSV"} upload`,
           date: new Date(),
         });
       } catch (_timelineErr) {
@@ -186,6 +196,22 @@ router.post("/gyms/:gymId/members/import/confirm", async (req, res): Promise<voi
       results.errors.push({ rowIndex: i, error: err.message || "Unexpected error" });
     }
   }
+
+  const finalStatus = results.errored > 0 && results.created === 0 ? "failed"
+    : results.errored > 0 ? "completed_with_errors"
+    : "completed";
+
+  await db.update(syncRunsTable)
+    .set({
+      status: finalStatus,
+      created: results.created,
+      skipped: results.skipped,
+      errored: results.errored,
+      totalRows: results.processed,
+      errorDetails: results.errors.length > 0 ? results.errors.slice(0, 50) : null,
+      completedAt: new Date(),
+    })
+    .where(eq(syncRunsTable.id, syncRun.id));
 
   res.json(results);
 });

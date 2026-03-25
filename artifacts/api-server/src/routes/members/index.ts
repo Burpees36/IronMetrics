@@ -4,6 +4,7 @@ import notesRouter from "./notes";
 import importRouter from "./import";
 import importWodifyRouter from "./import-wodify";
 import billingLinkingRouter from "./billing-linking";
+import syncRunsRouter from "./sync-runs";
 
 const router: IRouter = Router();
 
@@ -12,6 +13,7 @@ router.use(notesRouter);
 router.use(importRouter);
 router.use(importWodifyRouter);
 router.use(billingLinkingRouter);
+router.use(syncRunsRouter);
 
 export default router;
 
