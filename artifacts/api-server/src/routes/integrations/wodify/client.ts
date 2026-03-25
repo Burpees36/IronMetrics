@@ -9,6 +9,10 @@ import type {
 const WODIFY_BASE_URL = "https://api.wodify.com/v1";
 const PAGE_SIZE = 100;
 
+export interface PageProgressCallback {
+  (info: { endpoint: string; page: number; itemsThisPage: number; totalSoFar: number; done: boolean }): void;
+}
+
 export function createWodifyClient(apiKey: string): WodifyApiClient {
   return new WodifyApiClient({ apiKey, baseUrl: WODIFY_BASE_URL });
 }
@@ -56,32 +60,42 @@ export class WodifyApiClient {
     }
   }
 
-  async fetchAllClients(): Promise<WodifyClient[]> {
+  async fetchAllClients(onProgress?: PageProgressCallback): Promise<WodifyClient[]> {
     const all: WodifyClient[] = [];
     let page = 1;
 
     while (true) {
       const data = await this.fetchPage<WodifyClientListResponse>("/clients", page);
       const clients = data.clients ?? [];
-      if (clients.length === 0) break;
+      if (clients.length === 0) {
+        onProgress?.({ endpoint: "/clients", page, itemsThisPage: 0, totalSoFar: all.length, done: true });
+        break;
+      }
       all.push(...clients);
-      if (clients.length < PAGE_SIZE) break;
+      const done = clients.length < PAGE_SIZE;
+      onProgress?.({ endpoint: "/clients", page, itemsThisPage: clients.length, totalSoFar: all.length, done });
+      if (done) break;
       page++;
     }
 
     return all;
   }
 
-  async fetchAllMemberships(): Promise<WodifyMembership[]> {
+  async fetchAllMemberships(onProgress?: PageProgressCallback): Promise<WodifyMembership[]> {
     const all: WodifyMembership[] = [];
     let page = 1;
 
     while (true) {
       const data = await this.fetchPage<WodifyMembershipListResponse>("/memberships", page);
       const memberships = data.memberships ?? [];
-      if (memberships.length === 0) break;
+      if (memberships.length === 0) {
+        onProgress?.({ endpoint: "/memberships", page, itemsThisPage: 0, totalSoFar: all.length, done: true });
+        break;
+      }
       all.push(...memberships);
-      if (memberships.length < PAGE_SIZE) break;
+      const done = memberships.length < PAGE_SIZE;
+      onProgress?.({ endpoint: "/memberships", page, itemsThisPage: memberships.length, totalSoFar: all.length, done });
+      if (done) break;
       page++;
     }
 

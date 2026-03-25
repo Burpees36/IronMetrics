@@ -61,25 +61,47 @@ router.post("/gyms/:gymId/integrations/wodify/sync", async (req, res): Promise<v
     return;
   }
 
-  const [existingRun] = await db
-    .select()
-    .from(syncRunsTable)
-    .where(eq(syncRunsTable.gymId, gymId))
-    .orderBy(desc(syncRunsTable.startedAt))
-    .limit(1);
-
-  if (existingRun && existingRun.status === "running") {
-    res.status(409).json({
-      error: "A sync is already in progress",
-      syncRunId: existingRun.id,
-    });
-    return;
-  }
-
   const triggeredBy = (req as any).user?.claims?.sub || "unknown";
 
-  const result = await runWodifySync(gymId, apiKey, triggeredBy);
-  res.json(result);
+  try {
+    const result = await db.transaction(async (tx) => {
+      const [existingRun] = await tx
+        .select()
+        .from(syncRunsTable)
+        .where(and(eq(syncRunsTable.gymId, gymId), eq(syncRunsTable.source, "wodify-api"), eq(syncRunsTable.status, "running")))
+        .limit(1);
+
+      if (existingRun) {
+        return { conflict: true, syncRunId: existingRun.id };
+      }
+
+      const [syncRun] = await tx.insert(syncRunsTable).values({
+        gymId,
+        source: "wodify-api",
+        status: "running",
+        totalRows: 0,
+        triggeredBy,
+      }).returning();
+
+      return { conflict: false, syncRunId: syncRun.id };
+    });
+
+    if (result.conflict) {
+      res.status(409).json({
+        error: "A sync is already in progress",
+        syncRunId: result.syncRunId,
+      });
+      return;
+    }
+
+    runWodifySync(gymId, apiKey, triggeredBy, result.syncRunId).catch((err) => {
+      console.error(`[wodify-sync] Background sync failed for gym ${gymId}:`, err);
+    });
+
+    res.json({ syncRunId: result.syncRunId, status: "running" });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || "Failed to start sync" });
+  }
 });
 
 router.get("/gyms/:gymId/integrations/wodify/sync-status", async (req, res): Promise<void> => {
@@ -98,8 +120,13 @@ router.get("/gyms/:gymId/integrations/wodify/sync-status", async (req, res): Pro
     .orderBy(desc(syncRunsTable.startedAt))
     .limit(5);
 
+  const maskedKey = gym?.wodifyApiKey
+    ? `····${gym.wodifyApiKey.slice(-4)}`
+    : null;
+
   res.json({
     hasApiKey: !!gym?.wodifyApiKey,
+    maskedKey,
     latestSync: wodifyRuns[0] || null,
     recentSyncs: wodifyRuns,
   });

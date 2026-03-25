@@ -1,9 +1,32 @@
 import { eq, and } from "drizzle-orm";
 import { db, membersTable, syncRunsTable, timelineEventsTable, gymsTable } from "@workspace/db";
 import { createWodifyClient } from "./client";
+import type { PageProgressCallback } from "./client";
 import { isWodifySentinelDate, normalizeWodifyStatus } from "./types";
 import type { WodifyClient, WodifyMembership } from "./types";
 import { normalizePhone } from "../../members/import-utils";
+
+export interface SyncProgress {
+  phase: "fetching-clients" | "fetching-memberships" | "processing" | "writing" | "complete" | "failed";
+  currentPage?: number;
+  totalItemsFetched?: number;
+  processed?: number;
+  totalToProcess?: number;
+  created?: number;
+  updated?: number;
+  message: string;
+}
+
+async function updateSyncProgress(syncRunId: number, progress: SyncProgress) {
+  try {
+    const [current] = await db.select({ metadata: syncRunsTable.metadata })
+      .from(syncRunsTable).where(eq(syncRunsTable.id, syncRunId));
+    const existing = (current?.metadata as Record<string, unknown>) || {};
+    await db.update(syncRunsTable).set({
+      metadata: { ...existing, progress } as Record<string, unknown>,
+    }).where(eq(syncRunsTable.id, syncRunId));
+  } catch (_) {}
+}
 
 interface MemberUpsert {
   wodifyClientId: number;
@@ -181,14 +204,22 @@ export async function runWodifySync(
   gymId: number,
   apiKey: string,
   triggeredBy: string,
+  existingSyncRunId?: number,
 ): Promise<SyncResult> {
-  const [syncRun] = await db.insert(syncRunsTable).values({
-    gymId,
-    source: "wodify-api",
-    status: "running",
-    totalRows: 0,
-    triggeredBy,
-  }).returning();
+  let syncRunId: number;
+  if (existingSyncRunId) {
+    syncRunId = existingSyncRunId;
+  } else {
+    const [newRun] = await db.insert(syncRunsTable).values({
+      gymId,
+      source: "wodify-api",
+      status: "running",
+      totalRows: 0,
+      triggeredBy,
+    }).returning();
+    syncRunId = newRun.id;
+  }
+  const syncRun = { id: syncRunId };
 
   const result: SyncResult = {
     syncRunId: syncRun.id,
@@ -207,20 +238,54 @@ export async function runWodifySync(
   try {
     const client = createWodifyClient(apiKey);
 
-    const [wodifyClients, wodifyMemberships] = await Promise.all([
-      client.fetchAllClients(),
-      client.fetchAllMemberships(),
-    ]);
+    await updateSyncProgress(syncRun.id, {
+      phase: "fetching-clients",
+      currentPage: 1,
+      totalItemsFetched: 0,
+      message: "Fetching members from Wodify...",
+    });
+
+    const wodifyClients = await client.fetchAllClients((info) => {
+      updateSyncProgress(syncRun.id, {
+        phase: "fetching-clients",
+        currentPage: info.page,
+        totalItemsFetched: info.totalSoFar,
+        message: info.done
+          ? `Fetched ${info.totalSoFar} members`
+          : `Fetching members page ${info.page} (${info.totalSoFar} so far)...`,
+      });
+    });
+
+    await updateSyncProgress(syncRun.id, {
+      phase: "fetching-memberships",
+      currentPage: 1,
+      totalItemsFetched: 0,
+      message: "Fetching memberships from Wodify...",
+    });
+
+    const wodifyMemberships = await client.fetchAllMemberships((info) => {
+      updateSyncProgress(syncRun.id, {
+        phase: "fetching-memberships",
+        currentPage: info.page,
+        totalItemsFetched: info.totalSoFar,
+        message: info.done
+          ? `Fetched ${info.totalSoFar} memberships`
+          : `Fetching memberships page ${info.page} (${info.totalSoFar} so far)...`,
+      });
+    });
 
     result.totalClients = wodifyClients.length;
     result.totalMemberships = wodifyMemberships.length;
 
+    await updateSyncProgress(syncRun.id, {
+      phase: "processing",
+      totalToProcess: wodifyClients.length,
+      processed: 0,
+      message: `Processing ${wodifyClients.length} members...`,
+    });
+
     await db.update(syncRunsTable).set({
       totalRows: wodifyClients.length,
-      metadata: {
-        totalClients: wodifyClients.length,
-        totalMemberships: wodifyMemberships.length,
-      },
     }).where(eq(syncRunsTable.id, syncRun.id));
 
     const membershipMap = consolidateMemberships(wodifyMemberships);
@@ -245,6 +310,16 @@ export async function runWodifySync(
 
     for (const wClient of wodifyClients) {
       rowIndex++;
+      if (rowIndex % 25 === 0 || rowIndex === wodifyClients.length) {
+        await updateSyncProgress(syncRun.id, {
+          phase: "writing",
+          processed: rowIndex,
+          totalToProcess: wodifyClients.length,
+          created: result.created,
+          updated: result.updated,
+          message: `Writing member ${rowIndex} of ${wodifyClients.length}...`,
+        });
+      }
       const normalized = normalizeClient(wClient);
       if (!normalized) {
         result.skipped++;
@@ -352,6 +427,15 @@ export async function runWodifySync(
           ? "completed_with_errors"
           : "completed";
 
+    const completeProgress: SyncProgress = {
+      phase: "complete",
+      processed: result.totalClients,
+      totalToProcess: result.totalClients,
+      created: result.created,
+      updated: result.updated,
+      message: `Sync complete: ${result.created} created, ${result.updated} updated`,
+    };
+
     await db.update(syncRunsTable).set({
       status: result.status,
       created: result.created,
@@ -364,15 +448,21 @@ export async function runWodifySync(
         totalClients: result.totalClients,
         totalMemberships: result.totalMemberships,
         updated: result.updated,
+        progress: completeProgress,
       },
     }).where(eq(syncRunsTable.id, syncRun.id));
 
   } catch (err: any) {
     result.status = "failed";
+    const failedProgress: SyncProgress = {
+      phase: "failed",
+      message: err.message || "Sync failed",
+    };
     await db.update(syncRunsTable).set({
       status: "failed",
       errorDetails: [{ rowIndex: 0, error: err.message || "Sync failed" }],
       completedAt: new Date(),
+      metadata: { progress: failedProgress },
     }).where(eq(syncRunsTable.id, syncRun.id));
   }
 

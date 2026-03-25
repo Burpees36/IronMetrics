@@ -4,11 +4,14 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Upload, FileSpreadsheet, ArrowRight, ArrowLeft, Check, AlertTriangle,
   X, Download, CheckCircle2, XCircle, Users, Loader2, SkipForward, Info,
-  ChevronRight, Sparkles, DollarSign, HelpCircle, ExternalLink, Zap, RefreshCw
+  ChevronRight, Sparkles, DollarSign, HelpCircle, ExternalLink, Zap, RefreshCw,
+  ShieldAlert
 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useGym } from "@/store/GymContext";
 import { useToast } from "@/hooks/use-toast";
+import { useWodifySyncPolling } from "@/hooks/useWodifySyncPolling";
+import type { SyncProgress } from "@/hooks/useWodifySyncPolling";
 
 const MEMBER_FIELDS = [
   { key: "fullName", label: "Full Name (splits into first + last)", required: false, splitsName: true },
@@ -161,20 +164,29 @@ export function ImportMembersDialog({
   const [wodifyPreviewRows, setWodifyPreviewRows] = useState<WodifyPreviewRow[]>([]);
   const [wodifySummary, setWodifySummary] = useState<WodifySummary | null>(null);
 
-  const [hasWodifyApiKey, setHasWodifyApiKey] = useState(false);
-  const [wodifyApiSyncResult, setWodifyApiSyncResult] = useState<{
-    status: string; totalClients: number; totalMemberships: number;
-    created: number; updated: number; skipped: number; errored: number;
-  } | null>(null);
+  const dialogApiBase = import.meta.env.BASE_URL.replace(/\/$/, "");
+  const {
+    syncStatus: wodifySyncStatus,
+    progress: wodifyProgress,
+    isSyncing: isWodifyApiSyncing,
+    isComplete: isWodifyApiComplete,
+    completedResult: wodifyApiCompletedResult,
+    startSync: startWodifyApiSync,
+    elapsedSeconds: wodifyElapsed,
+  } = useWodifySyncPolling({
+    gymId: activeGymId,
+    apiBase: dialogApiBase,
+    enabled: open,
+  });
+
+  const hasWodifyApiKey = !!wodifySyncStatus?.hasApiKey;
 
   useEffect(() => {
-    if (!activeGymId || !open) return;
-    const apiBase = import.meta.env.BASE_URL.replace(/\/$/, "");
-    fetch(`${apiBase}/api/gyms/${activeGymId}/integrations/wodify/sync-status`, { credentials: "include" })
-      .then(r => r.ok ? r.json() : null)
-      .then(data => { if (data) setHasWodifyApiKey(!!data.hasApiKey); })
-      .catch(() => {});
-  }, [activeGymId, open]);
+    if (isWodifyApiComplete && wodifyApiCompletedResult && step === "wodify-api-sync") {
+      setStep("wodify-api-results");
+      onImportComplete?.();
+    }
+  }, [isWodifyApiComplete, wodifyApiCompletedResult, step]);
 
   const reset = useCallback(() => {
     setStep("source");
@@ -188,7 +200,6 @@ export function ImportMembersDialog({
     setFileName("");
     setWodifyPreviewRows([]);
     setWodifySummary(null);
-    setWodifyApiSyncResult(null);
   }, []);
 
   const handleClose = useCallback(() => {
@@ -370,22 +381,12 @@ export function ImportMembersDialog({
   const handleWodifyApiSync = useCallback(async () => {
     setStep("wodify-api-sync");
     try {
-      const apiBase = import.meta.env.BASE_URL.replace(/\/$/, "");
-      const resp = await fetch(`${apiBase}/api/gyms/${activeGymId}/integrations/wodify/sync`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-      });
-      const data = await resp.json();
-      if (!resp.ok) throw new Error(data.error || "Sync failed");
-      setWodifyApiSyncResult(data);
-      setStep("wodify-api-results");
-      onImportComplete?.();
+      await startWodifyApiSync();
     } catch (err: any) {
       toast({ title: "Sync failed", description: err?.message || "Something went wrong", variant: "destructive" });
       setStep("source");
     }
-  }, [activeGymId, toast, onImportComplete]);
+  }, [startWodifyApiSync, toast]);
 
   const isImporting = step === "importing" || step === "wodify-importing" || step === "wodify-api-sync";
 
@@ -649,19 +650,48 @@ export function ImportMembersDialog({
             )}
 
             {step === "wodify-api-sync" && (
-              <motion.div key="wodify-api-sync" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col items-center justify-center py-16 space-y-4">
-                <div className="relative">
-                  <Loader2 className="h-10 w-10 text-emerald-400 animate-spin" />
-                </div>
-                <p className="text-sm font-medium">Syncing from Wodify API...</p>
-                <div className="text-xs text-muted-foreground space-y-1 text-center">
-                  <p>Fetching members and memberships directly from your account</p>
-                  <p>This may take a minute for large gyms</p>
+              <motion.div key="wodify-api-sync" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col items-center justify-center py-10 space-y-5">
+                <div className="w-full max-w-sm space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Loader2 className="h-5 w-5 text-emerald-400 animate-spin shrink-0" />
+                    <p className="text-sm font-medium flex-1">{wodifyProgress?.message || "Starting sync..."}</p>
+                  </div>
+                  <div className="w-full bg-muted/30 rounded-full h-2 overflow-hidden">
+                    <motion.div
+                      className="h-full bg-emerald-500 rounded-full"
+                      initial={{ width: 0 }}
+                      animate={{ width: `${wodifyProgress ? (() => {
+                        switch (wodifyProgress.phase) {
+                          case "fetching-clients": return 15;
+                          case "fetching-memberships": return 35;
+                          case "processing": return 55;
+                          case "writing": return wodifyProgress.totalToProcess && wodifyProgress.processed
+                            ? Math.min(55 + (wodifyProgress.processed / wodifyProgress.totalToProcess) * 40, 95) : 65;
+                          default: return 10;
+                        }
+                      })() : 5}%` }}
+                      transition={{ duration: 0.5, ease: "easeOut" }}
+                    />
+                  </div>
+                  <div className="flex justify-between text-[10px] text-muted-foreground">
+                    <span>{wodifyElapsed < 60 ? `${wodifyElapsed}s` : `${Math.floor(wodifyElapsed / 60)}m ${wodifyElapsed % 60}s`} elapsed</span>
+                    {wodifyProgress?.processed && wodifyProgress?.totalToProcess ? (
+                      <span>{wodifyProgress.processed} / {wodifyProgress.totalToProcess} members</span>
+                    ) : null}
+                  </div>
+                  {wodifyElapsed > 120 && (
+                    <div className="flex items-start gap-2 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
+                      <ShieldAlert className="h-3.5 w-3.5 text-amber-400 shrink-0 mt-0.5" />
+                      <p className="text-[11px] text-amber-400">
+                        Taking longer than expected. You can close this dialog — the sync will continue in the background.
+                      </p>
+                    </div>
+                  )}
                 </div>
               </motion.div>
             )}
 
-            {step === "wodify-api-results" && wodifyApiSyncResult && (
+            {step === "wodify-api-results" && wodifyApiCompletedResult && (
               <motion.div key="wodify-api-results" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="space-y-4">
                 <div className="text-center py-4">
                   <div className="mx-auto w-14 h-14 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center mb-3">
@@ -674,10 +704,10 @@ export function ImportMembersDialog({
                 </div>
 
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                  <SummaryCard label="Total Clients" value={wodifyApiSyncResult.totalClients} icon={<Users className="h-4 w-4" />} color="text-foreground" />
-                  <SummaryCard label="New Members" value={wodifyApiSyncResult.created} icon={<CheckCircle2 className="h-4 w-4" />} color="text-emerald-400" />
-                  <SummaryCard label="Updated" value={wodifyApiSyncResult.updated} icon={<RefreshCw className="h-4 w-4" />} color="text-blue-400" />
-                  <SummaryCard label="Errors" value={wodifyApiSyncResult.errored} icon={<XCircle className="h-4 w-4" />} color="text-red-400" />
+                  <SummaryCard label="Total Clients" value={wodifyApiCompletedResult.totalClients} icon={<Users className="h-4 w-4" />} color="text-foreground" />
+                  <SummaryCard label="New Members" value={wodifyApiCompletedResult.created} icon={<CheckCircle2 className="h-4 w-4" />} color="text-emerald-400" />
+                  <SummaryCard label="Updated" value={wodifyApiCompletedResult.updated} icon={<RefreshCw className="h-4 w-4" />} color="text-blue-400" />
+                  <SummaryCard label="Errors" value={wodifyApiCompletedResult.errored} icon={<XCircle className="h-4 w-4" />} color="text-red-400" />
                 </div>
 
                 <div className="bg-muted/20 border border-border rounded-lg px-3 py-2 flex items-start gap-2">

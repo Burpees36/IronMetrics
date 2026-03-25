@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Loader2, UserPlus, Upload, Check, ChevronRight, Zap, RefreshCw, CheckCircle2, XCircle, Users, AlertCircle, ExternalLink, Key, ArrowRight } from "lucide-react";
+import { Loader2, UserPlus, Upload, Check, ChevronRight, Zap, RefreshCw, CheckCircle2, XCircle, Users, AlertCircle, ExternalLink, Key, ArrowRight, ShieldAlert, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -9,6 +9,7 @@ import { StepCard } from "./StepCard";
 import { apiFetch } from "./types";
 import type { StepProps } from "./types";
 import { motion, AnimatePresence } from "framer-motion";
+import { useWodifySyncPolling } from "@/hooks/useWodifySyncPolling";
 
 type WodifyState = "idle" | "entering-key" | "validating" | "validated" | "syncing" | "complete" | "error";
 
@@ -20,14 +21,27 @@ export function MembersStep({ gymId, onComplete, onSkip, onBack, isComplete }: S
   const [saving, setSaving] = useState(false);
   const { toast } = useToast();
 
-  const [hasWodifyApiKey, setHasWodifyApiKey] = useState(false);
   const [wodifyState, setWodifyState] = useState<WodifyState>("idle");
   const [wodifyApiKey, setWodifyApiKey] = useState("");
   const [wodifyError, setWodifyError] = useState("");
   const [wodifyClientCount, setWodifyClientCount] = useState(0);
-  const [wodifySyncResult, setWodifySyncResult] = useState<{
-    created: number; updated: number; totalClients: number; errored: number;
-  } | null>(null);
+
+  const onboardingApiBase = import.meta.env.BASE_URL.replace(/\/$/, "");
+  const {
+    syncStatus: wodifySyncStatus,
+    progress: wodifyProgress,
+    isSyncing: isWodifyPolling,
+    isComplete: isWodifySyncComplete,
+    isFailed: isWodifySyncFailed,
+    completedResult: wodifySyncResult,
+    startSync: startWodifySync,
+    elapsedSeconds: wodifyElapsed,
+  } = useWodifySyncPolling({
+    gymId: gymId,
+    apiBase: onboardingApiBase,
+  });
+
+  const hasWodifyApiKey = !!wodifySyncStatus?.hasApiKey;
 
   const [form, setForm] = useState({
     firstName: "", lastName: "", email: "", phone: "", status: "active",
@@ -47,10 +61,18 @@ export function MembersStep({ gymId, onComplete, onSkip, onBack, isComplete }: S
   useEffect(() => { fetchMembers(); }, [gymId]);
 
   useEffect(() => {
-    apiFetch(`/api/gyms/${gymId}/integrations/wodify/sync-status`)
-      .then(data => setHasWodifyApiKey(!!data.hasApiKey))
-      .catch(() => {});
-  }, [gymId]);
+    if (isWodifyPolling && wodifyState !== "syncing") setWodifyState("syncing");
+  }, [isWodifyPolling]);
+
+  useEffect(() => {
+    if (isWodifySyncComplete && wodifySyncResult) {
+      setWodifyState("complete");
+      fetchMembers();
+    } else if (isWodifySyncFailed) {
+      setWodifyState("error");
+      setWodifyError("Sync failed. Please try again.");
+    }
+  }, [isWodifySyncComplete, isWodifySyncFailed, wodifySyncResult]);
 
   const handleValidateKey = async () => {
     if (!wodifyApiKey.trim()) return;
@@ -67,7 +89,6 @@ export function MembersStep({ gymId, onComplete, onSkip, onBack, isComplete }: S
         return;
       }
       setWodifyClientCount(data.clientCount || 0);
-      setHasWodifyApiKey(true);
       setWodifyState("validated");
     } catch (err: any) {
       setWodifyState("error");
@@ -77,13 +98,9 @@ export function MembersStep({ gymId, onComplete, onSkip, onBack, isComplete }: S
 
   const handleWodifySync = async () => {
     setWodifyState("syncing");
+    setWodifyError("");
     try {
-      const data = await apiFetch(`/api/gyms/${gymId}/integrations/wodify/sync`, {
-        method: "POST",
-      });
-      setWodifySyncResult(data);
-      setWodifyState("complete");
-      await fetchMembers();
+      await startWodifySync();
     } catch (err: any) {
       setWodifyState("error");
       setWodifyError(err.message || "Sync failed");
@@ -134,7 +151,7 @@ export function MembersStep({ gymId, onComplete, onSkip, onBack, isComplete }: S
       <AnimatePresence mode="wait">
         {wodifyState !== "idle" && wodifyState !== "complete" && (
           <motion.div key="wodify-flow" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="mb-6">
-            {wodifyState === "entering-key" || wodifyState === "error" ? (
+            {wodifyState === "entering-key" ? (
               <div className="bg-background/30 rounded-xl p-5 border border-border space-y-4">
                 <div className="flex items-center gap-2 mb-1">
                   <Zap className="h-4 w-4 text-emerald-400" />
@@ -160,20 +177,35 @@ export function MembersStep({ gymId, onComplete, onSkip, onBack, isComplete }: S
                     </Button>
                   </div>
                 </div>
-                {wodifyError && (
-                  <div className="flex items-start gap-2 bg-destructive/10 border border-destructive/20 rounded-xl px-3 py-2.5">
-                    <AlertCircle className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
-                    <div className="text-xs">
-                      <p className="text-destructive font-medium">{wodifyError}</p>
-                      <a href="https://help.wodify.com/docs/api-access" target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-foreground flex items-center gap-1 mt-1">
-                        Where to find your API key <ExternalLink className="h-3 w-3" />
-                      </a>
-                    </div>
-                  </div>
-                )}
                 <button onClick={() => { setWodifyState("idle"); setWodifyApiKey(""); setWodifyError(""); }} className="text-xs text-muted-foreground hover:text-foreground transition-colors">
                   Cancel
                 </button>
+              </div>
+            ) : wodifyState === "error" ? (
+              <div className="bg-background/30 rounded-xl p-5 border border-border space-y-3">
+                <div className="flex items-start gap-2 bg-destructive/10 border border-destructive/20 rounded-xl px-3 py-2.5">
+                  <AlertCircle className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
+                  <div className="text-xs flex-1">
+                    <p className="text-destructive font-medium">{wodifyError}</p>
+                    {!hasWodifyApiKey && (
+                      <a href="https://help.wodify.com/docs/api-access" target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-foreground flex items-center gap-1 mt-1">
+                        Where to find your API key <ExternalLink className="h-3 w-3" />
+                      </a>
+                    )}
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" onClick={() => {
+                    setWodifyError("");
+                    if (hasWodifyApiKey) handleWodifySync();
+                    else setWodifyState("entering-key");
+                  }}>
+                    <RotateCcw className="h-3.5 w-3.5 mr-1" /> {hasWodifyApiKey ? "Retry Sync" : "Try Again"}
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={() => { setWodifyState("idle"); setWodifyError(""); }}>
+                    Dismiss
+                  </Button>
+                </div>
               </div>
             ) : wodifyState === "validating" ? (
               <div className="bg-background/30 rounded-xl p-8 border border-border flex flex-col items-center gap-3">
@@ -196,10 +228,42 @@ export function MembersStep({ gymId, onComplete, onSkip, onBack, isComplete }: S
                 </Button>
               </div>
             ) : wodifyState === "syncing" ? (
-              <div className="bg-background/30 rounded-xl p-8 border border-border flex flex-col items-center gap-3">
-                <Loader2 className="h-10 w-10 text-primary animate-spin" />
-                <p className="text-sm font-medium">Syncing your data from Wodify...</p>
-                <p className="text-xs text-muted-foreground">This may take a minute for large gyms</p>
+              <div className="bg-background/30 rounded-xl p-5 border border-border space-y-3">
+                <div className="flex items-center gap-2">
+                  <Loader2 className="h-5 w-5 text-primary animate-spin shrink-0" />
+                  <p className="text-sm font-medium flex-1">{wodifyProgress?.message || "Starting sync..."}</p>
+                </div>
+                <div className="w-full bg-muted/30 rounded-full h-2 overflow-hidden">
+                  <motion.div
+                    className="h-full bg-primary rounded-full"
+                    initial={{ width: 0 }}
+                    animate={{ width: `${wodifyProgress ? (() => {
+                      switch (wodifyProgress.phase) {
+                        case "fetching-clients": return 15;
+                        case "fetching-memberships": return 35;
+                        case "processing": return 55;
+                        case "writing": return wodifyProgress.totalToProcess && wodifyProgress.processed
+                          ? Math.min(55 + (wodifyProgress.processed / wodifyProgress.totalToProcess) * 40, 95) : 65;
+                        default: return 10;
+                      }
+                    })() : 5}%` }}
+                    transition={{ duration: 0.5, ease: "easeOut" }}
+                  />
+                </div>
+                <div className="flex justify-between text-[10px] text-muted-foreground">
+                  <span>{wodifyElapsed < 60 ? `${wodifyElapsed}s` : `${Math.floor(wodifyElapsed / 60)}m ${wodifyElapsed % 60}s`} elapsed</span>
+                  {wodifyProgress?.processed && wodifyProgress?.totalToProcess ? (
+                    <span>{wodifyProgress.processed} / {wodifyProgress.totalToProcess} members</span>
+                  ) : null}
+                </div>
+                {wodifyElapsed > 120 && (
+                  <div className="flex items-start gap-2 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
+                    <ShieldAlert className="h-3.5 w-3.5 text-amber-400 shrink-0 mt-0.5" />
+                    <p className="text-[11px] text-amber-400">
+                      Taking longer than expected. You can navigate away — the sync will continue in the background.
+                    </p>
+                  </div>
+                )}
               </div>
             ) : null}
           </motion.div>
