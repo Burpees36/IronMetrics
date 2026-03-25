@@ -11,6 +11,7 @@ import { useGym } from "@/store/GymContext";
 import { useToast } from "@/hooks/use-toast";
 
 const MEMBER_FIELDS = [
+  { key: "fullName", label: "Full Name (splits into first + last)", required: false, splitsName: true },
   { key: "firstName", label: "First Name", required: true },
   { key: "lastName", label: "Last Name", required: true },
   { key: "email", label: "Email", required: true },
@@ -78,6 +79,7 @@ interface WodifySummary {
 }
 
 const COMMON_ALIASES: Record<string, string[]> = {
+  fullName: ["client name", "client_name", "full name", "full_name", "name", "member name", "member_name"],
   firstName: ["first name", "first_name", "firstname", "first", "given name", "given_name"],
   lastName: ["last name", "last_name", "lastname", "last", "surname", "family name", "family_name"],
   email: ["email", "email address", "email_address", "e-mail", "e_mail"],
@@ -264,10 +266,16 @@ export function ImportMembersDialog({
     }
   }, [handleFileSelect, handleWodifyFileSelect, toast]);
 
+  const hasFullName = Object.values(mappings).includes("fullName");
+
   const handlePreview = useCallback(async () => {
     const requiredFields = MEMBER_FIELDS.filter((f) => f.required).map((f) => f.key);
     const mappedFields = Object.values(mappings).filter(Boolean);
-    const missingRequired = requiredFields.filter((f) => !mappedFields.includes(f));
+    const missingRequired = requiredFields.filter((f) => {
+      if (mappedFields.includes(f)) return false;
+      if ((f === "firstName" || f === "lastName") && mappedFields.includes("fullName")) return false;
+      return true;
+    });
     if (missingRequired.length > 0) {
       const labels = missingRequired.map((k) => MEMBER_FIELDS.find((f) => f.key === k)?.label || k);
       toast({ title: "Required fields not mapped", description: `Please map: ${labels.join(", ")}`, variant: "destructive" });
@@ -442,10 +450,11 @@ export function ImportMembersDialog({
                     <p className="text-sm font-medium text-foreground">How to export from Wodify</p>
                   </div>
                   <ol className="text-xs text-muted-foreground space-y-2 ml-6 list-decimal">
-                    <li>In Wodify, go to <span className="font-medium text-foreground">Reports &rarr; Membership Reports &rarr; All Memberships</span></li>
-                    <li>Set your filters (or leave defaults to include all members)</li>
-                    <li>Click the <span className="font-medium text-foreground">Export</span> button (top right) and choose CSV</li>
-                    <li>Upload that file here — either the formatted or unformatted version works</li>
+                    <li>In Wodify, go to <span className="font-medium text-foreground">Analytics &rarr; Standard Reports</span></li>
+                    <li>Select <span className="font-medium text-foreground">Memberships &rarr; All Memberships</span></li>
+                    <li>Hover over the report table and click the <span className="font-medium text-foreground">three dots (⋯)</span> that appear in the top-right corner</li>
+                    <li>Click <span className="font-medium text-foreground">Download Results</span> and choose <span className="font-medium text-foreground">CSV formatted</span></li>
+                    <li>Upload that file here</li>
                   </ol>
                   <div className="bg-muted/20 rounded-lg px-3 py-2 mt-2">
                     <p className="text-[11px] text-muted-foreground leading-relaxed">
@@ -683,14 +692,17 @@ export function ImportMembersDialog({
                 </div>
 
                 {(() => {
-                  const mappedRequired = MEMBER_FIELDS.filter(f => f.required && Object.values(mappings).includes(f.key));
-                  const totalRequired = MEMBER_FIELDS.filter(f => f.required).length;
-                  const allRequiredMapped = mappedRequired.length === totalRequired;
-                  return !allRequiredMapped ? (
+                  const mappedValues = Object.values(mappings).filter(Boolean);
+                  const missingRequired = MEMBER_FIELDS.filter(f => f.required).filter(f => {
+                    if (mappedValues.includes(f.key)) return false;
+                    if ((f.key === "firstName" || f.key === "lastName") && mappedValues.includes("fullName")) return false;
+                    return true;
+                  });
+                  return missingRequired.length > 0 ? (
                     <div className="flex items-center gap-2 px-3 py-2 bg-amber-500/10 border border-amber-500/20 rounded-xl">
                       <AlertTriangle className="h-3.5 w-3.5 text-amber-400 shrink-0" />
                       <p className="text-xs text-amber-400">
-                        Map the required fields to continue: {MEMBER_FIELDS.filter(f => f.required && !Object.values(mappings).includes(f.key)).map(f => f.label).join(", ")}
+                        Map the required fields to continue: {missingRequired.map(f => f.label).join(", ")}
                       </p>
                     </div>
                   ) : (
@@ -740,9 +752,12 @@ export function ImportMembersDialog({
                                 <option value="">— Skip —</option>
                                 {MEMBER_FIELDS.map((f) => {
                                   const alreadyUsed = Object.entries(mappings).some(([k, v]) => v === f.key && k !== header);
+                                  const coveredByFullName = hasFullName && (f.key === "firstName" || f.key === "lastName");
+                                  const coveredBySeparate = f.key === "fullName" && Object.values(mappings).includes("firstName") && Object.values(mappings).includes("lastName");
+                                  const isRequired = f.required && !(hasFullName && (f.key === "firstName" || f.key === "lastName"));
                                   return (
-                                    <option key={f.key} value={f.key} disabled={alreadyUsed}>
-                                      {f.label}{f.required ? " (required)" : ""}{alreadyUsed ? " ✓" : ""}
+                                    <option key={f.key} value={f.key} disabled={alreadyUsed || (coveredByFullName && !alreadyUsed && mapped !== f.key) || (coveredBySeparate && mapped !== f.key)}>
+                                      {f.label}{isRequired ? " (required)" : ""}{coveredByFullName ? " (covered by Full Name)" : ""}{alreadyUsed ? " ✓" : ""}
                                     </option>
                                   );
                                 })}

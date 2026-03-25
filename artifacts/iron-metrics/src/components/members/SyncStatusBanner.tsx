@@ -129,12 +129,12 @@ export function SyncStatusBanner({ onImport, memberCount }: { onImport: () => vo
       animate={{ opacity: 1, y: 0 }}
       className="bg-card border border-border rounded-2xl overflow-hidden"
     >
-      <button
-        onClick={() => setExpanded(!expanded)}
-        className="w-full px-4 py-3 flex items-center gap-3 hover:bg-muted/30 transition-colors"
-      >
+      <div className="w-full px-4 py-3 flex items-center gap-3">
         <StatusIcon status={latest.status} />
-        <div className="flex-1 text-left min-w-0">
+        <div
+          className="flex-1 text-left min-w-0 cursor-pointer hover:opacity-80 transition-opacity"
+          onClick={() => runs.length > 1 && setExpanded(!expanded)}
+        >
           <div className="flex items-center gap-2">
             <span className="text-sm font-medium text-foreground truncate">
               Last import: {statusLabel(latest.status)}
@@ -154,19 +154,26 @@ export function SyncStatusBanner({ onImport, memberCount }: { onImport: () => vo
         </div>
         <div className="flex items-center gap-2">
           <button
-            onClick={(e) => { e.stopPropagation(); onImport(); }}
+            onClick={onImport}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-primary/10 text-primary rounded-lg text-xs font-medium hover:bg-primary/20 transition-colors"
           >
             <RefreshCw className="h-3 w-3" />
             New Import
           </button>
-          {runs.length > 1 && (expanded ? (
-            <ChevronUp className="h-4 w-4 text-muted-foreground" />
-          ) : (
-            <ChevronDown className="h-4 w-4 text-muted-foreground" />
-          ))}
+          {runs.length > 1 && (
+            <button
+              onClick={() => setExpanded(!expanded)}
+              className="p-1 hover:bg-muted/30 rounded-lg transition-colors"
+            >
+              {expanded ? (
+                <ChevronUp className="h-4 w-4 text-muted-foreground" />
+              ) : (
+                <ChevronDown className="h-4 w-4 text-muted-foreground" />
+              )}
+            </button>
+          )}
         </div>
-      </button>
+      </div>
 
       <AnimatePresence>
         {expanded && runs.length > 1 && (

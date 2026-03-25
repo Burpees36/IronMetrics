@@ -28,7 +28,14 @@ router.post("/gyms/:gymId/members/import/preview", async (req, res): Promise<voi
     const row: ImportRow = {};
     for (const [csvCol, memberField] of Object.entries(mappings)) {
       if (memberField && rawRow[csvCol] !== undefined) {
-        (row as any)[memberField] = String(rawRow[csvCol]).trim();
+        const val = String(rawRow[csvCol]).trim();
+        if (memberField === "fullName") {
+          const parts = val.split(/\s+/);
+          row.firstName = parts[0] || "";
+          row.lastName = parts.slice(1).join(" ") || "";
+        } else {
+          (row as any)[memberField] = val;
+        }
       }
     }
     return row;
