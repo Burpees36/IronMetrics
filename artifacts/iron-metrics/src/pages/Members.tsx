@@ -6,9 +6,10 @@ import { useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import { Loader2, Search, Plus, Filter, MoreHorizontal, UserCircle, Upload, FileSpreadsheet } from "lucide-react";
 import { ImportMembersDialog } from "@/components/members/ImportMembersDialog";
+import { SyncStatusBanner } from "@/components/members/SyncStatusBanner";
 import { AddMemberWizard } from "@/components/members/AddMemberWizard";
 import { Link, useLocation } from "wouter";
-import { useIsMobile } from "@/hooks/use-mobile";
+import { useIsMobile } from "@/hooks/useMobile";
 import { useToast } from "@/hooks/use-toast";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
@@ -75,6 +76,7 @@ export function Members() {
 
   const [addOpen, setAddOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
+  const [syncRefreshKey, setSyncRefreshKey] = useState(0);
   const [filterOpen, setFilterOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [noteOpen, setNoteOpen] = useState(false);
@@ -355,6 +357,8 @@ export function Members() {
           />
         </div>
       </header>
+
+      <SyncStatusBanner key={syncRefreshKey} onImport={() => setImportOpen(true)} memberCount={data?.total ?? 0} />
 
       <div className="flex-1 bg-card border border-border rounded-2xl shadow-sm overflow-hidden flex flex-col">
         {isLoading && !data ? (
@@ -665,6 +669,7 @@ export function Members() {
         onOpenChange={setImportOpen}
         onImportComplete={() => {
           queryClient.invalidateQueries({ queryKey: getListMembersQueryKey(gymId, filterParams) });
+          setSyncRefreshKey((k) => k + 1);
         }}
       />
     </div>

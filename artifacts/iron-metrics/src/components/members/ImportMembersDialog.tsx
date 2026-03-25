@@ -11,6 +11,7 @@ import { useGym } from "@/store/GymContext";
 import { useToast } from "@/hooks/use-toast";
 
 const MEMBER_FIELDS = [
+  { key: "fullName", label: "Full Name (splits into first + last)", required: false, splitsName: true },
   { key: "firstName", label: "First Name", required: true },
   { key: "lastName", label: "Last Name", required: true },
   { key: "email", label: "Email", required: true },
@@ -78,6 +79,7 @@ interface WodifySummary {
 }
 
 const COMMON_ALIASES: Record<string, string[]> = {
+  fullName: ["client name", "client_name", "full name", "full_name", "name", "member name", "member_name"],
   firstName: ["first name", "first_name", "firstname", "first", "given name", "given_name"],
   lastName: ["last name", "last_name", "lastname", "last", "surname", "family name", "family_name"],
   email: ["email", "email address", "email_address", "e-mail", "e_mail"],
@@ -264,10 +266,16 @@ export function ImportMembersDialog({
     }
   }, [handleFileSelect, handleWodifyFileSelect, toast]);
 
+  const hasFullName = Object.values(mappings).includes("fullName");
+
   const handlePreview = useCallback(async () => {
     const requiredFields = MEMBER_FIELDS.filter((f) => f.required).map((f) => f.key);
     const mappedFields = Object.values(mappings).filter(Boolean);
-    const missingRequired = requiredFields.filter((f) => !mappedFields.includes(f));
+    const missingRequired = requiredFields.filter((f) => {
+      if (mappedFields.includes(f)) return false;
+      if ((f === "firstName" || f === "lastName") && mappedFields.includes("fullName")) return false;
+      return true;
+    });
     if (missingRequired.length > 0) {
       const labels = missingRequired.map((k) => MEMBER_FIELDS.find((f) => f.key === k)?.label || k);
       toast({ title: "Required fields not mapped", description: `Please map: ${labels.join(", ")}`, variant: "destructive" });
@@ -304,7 +312,7 @@ export function ImportMembersDialog({
       const apiBase = import.meta.env.BASE_URL.replace(/\/$/, "");
       const resp = await fetch(`${apiBase}/api/gyms/${activeGymId}/members/import/confirm`, {
         method: "POST",
-        body: JSON.stringify({ rows }),
+        body: JSON.stringify({ rows, source: isWodify ? "wodify" : "csv", fileName }),
         headers: { "Content-Type": "application/json" },
         credentials: "include",
       });
@@ -312,7 +320,7 @@ export function ImportMembersDialog({
       if (!resp.ok) throw new Error(data.error || "Import failed");
       setResults(data);
       setStep(isWodify ? "wodify-results" : "results");
-      if (data.created > 0) onImportComplete?.();
+      onImportComplete?.();
     } catch (err: any) {
       toast({ title: "Import failed", description: err?.message || "Something went wrong", variant: "destructive" });
       setStep(isWodify ? "wodify-preview" : "preview");
@@ -442,10 +450,11 @@ export function ImportMembersDialog({
                     <p className="text-sm font-medium text-foreground">How to export from Wodify</p>
                   </div>
                   <ol className="text-xs text-muted-foreground space-y-2 ml-6 list-decimal">
-                    <li>In Wodify, go to <span className="font-medium text-foreground">Reports &rarr; Membership Reports &rarr; All Memberships</span></li>
-                    <li>Set your filters (or leave defaults to include all members)</li>
-                    <li>Click the <span className="font-medium text-foreground">Export</span> button (top right) and choose CSV</li>
-                    <li>Upload that file here — either the formatted or unformatted version works</li>
+                    <li>In Wodify, go to <span className="font-medium text-foreground">Analytics &rarr; Standard Reports</span></li>
+                    <li>Select <span className="font-medium text-foreground">Memberships &rarr; All Memberships</span></li>
+                    <li>Hover over the report table and click the <span className="font-medium text-foreground">three dots (⋯)</span> that appear in the top-right corner</li>
+                    <li>Click <span className="font-medium text-foreground">Download Results</span> and choose <span className="font-medium text-foreground">CSV formatted</span></li>
+                    <li>Upload that file here</li>
                   </ol>
                   <div className="bg-muted/20 rounded-lg px-3 py-2 mt-2">
                     <p className="text-[11px] text-muted-foreground leading-relaxed">
@@ -672,51 +681,109 @@ export function ImportMembersDialog({
 
             {step === "map" && (
               <motion.div key="map" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium">{fileName}</p>
-                    <p className="text-xs text-muted-foreground">{csvRows.length} rows found with {csvHeaders.length} columns</p>
+                <div className="bg-muted/20 border border-border rounded-xl p-3">
+                  <div className="flex items-center gap-2 mb-1">
+                    <FileSpreadsheet className="h-4 w-4 text-amber-400 shrink-0" />
+                    <span className="text-sm font-medium text-foreground">{fileName}</span>
                   </div>
+                  <p className="text-xs text-muted-foreground">
+                    {csvRows.length} rows · {csvHeaders.length} columns · Match each column to a member field below
+                  </p>
                 </div>
 
-                <div className="space-y-2">
-                  <div className="grid grid-cols-[1fr,auto,1fr] gap-2 items-center px-2 pb-1 border-b border-border">
-                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Your CSV Column</p>
-                    <div className="w-6" />
-                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Maps To</p>
-                  </div>
-                  {csvHeaders.map((header) => {
-                    const mapped = mappings[header];
-                    const fieldInfo = MEMBER_FIELDS.find((f) => f.key === mapped);
-                    return (
-                      <div key={header} className="grid grid-cols-[1fr,auto,1fr] gap-2 items-center">
-                        <div className="bg-muted/30 rounded-lg px-3 py-2 text-sm font-mono truncate" title={header}>{header}</div>
-                        <ArrowRight className="h-4 w-4 text-muted-foreground shrink-0" />
-                        <select
-                          value={mapped || ""}
-                          onChange={(e) => updateMapping(header, e.target.value)}
-                          className={`bg-card border rounded-lg px-3 py-2 text-sm w-full cursor-pointer focus:outline-none focus:ring-1 focus:ring-amber-500/50 ${
-                            mapped ? (fieldInfo?.required ? "border-amber-500/40 text-foreground" : "border-emerald-500/40 text-foreground") : "border-border text-muted-foreground"
-                          }`}
-                        >
-                          <option value="">Skip this column</option>
-                          {MEMBER_FIELDS.map((f) => {
-                            const alreadyUsed = Object.entries(mappings).some(([k, v]) => v === f.key && k !== header);
-                            return (
-                              <option key={f.key} value={f.key} disabled={alreadyUsed}>
-                                {f.label}{f.required ? " *" : ""}{alreadyUsed ? " (already mapped)" : ""}
-                              </option>
-                            );
-                          })}
-                        </select>
-                      </div>
-                    );
-                  })}
-                </div>
+                {(() => {
+                  const mappedValues = Object.values(mappings).filter(Boolean);
+                  const missingRequired = MEMBER_FIELDS.filter(f => f.required).filter(f => {
+                    if (mappedValues.includes(f.key)) return false;
+                    if ((f.key === "firstName" || f.key === "lastName") && mappedValues.includes("fullName")) return false;
+                    return true;
+                  });
+                  return missingRequired.length > 0 ? (
+                    <div className="flex items-center gap-2 px-3 py-2 bg-amber-500/10 border border-amber-500/20 rounded-xl">
+                      <AlertTriangle className="h-3.5 w-3.5 text-amber-400 shrink-0" />
+                      <p className="text-xs text-amber-400">
+                        Map the required fields to continue: {missingRequired.map(f => f.label).join(", ")}
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2 px-3 py-2 bg-emerald-500/10 border border-emerald-500/20 rounded-xl">
+                      <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
+                      <p className="text-xs text-emerald-400">All required fields mapped — ready to preview</p>
+                    </div>
+                  );
+                })()}
 
-                <p className="text-xs text-muted-foreground flex items-center gap-1">
-                  <span className="text-amber-400">*</span> Required fields
-                </p>
+                <div className="border border-border rounded-xl overflow-hidden">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="bg-muted/30">
+                        <th className="text-left text-[11px] font-medium text-muted-foreground uppercase tracking-wider px-4 py-2.5 w-[45%]">Column in your file</th>
+                        <th className="text-left text-[11px] font-medium text-muted-foreground uppercase tracking-wider px-4 py-2.5 w-[45%]">Import as</th>
+                        <th className="w-[10%]" />
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border">
+                      {csvHeaders.map((header) => {
+                        const mapped = mappings[header];
+                        const fieldInfo = MEMBER_FIELDS.find((f) => f.key === mapped);
+                        const sampleValues = csvRows.slice(0, 3).map(r => r[header]).filter(Boolean);
+                        return (
+                          <tr key={header} className={mapped ? "bg-card" : "bg-card/50"}>
+                            <td className="px-4 py-2.5">
+                              <div className="text-sm font-medium text-foreground truncate" title={header}>{header}</div>
+                              {sampleValues.length > 0 && (
+                                <div className="text-[11px] text-muted-foreground truncate mt-0.5" title={sampleValues.join(", ")}>
+                                  e.g. {sampleValues[0]}
+                                </div>
+                              )}
+                            </td>
+                            <td className="px-4 py-2.5">
+                              <select
+                                value={mapped || ""}
+                                onChange={(e) => updateMapping(header, e.target.value)}
+                                className={`bg-card border rounded-lg px-3 py-1.5 text-sm w-full cursor-pointer focus:outline-none focus:ring-1 focus:ring-primary/50 transition-colors ${
+                                  mapped
+                                    ? fieldInfo?.required
+                                      ? "border-amber-500/50 text-foreground font-medium"
+                                      : "border-emerald-500/40 text-foreground"
+                                    : "border-border text-muted-foreground"
+                                }`}
+                              >
+                                <option value="">— Skip —</option>
+                                {MEMBER_FIELDS.map((f) => {
+                                  const alreadyUsed = Object.entries(mappings).some(([k, v]) => v === f.key && k !== header);
+                                  const coveredByFullName = hasFullName && (f.key === "firstName" || f.key === "lastName");
+                                  const coveredBySeparate = f.key === "fullName" && Object.values(mappings).includes("firstName") && Object.values(mappings).includes("lastName");
+                                  const isRequired = f.required && !(hasFullName && (f.key === "firstName" || f.key === "lastName"));
+                                  return (
+                                    <option key={f.key} value={f.key} disabled={alreadyUsed || (coveredByFullName && !alreadyUsed && mapped !== f.key) || (coveredBySeparate && mapped !== f.key)}>
+                                      {f.label}{isRequired ? " (required)" : ""}{coveredByFullName ? " (covered by Full Name)" : ""}{alreadyUsed ? " ✓" : ""}
+                                    </option>
+                                  );
+                                })}
+                              </select>
+                            </td>
+                            <td className="px-3 py-2.5 text-center">
+                              {mapped ? (
+                                fieldInfo?.required ? (
+                                  <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-amber-500/15">
+                                    <Check className="h-3 w-3 text-amber-400" />
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-emerald-500/15">
+                                    <Check className="h-3 w-3 text-emerald-400" />
+                                  </span>
+                                )
+                              ) : (
+                                <span className="text-[10px] text-muted-foreground/50">skip</span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
               </motion.div>
             )}
 

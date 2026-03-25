@@ -20,27 +20,17 @@ import { motion } from "framer-motion";
 import {
   Loader2, ArrowLeft, UserCircle, Mail, Phone, Calendar, Shield,
   MapPin, StickyNote, Clock, Edit, Pause, XCircle, Play, AlertTriangle,
-  CheckCircle, Activity, CreditCard, Plus, DollarSign, Receipt, RefreshCw,
+  Activity, CreditCard, Plus, DollarSign, Receipt, RefreshCw,
   Send, Copy, Star, Trash2, Link2, Unlink, Search, Users
 } from "lucide-react";
 import { Link } from "wouter";
-import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter
-} from "@/components/ui/dialog";
-import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
-  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle
-} from "@/components/ui/alert-dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { AddCardDialog } from "@/components/billing/AddCardDialog";
-import { ChangePlanDialog } from "@/components/billing/ChangePlanDialog";
 import { HoldsManager } from "@/components/billing/HoldsManager";
 import { InvoiceTable } from "@/components/billing/InvoiceTable";
 import { MemberBalance } from "@/components/billing/MemberBalance";
 import { SubscriptionDiscount } from "@/components/billing/SubscriptionDiscount";
+import { statusColor, riskColor, subStatusColor, formatDate } from "./member-detail/helpers";
+import { MemberDialogs } from "./member-detail/MemberDialogs";
 
 export function MemberDetail() {
   const { activeGymId } = useGym();
@@ -473,15 +463,8 @@ export function MemberDetail() {
     );
   }
 
-  const statusColor = member.status === "active" ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20"
-    : member.status === "hold" ? "bg-yellow-500/10 text-yellow-500 border-yellow-500/20"
-    : member.status === "inactive" ? "bg-muted text-muted-foreground border-border"
-    : "bg-destructive/10 text-destructive border-destructive/20";
-
-  const riskColor = member.riskTier === "critical" ? "text-red-500"
-    : member.riskTier === "high" ? "text-orange-500"
-    : member.riskTier === "healthy" ? "text-emerald-500"
-    : "text-yellow-500";
+  const sColor = statusColor(member.status);
+  const rColor = riskColor(member.riskTier);
 
   const tabs = [
     { key: "overview" as const, label: "Overview", icon: Activity },
@@ -495,18 +478,6 @@ export function MemberDetail() {
   const bSubs = billingData?.subscriptions ?? [];
   const bPayments = billingData?.payments ?? [];
   const bInvoices = billingData?.invoices ?? [];
-  const formatDate = (d: any) => d ? new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "—";
-  const subStatusColor = (s: string) => {
-    switch (s) {
-      case "active": return "bg-emerald-500/10 text-emerald-500 border-emerald-500/20";
-      case "paused": return "bg-yellow-500/10 text-yellow-500 border-yellow-500/20";
-      case "cancelled": case "cancel_at_period_end": return "bg-destructive/10 text-destructive border-destructive/20";
-      case "past_due": return "bg-orange-500/10 text-orange-500 border-orange-500/20";
-      case "succeeded": return "bg-emerald-500/10 text-emerald-500 border-emerald-500/20";
-      case "failed": return "bg-destructive/10 text-destructive border-destructive/20";
-      default: return "bg-muted text-muted-foreground border-border";
-    }
-  };
 
   return (
     <div className="space-y-6 pb-10">
@@ -537,11 +508,11 @@ export function MemberDetail() {
             <div className="flex flex-col md:flex-row md:items-center gap-3 mb-4">
               <h2 className="text-2xl font-bold text-foreground">{member.firstName} {member.lastName}</h2>
               <div className="flex items-center gap-2">
-                <span className={`px-2.5 py-1 rounded-full text-xs font-medium border ${statusColor}`}>
+                <span className={`px-2.5 py-1 rounded-full text-xs font-medium border ${sColor}`}>
                   {member.status.charAt(0).toUpperCase() + member.status.slice(1)}
                 </span>
                 {member.riskTier && (
-                  <span className={`flex items-center gap-1.5 text-xs font-semibold ${riskColor}`}>
+                  <span className={`flex items-center gap-1.5 text-xs font-semibold ${rColor}`}>
                     <div className="h-2 w-2 rounded-full bg-current" />
                     {member.riskTier.toUpperCase()} RISK
                   </span>
@@ -1162,295 +1133,65 @@ export function MemberDetail() {
         </motion.div>
       )}
 
-      <Dialog open={chargeOpen} onOpenChange={setChargeOpen}>
-        <DialogContent className="bg-card border-border max-w-sm">
-          <DialogHeader>
-            <DialogTitle>One-Time Charge</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-2">
-            <div className="space-y-2">
-              <Label>Amount ($) *</Label>
-              <Input type="number" step="0.01" value={chargeForm.amount} onChange={(e) => setChargeForm(f => ({ ...f, amount: e.target.value }))} placeholder="25.00" className="bg-background border-border" />
-            </div>
-            <div className="space-y-2">
-              <Label>Description *</Label>
-              <Input value={chargeForm.description} onChange={(e) => setChargeForm(f => ({ ...f, description: e.target.value }))} placeholder="e.g. Late cancel fee" className="bg-background border-border" />
-            </div>
-          </div>
-          <DialogFooter>
-            <button onClick={() => setChargeOpen(false)} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors">Cancel</button>
-            <button onClick={handleCreateCharge} disabled={createChargeMutation.isPending || !chargeForm.amount || !chargeForm.description} className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground hover:bg-primary/90 rounded-lg font-medium transition-colors disabled:opacity-50">
-              {createChargeMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
-              Charge
-            </button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={subOpen} onOpenChange={setSubOpen}>
-        <DialogContent className="bg-card border-border max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Start Subscription</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-2">
-            <div className="space-y-2">
-              <Label>Plan *</Label>
-              <Select value={subPlanId} onValueChange={setSubPlanId}>
-                <SelectTrigger className="bg-background border-border"><SelectValue placeholder="Select a plan" /></SelectTrigger>
-                <SelectContent>
-                  {(plans ?? []).map((p: any) => (
-                    <SelectItem key={p.id} value={String(p.id)}>{p.name} — ${p.price}{p.billingInterval === "one_time" ? "" : `/${p.billingInterval === "annual" ? "yr" : p.billingInterval === "quarterly" ? "qtr" : "mo"}`}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <DialogFooter>
-            <button onClick={() => setSubOpen(false)} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors">Cancel</button>
-            <button onClick={handleCreateStripeSub} disabled={createStripeSubMutation.isPending || !subPlanId} className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground hover:bg-primary/90 rounded-lg font-medium transition-colors disabled:opacity-50">
-              {createStripeSubMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
-              Start Subscription
-            </button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <AlertDialog open={cancelSubDialog !== null} onOpenChange={() => setCancelSubDialog(null)}>
-        <AlertDialogContent className="bg-card border-border">
-          <AlertDialogHeader>
-            <AlertDialogTitle>Cancel Subscription</AlertDialogTitle>
-            <AlertDialogDescription>Are you sure you want to cancel this subscription? This affects the member's billing.</AlertDialogDescription>
-          </AlertDialogHeader>
-          <div className="space-y-4 py-2">
-            <div className="flex gap-4">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input type="radio" checked={cancelAtPeriodEnd} onChange={() => setCancelAtPeriodEnd(true)} className="accent-primary" />
-                <span className="text-sm text-foreground">Cancel at period end</span>
-              </label>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input type="radio" checked={!cancelAtPeriodEnd} onChange={() => setCancelAtPeriodEnd(false)} className="accent-destructive" />
-                <span className="text-sm text-foreground">Cancel immediately</span>
-              </label>
-            </div>
-            {!cancelAtPeriodEnd && (
-              <div className="p-3 rounded-xl bg-destructive/5 border border-destructive/20 flex items-center gap-3">
-                <AlertTriangle className="h-4 w-4 text-destructive flex-shrink-0" />
-                <p className="text-xs text-destructive">Immediate cancellation stops billing right now and revokes access.</p>
-              </div>
-            )}
-            <div className="space-y-2">
-              <Label>Reason (optional)</Label>
-              <Textarea value={cancelReason} onChange={(e) => setCancelReason(e.target.value)} placeholder="Why is this being cancelled?" rows={2} className="bg-background border-border" />
-            </div>
-          </div>
-          <AlertDialogFooter>
-            <AlertDialogCancel className="bg-transparent border-border hover:bg-secondary">Keep Subscription</AlertDialogCancel>
-            <AlertDialogAction onClick={handleCancelMemberSub} disabled={cancelSubMutation.isPending} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-              {cancelSubMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-              Cancel Subscription
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      <AlertDialog open={pauseSubConfirm !== null} onOpenChange={() => setPauseSubConfirm(null)}>
-        <AlertDialogContent className="bg-card border-border">
-          <AlertDialogHeader>
-            <AlertDialogTitle>Pause Subscription</AlertDialogTitle>
-            <AlertDialogDescription>This will pause billing for this member. No invoices will be generated until the subscription is resumed.</AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel className="bg-transparent border-border hover:bg-secondary">Keep Active</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmPauseMemberSub} disabled={pauseSubMutation.isPending} className="bg-yellow-600 text-white hover:bg-yellow-700">
-              {pauseSubMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-              Pause Subscription
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      <AlertDialog open={removePmConfirm !== null} onOpenChange={() => setRemovePmConfirm(null)}>
-        <AlertDialogContent className="bg-card border-border">
-          <AlertDialogHeader>
-            <AlertDialogTitle>Remove Payment Method</AlertDialogTitle>
-            <AlertDialogDescription>Are you sure you want to remove this card? This cannot be undone. If it is used for active subscriptions, those may fail.</AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel className="bg-transparent border-border hover:bg-secondary">Keep Card</AlertDialogCancel>
-            <AlertDialogAction onClick={() => removePmConfirm && handleRemovePm(removePmConfirm)} disabled={removePmMutation.isPending} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-              {removePmMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-              Remove Card
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      <Dialog open={linkOpen} onOpenChange={(open) => { setLinkOpen(open); if (!open) { setLinkSearch(""); setSelectedLinkMember(null); } }}>
-        <DialogContent className="bg-card border-border max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2"><Users className="h-5 w-5 text-primary" /> Link Partner Billing</DialogTitle>
-          </DialogHeader>
-          <p className="text-sm text-muted-foreground">Search for a member to link to this member's billing. The selected member's subscriptions will be billed to this member.</p>
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              value={linkSearch}
-              onChange={(e) => setLinkSearch(e.target.value)}
-              placeholder="Search by name or email..."
-              className="pl-9 bg-background border-border"
-            />
-          </div>
-          <div className="max-h-[200px] overflow-y-auto space-y-1">
-            {filteredLinkMembers.map((m: any) => (
-              <button
-                key={m.id}
-                onClick={() => setSelectedLinkMember(m.id)}
-                className={`w-full flex items-center gap-3 p-3 rounded-xl text-left transition-colors ${
-                  selectedLinkMember === m.id ? "bg-primary/10 border border-primary/30" : "bg-muted/20 border border-transparent hover:bg-muted/40"
-                }`}
-              >
-                <UserCircle className="h-5 w-5 text-muted-foreground shrink-0" />
-                <div className="min-w-0">
-                  <p className="text-sm font-medium text-foreground truncate">{m.firstName} {m.lastName}</p>
-                  <p className="text-xs text-muted-foreground truncate">{m.email}</p>
-                </div>
-                {selectedLinkMember === m.id && <CheckCircle className="h-4 w-4 text-primary ml-auto shrink-0" />}
-              </button>
-            ))}
-            {linkSearch && filteredLinkMembers.length === 0 && (
-              <p className="text-sm text-muted-foreground text-center py-4">No members found.</p>
-            )}
-          </div>
-          <DialogFooter>
-            <button onClick={() => setLinkOpen(false)} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors">Cancel</button>
-            <button onClick={handleLinkBilling} disabled={!selectedLinkMember || linkBillingMutation.isPending} className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground hover:bg-primary/90 rounded-lg font-medium transition-colors disabled:opacity-50">
-              {linkBillingMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
-              Link Billing
-            </button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <AddCardDialog
-        open={addCardOpen}
-        onOpenChange={(open) => { setAddCardOpen(open); if (!open) setAddingCardSecret(null); }}
-        clientSecret={addingCardSecret}
-        onSuccess={() => { toast({ title: "Card added successfully" }); invalidateBilling(); }}
+      <MemberDialogs
+        memberId={memberId}
+        chargeOpen={chargeOpen}
+        setChargeOpen={setChargeOpen}
+        chargeForm={chargeForm}
+        setChargeForm={setChargeForm}
+        handleCreateCharge={handleCreateCharge}
+        createChargePending={createChargeMutation.isPending}
+        subOpen={subOpen}
+        setSubOpen={setSubOpen}
+        subPlanId={subPlanId}
+        setSubPlanId={setSubPlanId}
+        handleCreateStripeSub={handleCreateStripeSub}
+        createStripeSubPending={createStripeSubMutation.isPending}
+        plans={plans as any}
+        cancelSubDialog={cancelSubDialog}
+        setCancelSubDialog={setCancelSubDialog}
+        cancelAtPeriodEnd={cancelAtPeriodEnd}
+        setCancelAtPeriodEnd={setCancelAtPeriodEnd}
+        cancelReason={cancelReason}
+        setCancelReason={setCancelReason}
+        handleCancelMemberSub={handleCancelMemberSub}
+        cancelSubPending={cancelSubMutation.isPending}
+        pauseSubConfirm={pauseSubConfirm}
+        setPauseSubConfirm={setPauseSubConfirm}
+        confirmPauseMemberSub={confirmPauseMemberSub}
+        pauseSubPending={pauseSubMutation.isPending}
+        removePmConfirm={removePmConfirm}
+        setRemovePmConfirm={setRemovePmConfirm}
+        handleRemovePm={handleRemovePm}
+        removePmPending={removePmMutation.isPending}
+        linkOpen={linkOpen}
+        setLinkOpen={setLinkOpen}
+        linkSearch={linkSearch}
+        setLinkSearch={setLinkSearch}
+        selectedLinkMember={selectedLinkMember}
+        setSelectedLinkMember={setSelectedLinkMember}
+        filteredLinkMembers={filteredLinkMembers}
+        handleLinkBilling={handleLinkBilling}
+        linkBillingPending={linkBillingMutation.isPending}
+        addCardOpen={addCardOpen}
+        setAddCardOpen={setAddCardOpen}
+        addingCardSecret={addingCardSecret}
+        setAddingCardSecret={setAddingCardSecret}
+        onCardSuccess={() => { toast({ title: "Card added successfully" }); invalidateBilling(); }}
+        changePlanSub={changePlanSub}
+        setChangePlanSub={setChangePlanSub}
+        editOpen={editOpen}
+        setEditOpen={setEditOpen}
+        editForm={editForm}
+        setEditForm={setEditForm}
+        editErrors={editErrors}
+        setEditErrors={setEditErrors}
+        handleEditSave={handleEditSave}
+        updatePending={updateMutation.isPending}
+        statusAction={statusAction}
+        setStatusAction={setStatusAction}
+        handleStatusChange={handleStatusChange}
       />
-
-      {changePlanSub && (
-        <ChangePlanDialog
-          open={!!changePlanSub}
-          onClose={() => setChangePlanSub(null)}
-          subscription={{ id: changePlanSub.id, planId: changePlanSub.planId, planName: changePlanSub.planName || "", amount: changePlanSub.amount || 0, memberId }}
-        />
-      )}
-
-      <Dialog open={editOpen} onOpenChange={setEditOpen}>
-        <DialogContent className="bg-card border-border max-w-md max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Edit Member</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <Label htmlFor="edit-first">First Name <span className="text-red-400">*</span></Label>
-                <Input id="edit-first" value={editForm.firstName} onChange={(e) => { setEditForm(f => ({ ...f, firstName: e.target.value })); setEditErrors(e2 => { const n = {...e2}; delete n.firstName; return n; }); }} className={`bg-background border-border ${editErrors.firstName ? "border-red-400" : ""}`} />
-                {editErrors.firstName && <p className="text-xs text-red-400">{editErrors.firstName}</p>}
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="edit-last">Last Name <span className="text-red-400">*</span></Label>
-                <Input id="edit-last" value={editForm.lastName} onChange={(e) => { setEditForm(f => ({ ...f, lastName: e.target.value })); setEditErrors(e2 => { const n = {...e2}; delete n.lastName; return n; }); }} className={`bg-background border-border ${editErrors.lastName ? "border-red-400" : ""}`} />
-                {editErrors.lastName && <p className="text-xs text-red-400">{editErrors.lastName}</p>}
-              </div>
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="edit-email">Email <span className="text-red-400">*</span></Label>
-              <Input id="edit-email" type="email" value={editForm.email} onChange={(e) => { setEditForm(f => ({ ...f, email: e.target.value })); setEditErrors(e2 => { const n = {...e2}; delete n.email; return n; }); }} className={`bg-background border-border ${editErrors.email ? "border-red-400" : ""}`} />
-              {editErrors.email && <p className="text-xs text-red-400">{editErrors.email}</p>}
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="edit-phone">Phone</Label>
-              <Input id="edit-phone" value={editForm.phone} onChange={(e) => setEditForm(f => ({ ...f, phone: e.target.value }))} className="bg-background border-border" />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="edit-membership">Membership Plan</Label>
-              <Input id="edit-membership" value={editForm.membershipType} onChange={(e) => setEditForm(f => ({ ...f, membershipType: e.target.value }))} className="bg-background border-border" placeholder="e.g. Unlimited, 3x Week" />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="edit-address">Address</Label>
-              <Input id="edit-address" value={editForm.address} onChange={(e) => setEditForm(f => ({ ...f, address: e.target.value }))} className="bg-background border-border" />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <Label htmlFor="edit-city">City</Label>
-                <Input id="edit-city" value={editForm.city} onChange={(e) => setEditForm(f => ({ ...f, city: e.target.value }))} className="bg-background border-border" />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="edit-state">State</Label>
-                <Input id="edit-state" value={editForm.state} onChange={(e) => setEditForm(f => ({ ...f, state: e.target.value }))} className="bg-background border-border" placeholder="TX" />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <Label htmlFor="edit-ec-name">Emergency Contact</Label>
-                <Input id="edit-ec-name" value={editForm.emergencyContactName} onChange={(e) => setEditForm(f => ({ ...f, emergencyContactName: e.target.value }))} className="bg-background border-border" />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="edit-ec-phone">EC Phone</Label>
-                <Input id="edit-ec-phone" value={editForm.emergencyContactPhone} onChange={(e) => setEditForm(f => ({ ...f, emergencyContactPhone: e.target.value }))} className="bg-background border-border" />
-              </div>
-            </div>
-            <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/30 border border-border">
-              <input
-                type="checkbox"
-                id="edit-waiver-detail"
-                checked={editForm.waiverSigned}
-                onChange={(e) => setEditForm(f => ({ ...f, waiverSigned: e.target.checked }))}
-                className="rounded border-border"
-              />
-              <label htmlFor="edit-waiver-detail" className="text-sm text-foreground cursor-pointer">Liability Waiver Signed</label>
-            </div>
-          </div>
-          <DialogFooter>
-            <button onClick={() => setEditOpen(false)} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors">Cancel</button>
-            <button
-              onClick={handleEditSave}
-              disabled={updateMutation.isPending}
-              className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground hover:bg-primary/90 rounded-lg font-medium transition-colors disabled:opacity-50"
-            >
-              {updateMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
-              Save Changes
-            </button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <AlertDialog open={!!statusAction} onOpenChange={(open) => !open && setStatusAction(null)}>
-        <AlertDialogContent className="bg-card border-border">
-          <AlertDialogHeader>
-            <AlertDialogTitle>
-              {statusAction === "hold" ? "Place Member on Hold?" : statusAction === "cancelled" ? "Cancel Membership?" : "Reactivate Member?"}
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              {statusAction === "hold"
-                ? "This will pause the member's access. They can be reactivated later."
-                : statusAction === "cancelled"
-                ? "This will cancel the member's membership. This action can be reversed by reactivating."
-                : "This will restore the member's active status."}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel className="bg-transparent border-border hover:bg-secondary">Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleStatusChange}
-              className={statusAction === "active" ? "bg-emerald-600 hover:bg-emerald-700" : statusAction === "hold" ? "bg-yellow-600 hover:bg-yellow-700" : "bg-destructive hover:bg-destructive/90"}
-            >
-              {statusAction === "hold" ? "Place on Hold" : statusAction === "cancelled" ? "Cancel Membership" : "Reactivate"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   );
 }

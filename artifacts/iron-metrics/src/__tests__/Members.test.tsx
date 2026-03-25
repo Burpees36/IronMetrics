@@ -69,7 +69,7 @@ vi.mock("lucide-react", async (importOriginal) => {
   });
 });
 
-vi.mock("@/hooks/use-mobile", () => ({
+vi.mock("@/hooks/useMobile", () => ({
   useIsMobile: () => false,
 }));
 
@@ -133,8 +133,6 @@ vi.mock("@/components/ui/alert-dialog", () => ({
   AlertDialogHeader: make("div"),
   AlertDialogTitle: make("h2"),
   AlertDialogTrigger: noop,
-}));
-
 }));
 
 const mockUseGym = vi.fn();

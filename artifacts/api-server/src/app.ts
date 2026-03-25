@@ -28,8 +28,6 @@ import { WebhookHandlers } from "./webhookHandlers";
 import router from "./routes";
 import paymentUpdatePublicRouter from "./routes/payment-update-public";
 import leadCaptureRouter from "./routes/lead-capture";
-import leadCaptureConfigRouter from "./routes/lead-capture-config";
-import retentionRouter from "./routes/retention";
 
 const app: Express = express();
 
@@ -87,8 +85,8 @@ app.use(cors({
   },
 }));
 app.use(cookieParser());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: "10mb" }));
+app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
 // --- Rate limiters ---
 
@@ -148,8 +146,6 @@ app.use(authMiddleware);
 
 // Protected API routes — gym-scoped routes are further guarded by requireGymAccess
 app.use("/api", router);
-app.use("/api", leadCaptureConfigRouter);
-app.use("/api", retentionRouter);
 
 /** Global error handler — catches unhandled errors from any route or middleware. */
 app.use((err: any, _req: any, res: any, _next: any) => {

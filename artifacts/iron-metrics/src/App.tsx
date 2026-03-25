@@ -5,7 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useAuth } from "@workspace/replit-auth-web";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
-import NotFound from "@/pages/not-found";
+import NotFound from "@/pages/NotFound";
 
 import { GymProvider, useGym } from "@/store/GymContext";
 import { ThemeProvider } from "@/store/ThemeContext";

@@ -78,7 +78,7 @@ vi.mock("@/store/GymContext", () => ({
   useGym: () => mockUseGym(),
 }));
 
-vi.mock("@/hooks/use-mobile", () => ({
+vi.mock("@/hooks/useMobile", () => ({
   useIsMobile: () => false,
 }));
 

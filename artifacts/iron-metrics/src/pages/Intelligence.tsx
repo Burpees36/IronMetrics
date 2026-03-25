@@ -5,7 +5,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
 import { Loader2, Activity, ShieldAlert, Sparkles, TrendingUp, Zap, AlertCircle, CheckCircle2, Circle } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
-import { useIsMobile } from "@/hooks/use-mobile";
+import { useIsMobile } from "@/hooks/useMobile";
 
 const BASE_URL = import.meta.env.BASE_URL || "/";
 const API_BASE = `${BASE_URL}api`.replace(/\/+/g, "/");
@@ -261,10 +261,10 @@ export function Intelligence() {
                             <td className="px-6 py-4 font-medium text-foreground">${risk.revenueAtRisk}</td>
                             <td className="px-6 py-4">
                               <div className="flex flex-wrap gap-1">
-                                {risk.signals.slice(0, 2).map((sig: string, i: number) => (
+                                {(risk.signals || []).slice(0, 2).map((sig: string, i: number) => (
                                   <span key={i} className="px-2 py-0.5 bg-muted rounded text-[10px] text-muted-foreground">{sig}</span>
                                 ))}
-                                {risk.signals.length > 2 && <span className="px-2 py-0.5 text-[10px] text-muted-foreground">+{risk.signals.length - 2}</span>}
+                                {(risk.signals || []).length > 2 && <span className="px-2 py-0.5 text-[10px] text-muted-foreground">+{(risk.signals || []).length - 2}</span>}
                               </div>
                             </td>
                           </tr>
@@ -308,7 +308,7 @@ export function Intelligence() {
                     <p className="text-xs md:text-sm text-muted-foreground mb-4 md:mb-6 flex-1">{inv.description}</p>
                     
                     <div className="space-y-2 mb-4 md:mb-6">
-                      {inv.actions.map((action: string, j: number) => (
+                      {(inv.actions || []).map((action: string, j: number) => (
                         <div key={j} className="flex items-start gap-2 text-xs md:text-sm text-foreground/80">
                           <Zap className="h-4 w-4 text-primary shrink-0 mt-0.5" />
                           <span>{action}</span>
