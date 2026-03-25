@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, and } from "drizzle-orm";
 import { db, gymsTable, syncRunsTable } from "@workspace/db";
 import { createWodifyClient } from "./client";
 import { runWodifySync } from "./sync";
@@ -76,7 +76,7 @@ router.post("/gyms/:gymId/integrations/wodify/sync", async (req, res): Promise<v
     return;
   }
 
-  const triggeredBy = (req as any).user?.id || "unknown";
+  const triggeredBy = (req as any).user?.claims?.sub || "unknown";
 
   const result = await runWodifySync(gymId, apiKey, triggeredBy);
   res.json(result);
@@ -91,14 +91,12 @@ router.get("/gyms/:gymId/integrations/wodify/sync-status", async (req, res): Pro
 
   const [gym] = await db.select({ wodifyApiKey: gymsTable.wodifyApiKey }).from(gymsTable).where(eq(gymsTable.id, gymId));
 
-  const runs = await db
+  const wodifyRuns = await db
     .select()
     .from(syncRunsTable)
-    .where(eq(syncRunsTable.gymId, gymId))
+    .where(and(eq(syncRunsTable.gymId, gymId), eq(syncRunsTable.source, "wodify-api")))
     .orderBy(desc(syncRunsTable.startedAt))
     .limit(5);
-
-  const wodifyRuns = runs.filter(r => r.source === "wodify-api");
 
   res.json({
     hasApiKey: !!gym?.wodifyApiKey,
