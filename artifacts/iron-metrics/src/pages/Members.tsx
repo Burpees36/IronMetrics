@@ -358,7 +358,7 @@ export function Members() {
         </div>
       </header>
 
-      <SyncStatusBanner key={syncRefreshKey} onImport={() => setImportOpen(true)} />
+      <SyncStatusBanner key={syncRefreshKey} onImport={() => setImportOpen(true)} memberCount={data?.total ?? 0} />
 
       <div className="flex-1 bg-card border border-border rounded-2xl shadow-sm overflow-hidden flex flex-col">
         {isLoading && !data ? (

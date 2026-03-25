@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   CheckCircle2, XCircle, Clock, RefreshCw, ChevronDown, ChevronUp,
-  FileSpreadsheet, AlertTriangle, Upload, Loader2
+  FileSpreadsheet, AlertTriangle, Loader2
 } from "lucide-react";
 import { useGym } from "@/store/GymContext";
 
@@ -62,7 +62,7 @@ function sourceLabel(source: string): string {
   return source === "wodify" ? "Wodify" : "CSV";
 }
 
-export function SyncStatusBanner({ onImport }: { onImport: () => void }) {
+export function SyncStatusBanner({ onImport, memberCount }: { onImport: () => void; memberCount: number }) {
   const { activeGymId } = useGym();
   const [runs, setRuns] = useState<SyncRun[]>([]);
   const [loading, setLoading] = useState(true);
@@ -94,6 +94,8 @@ export function SyncStatusBanner({ onImport }: { onImport: () => void }) {
 
   const latest = runs[0];
 
+  if (!latest && memberCount > 0) return null;
+
   if (!latest) {
     return (
       <motion.div
@@ -103,11 +105,11 @@ export function SyncStatusBanner({ onImport }: { onImport: () => void }) {
       >
         <div className="bg-card/60 border border-dashed border-border rounded-2xl p-6 text-center">
           <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-primary/10 mb-3">
-            <Upload className="h-6 w-6 text-primary" />
+            <FileSpreadsheet className="h-6 w-6 text-primary" />
           </div>
-          <h3 className="text-sm font-semibold text-foreground mb-1">No data imported yet</h3>
+          <h3 className="text-sm font-semibold text-foreground mb-1">Import your member data</h3>
           <p className="text-xs text-muted-foreground mb-4 max-w-sm mx-auto">
-            Import your member data from a CSV file or Wodify export to get started with Iron Metrics.
+            Get started by importing your members from a CSV file or Wodify export.
           </p>
           <button
             onClick={onImport}
@@ -135,7 +137,7 @@ export function SyncStatusBanner({ onImport }: { onImport: () => void }) {
         <div className="flex-1 text-left min-w-0">
           <div className="flex items-center gap-2">
             <span className="text-sm font-medium text-foreground truncate">
-              {statusLabel(latest.status)}
+              Last import: {statusLabel(latest.status)}
             </span>
             <span className="text-xs text-muted-foreground">·</span>
             <span className="text-xs text-muted-foreground">
@@ -158,16 +160,16 @@ export function SyncStatusBanner({ onImport }: { onImport: () => void }) {
             <RefreshCw className="h-3 w-3" />
             New Import
           </button>
-          {expanded ? (
+          {runs.length > 1 && (expanded ? (
             <ChevronUp className="h-4 w-4 text-muted-foreground" />
           ) : (
             <ChevronDown className="h-4 w-4 text-muted-foreground" />
-          )}
+          ))}
         </div>
       </button>
 
       <AnimatePresence>
-        {expanded && (
+        {expanded && runs.length > 1 && (
           <motion.div
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: "auto", opacity: 1 }}
@@ -180,7 +182,7 @@ export function SyncStatusBanner({ onImport }: { onImport: () => void }) {
                 <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Import History</span>
               </div>
               <div className="divide-y divide-border">
-                {runs.map((run) => (
+                {runs.slice(1).map((run) => (
                   <div key={run.id} className="px-4 py-2.5 flex items-center gap-3 text-sm">
                     <StatusIcon status={run.status} />
                     <div className="flex-1 min-w-0">
@@ -204,11 +206,6 @@ export function SyncStatusBanner({ onImport }: { onImport: () => void }) {
                   </div>
                 ))}
               </div>
-              {runs.length === 0 && (
-                <div className="px-4 py-6 text-center text-xs text-muted-foreground">
-                  No import history yet
-                </div>
-              )}
             </div>
           </motion.div>
         )}
