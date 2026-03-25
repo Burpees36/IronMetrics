@@ -56,6 +56,19 @@ Iron Metrics is built as a pnpm workspace monorepo using TypeScript.
 - **Database Indexes:** Foreign key columns across all tables have B-tree indexes for query performance (attendance, members, member_notes, timeline_events, leads, lead_activities, workouts, workout_results, programming_days, subscriptions). Composite indexes on common query patterns (e.g., gym+status, gym+date, member+date).
 - **Date Columns:** All date-only fields use PostgreSQL `date` type with `mode: "string"` in Drizzle, returning/accepting YYYY-MM-DD strings in the API (joinDate, birthDate, workoutDate, nextFollowUpDate, currentPeriodStart/End, dueDate, programming date).
 
+## Wodify Integration
+- **Field Map:** `docs/integrations/wodify-field-map.ts` — source-of-truth mapping between Wodify API/CSV entities and Iron Metrics schema. LIVE-VERIFIED 2026-03-25 against api.wodify.com/v1.
+- **Integration Types:** `artifacts/api-server/src/routes/integrations/wodify/types.ts` — TypeScript interfaces for verified Wodify API response shapes (WodifyClient, WodifyMembership, WodifyClass, WodifyProgram, WodifyLead) and normalized Iron Metrics forms.
+- **API Probe:** `artifacts/api-server/src/routes/integrations/wodify/probe.ts` — one-time endpoint discovery script.
+- **Available Endpoints:** GET /clients (73 fields), GET /memberships (50 fields), GET /classes (69 fields), GET /programs (12 fields), GET /leads (47 fields). Pagination: ?page=N, 100/page.
+- **Unavailable:** /invoices, /attendance, /class-signins, /reservations, /client-statuses, /revenue-categories (all 403).
+- **Tier 1 Data Gap SOLVED:** /clients includes attendance summary: last_attendance, days_since_last_attendance, total_class_sign_ins, is_at_risk, current_weekstreak. No dedicated attendance endpoint needed for Tier 1 risk scores.
+- **Sync Order:** Clients → Memberships → Programs (optional) → Classes (Growth) → Leads (Growth).
+- **MRR Calculation:** membership.payment_plan.renewal_payment_option.renewal_cost (for auto-renew) or initial_payment_option.initial_cost. Interval from initial_payment_interval_time_unit/length.
+- **Schema Changes Needed:** `wodify_client_id` column on members, `wodify_api_key` on gyms, 'wodify-api' as sync_runs source.
+- **Observed Client Statuses:** 'Active', 'Inactive'. Date sentinel: '1900-01-01' = null/not-set.
+- **Remaining Questions:** Date range filtering params, rate limits (none observed).
+
 ## External Dependencies
 
 - **Replit Auth:** For user authentication and authorization.
