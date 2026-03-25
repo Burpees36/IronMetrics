@@ -170,6 +170,7 @@ export function ImportMembersDialog({
     progress: wodifyProgress,
     isSyncing: isWodifyApiSyncing,
     isComplete: isWodifyApiComplete,
+    isFailed: isWodifyApiFailed,
     completedResult: wodifyApiCompletedResult,
     startSync: startWodifyApiSync,
     elapsedSeconds: wodifyElapsed,
@@ -180,13 +181,18 @@ export function ImportMembersDialog({
   });
 
   const hasWodifyApiKey = !!wodifySyncStatus?.hasApiKey;
+  const [wodifyApiError, setWodifyApiError] = useState("");
 
   useEffect(() => {
     if (isWodifyApiComplete && wodifyApiCompletedResult && step === "wodify-api-sync") {
       setStep("wodify-api-results");
+      setWodifyApiError("");
       onImportComplete?.();
+    } else if (isWodifyApiFailed && step === "wodify-api-sync") {
+      const errDetails = wodifySyncStatus?.latestSync?.metadata?.progress as any;
+      setWodifyApiError(errDetails?.message || "Sync failed. Please try again.");
     }
-  }, [isWodifyApiComplete, wodifyApiCompletedResult, step]);
+  }, [isWodifyApiComplete, isWodifyApiFailed, wodifyApiCompletedResult, step]);
 
   const reset = useCallback(() => {
     setStep("source");
@@ -200,6 +206,7 @@ export function ImportMembersDialog({
     setFileName("");
     setWodifyPreviewRows([]);
     setWodifySummary(null);
+    setWodifyApiError("");
   }, []);
 
   const handleClose = useCallback(() => {
@@ -651,43 +658,72 @@ export function ImportMembersDialog({
 
             {step === "wodify-api-sync" && (
               <motion.div key="wodify-api-sync" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col items-center justify-center py-10 space-y-5">
-                <div className="w-full max-w-sm space-y-3">
-                  <div className="flex items-center gap-2">
-                    <Loader2 className="h-5 w-5 text-emerald-400 animate-spin shrink-0" />
-                    <p className="text-sm font-medium flex-1">{wodifyProgress?.message || "Starting sync..."}</p>
-                  </div>
-                  <div className="w-full bg-muted/30 rounded-full h-2 overflow-hidden">
-                    <motion.div
-                      className="h-full bg-emerald-500 rounded-full"
-                      initial={{ width: 0 }}
-                      animate={{ width: `${wodifyProgress ? (() => {
-                        switch (wodifyProgress.phase) {
-                          case "fetching-clients": return 15;
-                          case "fetching-memberships": return 35;
-                          case "processing": return 55;
-                          case "writing": return wodifyProgress.totalToProcess && wodifyProgress.processed
-                            ? Math.min(55 + (wodifyProgress.processed / wodifyProgress.totalToProcess) * 40, 95) : 65;
-                          default: return 10;
-                        }
-                      })() : 5}%` }}
-                      transition={{ duration: 0.5, ease: "easeOut" }}
-                    />
-                  </div>
-                  <div className="flex justify-between text-[10px] text-muted-foreground">
-                    <span>{wodifyElapsed < 60 ? `${wodifyElapsed}s` : `${Math.floor(wodifyElapsed / 60)}m ${wodifyElapsed % 60}s`} elapsed</span>
-                    {wodifyProgress?.processed && wodifyProgress?.totalToProcess ? (
-                      <span>{wodifyProgress.processed} / {wodifyProgress.totalToProcess} members</span>
-                    ) : null}
-                  </div>
-                  {wodifyElapsed > 120 && (
-                    <div className="flex items-start gap-2 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
-                      <ShieldAlert className="h-3.5 w-3.5 text-amber-400 shrink-0 mt-0.5" />
-                      <p className="text-[11px] text-amber-400">
-                        Taking longer than expected. You can close this dialog — the sync will continue in the background.
-                      </p>
+                {isWodifyApiFailed || wodifyApiError ? (
+                  <div className="w-full max-w-sm space-y-3">
+                    <div className="flex items-start gap-2 bg-destructive/10 border border-destructive/20 rounded-xl px-3 py-3">
+                      <AlertTriangle className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
+                      <div className="text-xs flex-1">
+                        <p className="text-destructive font-medium">Sync Failed</p>
+                        <p className="text-muted-foreground mt-1">{wodifyApiError || "An unexpected error occurred during sync."}</p>
+                      </div>
                     </div>
-                  )}
-                </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={async () => {
+                          setWodifyApiError("");
+                          try { await startWodifyApiSync(); } catch (err: any) { setWodifyApiError(err.message || "Sync failed"); }
+                        }}
+                        className="flex-1 px-4 py-2 text-sm font-medium rounded-xl border border-primary/30 text-primary hover:bg-primary/10 transition-colors flex items-center justify-center gap-1.5"
+                      >
+                        <RefreshCw className="h-3.5 w-3.5" /> Retry
+                      </button>
+                      <button
+                        onClick={() => { setStep("source"); setWodifyApiError(""); }}
+                        className="px-4 py-2 text-sm font-medium rounded-xl border border-border text-muted-foreground hover:bg-secondary transition-colors"
+                      >
+                        Back
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="w-full max-w-sm space-y-3">
+                    <div className="flex items-center gap-2">
+                      <Loader2 className="h-5 w-5 text-emerald-400 animate-spin shrink-0" />
+                      <p className="text-sm font-medium flex-1">{wodifyProgress?.message || "Starting sync..."}</p>
+                    </div>
+                    <div className="w-full bg-muted/30 rounded-full h-2 overflow-hidden">
+                      <motion.div
+                        className="h-full bg-emerald-500 rounded-full"
+                        initial={{ width: 0 }}
+                        animate={{ width: `${wodifyProgress ? (() => {
+                          switch (wodifyProgress.phase) {
+                            case "fetching-clients": return 15;
+                            case "fetching-memberships": return 35;
+                            case "processing": return 55;
+                            case "writing": return wodifyProgress.totalToProcess && wodifyProgress.processed
+                              ? Math.min(55 + (wodifyProgress.processed / wodifyProgress.totalToProcess) * 40, 95) : 65;
+                            default: return 10;
+                          }
+                        })() : 5}%` }}
+                        transition={{ duration: 0.5, ease: "easeOut" }}
+                      />
+                    </div>
+                    <div className="flex justify-between text-[10px] text-muted-foreground">
+                      <span>{wodifyElapsed < 60 ? `${wodifyElapsed}s` : `${Math.floor(wodifyElapsed / 60)}m ${wodifyElapsed % 60}s`} elapsed</span>
+                      {wodifyProgress?.processed && wodifyProgress?.totalToProcess ? (
+                        <span>{wodifyProgress.processed} / {wodifyProgress.totalToProcess} members</span>
+                      ) : null}
+                    </div>
+                    {wodifyElapsed > 120 && (
+                      <div className="flex items-start gap-2 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
+                        <ShieldAlert className="h-3.5 w-3.5 text-amber-400 shrink-0 mt-0.5" />
+                        <p className="text-[11px] text-amber-400">
+                          Taking longer than expected. You can close this dialog — the sync will continue in the background.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
               </motion.div>
             )}
 
