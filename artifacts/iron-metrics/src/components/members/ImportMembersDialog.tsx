@@ -1,10 +1,10 @@
-import React, { useState, useCallback, useRef } from "react";
+import React, { useState, useCallback, useRef, useEffect } from "react";
 import Papa from "papaparse";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Upload, FileSpreadsheet, ArrowRight, ArrowLeft, Check, AlertTriangle,
   X, Download, CheckCircle2, XCircle, Users, Loader2, SkipForward, Info,
-  ChevronRight, Sparkles, DollarSign, HelpCircle, ExternalLink
+  ChevronRight, Sparkles, DollarSign, HelpCircle, ExternalLink, Zap, RefreshCw
 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useGym } from "@/store/GymContext";
@@ -29,7 +29,8 @@ const MEMBER_FIELDS = [
 ] as const;
 
 type Step = "source" | "upload" | "map" | "preview" | "importing" | "results"
-  | "wodify-upload" | "wodify-preview" | "wodify-importing" | "wodify-results";
+  | "wodify-upload" | "wodify-preview" | "wodify-importing" | "wodify-results"
+  | "wodify-api-sync" | "wodify-api-results";
 
 interface ValidatedRow {
   rowIndex: number;
@@ -160,6 +161,21 @@ export function ImportMembersDialog({
   const [wodifyPreviewRows, setWodifyPreviewRows] = useState<WodifyPreviewRow[]>([]);
   const [wodifySummary, setWodifySummary] = useState<WodifySummary | null>(null);
 
+  const [hasWodifyApiKey, setHasWodifyApiKey] = useState(false);
+  const [wodifyApiSyncResult, setWodifyApiSyncResult] = useState<{
+    status: string; totalClients: number; totalMemberships: number;
+    created: number; updated: number; skipped: number; errored: number;
+  } | null>(null);
+
+  useEffect(() => {
+    if (!activeGymId || !open) return;
+    const apiBase = import.meta.env.BASE_URL.replace(/\/$/, "");
+    fetch(`${apiBase}/api/gyms/${activeGymId}/integrations/wodify/sync-status`, { credentials: "include" })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (data) setHasWodifyApiKey(!!data.hasApiKey); })
+      .catch(() => {});
+  }, [activeGymId, open]);
+
   const reset = useCallback(() => {
     setStep("source");
     setCsvHeaders([]);
@@ -172,6 +188,7 @@ export function ImportMembersDialog({
     setFileName("");
     setWodifyPreviewRows([]);
     setWodifySummary(null);
+    setWodifyApiSyncResult(null);
   }, []);
 
   const handleClose = useCallback(() => {
@@ -350,15 +367,38 @@ export function ImportMembersDialog({
     });
   }, []);
 
-  const isImporting = step === "importing" || step === "wodify-importing";
+  const handleWodifyApiSync = useCallback(async () => {
+    setStep("wodify-api-sync");
+    try {
+      const apiBase = import.meta.env.BASE_URL.replace(/\/$/, "");
+      const resp = await fetch(`${apiBase}/api/gyms/${activeGymId}/integrations/wodify/sync`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+      });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.error || "Sync failed");
+      setWodifyApiSyncResult(data);
+      setStep("wodify-api-results");
+      onImportComplete?.();
+    } catch (err: any) {
+      toast({ title: "Sync failed", description: err?.message || "Something went wrong", variant: "destructive" });
+      setStep("source");
+    }
+  }, [activeGymId, toast, onImportComplete]);
+
+  const isImporting = step === "importing" || step === "wodify-importing" || step === "wodify-api-sync";
 
   const getStepLabels = () => {
+    if (step === "wodify-api-sync" || step === "wodify-api-results") return ["Source", "Syncing", "Results"];
     if (step.startsWith("wodify")) return ["Source", "Upload", "Preview", "Import"];
     if (step === "source") return ["Source"];
     return ["Source", "Upload", "Map", "Preview", "Import"];
   };
   const getStepIndex = () => {
     if (step === "source") return 0;
+    if (step === "wodify-api-sync") return 1;
+    if (step === "wodify-api-results") return 2;
     if (step === "wodify-upload") return 1;
     if (step === "wodify-preview") return 2;
     if (step === "wodify-importing" || step === "wodify-results") return 3;
@@ -403,6 +443,29 @@ export function ImportMembersDialog({
               <motion.div key="source" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-4">
                 <p className="text-sm text-muted-foreground">Choose how you'd like to import your members:</p>
 
+                {hasWodifyApiKey && (
+                  <button
+                    onClick={handleWodifyApiSync}
+                    className="w-full text-left bg-gradient-to-br from-emerald-500/10 via-card to-primary/5 border border-emerald-500/20 rounded-xl p-5 hover:border-emerald-500/40 transition-colors group"
+                  >
+                    <div className="flex items-center gap-3 mb-2">
+                      <div className="h-10 w-10 bg-emerald-500/15 rounded-xl flex items-center justify-center">
+                        <Zap className="h-5 w-5 text-emerald-400" />
+                      </div>
+                      <div className="flex-1">
+                        <h3 className="text-sm font-semibold text-foreground">Sync from Wodify API</h3>
+                        <p className="text-xs text-muted-foreground">Pull latest member data directly from your connected Wodify account</p>
+                      </div>
+                      <ChevronRight className="h-5 w-5 text-muted-foreground group-hover:text-emerald-400 transition-colors" />
+                    </div>
+                    <div className="flex items-center gap-4 text-[11px] text-muted-foreground ml-[52px]">
+                      <span className="flex items-center gap-1"><CheckCircle2 className="h-3 w-3 text-emerald-500" /> No file needed</span>
+                      <span className="flex items-center gap-1"><CheckCircle2 className="h-3 w-3 text-emerald-500" /> Auto-dedup</span>
+                      <span className="flex items-center gap-1"><CheckCircle2 className="h-3 w-3 text-emerald-500" /> Revenue calculated</span>
+                    </div>
+                  </button>
+                )}
+
                 <button
                   onClick={() => setStep("wodify-upload")}
                   className="w-full text-left bg-gradient-to-br from-violet-500/10 via-card to-primary/5 border border-violet-500/20 rounded-xl p-5 hover:border-violet-500/40 transition-colors group"
@@ -412,8 +475,8 @@ export function ImportMembersDialog({
                       <Sparkles className="h-5 w-5 text-violet-500" />
                     </div>
                     <div className="flex-1">
-                      <h3 className="text-sm font-semibold text-foreground">Import from Wodify</h3>
-                      <p className="text-xs text-muted-foreground">Smart import that understands Wodify's membership export format</p>
+                      <h3 className="text-sm font-semibold text-foreground">Import from Wodify CSV</h3>
+                      <p className="text-xs text-muted-foreground">Upload a Wodify membership CSV export</p>
                     </div>
                     <ChevronRight className="h-5 w-5 text-muted-foreground group-hover:text-violet-500 transition-colors" />
                   </div>
@@ -582,6 +645,47 @@ export function ImportMembersDialog({
                     )}
                   </>
                 ) : null}
+              </motion.div>
+            )}
+
+            {step === "wodify-api-sync" && (
+              <motion.div key="wodify-api-sync" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col items-center justify-center py-16 space-y-4">
+                <div className="relative">
+                  <Loader2 className="h-10 w-10 text-emerald-400 animate-spin" />
+                </div>
+                <p className="text-sm font-medium">Syncing from Wodify API...</p>
+                <div className="text-xs text-muted-foreground space-y-1 text-center">
+                  <p>Fetching members and memberships directly from your account</p>
+                  <p>This may take a minute for large gyms</p>
+                </div>
+              </motion.div>
+            )}
+
+            {step === "wodify-api-results" && wodifyApiSyncResult && (
+              <motion.div key="wodify-api-results" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="space-y-4">
+                <div className="text-center py-4">
+                  <div className="mx-auto w-14 h-14 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center mb-3">
+                    <CheckCircle2 className="h-7 w-7 text-emerald-400" />
+                  </div>
+                  <h3 className="text-lg font-semibold">Sync Complete</h3>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Your Wodify data has been synced successfully
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <SummaryCard label="Total Clients" value={wodifyApiSyncResult.totalClients} icon={<Users className="h-4 w-4" />} color="text-foreground" />
+                  <SummaryCard label="New Members" value={wodifyApiSyncResult.created} icon={<CheckCircle2 className="h-4 w-4" />} color="text-emerald-400" />
+                  <SummaryCard label="Updated" value={wodifyApiSyncResult.updated} icon={<RefreshCw className="h-4 w-4" />} color="text-blue-400" />
+                  <SummaryCard label="Errors" value={wodifyApiSyncResult.errored} icon={<XCircle className="h-4 w-4" />} color="text-red-400" />
+                </div>
+
+                <div className="bg-muted/20 border border-border rounded-lg px-3 py-2 flex items-start gap-2">
+                  <Sparkles className="h-3.5 w-3.5 text-emerald-400 mt-0.5 shrink-0" />
+                  <p className="text-xs text-muted-foreground">
+                    Your dashboard, risk scores, and retention metrics will start populating with this data.
+                  </p>
+                </div>
               </motion.div>
             )}
 
@@ -878,7 +982,7 @@ export function ImportMembersDialog({
             )}
           </div>
           <div className="flex items-center gap-2">
-            {(step === "results" || step === "wodify-results") && (
+            {(step === "results" || step === "wodify-results" || step === "wodify-api-results") && (
               <button onClick={handleClose} className="px-4 py-2 bg-primary text-primary-foreground hover:bg-primary/90 rounded-lg font-medium text-sm transition-colors">
                 Done
               </button>

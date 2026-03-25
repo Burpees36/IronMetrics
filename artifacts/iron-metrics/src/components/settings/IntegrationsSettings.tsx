@@ -1,9 +1,10 @@
 import React from "react";
 import { motion } from "framer-motion";
 import { Badge } from "@/components/ui/badge";
-import { Puzzle, CheckCircle2, AlertCircle, Circle } from "lucide-react";
+import { Puzzle, CheckCircle2, Circle } from "lucide-react";
+import { WodifyConnectionCard } from "./WodifyConnectionCard";
 
-const INTEGRATIONS = [
+const STATIC_INTEGRATIONS = [
   {
     name: "Stripe",
     desc: "Payment processing, subscriptions, and billing.",
@@ -15,12 +16,6 @@ const INTEGRATIONS = [
     desc: "Transactional email delivery for member communications.",
     status: "connected" as const,
     statusText: "Connected",
-  },
-  {
-    name: "Wodify CSV Import",
-    desc: "Import member data from Wodify CSV exports. Manual upload — not a live sync.",
-    status: "available" as const,
-    statusText: "Beta",
   },
   {
     name: "SMS Provider",
@@ -40,14 +35,16 @@ export function IntegrationsSettings() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {INTEGRATIONS.map((integration, i) => {
+          <WodifyConnectionCard />
+
+          {STATIC_INTEGRATIONS.map((integration, i) => {
             const isConnected = integration.status === "connected";
             return (
               <motion.div
                 key={integration.name}
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: i * 0.05 }}
+                transition={{ delay: (i + 1) * 0.05 }}
                 className="bg-card border border-border rounded-2xl p-5 shadow-sm"
               >
                 <div className="flex items-start justify-between mb-3">
