@@ -139,7 +139,7 @@ function HowItWorksGuide({ onSeedDefaults, onDismiss, hasSequences }: {
             <p className="text-sm font-medium text-foreground">Set up your sequences</p>
             <p className="text-xs text-muted-foreground mt-0.5">
               {hasSequences
-                ? "You already have sequences created. Each one targets a different situation — members who stopped showing up, those at risk, or new members who are losing momentum."
+                ? "You already have sequences created. Each one targets a different situation — members who stopped showing up, those at risk, or new members who are losing momentum. Feel free to change them to best suit your brand and needs."
                 : "Start with our 4 proven templates (\"Miss You\", \"Check-In\", \"Win Back\", \"New Member Support\") or create your own from scratch. Each one targets a different at-risk situation."}
             </p>
           </div>
