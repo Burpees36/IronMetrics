@@ -82,6 +82,8 @@ export function useWodifySyncPolling({
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const elapsedRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const mountedRef = useRef(true);
+  const pollFailuresRef = useRef(0);
+  const MAX_POLL_FAILURES = 5;
 
   useEffect(() => {
     mountedRef.current = true;
@@ -124,10 +126,32 @@ export function useWodifySyncPolling({
       }
     }, 1000);
 
+    pollFailuresRef.current = 0;
     pollingRef.current = setInterval(async () => {
       const data = await fetchStatus();
-      if (!data || !mountedRef.current) return;
+      if (!mountedRef.current) return;
 
+      if (!data) {
+        pollFailuresRef.current++;
+        if (pollFailuresRef.current >= MAX_POLL_FAILURES) {
+          stopPolling();
+          setIsSyncing(false);
+          setCompletedResult({
+            syncRunId: 0,
+            status: "failed",
+            totalClients: 0,
+            totalMemberships: 0,
+            created: 0,
+            updated: 0,
+            skipped: 0,
+            errored: 0,
+            totalMrr: 0,
+          });
+        }
+        return;
+      }
+
+      pollFailuresRef.current = 0;
       const latest = data.latestSync;
       if (latest && latest.status !== "running") {
         stopPolling();

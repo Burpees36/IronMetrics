@@ -104,6 +104,24 @@ router.post("/gyms/:gymId/integrations/wodify/sync", async (req, res): Promise<v
   }
 });
 
+router.post("/gyms/:gymId/integrations/wodify/disconnect", async (req, res): Promise<void> => {
+  const gymId = parseInt(req.params.gymId, 10);
+  if (isNaN(gymId)) {
+    res.status(400).json({ error: "Invalid gym ID" });
+    return;
+  }
+
+  try {
+    await db.update(gymsTable)
+      .set({ wodifyApiKey: null })
+      .where(eq(gymsTable.id, gymId));
+
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || "Failed to disconnect" });
+  }
+});
+
 router.get("/gyms/:gymId/integrations/wodify/sync-status", async (req, res): Promise<void> => {
   const gymId = parseInt(req.params.gymId, 10);
   if (isNaN(gymId)) {

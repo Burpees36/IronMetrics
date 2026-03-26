@@ -198,11 +198,10 @@ export function WodifyConnectionCard() {
   const handleDisconnect = async () => {
     if (!activeGymId) return;
     try {
-      const resp = await fetch(`${apiBase}/api/gyms/${activeGymId}`, {
-        method: "PATCH",
+      const resp = await fetch(`${apiBase}/api/gyms/${activeGymId}/integrations/wodify/disconnect`, {
+        method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ wodifyApiKey: null }),
       });
       if (!resp.ok) throw new Error("Failed to disconnect");
       toast({ title: "Wodify disconnected" });
