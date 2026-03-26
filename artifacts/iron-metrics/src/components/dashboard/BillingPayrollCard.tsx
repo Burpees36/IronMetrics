@@ -42,7 +42,7 @@ function StatusPill({ entry }: { entry: PayrollEntry }) {
   }
   return (
     <span className="px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/20">
-      Paid
+      Current
     </span>
   );
 }

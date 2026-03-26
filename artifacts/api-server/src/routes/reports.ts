@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, and, count, desc, gte, sql } from "drizzle-orm";
+import { eq, and, count, desc, gte, lt, sql } from "drizzle-orm";
 import { db, membersTable, subscriptionsTable, invoicesTable, attendanceTable, leadsTable, classesTable, membershipPlansTable } from "@workspace/db";
 
 const router: IRouter = Router();
@@ -63,6 +63,15 @@ router.get("/gyms/:gymId/reports/dashboard", async (req, res): Promise<void> => 
 
   const newMembersThisMonth = await db.select({ count: count() }).from(membersTable).where(and(eq(membersTable.gymId, gymId), gte(membersTable.joinDate, monthAgo.toISOString().split("T")[0])));
   const newCount = Number(newMembersThisMonth[0]?.count ?? 0);
+
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+  const [churnedThisMonthCount] = await db.select({ count: count() }).from(subscriptionsTable).where(and(
+    eq(subscriptionsTable.gymId, gymId),
+    gte(subscriptionsTable.cancelledAt, monthStart),
+    lt(subscriptionsTable.cancelledAt, monthEnd),
+  ));
+  const churnedThisMonth = Number(churnedThisMonthCount?.count ?? 0);
 
   const active = Number(activeCount?.count ?? 0);
   const cancelled = Number(cancelledCount?.count ?? 0);
@@ -135,7 +144,7 @@ router.get("/gyms/:gymId/reports/dashboard", async (req, res): Promise<void> => 
   res.json({
     activeMembers: active,
     newMembersThisMonth: newCount,
-    churnedThisMonth: cancelled,
+    churnedThisMonth,
     mrr,
     mrrGrowth: (() => {
       const currentRev = months[months.length - 1]?.revenue ?? 0;
@@ -206,16 +215,47 @@ router.get("/gyms/:gymId/reports/membership", async (req, res): Promise<void> =>
     });
   const avgTenureMonths = tenureValues.length > 0 ? Math.round((tenureValues.reduce((s, t) => s + t, 0) / tenureValues.length) * 10) / 10 : 0;
 
+  const allCancelledSubs = await db.select({
+    cancelledAt: subscriptionsTable.cancelledAt,
+  }).from(subscriptionsTable).where(and(
+    eq(subscriptionsTable.gymId, gymId),
+    sql`${subscriptionsTable.cancelledAt} IS NOT NULL`,
+  ));
+
+  const allNewMembers = await db.select({
+    joinDate: membersTable.joinDate,
+    createdAt: membersTable.createdAt,
+  }).from(membersTable).where(eq(membersTable.gymId, gymId));
+
   const months = [];
   for (let i = 5; i >= 0; i--) {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const mStart = new Date(d.getFullYear(), d.getMonth(), 1);
+    const mEnd = new Date(d.getFullYear(), d.getMonth() + 1, 1);
+    const monthKey = d.toISOString().slice(0, 7);
+
+    const churned = allCancelledSubs.filter(s => {
+      if (!s.cancelledAt) return false;
+      const cat = new Date(s.cancelledAt);
+      return cat >= mStart && cat < mEnd;
+    }).length;
+
+    const newMems = allNewMembers.filter(m => {
+      const jd = m.joinDate || (m.createdAt ? new Date(m.createdAt).toISOString().split("T")[0] : null);
+      if (!jd) return false;
+      const jDate = new Date(jd);
+      return jDate >= mStart && jDate < mEnd;
+    }).length;
+
     months.push({
-      month: d.toISOString().slice(0, 7),
-      newMembers: i === 0 ? Number(newThisMonth?.count ?? 0) : 0,
-      churned: i === 0 ? cancelled : 0,
-      net: i === 0 ? netGrowth : 0,
+      month: monthKey,
+      newMembers: newMems,
+      churned,
+      net: newMems - churned,
     });
   }
+
+  const currentMonthChurned = months[months.length - 1]?.churned ?? 0;
 
   res.json({
     totalActive: active,
@@ -223,7 +263,7 @@ router.get("/gyms/:gymId/reports/membership", async (req, res): Promise<void> =>
     totalOnHold: hold,
     totalCancelled: cancelled,
     newThisMonth: Number(newThisMonth?.count ?? 0),
-    churnedThisMonth: cancelled,
+    churnedThisMonth: currentMonthChurned,
     netGrowth,
     churnRate,
     avgTenureMonths,
