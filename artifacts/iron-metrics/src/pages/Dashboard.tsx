@@ -5,12 +5,14 @@ import {
   Users, TrendingUp, AlertTriangle, CalendarCheck, 
   ArrowUpRight, ArrowDownRight, Loader2, BrainCircuit, Rocket,
   Sun, CreditCard, UserCheck, Calendar, ChevronRight, Sparkles,
-  ChevronDown, ChevronUp, UserPlus, Clock, DollarSign, Inbox
+  ChevronDown, ChevronUp, UserPlus, Clock
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { AreaChart, Area, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
+import { AreaChart, Area, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
+import { BillingPayrollCard } from "@/components/dashboard/BillingPayrollCard";
+import { RecentCancellationsCard } from "@/components/dashboard/RecentCancellationsCard";
 
 const API_BASE = import.meta.env.VITE_API_URL || "";
 
@@ -360,22 +362,7 @@ export function Dashboard() {
           </div>
         </div>
 
-        <div className="bg-card border border-border rounded-2xl p-4 md:p-6 shadow-sm flex flex-col">
-          <div className="mb-4 md:mb-6">
-            <h3 className="text-base md:text-lg font-semibold text-foreground">Member Status</h3>
-            <p className="text-xs md:text-sm text-muted-foreground">Current base distribution</p>
-          </div>
-          <div className="flex-1 min-h-[200px] md:min-h-[250px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={stats.memberStatusBreakdown} layout="vertical" margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
-                <XAxis type="number" hide />
-                <YAxis dataKey="status" type="category" axisLine={false} tickLine={false} tick={{fill: 'hsl(var(--foreground))', fontSize: 12}} width={70} />
-                <RechartsTooltip cursor={{fill: 'transparent'}} contentStyle={{ backgroundColor: 'hsl(var(--card))', borderColor: 'hsl(var(--border))', borderRadius: '8px', color: 'hsl(var(--foreground))' }} />
-                <Bar dataKey="count" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} barSize={24} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
+        <BillingPayrollCard gymId={activeGymId} />
       </div>
       
       {stats.atRiskMembers > 0 && (
@@ -399,6 +386,8 @@ export function Dashboard() {
           </Link>
         </motion.div>
       )}
+
+      <RecentCancellationsCard gymId={activeGymId} />
     </div>
   );
 }
