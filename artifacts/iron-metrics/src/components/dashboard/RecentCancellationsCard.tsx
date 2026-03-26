@@ -47,9 +47,12 @@ function CancellationRow({ entry }: { entry: CancellationEntry }) {
             <span className="text-xs font-medium text-foreground truncate">{entry.memberName}</span>
             <span className="text-[10px] text-muted-foreground whitespace-nowrap">{daysAgo(entry.cancelledAt)}</span>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <span className="text-[10px] text-muted-foreground">{entry.planName}</span>
             <span className="text-[10px] text-red-400">-${entry.amount.toFixed(0)}/mo</span>
+            {entry.cancelReason && (
+              <span className="text-[10px] text-muted-foreground/70 truncate max-w-[120px]">· {entry.cancelReason}</span>
+            )}
           </div>
         </div>
         <ChevronDown className={`h-3 w-3 text-muted-foreground transition-transform shrink-0 ${expanded ? "rotate-180" : ""}`} />

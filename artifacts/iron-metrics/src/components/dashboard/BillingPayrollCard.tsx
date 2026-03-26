@@ -42,7 +42,7 @@ function StatusPill({ entry }: { entry: PayrollEntry }) {
   }
   return (
     <span className="px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/20">
-      Active
+      Paid
     </span>
   );
 }
@@ -88,6 +88,10 @@ function PayrollRow({ entry }: { entry: PayrollEntry }) {
               <div className="flex items-center gap-1.5">
                 <DollarSign className="h-3 w-3 text-muted-foreground shrink-0" />
                 <span className="text-[10px] text-muted-foreground">${entry.amount.toFixed(2)}/{(entry.billingInterval || "mo").slice(0, 3)}</span>
+              </div>
+              <div className="flex items-center gap-1.5 col-span-2">
+                <CreditCard className="h-3 w-3 text-muted-foreground shrink-0" />
+                <span className="text-[10px] text-muted-foreground">{entry.planName} · {entry.billingInterval || "Monthly"}</span>
               </div>
               {entry.email && (
                 <div className="flex items-center gap-1.5 col-span-2">
