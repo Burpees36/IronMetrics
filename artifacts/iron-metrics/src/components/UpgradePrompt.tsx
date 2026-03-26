@@ -22,8 +22,8 @@ const TIER_INFO = {
     name: "Pro",
     price: "$299/month",
     icon: Crown,
-    color: "text-amber-400",
-    bgColor: "bg-amber-400/10",
+    color: "text-violet-400",
+    bgColor: "bg-violet-400/10",
   },
 };
 

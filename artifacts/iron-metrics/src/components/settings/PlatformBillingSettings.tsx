@@ -37,7 +37,7 @@ const TIER_ICONS: Record<string, React.ElementType> = {
 const TIER_COLORS: Record<string, string> = {
   insights: "text-blue-400",
   growth: "text-primary",
-  pro: "text-amber-400",
+  pro: "text-violet-400",
 };
 
 async function apiFetch(path: string, options?: RequestInit) {

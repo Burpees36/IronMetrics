@@ -54,7 +54,7 @@ export function MemberBalance({ memberId }: Props) {
         <h4 className="text-sm font-medium text-white/70 flex items-center gap-2">
           <Wallet className="w-4 h-4" /> Account Credit
         </h4>
-        <button onClick={() => setAdjustOpen(true)} className="text-xs text-amber-400 hover:text-amber-300 flex items-center gap-1">
+        <button onClick={() => setAdjustOpen(true)} className="text-xs text-primary hover:text-primary/80 flex items-center gap-1">
           <Plus className="w-3 h-3" /> Adjust
         </button>
       </div>
@@ -76,7 +76,7 @@ export function MemberBalance({ memberId }: Props) {
         <DialogContent className="sm:max-w-sm bg-[hsl(220,20%,12%)] border-white/10 text-white">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Wallet className="w-5 h-5 text-amber-400" /> Adjust Credit
+              <Wallet className="w-5 h-5 text-primary" /> Adjust Credit
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
@@ -114,7 +114,7 @@ export function MemberBalance({ memberId }: Props) {
           <DialogFooter>
             <button onClick={() => setAdjustOpen(false)} className="px-4 py-2 text-sm text-white/60 hover:text-white">Cancel</button>
             <button onClick={handleAdjust} disabled={!form.amount || !form.description || adjustMutation.isPending}
-              className="px-4 py-2 text-sm bg-amber-500 text-black rounded-lg hover:bg-amber-400 disabled:opacity-50 flex items-center gap-2">
+              className="px-4 py-2 text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 flex items-center gap-2">
               {adjustMutation.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
               {form.type === "add" ? "Add Credit" : "Deduct"}
             </button>

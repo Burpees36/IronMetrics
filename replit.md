@@ -29,7 +29,7 @@ Iron Metrics is built as a pnpm workspace monorepo using TypeScript.
 - **Validation:** Zod (`zod/v4`).
 - **API Codegen:** Orval (from OpenAPI spec).
 - **Auth:** Replit Auth (OIDC with PKCE).
-- **UI/UX Design:** Premium SaaS theme with light/dark mode toggle. Dark mode uses `hsl(224 35% 6%)` background, `hsl(224 35% 9%)` cards; light mode uses `hsl(210 20% 98%)` background with white cards. Both modes use 2xl rounded corners and a glass-panel effect. Primary accent is amber/gold. Theme is managed by `ThemeProvider` context (`src/store/ThemeContext.tsx`), persisted to `localStorage` key `iron-metrics-theme`, and respects `prefers-color-scheme` on first visit. An inline script in `index.html` prevents flash on load. Toggle is in the landing page navbar (desktop + mobile) and the authenticated sidebar.
+- **UI/UX Design:** Premium SaaS theme with light/dark mode toggle. Dark mode uses `hsl(224 35% 6%)` background, `hsl(224 35% 9%)` cards; light mode uses `hsl(210 20% 98%)` background with white cards. Both modes use 2xl rounded corners and a glass-panel effect. Primary accent is emerald green (`#10B981` / `hsl(160 84% 45%)` dark, `hsl(160 84% 39%)` light). Pro tier uses violet accent. Amber/yellow reserved for warning/caution semantic states only. Theme is managed by `ThemeProvider` context (`src/store/ThemeContext.tsx`), persisted to `localStorage` key `iron-metrics-theme`, and respects `prefers-color-scheme` on first visit. An inline script in `index.html` prevents flash on load. Toggle is in the landing page navbar (desktop + mobile) and the authenticated sidebar.
 
 **Key Features & Implementation:**
 

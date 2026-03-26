@@ -48,7 +48,7 @@ export function BrandingSettings({ gymId }: Props) {
             <p className="text-sm font-medium mb-2">Primary Color</p>
             <div className="flex items-center gap-3">
               <div className="h-10 w-10 rounded-lg bg-primary border border-border" />
-              <span className="text-sm text-muted-foreground font-mono">#FBBF24</span>
+              <span className="text-sm text-muted-foreground font-mono">#10B981</span>
             </div>
           </div>
           <div className="p-4 rounded-xl border border-border bg-background">

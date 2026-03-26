@@ -84,7 +84,7 @@ export function UpdatePayment() {
         appearance: {
           theme: "stripe",
           variables: {
-            colorPrimary: "#FBBF24",
+            colorPrimary: "#10B981",
             colorBackground: "#ffffff",
             colorText: "#111827",
             borderRadius: "8px",
@@ -166,11 +166,11 @@ export function UpdatePayment() {
   return (
     <div style={{ minHeight: "100vh", background: "#f3f4f6", display: "flex", alignItems: "center", justifyContent: "center", padding: "16px" }}>
       <div style={{ maxWidth: "480px", width: "100%", background: "#ffffff", borderRadius: "16px", boxShadow: "0 4px 24px rgba(0,0,0,0.08)", overflow: "hidden" }}>
-        <div style={{ padding: "32px 24px 24px", background: "#FBBF24", textAlign: "center" }}>
+        <div style={{ padding: "32px 24px 24px", background: "#10B981", textAlign: "center" }}>
           {gymLogoUrl && (
             <img src={gymLogoUrl} alt={gymName} style={{ maxHeight: "48px", maxWidth: "200px", marginBottom: "12px", display: "inline-block" }} />
           )}
-          <h1 style={{ margin: 0, fontSize: "22px", fontWeight: 700, color: "#111827" }}>
+          <h1 style={{ margin: 0, fontSize: "22px", fontWeight: 700, color: "#ffffff" }}>
             {gymName || "Update Payment Method"}
           </h1>
         </div>
@@ -178,7 +178,7 @@ export function UpdatePayment() {
         <div style={{ padding: "32px 24px" }}>
           {state === "loading" && (
             <div style={{ textAlign: "center", padding: "40px 0" }}>
-              <Loader2 style={{ width: "40px", height: "40px", color: "#FBBF24", margin: "0 auto 16px", animation: "spin 1s linear infinite" }} />
+              <Loader2 style={{ width: "40px", height: "40px", color: "#10B981", margin: "0 auto 16px", animation: "spin 1s linear infinite" }} />
               <p style={{ color: "#6b7280", fontSize: "15px" }}>Validating your link...</p>
               <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
             </div>
@@ -215,8 +215,8 @@ export function UpdatePayment() {
                 style={{
                   width: "100%",
                   padding: "14px",
-                  background: "#FBBF24",
-                  color: "#111827",
+                  background: "#10B981",
+                  color: "#ffffff",
                   fontSize: "15px",
                   fontWeight: 600,
                   border: "none",
@@ -236,7 +236,7 @@ export function UpdatePayment() {
 
           {state === "processing" && (
             <div style={{ textAlign: "center", padding: "40px 0" }}>
-              <Loader2 style={{ width: "40px", height: "40px", color: "#FBBF24", margin: "0 auto 16px", animation: "spin 1s linear infinite" }} />
+              <Loader2 style={{ width: "40px", height: "40px", color: "#10B981", margin: "0 auto 16px", animation: "spin 1s linear infinite" }} />
               <p style={{ color: "#374151", fontSize: "15px", fontWeight: 500 }}>Processing your payment method...</p>
               <p style={{ color: "#9ca3af", fontSize: "13px", marginTop: "8px" }}>Please don't close this page.</p>
               <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>

@@ -283,7 +283,7 @@ export function AiOperator() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
             <div className="flex items-center gap-3 mb-1">
-              <div className="h-8 w-8 bg-primary/20 rounded-lg flex items-center justify-center border border-primary/30 shadow-[0_0_15px_rgba(251,191,36,0.3)]">
+              <div className="h-8 w-8 bg-primary/20 rounded-lg flex items-center justify-center border border-primary/30 shadow-[0_0_15px_rgba(16,185,129,0.3)]">
                 <Bot className="h-5 w-5 text-primary" />
               </div>
               <h1 className="text-2xl md:text-3xl font-display font-bold text-foreground">AI Operator</h1>

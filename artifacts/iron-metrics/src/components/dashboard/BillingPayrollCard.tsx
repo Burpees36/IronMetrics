@@ -158,7 +158,7 @@ export function BillingPayrollCard({ gymId }: { gymId: number }) {
           animate={{ y: [0, -3, 0] }}
           transition={{ duration: 2.5, repeat: Infinity, ease: "easeInOut" }}
         >
-          <div className="h-9 w-9 bg-primary/15 rounded-lg flex items-center justify-center border border-primary/25 shadow-[0_0_12px_rgba(251,191,36,0.2)]">
+          <div className="h-9 w-9 bg-primary/15 rounded-lg flex items-center justify-center border border-primary/25 shadow-[0_0_12px_rgba(16,185,129,0.2)]">
             <Bot className="h-5 w-5 text-primary" />
           </div>
         </motion.div>

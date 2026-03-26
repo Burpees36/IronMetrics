@@ -34,9 +34,9 @@ const TIER_VISUAL: Record<string, TierVisualConfig> = {
   },
   pro: {
     icon: Crown,
-    color: "text-amber-400",
-    bgColor: "bg-amber-400/10",
-    borderColor: "border-amber-400/30",
+    color: "text-violet-400",
+    bgColor: "bg-violet-400/10",
+    borderColor: "border-violet-400/30",
   },
 };
 

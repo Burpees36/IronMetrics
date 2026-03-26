@@ -425,7 +425,7 @@ export function ImportMembersDialog({
       <DialogContent className="max-w-3xl max-h-[85vh] flex flex-col p-0 gap-0 bg-card border-border overflow-hidden">
         <DialogHeader className="px-6 pt-6 pb-4 border-b border-border shrink-0">
           <DialogTitle className="text-lg font-semibold flex items-center gap-2">
-            <FileSpreadsheet className="h-5 w-5 text-amber-400" />
+            <FileSpreadsheet className="h-5 w-5 text-primary" />
             Import Members
           </DialogTitle>
           <div className="flex items-center gap-1 mt-3">
@@ -434,7 +434,7 @@ export function ImportMembersDialog({
                 {i > 0 && <div className="h-px w-4 bg-border" />}
                 <div className={`flex items-center gap-1.5 text-xs font-medium px-2 py-1 rounded-full transition-colors ${
                   i < stepIndex ? "bg-emerald-500/10 text-emerald-400" :
-                  i === stepIndex ? "bg-amber-500/10 text-amber-400" :
+                  i === stepIndex ? "bg-primary/10 text-primary" :
                   "bg-muted/30 text-muted-foreground"
                 }`}>
                   {i < stepIndex ? <Check className="h-3 w-3" /> : null}

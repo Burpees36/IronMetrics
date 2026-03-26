@@ -92,7 +92,7 @@ function Navbar() {
             </button>
             <button
               onClick={() => setLocation("/login")}
-              className="text-sm font-semibold px-5 py-2.5 rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 transition-all shadow-[0_0_20px_rgba(251,191,36,0.2)] hover:shadow-[0_0_30px_rgba(251,191,36,0.4)]"
+              className="text-sm font-semibold px-5 py-2.5 rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 transition-all shadow-[0_0_20px_rgba(16,185,129,0.2)] hover:shadow-[0_0_30px_rgba(16,185,129,0.4)]"
             >
               Get Started
             </button>
@@ -203,7 +203,7 @@ function Hero() {
         >
           <button
             onClick={() => setLocation("/login")}
-            className="group flex items-center gap-2 px-8 py-4 rounded-xl font-semibold text-lg bg-primary text-primary-foreground shadow-[0_0_30px_rgba(251,191,36,0.3)] hover:shadow-[0_0_50px_rgba(251,191,36,0.5)] hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200"
+            className="group flex items-center gap-2 px-8 py-4 rounded-xl font-semibold text-lg bg-primary text-primary-foreground shadow-[0_0_30px_rgba(16,185,129,0.3)] hover:shadow-[0_0_50px_rgba(16,185,129,0.5)] hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200"
           >
             Get Started Free
             <ArrowRight className="h-5 w-5 group-hover:translate-x-1 transition-transform" />
@@ -503,8 +503,8 @@ function Pricing() {
     {
       name: "Pro",
       icon: Crown,
-      iconColor: "text-amber-400",
-      iconBg: "bg-amber-400/10",
+      iconColor: "text-violet-400",
+      iconBg: "bg-violet-400/10",
       price: "$299",
       description: "AI automation and advanced analytics for gyms serious about growth.",
       features: [
@@ -569,7 +569,7 @@ function Pricing() {
                 onClick={() => setLocation("/login")}
                 className={`w-full py-3 rounded-xl font-semibold text-sm transition-all ${
                   plan.highlighted
-                    ? "bg-primary text-primary-foreground hover:bg-primary/90 shadow-[0_0_20px_rgba(251,191,36,0.3)]"
+                    ? "bg-primary text-primary-foreground hover:bg-primary/90 shadow-[0_0_20px_rgba(16,185,129,0.3)]"
                     : "border border-border hover:border-primary/30 hover:bg-secondary text-foreground"
                 }`}
               >
@@ -658,7 +658,7 @@ function CTA() {
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
               <button
                 onClick={() => setLocation("/login")}
-                className="group flex items-center gap-2 px-8 py-4 rounded-xl font-semibold text-lg bg-primary text-primary-foreground shadow-[0_0_30px_rgba(251,191,36,0.3)] hover:shadow-[0_0_50px_rgba(251,191,36,0.5)] hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200"
+                className="group flex items-center gap-2 px-8 py-4 rounded-xl font-semibold text-lg bg-primary text-primary-foreground shadow-[0_0_30px_rgba(16,185,129,0.3)] hover:shadow-[0_0_50px_rgba(16,185,129,0.5)] hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200"
               >
                 Start for Free
                 <ArrowRight className="h-5 w-5 group-hover:translate-x-1 transition-transform" />
