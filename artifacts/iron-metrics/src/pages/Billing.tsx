@@ -823,6 +823,7 @@ export function Billing() {
                           <th className="px-4 py-3 font-semibold">Name</th>
                           <th className="px-4 py-3 font-semibold">Email</th>
                           <th className="px-4 py-3 font-semibold">Plan</th>
+                          <th className="px-4 py-3 font-semibold">Cancelled</th>
                           <th className="px-4 py-3 font-semibold">Joined</th>
                         </tr>
                       </thead>
@@ -832,6 +833,7 @@ export function Billing() {
                             <td className="px-4 py-3 font-medium text-foreground">{m.firstName} {m.lastName}</td>
                             <td className="px-4 py-3 text-muted-foreground">{m.email}</td>
                             <td className="px-4 py-3 text-muted-foreground">{m.membershipType || "—"}</td>
+                            <td className="px-4 py-3 text-muted-foreground">{m.cancelledAt ? new Date(m.cancelledAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "—"}</td>
                             <td className="px-4 py-3 text-muted-foreground">{m.joinDate || "—"}</td>
                           </tr>
                         ))}

@@ -47,20 +47,33 @@ router.get("/gyms/:gymId/cancelled-members", requireBillingRead(), async (req, r
     ))
     .orderBy(desc(subscriptionsTable.cancelledAt));
 
-  const cancelledMembers = await db
-    .select()
+  const cancelledMemberRows = await db
+    .select({
+      id: membersTable.id,
+      firstName: membersTable.firstName,
+      lastName: membersTable.lastName,
+      email: membersTable.email,
+      phone: membersTable.phone,
+      membershipType: membersTable.membershipType,
+      joinDate: membersTable.joinDate,
+      cancelledAt: sql<string>`MAX(${subscriptionsTable.cancelledAt})`.as("cancelled_at"),
+    })
     .from(membersTable)
-    .where(and(
-      eq(membersTable.gymId, gymId),
-      eq(membersTable.status, "cancelled"),
+    .innerJoin(subscriptionsTable, and(
+      eq(subscriptionsTable.memberId, membersTable.id),
+      eq(subscriptionsTable.gymId, gymId),
+      gte(subscriptionsTable.cancelledAt, startDate),
+      lt(subscriptionsTable.cancelledAt, endDate),
     ))
-    .orderBy(desc(membersTable.updatedAt));
+    .where(eq(membersTable.gymId, gymId))
+    .groupBy(membersTable.id)
+    .orderBy(desc(sql`MAX(${subscriptionsTable.cancelledAt})`));
 
   const lostRevenue = cancelledSubs.reduce((sum, s) => sum + parseFloat(s.amount || "0"), 0);
 
   res.json({
     cancelledSubscriptions: cancelledSubs.map((s) => ({ ...s, amount: parseFloat(s.amount) })),
-    cancelledMembers: cancelledMembers.map((m) => ({
+    cancelledMembers: cancelledMemberRows.map((m) => ({
       id: m.id,
       firstName: m.firstName,
       lastName: m.lastName,
@@ -68,7 +81,7 @@ router.get("/gyms/:gymId/cancelled-members", requireBillingRead(), async (req, r
       phone: m.phone,
       membershipType: m.membershipType,
       joinDate: m.joinDate,
-      updatedAt: m.updatedAt,
+      cancelledAt: m.cancelledAt,
     })),
     lostRevenue,
     period: {
