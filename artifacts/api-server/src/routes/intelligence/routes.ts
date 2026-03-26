@@ -350,7 +350,7 @@ router.get("/gyms/:gymId/intelligence/morning-briefing", async (req, res): Promi
       items.push({
         icon: "positive",
         priority: "positive",
-        message: `RSI is ${rsi.score.toFixed(1)} (Strong) — your gym is in great shape`,
+        message: `RSI is ${rsi.score.toFixed(1)} (Strong) — your business is in great shape. Invest in your systems and don't get complacent.`,
       });
     }
 
