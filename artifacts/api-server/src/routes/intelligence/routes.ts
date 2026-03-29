@@ -3,7 +3,7 @@ import { eq, and, count, sql, gte } from "drizzle-orm";
 import { db, membersTable, subscriptionsTable, attendanceTable, leadsTable, classesTable } from "@workspace/db";
 import { computeRSI } from "./computations";
 import { getGymMetrics, getRiskProfiles, getInterventions, computeRevenueForecast } from "./metrics";
-import { computeBlendedMRR, computeBlendedEngagement, getBlendedGymMetrics } from "../../blendedMetrics";
+import { computeBlendedMRR, computeBlendedEngagement } from "../../blendedMetrics";
 
 const router: IRouter = Router();
 

@@ -172,9 +172,7 @@ export function Billing() {
   const activeSubs = summary?.activeSubscriptions ?? 0;
   const arm = summary?.arm ?? 0;
   const failedPayments = summary?.failedPayments ?? 0;
-  const overdueAccounts = summary?.overdueAccounts ?? 0;
   const hasSubscriptionData = summary?.hasSubscriptionData ?? true;
-  const revenueSource = summary?.revenueSource ?? "subscriptions_only";
 
   if (isLoading) {
     return (
