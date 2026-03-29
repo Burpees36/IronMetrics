@@ -130,6 +130,12 @@ export async function computeBlendedEngagement(gymId: number): Promise<BlendedEn
 
   const hasAttendanceRecords = attendanceTableMemberIds.size > 0 || priorAttendanceTableMemberIds.size > 0;
 
+  const allAttendanceMemberIds = await db
+    .select({ memberId: attendanceTable.memberId })
+    .from(attendanceTable)
+    .where(eq(attendanceTable.gymId, gymId));
+  const membersWithAnyAttendance = new Set(allAttendanceMemberIds.map(a => a.memberId));
+
   const wodifyActiveMembers = await db
     .select({
       id: membersTable.id,
@@ -146,12 +152,16 @@ export async function computeBlendedEngagement(gymId: number): Promise<BlendedEn
   let engagedPriorWeek = priorAttendanceTableMemberIds.size;
 
   for (const m of wodifyActiveMembers) {
-    if (attendanceTableMemberIds.has(m.id) || priorAttendanceTableMemberIds.has(m.id)) {
+    if (membersWithAnyAttendance.has(m.id)) {
       continue;
     }
 
-    if (m.daysSinceLastAttendance !== null && m.daysSinceLastAttendance <= 7) {
-      engagedThisWeek++;
+    if (m.daysSinceLastAttendance !== null) {
+      if (m.daysSinceLastAttendance <= 7) {
+        engagedThisWeek++;
+      } else if (m.daysSinceLastAttendance <= 14) {
+        engagedPriorWeek++;
+      }
     } else if (m.lastVisitDate) {
       const daysSince = Math.floor((now.getTime() - new Date(m.lastVisitDate).getTime()) / (1000 * 60 * 60 * 24));
       if (daysSince <= 7) {
@@ -167,7 +177,7 @@ export async function computeBlendedEngagement(gymId: number): Promise<BlendedEn
   const engagementChange = Math.round((engagementRate - priorEngagementRate) * 10) / 10;
 
   const hasWodifyEngagement = wodifyActiveMembers.some(m =>
-    !attendanceTableMemberIds.has(m.id) && !priorAttendanceTableMemberIds.has(m.id) &&
+    !membersWithAnyAttendance.has(m.id) &&
     (m.daysSinceLastAttendance !== null || m.lastVisitDate !== null)
   );
 
