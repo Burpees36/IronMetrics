@@ -59,6 +59,9 @@ router.get("/gyms/:gymId/intelligence/rsi", async (req, res): Promise<void> => {
       trend30d,
       trend90d,
       trendInsufficient,
+      revenueSource: metrics.revenueSource,
+      attendanceSource: metrics.attendanceSource,
+      hasSubscriptionData: metrics.hasSubscriptionData,
       insight: rsi.band === "Strong"
         ? "Your gym is showing strong retention. Keep focus on onboarding quality."
         : rsi.band === "Moderate"

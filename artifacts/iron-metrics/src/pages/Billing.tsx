@@ -424,34 +424,56 @@ export function Billing() {
           <p className="text-xs text-muted-foreground mt-1">per member/mo</p>
         </motion.div>
 
-        {failedPayments > 0 ? (
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }} className="bg-destructive/5 border border-destructive/20 p-5 rounded-2xl shadow-sm">
-            <div className="flex items-center gap-2 mb-3">
-              <AlertTriangle className="h-4 w-4 text-destructive" />
-              <span className="text-xs font-medium text-destructive uppercase tracking-wider">Failed</span>
-            </div>
-            <p className="text-2xl font-display font-bold text-destructive">{failedPayments}</p>
-            <p className="text-xs text-destructive/70 mt-1">need attention</p>
-          </motion.div>
+        {hasSubscriptionData ? (
+          failedPayments > 0 ? (
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }} className="bg-destructive/5 border border-destructive/20 p-5 rounded-2xl shadow-sm">
+              <div className="flex items-center gap-2 mb-3">
+                <AlertTriangle className="h-4 w-4 text-destructive" />
+                <span className="text-xs font-medium text-destructive uppercase tracking-wider">Failed</span>
+              </div>
+              <p className="text-2xl font-display font-bold text-destructive">{failedPayments}</p>
+              <p className="text-xs text-destructive/70 mt-1">need attention</p>
+            </motion.div>
+          ) : (
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }} className="bg-card border border-border p-5 rounded-2xl shadow-sm">
+              <div className="flex items-center gap-2 mb-3">
+                <Receipt className="h-4 w-4 text-primary" />
+                <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Collected</span>
+              </div>
+              <p className="text-2xl font-display font-bold text-foreground">${(summary?.collectionsThisMonth ?? 0).toLocaleString()}</p>
+              <p className="text-xs text-muted-foreground mt-1">this month</p>
+            </motion.div>
+          )
         ) : (
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }} className="bg-card border border-border p-5 rounded-2xl shadow-sm">
             <div className="flex items-center gap-2 mb-3">
-              <Receipt className="h-4 w-4 text-primary" />
-              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Collected</span>
+              <CreditCard className="h-4 w-4 text-muted-foreground" />
+              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Payments</span>
             </div>
-            <p className="text-2xl font-display font-bold text-foreground">${(summary?.collectionsThisMonth ?? 0).toLocaleString()}</p>
-            <p className="text-xs text-muted-foreground mt-1">this month</p>
+            <p className="text-sm font-medium text-muted-foreground">No billing provider</p>
+            <p className="text-xs text-muted-foreground mt-1">connect to track</p>
           </motion.div>
         )}
 
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="bg-card border border-border p-5 rounded-2xl shadow-sm">
-          <div className="flex items-center gap-2 mb-3">
-            <UserMinus className="h-4 w-4 text-muted-foreground" />
-            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Cancelled</span>
-          </div>
-          <p className="text-2xl font-display font-bold text-foreground">{summary?.cancelledThisMonth ?? 0}</p>
-          <p className="text-xs text-muted-foreground mt-1">this period</p>
-        </motion.div>
+        {hasSubscriptionData ? (
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="bg-card border border-border p-5 rounded-2xl shadow-sm">
+            <div className="flex items-center gap-2 mb-3">
+              <UserMinus className="h-4 w-4 text-muted-foreground" />
+              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Cancelled</span>
+            </div>
+            <p className="text-2xl font-display font-bold text-foreground">{summary?.cancelledThisMonth ?? 0}</p>
+            <p className="text-xs text-muted-foreground mt-1">this period</p>
+          </motion.div>
+        ) : (
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="bg-card border border-border p-5 rounded-2xl shadow-sm">
+            <div className="flex items-center gap-2 mb-3">
+              <UserMinus className="h-4 w-4 text-muted-foreground" />
+              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Cancelled</span>
+            </div>
+            <p className="text-sm font-medium text-muted-foreground">No billing provider</p>
+            <p className="text-xs text-muted-foreground mt-1">connect to track</p>
+          </motion.div>
+        )}
       </div>
 
       {hasSubscriptionData && (recoveries as any[] || []).length > 0 && (

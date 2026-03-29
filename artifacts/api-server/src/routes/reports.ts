@@ -73,9 +73,12 @@ router.get("/gyms/:gymId/reports/dashboard", async (req, res): Promise<void> => 
   for (let i = 11; i >= 0; i--) {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
     const monthKey = d.toISOString().slice(0, 7);
-    const invoiceRev = invoicesByMonth[monthKey] ?? 0;
-    const revenue = invoiceRev > 0 ? Math.round(invoiceRev) : (monthKey === currentMonthKey ? Math.round(mrrResult.totalMRR) : 0);
-    months.push({ month: monthKey, revenue });
+    if (monthKey === currentMonthKey) {
+      months.push({ month: monthKey, revenue: Math.round(mrrResult.totalMRR) });
+    } else {
+      const invoiceRev = invoicesByMonth[monthKey] ?? 0;
+      months.push({ month: monthKey, revenue: invoiceRev > 0 ? Math.round(invoiceRev) : 0 });
+    }
   }
 
   const failedSubs = await db.select().from(subscriptionsTable).where(and(eq(subscriptionsTable.gymId, gymId), eq(subscriptionsTable.status, "past_due")));
@@ -266,9 +269,14 @@ router.get("/gyms/:gymId/reports/revenue", async (req, res): Promise<void> => {
   for (let i = 11; i >= 0; i--) {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
     const monthKey = d.toISOString().slice(0, 7);
-    const invoiceRev = invoicesByMonthRev[monthKey] ?? 0;
-    const membership = invoiceRev > 0 ? Math.round(invoiceRev) : (monthKey === currentMonthKeyRev ? Math.round(mrr) : 0);
-    byMonth.push({ month: monthKey, membership, retail: 0, total: membership });
+    if (monthKey === currentMonthKeyRev) {
+      const membership = Math.round(mrr);
+      byMonth.push({ month: monthKey, membership, retail: 0, total: membership });
+    } else {
+      const invoiceRev = invoicesByMonthRev[monthKey] ?? 0;
+      const membership = invoiceRev > 0 ? Math.round(invoiceRev) : 0;
+      byMonth.push({ month: monthKey, membership, retail: 0, total: membership });
+    }
   }
 
   res.json({

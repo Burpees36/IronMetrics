@@ -1,10 +1,10 @@
 import { eq, and, count, gte, sql, notInArray } from "drizzle-orm";
 import { db, membersTable, subscriptionsTable, attendanceTable } from "@workspace/db";
 
-const BILLABLE_STATUSES = ["active"] as const;
+const BILLABLE_STATUSES: ReadonlySet<string> = new Set(["active"]);
 
 export function isActiveBillableMember(status: string): boolean {
-  return BILLABLE_STATUSES.includes(status as any);
+  return BILLABLE_STATUSES.has(status);
 }
 
 export interface BlendedMRRResult {
@@ -66,7 +66,11 @@ export async function computeBlendedMRR(gymId: number): Promise<BlendedMRRResult
   const totalMRR = subscriptionMRR + wodifyMRR;
   const arm = activeBillableMembers > 0 ? totalMRR / activeBillableMembers : 0;
 
-  const hasSubscriptionData = activeSubs.length > 0;
+  const [anySubResult] = await db
+    .select({ count: count() })
+    .from(subscriptionsTable)
+    .where(eq(subscriptionsTable.gymId, gymId));
+  const hasSubscriptionData = Number(anySubResult?.count ?? 0) > 0;
   let revenueSource: BlendedMRRResult["revenueSource"];
   if (hasSubscriptionData && wodifyMRR > 0) revenueSource = "blended";
   else if (hasSubscriptionData) revenueSource = "subscriptions_only";
