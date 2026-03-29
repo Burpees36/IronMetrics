@@ -3,6 +3,7 @@ import { eq, and, count, sql, gte } from "drizzle-orm";
 import { db, membersTable, subscriptionsTable, attendanceTable, leadsTable, classesTable } from "@workspace/db";
 import { computeRSI } from "./computations";
 import { getGymMetrics, getRiskProfiles, getInterventions, computeRevenueForecast } from "./metrics";
+import { computeBlendedMRR, computeBlendedEngagement, getBlendedGymMetrics } from "../../blendedMetrics";
 
 const router: IRouter = Router();
 
@@ -35,8 +36,7 @@ router.get("/gyms/:gymId/intelligence/rsi", async (req, res): Promise<void> => {
       const past30Active = membersJoinedBefore30.filter(m => m.status === "active").length;
       const past30Total = membersJoinedBefore30.length;
       const pastChurn30 = past30Total > 0 ? ((past30Total - past30Active) / past30Total) * 100 : 0;
-      const pastSubs30 = await db.select().from(subscriptionsTable).where(and(eq(subscriptionsTable.gymId, gymId), eq(subscriptionsTable.status, "active")));
-      const pastAvgRev30 = pastSubs30.length > 0 ? pastSubs30.reduce((s, sub) => s + parseFloat(sub.amount || "0"), 0) / pastSubs30.length : 0;
+      const pastAvgRev30 = past30Active > 0 ? metrics.totalRev / past30Active : metrics.avgRev;
       const pastRsi30 = computeRSI(pastChurn30, pastAvgRev30, past30Active - (past30Total - past30Active), metrics.avgTenure > 1 ? metrics.avgTenure - 1 : 0);
       trend30d = Math.round((rsi.score - pastRsi30.score) * 10) / 10;
     } else {
@@ -47,8 +47,7 @@ router.get("/gyms/:gymId/intelligence/rsi", async (req, res): Promise<void> => {
       const past90Active = membersJoinedBefore90.filter(m => m.status === "active").length;
       const past90Total = membersJoinedBefore90.length;
       const pastChurn90 = past90Total > 0 ? ((past90Total - past90Active) / past90Total) * 100 : 0;
-      const pastSubs90 = await db.select().from(subscriptionsTable).where(and(eq(subscriptionsTable.gymId, gymId), eq(subscriptionsTable.status, "active")));
-      const pastAvgRev90 = pastSubs90.length > 0 ? pastSubs90.reduce((s, sub) => s + parseFloat(sub.amount || "0"), 0) / pastSubs90.length : 0;
+      const pastAvgRev90 = past90Active > 0 ? metrics.totalRev / past90Active : metrics.avgRev;
       const pastRsi90 = computeRSI(pastChurn90, pastAvgRev90, past90Active - (past90Total - past90Active), metrics.avgTenure > 3 ? metrics.avgTenure - 3 : 0);
       trend90d = Math.round((rsi.score - pastRsi90.score) * 10) / 10;
     } else {
@@ -178,14 +177,14 @@ router.get("/gyms/:gymId/intelligence/revenue-forecast", async (req, res): Promi
   if (!gymId) { res.status(400).json({ error: "Invalid gym ID" }); return; }
 
   try {
-    const subs = await db.select().from(subscriptionsTable).where(and(eq(subscriptionsTable.gymId, gymId), eq(subscriptionsTable.status, "active")));
-    const currentMrr = subs.reduce((sum, s) => sum + parseFloat(s.amount || "0"), 0);
+    const blendedMRR = await computeBlendedMRR(gymId);
+    const currentMrr = blendedMRR.totalMRR;
     const [totalCount] = await db.select({ count: count() }).from(membersTable).where(eq(membersTable.gymId, gymId));
     const [cancelledCount] = await db.select({ count: count() }).from(membersTable).where(and(eq(membersTable.gymId, gymId), eq(membersTable.status, "cancelled")));
     const total = Number(totalCount?.count ?? 0);
     const churnRate = total > 0 ? Math.round(Number(cancelledCount?.count ?? 0) / total * 1000) / 10 : 0;
 
-    const forecast = await computeRevenueForecast(gymId, currentMrr, churnRate, subs.length);
+    const forecast = await computeRevenueForecast(gymId, currentMrr, churnRate, blendedMRR.activeBillableMembers);
     res.json(forecast);
   } catch (err) {
     console.error("[intelligence/revenue-forecast] Failed to generate forecast:", err);
@@ -220,7 +219,7 @@ router.get("/gyms/:gymId/intelligence/overview", async (req, res): Promise<void>
     const [cancelledCount] = await db.select({ count: count() }).from(membersTable).where(and(eq(membersTable.gymId, gymId), eq(membersTable.status, "cancelled")));
     const total = Number(totalCount?.count ?? 0);
     const churnRate = total > 0 ? Math.round(Number(cancelledCount?.count ?? 0) / total * 1000) / 10 : 0;
-    const forecast = await computeRevenueForecast(gymId, currentMrr, churnRate, metrics.subs.length);
+    const forecast = await computeRevenueForecast(gymId, currentMrr, churnRate, metrics.active);
 
     res.json({
       gymId,
@@ -266,10 +265,8 @@ router.get("/gyms/:gymId/intelligence/morning-briefing", async (req, res): Promi
     const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
     const newLeadsToday = allLeads.filter(l => new Date(l.createdAt) >= oneDayAgo && l.stage !== "converted" && l.stage !== "lost");
 
-    const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-    const allAttendance = await db.select().from(attendanceTable).where(and(eq(attendanceTable.gymId, gymId), gte(attendanceTable.checkinTime, weekAgo)));
-    const uniqueAttendees = new Set(allAttendance.map(a => a.memberId)).size;
-    const engagementRate = metrics.active > 0 ? Math.round((uniqueAttendees / metrics.active) * 1000) / 10 : 0;
+    const blendedEngagement = await computeBlendedEngagement(gymId);
+    const engagementRate = blendedEngagement.engagementRate;
 
     const todayStr = now.toISOString().split("T")[0];
     const allClasses = await db.select().from(classesTable).where(eq(classesTable.gymId, gymId));

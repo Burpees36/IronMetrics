@@ -1,5 +1,6 @@
 import { db, subscriptionsTable, paymentsTable, refundsTable } from "@workspace/db";
 import { eq, and, gte, lt, desc } from "drizzle-orm";
+import { computeBlendedMRR, type BlendedMRRResult } from "./blendedMetrics";
 
 export function getMonthWindow(date?: Date): { start: Date; end: Date } {
   const now = date || new Date();
@@ -22,18 +23,18 @@ export interface BillingSummary {
   arm: number;
   activeSubscriptions: number;
   totalSubscriptions: number;
+  activeBillableMembers: number;
   failedPayments: number;
   overdueAccounts: number;
   collectionsThisMonth: number;
   refundsThisMonth: number;
   cancelledThisMonth: number;
+  revenueSource: BlendedMRRResult["revenueSource"];
+  hasSubscriptionData: boolean;
 }
 
 export async function computeBillingSummary(gymId: number, asOfDate?: Date): Promise<BillingSummary> {
-  const activeSubs = await db
-    .select()
-    .from(subscriptionsTable)
-    .where(and(eq(subscriptionsTable.gymId, gymId), eq(subscriptionsTable.status, "active")));
+  const blended = await computeBlendedMRR(gymId);
 
   const allSubs = await db
     .select()
@@ -42,9 +43,6 @@ export async function computeBillingSummary(gymId: number, asOfDate?: Date): Pro
 
   const failedPaymentSubs = allSubs.filter((s) => s.failedPayments > 0);
   const overdueSubs = allSubs.filter((s) => s.status === "past_due");
-
-  const mrr = computeMRR(activeSubs);
-  const arm = computeARM(mrr, activeSubs.length);
 
   const { start: monthStart, end: monthEnd } = getMonthWindow(asOfDate);
 
@@ -76,15 +74,18 @@ export async function computeBillingSummary(gymId: number, asOfDate?: Date): Pro
   );
 
   return {
-    mrr,
-    arr: mrr * 12,
-    arm,
-    activeSubscriptions: activeSubs.length,
+    mrr: blended.totalMRR,
+    arr: blended.totalMRR * 12,
+    arm: blended.arm,
+    activeSubscriptions: blended.activeSubscriptionCount,
     totalSubscriptions: allSubs.length,
+    activeBillableMembers: blended.activeBillableMembers,
     failedPayments: failedPaymentSubs.length,
     overdueAccounts: overdueSubs.length,
     collectionsThisMonth,
     refundsThisMonth,
     cancelledThisMonth: cancelledThisMonth.length,
+    revenueSource: blended.revenueSource,
+    hasSubscriptionData: blended.hasSubscriptionData,
   };
 }

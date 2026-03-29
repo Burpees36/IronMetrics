@@ -341,8 +341,8 @@ export function Dashboard() {
 
       <div className="bg-card border border-border rounded-2xl p-4 md:p-6 shadow-sm">
         <div className="mb-4">
-          <h3 className="text-sm md:text-base font-semibold text-foreground">Revenue Trend</h3>
-          <p className="text-xs text-muted-foreground">Monthly MRR over time</p>
+          <h3 className="text-sm md:text-base font-semibold text-foreground">MRR Trend</h3>
+          <p className="text-xs text-muted-foreground">Monthly recurring revenue over time</p>
         </div>
         <div className="h-[180px] md:h-[240px] w-full">
           <ResponsiveContainer width="100%" height="100%">

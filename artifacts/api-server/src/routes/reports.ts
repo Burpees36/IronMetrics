@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
 import { eq, and, count, desc, gte, lt, sql } from "drizzle-orm";
 import { db, membersTable, subscriptionsTable, invoicesTable, attendanceTable, leadsTable, classesTable, membershipPlansTable } from "@workspace/db";
+import { getBlendedGymMetrics, computeBlendedMRR, computeBlendedEngagement } from "../blendedMetrics";
 
 const router: IRouter = Router();
 
@@ -25,39 +26,14 @@ router.get("/gyms/:gymId/reports/dashboard", async (req, res): Promise<void> => 
   const gymId = parseGymId(req.params);
   if (!gymId) { res.status(400).json({ error: "Invalid gym ID" }); return; }
 
-  const [activeCount] = await db.select({ count: count() }).from(membersTable).where(and(eq(membersTable.gymId, gymId), eq(membersTable.status, "active")));
-  const [cancelledCount] = await db.select({ count: count() }).from(membersTable).where(and(eq(membersTable.gymId, gymId), eq(membersTable.status, "cancelled")));
-  const [holdCount] = await db.select({ count: count() }).from(membersTable).where(and(eq(membersTable.gymId, gymId), eq(membersTable.status, "hold")));
-  const [totalCount] = await db.select({ count: count() }).from(membersTable).where(eq(membersTable.gymId, gymId));
-
-  const subs = await db.select().from(subscriptionsTable).where(and(eq(subscriptionsTable.gymId, gymId), eq(subscriptionsTable.status, "active")));
-  const mrr = subs.reduce((sum, s) => sum + parseFloat(s.amount || "0"), 0);
-
-  const failedSubs = await db.select().from(subscriptionsTable).where(and(eq(subscriptionsTable.gymId, gymId), eq(subscriptionsTable.status, "past_due")));
+  const blended = await getBlendedGymMetrics(gymId);
+  const { mrr: mrrResult, engagement } = blended;
 
   const [openLeadCount] = await db.select({ count: count() }).from(leadsTable).where(eq(leadsTable.gymId, gymId));
 
   const now = new Date();
   const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-  const twoWeeksAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
   const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-
-  /**
-   * Member Engagement Rate: percentage of active members who checked in
-   * at least once in the trailing 7 days. 
-   *
-   * Formula: (unique members with ≥1 check-in this week / total active members) × 100
-   *
-   * Also computes the prior-week engagement rate for a week-over-week
-   * change indicator on the dashboard KPI card.
-   */
-  const weeklyAttendance = await db.select().from(attendanceTable).where(and(eq(attendanceTable.gymId, gymId), gte(attendanceTable.checkinTime, weekAgo)));
-  const uniqueMembersThisWeek = new Set(weeklyAttendance.map(a => a.memberId)).size;
-
-  const priorWeekAttendance = await db.select().from(attendanceTable).where(
-    and(eq(attendanceTable.gymId, gymId), gte(attendanceTable.checkinTime, twoWeeksAgo), sql`${attendanceTable.checkinTime} < ${weekAgo}`)
-  );
-  const uniqueMembersPriorWeek = new Set(priorWeekAttendance.map(a => a.memberId)).size;
 
   const [classesThisWeek] = await db.select({ count: count() }).from(classesTable).where(and(eq(classesTable.gymId, gymId), gte(classesTable.startTime, weekAgo)));
 
@@ -73,37 +49,13 @@ router.get("/gyms/:gymId/reports/dashboard", async (req, res): Promise<void> => 
   ));
   const churnedThisMonth = Number(churnedThisMonthCount?.count ?? 0);
 
-  const active = Number(activeCount?.count ?? 0);
-  const cancelled = Number(cancelledCount?.count ?? 0);
-  const hold = Number(holdCount?.count ?? 0);
-  const total = Number(totalCount?.count ?? 0);
-  const churnRate = total > 0 ? Math.round((cancelled / total) * 1000) / 10 : 0;
-
   const atRiskMembers = await db.select({ count: count() }).from(membersTable).where(
     and(eq(membersTable.gymId, gymId), eq(membersTable.status, "active"),
       sql`(${membersTable.riskTier} = 'critical' OR ${membersTable.riskTier} = 'high')`)
   );
   const atRiskCount = Number(atRiskMembers[0]?.count ?? 0);
 
-  const engagementRate = active > 0 ? Math.round((uniqueMembersThisWeek / active) * 1000) / 10 : 0;
-  const priorEngagementRate = active > 0 ? Math.round((uniqueMembersPriorWeek / active) * 1000) / 10 : 0;
-  const engagementChange = Math.round((engagementRate - priorEngagementRate) * 10) / 10;
-
-  const avgRevPerMember = subs.length > 0 ? mrr / subs.length : 0;
-  const netGrowth = active - cancelled;
-
-  const allMembersForTenure = await db.select().from(membersTable).where(eq(membersTable.gymId, gymId));
-  const tenures = allMembersForTenure
-    .filter(m => m.joinDate || m.createdAt)
-    .map(m => {
-      const end = m.status === "cancelled" && m.updatedAt ? new Date(m.updatedAt) : now;
-      const start = new Date(m.joinDate || m.createdAt!);
-      return Math.max(0, (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24 * 30));
-    });
-  const avgTenure = tenures.length > 0 ? Math.round((tenures.reduce((s, t) => s + t, 0) / tenures.length) * 10) / 10 : 0;
-  const rsiResult = computeRSI(churnRate, avgRevPerMember, netGrowth, avgTenure);
-  const rsiScore = rsiResult.score;
-  const rsiBand = rsiResult.band;
+  const rsiResult = computeRSI(blended.churnRate, blended.avgRevPerMember, blended.netGrowth, blended.avgTenure);
 
   const paidInvoices = await db.select().from(invoicesTable).where(and(eq(invoicesTable.gymId, gymId), eq(invoicesTable.status, "paid")));
   const allInvoices = await db.select().from(invoicesTable).where(eq(invoicesTable.gymId, gymId));
@@ -122,12 +74,11 @@ router.get("/gyms/:gymId/reports/dashboard", async (req, res): Promise<void> => 
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
     const monthKey = d.toISOString().slice(0, 7);
     const invoiceRev = invoicesByMonth[monthKey] ?? 0;
-    const revenue = invoiceRev > 0 ? Math.round(invoiceRev) : (monthKey === currentMonthKey ? Math.round(mrr) : 0);
-    months.push({
-      month: monthKey,
-      revenue,
-    });
+    const revenue = invoiceRev > 0 ? Math.round(invoiceRev) : (monthKey === currentMonthKey ? Math.round(mrrResult.totalMRR) : 0);
+    months.push({ month: monthKey, revenue });
   }
+
+  const failedSubs = await db.select().from(subscriptionsTable).where(and(eq(subscriptionsTable.gymId, gymId), eq(subscriptionsTable.status, "past_due")));
 
   const allAttendance = await db.select().from(attendanceTable).where(eq(attendanceTable.gymId, gymId));
   const attendanceByDay: { date: string; count: number }[] = [];
@@ -142,34 +93,37 @@ router.get("/gyms/:gymId/reports/dashboard", async (req, res): Promise<void> => 
   }
 
   res.json({
-    activeMembers: active,
+    activeMembers: blended.activeBillableMembers,
     newMembersThisMonth: newCount,
     churnedThisMonth,
-    mrr,
+    mrr: mrrResult.totalMRR,
     mrrGrowth: (() => {
       const currentRev = months[months.length - 1]?.revenue ?? 0;
       const prevRev = months[months.length - 2]?.revenue ?? 0;
       if (prevRev > 0) return Math.round(((currentRev - prevRev) / prevRev) * 1000) / 10;
       return null;
     })(),
-    totalRevenue: mrr * 12,
+    totalRevenue: mrrResult.totalMRR * 12,
     revenueGrowth: null,
-    engagementRate,
-    engagementChange,
+    engagementRate: engagement.engagementRate,
+    engagementChange: engagement.engagementChange,
     classesThisWeek: Number(classesThisWeek?.count ?? 0),
     openLeads: Number(openLeadCount?.count ?? 0),
     atRiskMembers: atRiskCount,
     failedPayments: failedSubs.length,
     collectionRate,
-    rsiScore: Math.round(rsiScore * 10) / 10,
-    rsiBand,
+    rsiScore: Math.round(rsiResult.score * 10) / 10,
+    rsiBand: rsiResult.band,
     revenueByMonth: months,
     attendanceByDay,
     memberStatusBreakdown: [
-      { status: "active", count: active },
-      { status: "hold", count: hold },
-      { status: "cancelled", count: cancelled },
+      { status: "active", count: blended.activeBillableMembers },
+      { status: "hold", count: blended.holdMembers },
+      { status: "cancelled", count: blended.cancelledMembers },
     ],
+    revenueSource: mrrResult.revenueSource,
+    attendanceSource: engagement.attendanceSource,
+    hasSubscriptionData: mrrResult.hasSubscriptionData,
   });
 });
 
@@ -276,9 +230,9 @@ router.get("/gyms/:gymId/reports/revenue", async (req, res): Promise<void> => {
   const gymId = parseGymId(req.params);
   if (!gymId) { res.status(400).json({ error: "Invalid gym ID" }); return; }
 
-  const subs = await db.select().from(subscriptionsTable).where(and(eq(subscriptionsTable.gymId, gymId), eq(subscriptionsTable.status, "active")));
-  const mrr = subs.reduce((sum, s) => sum + parseFloat(s.amount || "0"), 0);
-  const activeMemberCount = subs.length || 1;
+  const blendedMRR = await computeBlendedMRR(gymId);
+  const mrr = blendedMRR.totalMRR;
+  const activeMemberCount = blendedMRR.activeBillableMembers || 1;
 
   const paidInvoices = await db.select().from(invoicesTable).where(and(eq(invoicesTable.gymId, gymId), eq(invoicesTable.status, "paid")));
   const allInvoices = await db.select().from(invoicesTable).where(eq(invoicesTable.gymId, gymId));
@@ -328,6 +282,7 @@ router.get("/gyms/:gymId/reports/revenue", async (req, res): Promise<void> => {
     failedRevenue,
     collectionRate,
     byMonth,
+    revenueSource: blendedMRR.revenueSource,
   });
 });
 
