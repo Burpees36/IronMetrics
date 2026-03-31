@@ -280,6 +280,9 @@ describe("Intelligence route handlers", () => {
       expect(data).toHaveProperty("rsi");
       expect(data).toHaveProperty("topRisks");
       expect(data).toHaveProperty("gymId");
+      expect(data).toHaveProperty("revenueForecast");
+      expect(data.revenueForecast).toHaveProperty("currentMrr");
+      expect(data.revenueForecast.currentMrr).toBe(150);
     });
 
     it("returns 400 for invalid gym ID", async () => {
