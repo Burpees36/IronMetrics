@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
-import { eq, and, desc, gte, lt, sql, inArray } from "drizzle-orm";
-import { db, subscriptionsTable, membersTable, invoicesTable, billingAuditLogsTable, billingWebhookEventsTable, billingEventsTable } from "@workspace/db";
+import { eq, and, desc, gte, lt, sql, inArray, or, ne } from "drizzle-orm";
+import { db, subscriptionsTable, membersTable, membershipPlansTable, invoicesTable, billingAuditLogsTable, billingWebhookEventsTable, billingEventsTable } from "@workspace/db";
 import { requireBillingPermission, requireBillingRead } from "../../middlewares/billingRbac";
 import { computeBillingSummary } from "../../billingMetrics";
 import { billingAuditLogger } from "../../billingAuditLogger";
@@ -47,20 +47,33 @@ router.get("/gyms/:gymId/cancelled-members", requireBillingRead(), async (req, r
     ))
     .orderBy(desc(subscriptionsTable.cancelledAt));
 
-  const cancelledMembers = await db
-    .select()
+  const cancelledMemberRows = await db
+    .select({
+      id: membersTable.id,
+      firstName: membersTable.firstName,
+      lastName: membersTable.lastName,
+      email: membersTable.email,
+      phone: membersTable.phone,
+      membershipType: membersTable.membershipType,
+      joinDate: membersTable.joinDate,
+      cancelledAt: sql<string>`MAX(${subscriptionsTable.cancelledAt})`.as("cancelled_at"),
+    })
     .from(membersTable)
-    .where(and(
-      eq(membersTable.gymId, gymId),
-      eq(membersTable.status, "cancelled"),
+    .innerJoin(subscriptionsTable, and(
+      eq(subscriptionsTable.memberId, membersTable.id),
+      eq(subscriptionsTable.gymId, gymId),
+      gte(subscriptionsTable.cancelledAt, startDate),
+      lt(subscriptionsTable.cancelledAt, endDate),
     ))
-    .orderBy(desc(membersTable.updatedAt));
+    .where(eq(membersTable.gymId, gymId))
+    .groupBy(membersTable.id)
+    .orderBy(desc(sql`MAX(${subscriptionsTable.cancelledAt})`));
 
   const lostRevenue = cancelledSubs.reduce((sum, s) => sum + parseFloat(s.amount || "0"), 0);
 
   res.json({
     cancelledSubscriptions: cancelledSubs.map((s) => ({ ...s, amount: parseFloat(s.amount) })),
-    cancelledMembers: cancelledMembers.map((m) => ({
+    cancelledMembers: cancelledMemberRows.map((m) => ({
       id: m.id,
       firstName: m.firstName,
       lastName: m.lastName,
@@ -68,7 +81,7 @@ router.get("/gyms/:gymId/cancelled-members", requireBillingRead(), async (req, r
       phone: m.phone,
       membershipType: m.membershipType,
       joinDate: m.joinDate,
-      updatedAt: m.updatedAt,
+      cancelledAt: m.cancelledAt,
     })),
     lostRevenue,
     period: {
@@ -147,6 +160,86 @@ router.get("/gyms/:gymId/invoices", requireBillingRead(), async (req, res): Prom
     .orderBy(desc(invoicesTable.createdAt));
 
   res.json(invoices.map((i) => ({ ...i, amount: parseFloat(i.amount) })));
+});
+
+router.get("/gyms/:gymId/dashboard/billing-payroll", requireBillingRead(), async (req, res): Promise<void> => {
+  const gymId = parseGymId(req.params);
+  if (!gymId) { res.status(400).json({ error: "Invalid gym ID" }); return; }
+
+  const today = new Date().toISOString().split("T")[0];
+
+  const subs = await db
+    .select({
+      id: subscriptionsTable.id,
+      memberId: subscriptionsTable.memberId,
+      memberName: subscriptionsTable.memberName,
+      planName: subscriptionsTable.planName,
+      status: subscriptionsTable.status,
+      amount: subscriptionsTable.amount,
+      failedPayments: subscriptionsTable.failedPayments,
+      currentPeriodEnd: subscriptionsTable.currentPeriodEnd,
+      billingInterval: membershipPlansTable.billingInterval,
+      email: membersTable.email,
+      phone: membersTable.phone,
+    })
+    .from(subscriptionsTable)
+    .leftJoin(membershipPlansTable, eq(subscriptionsTable.planId, membershipPlansTable.id))
+    .leftJoin(membersTable, eq(subscriptionsTable.memberId, membersTable.id))
+    .where(and(
+      eq(subscriptionsTable.gymId, gymId),
+      or(eq(subscriptionsTable.status, "active"), eq(subscriptionsTable.status, "past_due")),
+    ))
+    .orderBy(desc(subscriptionsTable.failedPayments), subscriptionsTable.currentPeriodEnd);
+
+  const overdue = subs
+    .filter((s) => s.status === "past_due" || s.failedPayments > 0)
+    .map((s) => ({ ...s, amount: parseFloat(s.amount), category: "overdue" as const }));
+
+  const upcoming = subs
+    .filter((s) => s.status === "active" && s.failedPayments === 0)
+    .sort((a, b) => {
+      if (a.currentPeriodEnd && b.currentPeriodEnd) return a.currentPeriodEnd.localeCompare(b.currentPeriodEnd);
+      if (a.currentPeriodEnd) return -1;
+      if (b.currentPeriodEnd) return 1;
+      return 0;
+    })
+    .map((s) => ({ ...s, amount: parseFloat(s.amount), category: "upcoming" as const }))
+    .slice(0, 20);
+
+  res.json({ overdue, upcoming });
+});
+
+router.get("/gyms/:gymId/dashboard/recent-cancellations", requireBillingRead(), async (req, res): Promise<void> => {
+  const gymId = parseGymId(req.params);
+  if (!gymId) { res.status(400).json({ error: "Invalid gym ID" }); return; }
+
+  const thirtyDaysAgo = new Date();
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+  const cancellations = await db
+    .select({
+      subscriptionId: subscriptionsTable.id,
+      memberId: subscriptionsTable.memberId,
+      memberName: subscriptionsTable.memberName,
+      planName: subscriptionsTable.planName,
+      amount: subscriptionsTable.amount,
+      cancelledAt: subscriptionsTable.cancelledAt,
+      cancelReason: subscriptionsTable.cancelReason,
+      email: membersTable.email,
+      phone: membersTable.phone,
+    })
+    .from(subscriptionsTable)
+    .leftJoin(membersTable, eq(subscriptionsTable.memberId, membersTable.id))
+    .where(and(
+      eq(subscriptionsTable.gymId, gymId),
+      gte(subscriptionsTable.cancelledAt, thirtyDaysAgo),
+    ))
+    .orderBy(desc(subscriptionsTable.cancelledAt));
+
+  res.json({
+    cancellations: cancellations.map((c) => ({ ...c, amount: parseFloat(c.amount) })),
+    count: cancellations.length,
+  });
 });
 
 export default router;

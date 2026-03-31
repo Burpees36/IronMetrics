@@ -154,7 +154,7 @@ export function HoldsManager({ memberId, subscriptionId, onHoldChange }: Props) 
           <DialogFooter>
             <button onClick={() => setCreateOpen(false)} className="px-4 py-2 text-sm text-white/60 hover:text-white">Cancel</button>
             <button onClick={handleCreate} disabled={!form.startDate || createMutation.isPending}
-              className="px-4 py-2 text-sm bg-amber-500 text-black rounded-lg hover:bg-amber-400 disabled:opacity-50 flex items-center gap-2">
+              className="px-4 py-2 text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 flex items-center gap-2">
               {createMutation.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
               Schedule
             </button>

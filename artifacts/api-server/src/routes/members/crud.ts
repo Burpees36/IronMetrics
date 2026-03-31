@@ -337,6 +337,20 @@ router.patch("/gyms/:gymId/members/:memberId", async (req, res): Promise<void> =
 
   if (!member) { res.status(404).json({ error: "Member not found" }); return; }
 
+  if (data.status === "cancelled") {
+    await db.update(subscriptionsTable)
+      .set({
+        status: "cancelled",
+        cancelledAt: new Date(),
+        cancelReason: "Member cancelled by staff",
+      })
+      .where(and(
+        eq(subscriptionsTable.memberId, memberId),
+        eq(subscriptionsTable.gymId, gymId),
+        inArray(subscriptionsTable.status, ["active", "past_due", "cancel_at_period_end"]),
+      ));
+  }
+
   res.json({
     ...member,
     riskScore: member.riskScore ? parseFloat(member.riskScore) : null,

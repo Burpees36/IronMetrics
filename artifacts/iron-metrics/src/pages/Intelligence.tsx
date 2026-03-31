@@ -133,7 +133,7 @@ export function Intelligence() {
                   <svg className="w-36 h-36 md:w-48 md:h-48 transform -rotate-90" viewBox="0 0 192 192">
                     <circle cx="96" cy="96" r="80" stroke="currentColor" strokeWidth="8" fill="transparent" className="text-muted" />
                     <circle cx="96" cy="96" r="80" stroke="currentColor" strokeWidth="12" fill="transparent" 
-                      strokeDasharray={`${(rsi.score / 100) * 502} 502`} className="text-primary drop-shadow-[0_0_10px_rgba(251,191,36,0.5)]" 
+                      strokeDasharray={`${(rsi.score / 100) * 502} 502`} className="text-primary drop-shadow-[0_0_10px_rgba(16,185,129,0.5)]" 
                       strokeLinecap="round" />
                   </svg>
                   <div className="absolute inset-0 flex items-center justify-center flex-col">

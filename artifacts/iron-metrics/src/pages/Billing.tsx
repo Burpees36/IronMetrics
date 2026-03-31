@@ -168,10 +168,11 @@ export function Billing() {
 
   const summary = billingSummary as any;
   const mrr = summary?.mrr ?? 0;
+  const activeBillableMembers = summary?.activeBillableMembers ?? summary?.activeSubscriptions ?? 0;
   const activeSubs = summary?.activeSubscriptions ?? 0;
   const arm = summary?.arm ?? 0;
   const failedPayments = summary?.failedPayments ?? 0;
-  const overdueAccounts = summary?.overdueAccounts ?? 0;
+  const hasSubscriptionData = summary?.hasSubscriptionData ?? true;
 
   if (isLoading) {
     return (
@@ -381,6 +382,18 @@ export function Billing() {
         <p className="text-muted-foreground mt-1">Plans, subscriptions, revenue, and payment management.</p>
       </header>
 
+      {!hasSubscriptionData && (
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="bg-blue-500/5 border border-blue-500/20 rounded-2xl p-4 flex items-center gap-3">
+          <div className="p-2 rounded-lg bg-blue-500/10">
+            <CreditCard className="h-4 w-4 text-blue-500" />
+          </div>
+          <div>
+            <p className="text-sm font-medium text-foreground">Revenue data from Wodify</p>
+            <p className="text-xs text-muted-foreground">MRR and ARM are calculated from imported member records. Connect a billing provider to enable subscriptions, payment tracking, and dunning.</p>
+          </div>
+        </motion.div>
+      )}
+
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="bg-card border border-border p-5 rounded-2xl shadow-sm">
           <div className="flex items-center gap-2 mb-3">
@@ -396,8 +409,8 @@ export function Billing() {
             <Users className="h-4 w-4 text-primary" />
             <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Active</span>
           </div>
-          <p className="text-2xl font-display font-bold text-foreground">{activeSubs}</p>
-          <p className="text-xs text-muted-foreground mt-1">{summary?.totalSubscriptions ?? 0} total</p>
+          <p className="text-2xl font-display font-bold text-foreground">{activeBillableMembers}</p>
+          <p className="text-xs text-muted-foreground mt-1">{hasSubscriptionData ? `${activeSubs} subscriptions` : "members"}</p>
         </motion.div>
 
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="bg-card border border-border p-5 rounded-2xl shadow-sm">
@@ -409,37 +422,59 @@ export function Billing() {
           <p className="text-xs text-muted-foreground mt-1">per member/mo</p>
         </motion.div>
 
-        {failedPayments > 0 ? (
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }} className="bg-destructive/5 border border-destructive/20 p-5 rounded-2xl shadow-sm">
-            <div className="flex items-center gap-2 mb-3">
-              <AlertTriangle className="h-4 w-4 text-destructive" />
-              <span className="text-xs font-medium text-destructive uppercase tracking-wider">Failed</span>
-            </div>
-            <p className="text-2xl font-display font-bold text-destructive">{failedPayments}</p>
-            <p className="text-xs text-destructive/70 mt-1">need attention</p>
-          </motion.div>
+        {hasSubscriptionData ? (
+          failedPayments > 0 ? (
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }} className="bg-destructive/5 border border-destructive/20 p-5 rounded-2xl shadow-sm">
+              <div className="flex items-center gap-2 mb-3">
+                <AlertTriangle className="h-4 w-4 text-destructive" />
+                <span className="text-xs font-medium text-destructive uppercase tracking-wider">Failed</span>
+              </div>
+              <p className="text-2xl font-display font-bold text-destructive">{failedPayments}</p>
+              <p className="text-xs text-destructive/70 mt-1">need attention</p>
+            </motion.div>
+          ) : (
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }} className="bg-card border border-border p-5 rounded-2xl shadow-sm">
+              <div className="flex items-center gap-2 mb-3">
+                <Receipt className="h-4 w-4 text-primary" />
+                <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Collected</span>
+              </div>
+              <p className="text-2xl font-display font-bold text-foreground">${(summary?.collectionsThisMonth ?? 0).toLocaleString()}</p>
+              <p className="text-xs text-muted-foreground mt-1">this month</p>
+            </motion.div>
+          )
         ) : (
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }} className="bg-card border border-border p-5 rounded-2xl shadow-sm">
             <div className="flex items-center gap-2 mb-3">
-              <Receipt className="h-4 w-4 text-primary" />
-              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Collected</span>
+              <CreditCard className="h-4 w-4 text-muted-foreground" />
+              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Payments</span>
             </div>
-            <p className="text-2xl font-display font-bold text-foreground">${(summary?.collectionsThisMonth ?? 0).toLocaleString()}</p>
-            <p className="text-xs text-muted-foreground mt-1">this month</p>
+            <p className="text-sm font-medium text-muted-foreground">No billing provider</p>
+            <p className="text-xs text-muted-foreground mt-1">connect to track</p>
           </motion.div>
         )}
 
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="bg-card border border-border p-5 rounded-2xl shadow-sm">
-          <div className="flex items-center gap-2 mb-3">
-            <UserMinus className="h-4 w-4 text-muted-foreground" />
-            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Cancelled</span>
-          </div>
-          <p className="text-2xl font-display font-bold text-foreground">{summary?.cancelledThisMonth ?? 0}</p>
-          <p className="text-xs text-muted-foreground mt-1">this period</p>
-        </motion.div>
+        {hasSubscriptionData ? (
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="bg-card border border-border p-5 rounded-2xl shadow-sm">
+            <div className="flex items-center gap-2 mb-3">
+              <UserMinus className="h-4 w-4 text-muted-foreground" />
+              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Cancelled</span>
+            </div>
+            <p className="text-2xl font-display font-bold text-foreground">{summary?.cancelledThisMonth ?? 0}</p>
+            <p className="text-xs text-muted-foreground mt-1">this period</p>
+          </motion.div>
+        ) : (
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="bg-card border border-border p-5 rounded-2xl shadow-sm">
+            <div className="flex items-center gap-2 mb-3">
+              <UserMinus className="h-4 w-4 text-muted-foreground" />
+              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Cancelled</span>
+            </div>
+            <p className="text-sm font-medium text-muted-foreground">No billing provider</p>
+            <p className="text-xs text-muted-foreground mt-1">connect to track</p>
+          </motion.div>
+        )}
       </div>
 
-      {(recoveries as any[] || []).length > 0 && (
+      {hasSubscriptionData && (recoveries as any[] || []).length > 0 && (
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="bg-orange-500/5 border border-orange-500/20 rounded-2xl p-5 shadow-sm">
           <div className="flex items-center gap-3 mb-4">
             <div className="h-8 w-8 bg-orange-500/10 rounded-lg flex items-center justify-center">
@@ -823,6 +858,7 @@ export function Billing() {
                           <th className="px-4 py-3 font-semibold">Name</th>
                           <th className="px-4 py-3 font-semibold">Email</th>
                           <th className="px-4 py-3 font-semibold">Plan</th>
+                          <th className="px-4 py-3 font-semibold">Cancelled</th>
                           <th className="px-4 py-3 font-semibold">Joined</th>
                         </tr>
                       </thead>
@@ -832,6 +868,7 @@ export function Billing() {
                             <td className="px-4 py-3 font-medium text-foreground">{m.firstName} {m.lastName}</td>
                             <td className="px-4 py-3 text-muted-foreground">{m.email}</td>
                             <td className="px-4 py-3 text-muted-foreground">{m.membershipType || "—"}</td>
+                            <td className="px-4 py-3 text-muted-foreground">{m.cancelledAt ? new Date(m.cancelledAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "—"}</td>
                             <td className="px-4 py-3 text-muted-foreground">{m.joinDate || "—"}</td>
                           </tr>
                         ))}

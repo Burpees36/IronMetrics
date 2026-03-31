@@ -262,7 +262,7 @@ export function AddMemberWizard({ open, onOpenChange }: Props) {
         appearance: {
           theme: "night",
           variables: {
-            colorPrimary: "#FBBF24",
+            colorPrimary: "#10B981",
             colorBackground: "hsl(220, 20%, 12%)",
             colorText: "#e4e4e7",
             colorDanger: "#ef4444",

@@ -1,38 +1,31 @@
 import { eq, and, count, sql } from "drizzle-orm";
 import { db, membersTable, subscriptionsTable, leadsTable, invoicesTable } from "@workspace/db";
 import { calculateRiskScore, getRiskTier } from "./computations";
+import { getBlendedGymMetrics, computeBlendedMRR, getMemberRevenueFromMembersTable, activeMemberCondition, isActiveBillableMember } from "../../blendedMetrics";
 
 export async function getGymMetrics(gymId: number) {
-  const [activeCount] = await db.select({ count: count() }).from(membersTable).where(and(eq(membersTable.gymId, gymId), eq(membersTable.status, "active")));
-  const [cancelledCount] = await db.select({ count: count() }).from(membersTable).where(and(eq(membersTable.gymId, gymId), eq(membersTable.status, "cancelled")));
-  const [totalCount] = await db.select({ count: count() }).from(membersTable).where(eq(membersTable.gymId, gymId));
-
-  const total = Number(totalCount?.count ?? 0);
-  const active = Number(activeCount?.count ?? 0);
-  const cancelled = Number(cancelledCount?.count ?? 0);
-  const churnRate = total > 0 ? (cancelled / total) * 100 : 0;
+  const blended = await getBlendedGymMetrics(gymId);
 
   const subs = await db.select().from(subscriptionsTable).where(and(eq(subscriptionsTable.gymId, gymId), eq(subscriptionsTable.status, "active")));
-  const totalRev = subs.reduce((sum, s) => sum + parseFloat(s.amount || "0"), 0);
-  const avgRev = subs.length > 0 ? totalRev / subs.length : 0;
-  const netGrowth = active - cancelled;
 
-  const allMembers = await db.select().from(membersTable).where(eq(membersTable.gymId, gymId));
-  const now = new Date();
-  const tenures = allMembers
-    .filter(m => m.joinDate || m.createdAt)
-    .map(m => {
-      const end = m.status === "cancelled" && m.updatedAt ? new Date(m.updatedAt) : now;
-      const start = new Date(m.joinDate || m.createdAt!);
-      return Math.max(0, (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24 * 30));
-    });
-  const avgTenure = tenures.length > 0 ? Math.round((tenures.reduce((s, t) => s + t, 0) / tenures.length) * 10) / 10 : 0;
-
-  return { active, cancelled, total, churnRate, totalRev, avgRev, netGrowth, avgTenure, subs };
+  return {
+    active: blended.activeBillableMembers,
+    cancelled: blended.cancelledMembers,
+    total: blended.totalMembers,
+    churnRate: blended.churnRate,
+    totalRev: blended.mrr.totalMRR,
+    avgRev: blended.avgRevPerMember,
+    netGrowth: blended.netGrowth,
+    avgTenure: blended.avgTenure,
+    subs,
+    revenueSource: blended.mrr.revenueSource,
+    attendanceSource: blended.engagement.attendanceSource,
+    hasSubscriptionData: blended.mrr.hasSubscriptionData,
+  };
 }
 
 export async function getRiskProfiles(gymId: number) {
-  const members = await db.select().from(membersTable).where(and(eq(membersTable.gymId, gymId), eq(membersTable.status, "active")));
+  const members = await db.select().from(membersTable).where(and(eq(membersTable.gymId, gymId), activeMemberCondition(membersTable)));
 
   const memberSubs = await db.select().from(subscriptionsTable).where(and(eq(subscriptionsTable.gymId, gymId), eq(subscriptionsTable.status, "active")));
   const subByMember: Record<number, number> = {};
@@ -52,7 +45,7 @@ export async function getRiskProfiles(gymId: number) {
     if (m.attendanceCount30d !== null && m.attendanceCount30d < 3) signals.push("Low attendance (<3/month)");
     if (attendanceDecay > 0.5) signals.push("Attendance declining");
 
-    const monthlyValue = subByMember[m.id] ?? 0;
+    const monthlyValue = subByMember[m.id] ?? getMemberRevenueFromMembersTable(m);
     return {
       memberId: m.id,
       memberName: `${m.firstName} ${m.lastName}`,
@@ -73,7 +66,7 @@ export async function getRiskProfiles(gymId: number) {
 
 export async function getInterventions(gymId: number) {
   const [atRiskResult] = await db.select({ count: count() }).from(membersTable).where(
-    and(eq(membersTable.gymId, gymId), eq(membersTable.status, "active"),
+    and(eq(membersTable.gymId, gymId), activeMemberCondition(membersTable),
       sql`(${membersTable.riskTier} = 'critical' OR ${membersTable.riskTier} = 'high')`)
   );
   const atRiskCount = Number(atRiskResult?.count ?? 0);
@@ -81,19 +74,19 @@ export async function getInterventions(gymId: number) {
   const [openLeadCount] = await db.select({ count: count() }).from(leadsTable).where(eq(leadsTable.gymId, gymId));
   const failedSubs = await db.select().from(subscriptionsTable).where(and(eq(subscriptionsTable.gymId, gymId), eq(subscriptionsTable.status, "past_due")));
 
-  const activeSubs = await db.select().from(subscriptionsTable).where(and(eq(subscriptionsTable.gymId, gymId), eq(subscriptionsTable.status, "active")));
-  const avgSubAmount = activeSubs.length > 0
-    ? activeSubs.reduce((s, sub) => s + parseFloat(sub.amount || "0"), 0) / activeSubs.length
+  const blendedMRR = await computeBlendedMRR(gymId);
+  const avgSubAmount = blendedMRR.activeBillableMembers > 0
+    ? blendedMRR.totalMRR / blendedMRR.activeBillableMembers
     : 0;
 
   const atRiskMembers = await db.select().from(membersTable).where(
-    and(eq(membersTable.gymId, gymId), eq(membersTable.status, "active"),
+    and(eq(membersTable.gymId, gymId), activeMemberCondition(membersTable),
       sql`(${membersTable.riskTier} = 'critical' OR ${membersTable.riskTier} = 'high')`)
   );
   const atRiskSubsByMember = await db.select().from(subscriptionsTable).where(and(eq(subscriptionsTable.gymId, gymId), eq(subscriptionsTable.status, "active")));
   const subLookup: Record<number, number> = {};
   for (const s of atRiskSubsByMember) subLookup[s.memberId] = parseFloat(s.amount || "0");
-  const atRiskRevenue = atRiskMembers.reduce((sum, m) => sum + (subLookup[m.id] ?? 0), 0);
+  const atRiskRevenue = atRiskMembers.reduce((sum, m) => sum + (subLookup[m.id] ?? getMemberRevenueFromMembersTable(m)), 0);
 
   const interventions = [
     {
@@ -178,9 +171,10 @@ export async function computeRevenueForecast(gymId: number, currentMrr: number, 
 
   const sortedMonths = Object.keys(monthlyRevenue).sort();
   let monthlyGrowthRate = 0;
-  let dataSource: "invoices" | "subscriptions" = "invoices";
+  let dataSource: "invoices" | "subscriptions" | "blended" = "blended";
 
   if (sortedMonths.length >= 2) {
+    dataSource = "invoices";
     const recentMonths = sortedMonths.slice(-6);
     const growthRates: number[] = [];
     for (let i = 1; i < recentMonths.length; i++) {
@@ -194,9 +188,8 @@ export async function computeRevenueForecast(gymId: number, currentMrr: number, 
       monthlyGrowthRate = growthRates.reduce((s, r) => s + r, 0) / growthRates.length;
     }
   } else {
-    dataSource = "subscriptions";
     const allMembers = await db.select().from(membersTable).where(eq(membersTable.gymId, gymId));
-    const activeMembers = allMembers.filter(m => m.status === "active").length;
+    const activeMembers = allMembers.filter(m => isActiveBillableMember(m.status)).length;
     const totalMembers = allMembers.length;
 
     const monthlyChurnRate = churnRate > 0 ? (churnRate / 100) / Math.max(1, totalMembers > activeMembers ? 12 : 6) : 0;
@@ -206,8 +199,8 @@ export async function computeRevenueForecast(gymId: number, currentMrr: number, 
     );
     const pipelineLeads = Number(openLeads[0]?.count ?? 0);
     const estimatedConversionsPerMonth = pipelineLeads * 0.15;
-    const avgSubAmount = activeSubCount > 0 ? currentMrr / activeSubCount : 0;
-    const growthFromNewMembers = activeMembers > 0 ? (estimatedConversionsPerMonth * avgSubAmount) / currentMrr : 0;
+    const avgMemberAmount = activeMembers > 0 ? currentMrr / activeMembers : 0;
+    const growthFromNewMembers = activeMembers > 0 && currentMrr > 0 ? (estimatedConversionsPerMonth * avgMemberAmount) / currentMrr : 0;
 
     monthlyGrowthRate = currentMrr > 0 ? growthFromNewMembers - monthlyChurnRate : 0;
   }
@@ -223,6 +216,8 @@ export async function computeRevenueForecast(gymId: number, currentMrr: number, 
     return Math.round(currentMrr * Math.pow(1 - monthlyChurnDecay, months));
   };
 
+  const blendedMRR = await computeBlendedMRR(gymId);
+
   return {
     currentMrr,
     expectedMrr3m: project(3, 1),
@@ -237,7 +232,7 @@ export async function computeRevenueForecast(gymId: number, currentMrr: number, 
     dataSource,
     assumptions: [
       `Based on trailing churn rate of ${churnRate.toFixed(1)}%`,
-      `Current MRR: $${currentMrr.toLocaleString()} from ${activeSubCount} active subscriptions`,
+      `Current MRR: $${currentMrr.toLocaleString()} from ${blendedMRR.activeBillableMembers} active members (${blendedMRR.revenueSource})`,
       dataSource === "invoices"
         ? `Historical monthly growth rate: ${(monthlyGrowthRate * 100).toFixed(1)}% (from ${sortedMonths.length} months of invoice data)`
         : `Estimated monthly growth rate: ${(monthlyGrowthRate * 100).toFixed(1)}% (derived from pipeline conversion and churn)`,

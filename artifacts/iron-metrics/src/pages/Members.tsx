@@ -687,8 +687,8 @@ function EmptyMemberState({ hasSearch, onImport, onAdd }: { hasSearch: boolean; 
 
   return (
     <div className="px-6 py-16 text-center">
-      <div className="mx-auto w-14 h-14 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center mb-4">
-        <UserCircle className="h-7 w-7 text-amber-400" />
+      <div className="mx-auto w-14 h-14 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center mb-4">
+        <UserCircle className="h-7 w-7 text-primary" />
       </div>
       <h3 className="text-lg font-semibold text-foreground mb-1">No members yet</h3>
       <p className="text-sm text-muted-foreground mb-6 max-w-sm mx-auto">
@@ -697,7 +697,7 @@ function EmptyMemberState({ hasSearch, onImport, onAdd }: { hasSearch: boolean; 
       <div className="flex items-center justify-center gap-3">
         <button
           onClick={onImport}
-          className="flex items-center gap-2 px-4 py-2.5 bg-amber-500 text-black font-medium text-sm rounded-xl hover:bg-amber-400 transition-colors shadow-lg shadow-amber-500/20"
+          className="flex items-center gap-2 px-4 py-2.5 bg-primary text-primary-foreground font-medium text-sm rounded-xl hover:bg-primary/90 transition-colors shadow-lg shadow-primary/20"
         >
           <FileSpreadsheet className="h-4 w-4" />
           Import from CSV

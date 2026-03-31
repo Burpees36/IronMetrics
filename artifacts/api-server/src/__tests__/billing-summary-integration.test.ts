@@ -6,11 +6,15 @@ vi.mock("drizzle-orm", () => ({
   gte: (left: any, right: any) => ({ _type: "gte", left, right }),
   lt: (left: any, right: any) => ({ _type: "lt", left, right }),
   desc: () => ({}),
+  count: () => ({ _type: "count" }),
+  sql: Object.assign((() => ({})) as any, { raw: () => ({}) }),
+  notInArray: (left: any, values: any[]) => ({ _type: "notInArray", left, values }),
 }));
 
 let mockSubs: any[] = [];
 let mockPayments: any[] = [];
 let mockRefunds: any[] = [];
+let mockMembers: any[] = [];
 
 vi.mock("@workspace/db", () => {
   function resolveField(colRef: any): string {
@@ -27,6 +31,10 @@ vi.mock("@workspace/db", () => {
       const field = resolveField(cond.left);
       return row[field] < cond.right;
     }
+    if (cond._type === "notInArray") {
+      const field = resolveField(cond.left);
+      return !cond.values.includes(row[field]);
+    }
     if (cond._type === "and") return cond.conditions.every((c: any) => matchesCondition(row, c));
     return true;
   }
@@ -42,6 +50,7 @@ vi.mock("@workspace/db", () => {
     if (tn === "subscriptions") return mockSubs;
     if (tn === "payments") return mockPayments;
     if (tn === "refunds") return mockRefunds;
+    if (tn === "members") return mockMembers;
     return [];
   }
   const db: any = {
@@ -55,7 +64,12 @@ vi.mock("@workspace/db", () => {
             orderBy() { return chain; },
             then(resolve: any) {
               const data = getTableData(tn);
-              resolve(data.filter((r: any) => matchesCondition(r, cond)));
+              if (fields && fields.count) {
+                const filtered = data.filter((r: any) => matchesCondition(r, cond));
+                resolve([{ count: filtered.length }]);
+              } else {
+                resolve(data.filter((r: any) => matchesCondition(r, cond)));
+              }
             },
           };
           return chain;
@@ -68,6 +82,8 @@ vi.mock("@workspace/db", () => {
     subscriptionsTable: makeTable("subscriptions"),
     paymentsTable: makeTable("payments"),
     refundsTable: makeTable("refunds"),
+    membersTable: makeTable("members"),
+    attendanceTable: makeTable("attendance"),
   };
 });
 
@@ -78,6 +94,7 @@ describe("computeBillingSummary integration", () => {
     mockSubs = [];
     mockPayments = [];
     mockRefunds = [];
+    mockMembers = [];
   });
 
   it("returns zero summary for empty gym", async () => {
@@ -86,46 +103,69 @@ describe("computeBillingSummary integration", () => {
     expect(result.arr).toBe(0);
     expect(result.arm).toBe(0);
     expect(result.activeSubscriptions).toBe(0);
+    expect(result.activeBillableMembers).toBe(0);
     expect(result.totalSubscriptions).toBe(0);
     expect(result.failedPayments).toBe(0);
     expect(result.overdueAccounts).toBe(0);
+    expect(result.revenueSource).toBe("wodify_only");
+    expect(result.hasSubscriptionData).toBe(false);
   });
 
-  it("computes MRR from active subscriptions", async () => {
+  it("computes MRR from active subscriptions with members", async () => {
+    mockMembers = [
+      { id: 1, gymId: 1, status: "active", monthlyRevenue: null },
+      { id: 2, gymId: 1, status: "active", monthlyRevenue: null },
+      { id: 3, gymId: 1, status: "cancelled", monthlyRevenue: null },
+    ];
     mockSubs = [
-      { id: 1, gymId: 1, status: "active", amount: "100.00", failedPayments: 0, cancelledAt: null },
-      { id: 2, gymId: 1, status: "active", amount: "150.00", failedPayments: 0, cancelledAt: null },
-      { id: 3, gymId: 1, status: "cancelled", amount: "200.00", failedPayments: 0, cancelledAt: null },
+      { id: 1, gymId: 1, memberId: 1, status: "active", amount: "100.00", failedPayments: 0, cancelledAt: null },
+      { id: 2, gymId: 1, memberId: 2, status: "active", amount: "150.00", failedPayments: 0, cancelledAt: null },
+      { id: 3, gymId: 1, memberId: 3, status: "cancelled", amount: "200.00", failedPayments: 0, cancelledAt: null },
     ];
     const result = await computeBillingSummary(1);
     expect(result.mrr).toBe(250);
     expect(result.arr).toBe(3000);
     expect(result.activeSubscriptions).toBe(2);
     expect(result.totalSubscriptions).toBe(3);
+    expect(result.activeBillableMembers).toBe(2);
+    expect(result.revenueSource).toBe("subscriptions_only");
+    expect(result.hasSubscriptionData).toBe(true);
   });
 
-  it("computes ARM correctly", async () => {
+  it("computes ARM correctly (MRR / active billable members)", async () => {
+    mockMembers = [
+      { id: 1, gymId: 1, status: "active", monthlyRevenue: null },
+      { id: 2, gymId: 1, status: "active", monthlyRevenue: null },
+    ];
     mockSubs = [
-      { id: 1, gymId: 1, status: "active", amount: "100.00", failedPayments: 0, cancelledAt: null },
-      { id: 2, gymId: 1, status: "active", amount: "200.00", failedPayments: 0, cancelledAt: null },
+      { id: 1, gymId: 1, memberId: 1, status: "active", amount: "100.00", failedPayments: 0, cancelledAt: null },
+      { id: 2, gymId: 1, memberId: 2, status: "active", amount: "200.00", failedPayments: 0, cancelledAt: null },
     ];
     const result = await computeBillingSummary(1);
     expect(result.arm).toBe(150);
   });
 
   it("counts failed payment subscriptions", async () => {
+    mockMembers = [
+      { id: 1, gymId: 1, status: "active", monthlyRevenue: null },
+      { id: 2, gymId: 1, status: "active", monthlyRevenue: null },
+    ];
     mockSubs = [
-      { id: 1, gymId: 1, status: "active", amount: "100.00", failedPayments: 2, cancelledAt: null },
-      { id: 2, gymId: 1, status: "active", amount: "100.00", failedPayments: 0, cancelledAt: null },
+      { id: 1, gymId: 1, memberId: 1, status: "active", amount: "100.00", failedPayments: 2, cancelledAt: null },
+      { id: 2, gymId: 1, memberId: 2, status: "active", amount: "100.00", failedPayments: 0, cancelledAt: null },
     ];
     const result = await computeBillingSummary(1);
     expect(result.failedPayments).toBe(1);
   });
 
   it("counts overdue (past_due) accounts", async () => {
+    mockMembers = [
+      { id: 1, gymId: 1, status: "active", monthlyRevenue: null },
+      { id: 2, gymId: 1, status: "active", monthlyRevenue: null },
+    ];
     mockSubs = [
-      { id: 1, gymId: 1, status: "past_due", amount: "100.00", failedPayments: 1, cancelledAt: null },
-      { id: 2, gymId: 1, status: "active", amount: "100.00", failedPayments: 0, cancelledAt: null },
+      { id: 1, gymId: 1, memberId: 1, status: "past_due", amount: "100.00", failedPayments: 1, cancelledAt: null },
+      { id: 2, gymId: 1, memberId: 2, status: "active", amount: "100.00", failedPayments: 0, cancelledAt: null },
     ];
     const result = await computeBillingSummary(1);
     expect(result.overdueAccounts).toBe(1);
@@ -134,7 +174,8 @@ describe("computeBillingSummary integration", () => {
   it("sums collections for current month", async () => {
     const now = new Date();
     const { start, end } = getMonthWindow(now);
-    mockSubs = [{ id: 1, gymId: 1, status: "active", amount: "100.00", failedPayments: 0, cancelledAt: null }];
+    mockMembers = [{ id: 1, gymId: 1, status: "active", monthlyRevenue: null }];
+    mockSubs = [{ id: 1, gymId: 1, memberId: 1, status: "active", amount: "100.00", failedPayments: 0, cancelledAt: null }];
     mockPayments = [
       { id: 1, gymId: 1, status: "succeeded", amount: "100.00", createdAt: new Date(start.getTime() + 86400000) },
       { id: 2, gymId: 1, status: "succeeded", amount: "50.00", createdAt: new Date(start.getTime() + 172800000) },
@@ -148,6 +189,7 @@ describe("computeBillingSummary integration", () => {
     const now = new Date();
     const { start } = getMonthWindow(now);
     mockSubs = [];
+    mockMembers = [];
     mockRefunds = [
       { id: 1, gymId: 1, amount: "25.00", createdAt: new Date(start.getTime() + 86400000) },
       { id: 2, gymId: 1, amount: "10.00", createdAt: new Date(start.getTime() + 172800000) },
@@ -159,13 +201,30 @@ describe("computeBillingSummary integration", () => {
   it("counts cancelled subscriptions this month", async () => {
     const now = new Date();
     const { start } = getMonthWindow(now);
+    mockMembers = [
+      { id: 1, gymId: 1, status: "active", monthlyRevenue: null },
+    ];
     mockSubs = [
-      { id: 1, gymId: 1, status: "cancelled", amount: "100.00", failedPayments: 0, cancelledAt: new Date(start.getTime() + 86400000) },
-      { id: 2, gymId: 1, status: "cancelled", amount: "100.00", failedPayments: 0, cancelledAt: new Date(2020, 1, 1) },
-      { id: 3, gymId: 1, status: "active", amount: "100.00", failedPayments: 0, cancelledAt: null },
+      { id: 1, gymId: 1, memberId: 1, status: "cancelled", amount: "100.00", failedPayments: 0, cancelledAt: new Date(start.getTime() + 86400000) },
+      { id: 2, gymId: 1, memberId: 2, status: "cancelled", amount: "100.00", failedPayments: 0, cancelledAt: new Date(2020, 1, 1) },
+      { id: 3, gymId: 1, memberId: 1, status: "active", amount: "100.00", failedPayments: 0, cancelledAt: null },
     ];
     const result = await computeBillingSummary(1, now);
     expect(result.cancelledThisMonth).toBe(1);
+  });
+
+  it("includes Wodify member revenue when no subscription covers member", async () => {
+    mockMembers = [
+      { id: 1, gymId: 1, status: "active", monthlyRevenue: "150.00" },
+      { id: 2, gymId: 1, status: "active", monthlyRevenue: "100.00" },
+    ];
+    mockSubs = [];
+    const result = await computeBillingSummary(1);
+    expect(result.mrr).toBe(250);
+    expect(result.activeBillableMembers).toBe(2);
+    expect(result.arm).toBe(125);
+    expect(result.revenueSource).toBe("wodify_only");
+    expect(result.hasSubscriptionData).toBe(false);
   });
 });
 

@@ -1,14 +1,17 @@
-import React, { useState, useCallback, useRef } from "react";
+import React, { useState, useCallback, useRef, useEffect } from "react";
 import Papa from "papaparse";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Upload, FileSpreadsheet, ArrowRight, ArrowLeft, Check, AlertTriangle,
   X, Download, CheckCircle2, XCircle, Users, Loader2, SkipForward, Info,
-  ChevronRight, Sparkles, DollarSign, HelpCircle, ExternalLink
+  ChevronRight, Sparkles, DollarSign, HelpCircle, ExternalLink, Zap, RefreshCw,
+  ShieldAlert
 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useGym } from "@/store/GymContext";
 import { useToast } from "@/hooks/use-toast";
+import { useWodifySyncPolling } from "@/hooks/useWodifySyncPolling";
+import type { SyncProgress } from "@/hooks/useWodifySyncPolling";
 
 const MEMBER_FIELDS = [
   { key: "fullName", label: "Full Name (splits into first + last)", required: false, splitsName: true },
@@ -29,7 +32,8 @@ const MEMBER_FIELDS = [
 ] as const;
 
 type Step = "source" | "upload" | "map" | "preview" | "importing" | "results"
-  | "wodify-upload" | "wodify-preview" | "wodify-importing" | "wodify-results";
+  | "wodify-upload" | "wodify-preview" | "wodify-importing" | "wodify-results"
+  | "wodify-api-sync" | "wodify-api-results";
 
 interface ValidatedRow {
   rowIndex: number;
@@ -160,6 +164,36 @@ export function ImportMembersDialog({
   const [wodifyPreviewRows, setWodifyPreviewRows] = useState<WodifyPreviewRow[]>([]);
   const [wodifySummary, setWodifySummary] = useState<WodifySummary | null>(null);
 
+  const dialogApiBase = ((import.meta.env.VITE_API_URL || "") as string).replace(/\/$/, "");
+  const {
+    syncStatus: wodifySyncStatus,
+    progress: wodifyProgress,
+    isSyncing: isWodifyApiSyncing,
+    isComplete: isWodifyApiComplete,
+    isFailed: isWodifyApiFailed,
+    completedResult: wodifyApiCompletedResult,
+    startSync: startWodifyApiSync,
+    elapsedSeconds: wodifyElapsed,
+  } = useWodifySyncPolling({
+    gymId: activeGymId,
+    apiBase: dialogApiBase,
+    enabled: open,
+  });
+
+  const hasWodifyApiKey = !!wodifySyncStatus?.hasApiKey;
+  const [wodifyApiError, setWodifyApiError] = useState("");
+
+  useEffect(() => {
+    if (isWodifyApiComplete && wodifyApiCompletedResult && step === "wodify-api-sync") {
+      setStep("wodify-api-results");
+      setWodifyApiError("");
+      onImportComplete?.();
+    } else if (isWodifyApiFailed && step === "wodify-api-sync") {
+      const errDetails = wodifySyncStatus?.latestSync?.metadata?.progress as any;
+      setWodifyApiError(errDetails?.message || "Sync failed. Please try again.");
+    }
+  }, [isWodifyApiComplete, isWodifyApiFailed, wodifyApiCompletedResult, step]);
+
   const reset = useCallback(() => {
     setStep("source");
     setCsvHeaders([]);
@@ -172,6 +206,7 @@ export function ImportMembersDialog({
     setFileName("");
     setWodifyPreviewRows([]);
     setWodifySummary(null);
+    setWodifyApiError("");
   }, []);
 
   const handleClose = useCallback(() => {
@@ -350,15 +385,28 @@ export function ImportMembersDialog({
     });
   }, []);
 
-  const isImporting = step === "importing" || step === "wodify-importing";
+  const handleWodifyApiSync = useCallback(async () => {
+    setStep("wodify-api-sync");
+    try {
+      await startWodifyApiSync();
+    } catch (err: any) {
+      toast({ title: "Sync failed", description: err?.message || "Something went wrong", variant: "destructive" });
+      setStep("source");
+    }
+  }, [startWodifyApiSync, toast]);
+
+  const isImporting = step === "importing" || step === "wodify-importing" || step === "wodify-api-sync";
 
   const getStepLabels = () => {
+    if (step === "wodify-api-sync" || step === "wodify-api-results") return ["Source", "Syncing", "Results"];
     if (step.startsWith("wodify")) return ["Source", "Upload", "Preview", "Import"];
     if (step === "source") return ["Source"];
     return ["Source", "Upload", "Map", "Preview", "Import"];
   };
   const getStepIndex = () => {
     if (step === "source") return 0;
+    if (step === "wodify-api-sync") return 1;
+    if (step === "wodify-api-results") return 2;
     if (step === "wodify-upload") return 1;
     if (step === "wodify-preview") return 2;
     if (step === "wodify-importing" || step === "wodify-results") return 3;
@@ -377,7 +425,7 @@ export function ImportMembersDialog({
       <DialogContent className="max-w-3xl max-h-[85vh] flex flex-col p-0 gap-0 bg-card border-border overflow-hidden">
         <DialogHeader className="px-6 pt-6 pb-4 border-b border-border shrink-0">
           <DialogTitle className="text-lg font-semibold flex items-center gap-2">
-            <FileSpreadsheet className="h-5 w-5 text-amber-400" />
+            <FileSpreadsheet className="h-5 w-5 text-primary" />
             Import Members
           </DialogTitle>
           <div className="flex items-center gap-1 mt-3">
@@ -386,7 +434,7 @@ export function ImportMembersDialog({
                 {i > 0 && <div className="h-px w-4 bg-border" />}
                 <div className={`flex items-center gap-1.5 text-xs font-medium px-2 py-1 rounded-full transition-colors ${
                   i < stepIndex ? "bg-emerald-500/10 text-emerald-400" :
-                  i === stepIndex ? "bg-amber-500/10 text-amber-400" :
+                  i === stepIndex ? "bg-primary/10 text-primary" :
                   "bg-muted/30 text-muted-foreground"
                 }`}>
                   {i < stepIndex ? <Check className="h-3 w-3" /> : null}
@@ -403,6 +451,29 @@ export function ImportMembersDialog({
               <motion.div key="source" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-4">
                 <p className="text-sm text-muted-foreground">Choose how you'd like to import your members:</p>
 
+                {hasWodifyApiKey && (
+                  <button
+                    onClick={handleWodifyApiSync}
+                    className="w-full text-left bg-gradient-to-br from-emerald-500/10 via-card to-primary/5 border border-emerald-500/20 rounded-xl p-5 hover:border-emerald-500/40 transition-colors group"
+                  >
+                    <div className="flex items-center gap-3 mb-2">
+                      <div className="h-10 w-10 bg-emerald-500/15 rounded-xl flex items-center justify-center">
+                        <Zap className="h-5 w-5 text-emerald-400" />
+                      </div>
+                      <div className="flex-1">
+                        <h3 className="text-sm font-semibold text-foreground">Sync from Wodify API</h3>
+                        <p className="text-xs text-muted-foreground">Pull latest member data directly from your connected Wodify account</p>
+                      </div>
+                      <ChevronRight className="h-5 w-5 text-muted-foreground group-hover:text-emerald-400 transition-colors" />
+                    </div>
+                    <div className="flex items-center gap-4 text-[11px] text-muted-foreground ml-[52px]">
+                      <span className="flex items-center gap-1"><CheckCircle2 className="h-3 w-3 text-emerald-500" /> No file needed</span>
+                      <span className="flex items-center gap-1"><CheckCircle2 className="h-3 w-3 text-emerald-500" /> Auto-dedup</span>
+                      <span className="flex items-center gap-1"><CheckCircle2 className="h-3 w-3 text-emerald-500" /> Revenue calculated</span>
+                    </div>
+                  </button>
+                )}
+
                 <button
                   onClick={() => setStep("wodify-upload")}
                   className="w-full text-left bg-gradient-to-br from-violet-500/10 via-card to-primary/5 border border-violet-500/20 rounded-xl p-5 hover:border-violet-500/40 transition-colors group"
@@ -412,8 +483,8 @@ export function ImportMembersDialog({
                       <Sparkles className="h-5 w-5 text-violet-500" />
                     </div>
                     <div className="flex-1">
-                      <h3 className="text-sm font-semibold text-foreground">Import from Wodify</h3>
-                      <p className="text-xs text-muted-foreground">Smart import that understands Wodify's membership export format</p>
+                      <h3 className="text-sm font-semibold text-foreground">Import from Wodify CSV</h3>
+                      <p className="text-xs text-muted-foreground">Upload a Wodify membership CSV export</p>
                     </div>
                     <ChevronRight className="h-5 w-5 text-muted-foreground group-hover:text-violet-500 transition-colors" />
                   </div>
@@ -582,6 +653,110 @@ export function ImportMembersDialog({
                     )}
                   </>
                 ) : null}
+              </motion.div>
+            )}
+
+            {step === "wodify-api-sync" && (
+              <motion.div key="wodify-api-sync" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col items-center justify-center py-10 space-y-5">
+                {isWodifyApiFailed || wodifyApiError ? (
+                  <div className="w-full max-w-sm space-y-3">
+                    <div className="flex items-start gap-2 bg-destructive/10 border border-destructive/20 rounded-xl px-3 py-3">
+                      <AlertTriangle className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
+                      <div className="text-xs flex-1">
+                        <p className="text-destructive font-medium">Sync Failed</p>
+                        <p className="text-muted-foreground mt-1">{wodifyApiError || "An unexpected error occurred during sync."}</p>
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={async () => {
+                          setWodifyApiError("");
+                          try { await startWodifyApiSync(); } catch (err: any) { setWodifyApiError(err.message || "Sync failed"); }
+                        }}
+                        className="flex-1 px-4 py-2 text-sm font-medium rounded-xl border border-primary/30 text-primary hover:bg-primary/10 transition-colors flex items-center justify-center gap-1.5"
+                      >
+                        <RefreshCw className="h-3.5 w-3.5" /> Retry
+                      </button>
+                      <button
+                        onClick={() => { setStep("source"); setWodifyApiError(""); }}
+                        className="px-4 py-2 text-sm font-medium rounded-xl border border-border text-muted-foreground hover:bg-secondary transition-colors"
+                      >
+                        Back
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="w-full max-w-sm space-y-3">
+                    <div className="flex items-center gap-2">
+                      <Loader2 className="h-5 w-5 text-emerald-400 animate-spin shrink-0" />
+                      <p className="text-sm font-medium flex-1">{wodifyProgress?.message || "Starting sync..."}</p>
+                    </div>
+                    <div className="w-full bg-muted/30 rounded-full h-2 overflow-hidden">
+                      <motion.div
+                        className="h-full bg-emerald-500 rounded-full"
+                        initial={{ width: 0 }}
+                        animate={{ width: `${wodifyProgress ? (() => {
+                          switch (wodifyProgress.phase) {
+                            case "fetching-clients": return 15;
+                            case "fetching-memberships": return 35;
+                            case "processing": return 55;
+                            case "writing": return wodifyProgress.totalToProcess && wodifyProgress.processed
+                              ? Math.min(55 + (wodifyProgress.processed / wodifyProgress.totalToProcess) * 40, 95) : 65;
+                            default: return 10;
+                          }
+                        })() : 5}%` }}
+                        transition={{ duration: 0.5, ease: "easeOut" }}
+                      />
+                    </div>
+                    <div className="flex justify-between text-[10px] text-muted-foreground">
+                      <span>{wodifyElapsed < 60 ? `${wodifyElapsed}s` : `${Math.floor(wodifyElapsed / 60)}m ${wodifyElapsed % 60}s`} elapsed</span>
+                      {wodifyProgress?.processed && wodifyProgress?.totalToProcess ? (
+                        <span>{wodifyProgress.processed} / {wodifyProgress.totalToProcess} members</span>
+                      ) : null}
+                    </div>
+                    {wodifyElapsed > 120 && (
+                      <div className="flex items-start gap-2 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
+                        <ShieldAlert className="h-3.5 w-3.5 text-amber-400 shrink-0 mt-0.5" />
+                        <p className="text-[11px] text-amber-400">
+                          Taking longer than expected. You can close this dialog — the sync will continue in the background.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </motion.div>
+            )}
+
+            {step === "wodify-api-results" && wodifyApiCompletedResult && (
+              <motion.div key="wodify-api-results" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="space-y-4">
+                <div className="text-center py-4">
+                  <div className="mx-auto w-14 h-14 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center mb-3">
+                    <CheckCircle2 className="h-7 w-7 text-emerald-400" />
+                  </div>
+                  <h3 className="text-lg font-semibold">Sync Complete</h3>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Your Wodify data has been synced successfully
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                  <SummaryCard label="Total Members" value={wodifyApiCompletedResult.totalClients} icon={<Users className="h-4 w-4" />} color="text-foreground" />
+                  <SummaryCard label="New Members" value={wodifyApiCompletedResult.created} icon={<CheckCircle2 className="h-4 w-4" />} color="text-emerald-400" />
+                  <SummaryCard label="Updated" value={wodifyApiCompletedResult.updated} icon={<RefreshCw className="h-4 w-4" />} color="text-blue-400" />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <SummaryCard label="Monthly Revenue" value={`$${wodifyApiCompletedResult.totalMrr.toLocaleString()}`} icon={<DollarSign className="h-4 w-4" />} color="text-emerald-400" />
+                  {wodifyApiCompletedResult.errored > 0 && (
+                    <SummaryCard label="Errors" value={wodifyApiCompletedResult.errored} icon={<XCircle className="h-4 w-4" />} color="text-red-400" />
+                  )}
+                </div>
+
+                <div className="bg-muted/20 border border-border rounded-lg px-3 py-2 flex items-start gap-2">
+                  <Sparkles className="h-3.5 w-3.5 text-emerald-400 mt-0.5 shrink-0" />
+                  <p className="text-xs text-muted-foreground">
+                    Your dashboard, risk scores, and retention metrics will start populating with this data.
+                  </p>
+                </div>
               </motion.div>
             )}
 
@@ -878,7 +1053,7 @@ export function ImportMembersDialog({
             )}
           </div>
           <div className="flex items-center gap-2">
-            {(step === "results" || step === "wodify-results") && (
+            {(step === "results" || step === "wodify-results" || step === "wodify-api-results") && (
               <button onClick={handleClose} className="px-4 py-2 bg-primary text-primary-foreground hover:bg-primary/90 rounded-lg font-medium text-sm transition-colors">
                 Done
               </button>

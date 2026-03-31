@@ -13,6 +13,7 @@ vi.mock("drizzle-orm", () => ({
   desc: () => ({}),
   count: () => ({ _type: "count" }),
   sql: Object.assign((() => ({})) as any, { raw: () => ({}) }),
+  notInArray: (left: any, values: any[]) => ({ _type: "notInArray", left, values }),
 }));
 
 vi.mock("@workspace/db", () => {

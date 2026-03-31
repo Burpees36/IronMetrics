@@ -4,6 +4,7 @@ import { db, aiTasksTable, aiGeneratedContentTable, membersTable, leadsTable, gy
 import { CreateAiTaskBody, GenerateMemberOutreachBody, UpdateAiTaskBody } from "@workspace/api-zod";
 import { generateAiTasks } from "../services/ai-task-generation";
 import { getEmailService } from "../services/email-service";
+import { activeMemberCondition } from "../blendedMetrics";
 
 const router: IRouter = Router();
 
@@ -151,7 +152,7 @@ router.post("/gyms/:gymId/ai/generate-brief", async (req, res): Promise<void> =>
   const { eq, and, sql } = await import("drizzle-orm");
   const { subscriptionsTable, leadsTable } = await import("@workspace/db");
 
-  const [activeCount] = await db.select({ count: count() }).from(membersTable).where(and(eq(membersTable.gymId, gymId), eq(membersTable.status, "active")));
+  const [activeCount] = await db.select({ count: count() }).from(membersTable).where(and(eq(membersTable.gymId, gymId), activeMemberCondition(membersTable)));
   const [cancelledCount] = await db.select({ count: count() }).from(membersTable).where(and(eq(membersTable.gymId, gymId), eq(membersTable.status, "cancelled")));
   const [holdCount] = await db.select({ count: count() }).from(membersTable).where(and(eq(membersTable.gymId, gymId), eq(membersTable.status, "hold")));
   const [leadCount] = await db.select({ count: count() }).from(leadsTable).where(eq(leadsTable.gymId, gymId));
@@ -159,7 +160,7 @@ router.post("/gyms/:gymId/ai/generate-brief", async (req, res): Promise<void> =>
   const mrr = subs.reduce((sum, s) => sum + parseFloat(s.amount), 0);
   const failedSubs = await db.select().from(subscriptionsTable).where(and(eq(subscriptionsTable.gymId, gymId), eq(subscriptionsTable.status, "past_due")));
   const atRiskMembers = await db.select({ count: count() }).from(membersTable).where(
-    and(eq(membersTable.gymId, gymId), eq(membersTable.status, "active"),
+    and(eq(membersTable.gymId, gymId), activeMemberCondition(membersTable),
       sql`(${membersTable.riskTier} = 'critical' OR ${membersTable.riskTier} = 'high')`)
   );
 

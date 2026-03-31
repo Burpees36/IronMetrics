@@ -38,7 +38,7 @@ function buildFooter(branding: GymBranding): string {
 }
 
 function wrapEmail(branding: GymBranding, bodyContent: string): string {
-  const primaryColor = "#FBBF24";
+  const primaryColor = "#10B981";
   return `
 <!DOCTYPE html>
 <html>
@@ -80,7 +80,7 @@ export function buildPaymentFailedEmail(params: {
       Please update your payment method to keep your membership active. Click the button below to securely update your card:
     </p>
     <div style="text-align:center;margin:24px 0;">
-      <a href="${updateLink}" style="display:inline-block;padding:14px 32px;background:#FBBF24;color:#111827;font-size:15px;font-weight:600;text-decoration:none;border-radius:8px;">
+      <a href="${updateLink}" style="display:inline-block;padding:14px 32px;background:#10B981;color:#ffffff;font-size:15px;font-weight:600;text-decoration:none;border-radius:8px;">
         Update Payment Method
       </a>
     </div>

@@ -32,6 +32,7 @@ export const gymsTable = pgTable("gyms", {
   taxJurisdiction: text("tax_jurisdiction"),
   stripeTaxRateId: text("stripe_tax_rate_id"),
   pastDuePolicy: text("past_due_policy").notNull().default("grace_period"),
+  wodifyApiKey: text("wodify_api_key"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

@@ -49,6 +49,7 @@ import leadCaptureConfigRouter from "./lead-capture-config";
 import retentionRouter from "./retention";
 import platformBillingRouter from "./platform-billing";
 import adminRouter from "./admin";
+import wodifyRouter from "./integrations/wodify";
 
 const router: IRouter = Router();
 
@@ -72,6 +73,9 @@ router.use(platformBillingRouter);
 // Onboarding and lead-capture-config are ungated (needed for initial setup before subscribing)
 router.use(onboardingRouter);
 router.use(leadCaptureConfigRouter);
+
+// Wodify integration — available to all authenticated gym members (needed for initial data import)
+router.use(wodifyRouter);
 
 // Insights-tier access gates — block zero-subscription gyms from paid features.
 // These must come before the corresponding routers.

@@ -8,6 +8,9 @@ vi.mock("drizzle-orm", () => ({
   desc: () => ({}),
   ilike: (left: any, pattern: any) => ({ _type: "ilike", left, pattern }),
   sql: Object.assign((() => ({})) as any, { raw: () => ({}) }),
+  notInArray: (left: any, values: any[]) => ({ _type: "notInArray", left, values }),
+  ne: (left: any, right: any) => ({ _type: "ne", left, right }),
+  inArray: (left: any, values: any[]) => ({ _type: "inArray", left, values }),
 }));
 
 let mockMembers: any[] = [];
@@ -51,6 +54,7 @@ vi.mock("@workspace/db", () => {
             orderBy() { return chain; },
             limit() { return chain; },
             offset() { return chain; },
+            leftJoin() { return chain; },
             then(resolve: any) {
               const data = getTableData(tn);
               if (fields && fields.count) {
@@ -109,8 +113,20 @@ vi.mock("@workspace/db", () => {
     timelineEventsTable: makeTable("timeline_events"),
     subscriptionsTable: makeTable("subscriptions"),
     attendanceTable: makeTable("attendance"),
+    membershipPlansTable: makeTable("membership_plans"),
   };
 });
+
+vi.mock("../../stripeService", () => ({
+  stripeService: {
+    createCustomer: vi.fn().mockResolvedValue({ id: "cus_test" }),
+    createSubscription: vi.fn().mockResolvedValue({ id: "sub_test" }),
+  },
+}));
+
+vi.mock("../../stripeClient", () => ({
+  getStripeClient: vi.fn().mockReturnValue(null),
+}));
 
 vi.mock("@workspace/api-zod", () => ({
   CreateMemberBody: { safeParse: (data: any) => ({ success: true, data }) },
@@ -146,21 +162,27 @@ describe("Members route handlers", () => {
     router = mod.default;
   });
 
-  function findHandler(method: string, pathPattern: string, exact?: string) {
-    for (const layer of router.stack) {
-      if (layer.route) {
-        const routePath = layer.route.path;
-        const routeMethod = Object.keys(layer.route.methods)[0];
-        if (exact) {
-          if (routeMethod === method && routePath === exact) {
+  function findHandler(method: string, pathPattern: string, exact?: string): any {
+    function search(stack: any[]): any {
+      for (const layer of stack) {
+        if (layer.route) {
+          const routePath = layer.route.path;
+          const routeMethod = Object.keys(layer.route.methods)[0];
+          if (exact) {
+            if (routeMethod === method && routePath === exact) {
+              return layer.route.stack[0].handle;
+            }
+          } else if (routeMethod === method && routePath.includes(pathPattern)) {
             return layer.route.stack[0].handle;
           }
-        } else if (routeMethod === method && routePath.includes(pathPattern)) {
-          return layer.route.stack[0].handle;
+        } else if (layer.handle && layer.handle.stack) {
+          const found = search(layer.handle.stack);
+          if (found) return found;
         }
       }
+      return null;
     }
-    return null;
+    return search(router.stack);
   }
 
   describe("GET /gyms/:gymId/members", () => {

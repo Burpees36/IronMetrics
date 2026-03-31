@@ -99,7 +99,15 @@ router.patch("/gyms/:gymId/subscriptions/:subscriptionId", requireBillingPermiss
   const parsed = UpdateSubscriptionBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
 
-  const [sub] = await db.update(subscriptionsTable).set(parsed.data).where(and(eq(subscriptionsTable.id, subId), eq(subscriptionsTable.gymId, gymId))).returning();
+  const updateData: Record<string, any> = { ...parsed.data };
+  if (parsed.data.status === "cancelled" && !parsed.data.cancelledAt) {
+    updateData.cancelledAt = new Date();
+  }
+  if (parsed.data.status === "cancelled" && !parsed.data.cancelReason) {
+    updateData.cancelReason = "Cancelled by staff";
+  }
+
+  const [sub] = await db.update(subscriptionsTable).set(updateData).where(and(eq(subscriptionsTable.id, subId), eq(subscriptionsTable.gymId, gymId))).returning();
   if (!sub) { res.status(404).json({ error: "Subscription not found" }); return; }
 
   if (parsed.data.status === "cancelled") {

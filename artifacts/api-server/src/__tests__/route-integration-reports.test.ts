@@ -6,7 +6,9 @@ vi.mock("drizzle-orm", () => ({
   count: () => ({ _type: "count" }),
   desc: () => ({}),
   gte: () => ({}),
+  lt: () => ({}),
   sql: Object.assign((() => ({})) as any, { raw: () => ({}) }),
+  notInArray: (left: any, values: any[]) => ({ _type: "notInArray", left, values }),
 }));
 
 let mockMembers: any[] = [];
@@ -130,13 +132,13 @@ describe("Reports route handlers", () => {
   describe("GET /reports/dashboard", () => {
     it("returns dashboard stats with KPIs", async () => {
       mockMembers = [
-        { id: 1, gymId: 1, status: "active", joinDate: "2024-01-01", riskTier: null },
-        { id: 2, gymId: 1, status: "active", joinDate: "2024-02-01", riskTier: null },
-        { id: 3, gymId: 1, status: "cancelled", joinDate: "2024-01-15", riskTier: null },
+        { id: 1, gymId: 1, status: "active", joinDate: "2024-01-01", riskTier: null, monthlyRevenue: null, lastVisitDate: null, daysSinceLastAttendance: null },
+        { id: 2, gymId: 1, status: "active", joinDate: "2024-02-01", riskTier: null, monthlyRevenue: null, lastVisitDate: null, daysSinceLastAttendance: null },
+        { id: 3, gymId: 1, status: "cancelled", joinDate: "2024-01-15", riskTier: null, monthlyRevenue: null, lastVisitDate: null, daysSinceLastAttendance: null },
       ];
       mockSubs = [
-        { id: 1, gymId: 1, status: "active", amount: "150.00" },
-        { id: 2, gymId: 1, status: "active", amount: "100.00" },
+        { id: 1, gymId: 1, memberId: 1, status: "active", amount: "150.00" },
+        { id: 2, gymId: 1, memberId: 2, status: "active", amount: "100.00" },
       ];
       const handler = findHandler(router, "get", "reports/dashboard");
       const { req, res } = makeReqRes({ params: { gymId: "1" } });
@@ -147,6 +149,10 @@ describe("Reports route handlers", () => {
       expect(data.activeMembers).toBe(2);
       expect(data).toHaveProperty("mrr");
       expect(data.mrr).toBe(250);
+      expect(data).toHaveProperty("revenueSource");
+      expect(data.revenueSource).toBe("subscriptions_only");
+      expect(data).toHaveProperty("hasSubscriptionData");
+      expect(data.hasSubscriptionData).toBe(true);
     });
 
     it("returns 400 for invalid gym ID", async () => {
@@ -158,9 +164,9 @@ describe("Reports route handlers", () => {
 
     it("computes RSI score in dashboard", async () => {
       mockMembers = [
-        { id: 1, gymId: 1, status: "active", joinDate: "2024-01-01", riskTier: null },
+        { id: 1, gymId: 1, status: "active", joinDate: "2024-01-01", riskTier: null, monthlyRevenue: null, lastVisitDate: null, daysSinceLastAttendance: null },
       ];
-      mockSubs = [{ id: 1, gymId: 1, status: "active", amount: "150.00" }];
+      mockSubs = [{ id: 1, gymId: 1, memberId: 1, status: "active", amount: "150.00" }];
       const handler = findHandler(router, "get", "reports/dashboard");
       const { req, res } = makeReqRes({ params: { gymId: "1" } });
       await handler(req, res);
@@ -171,7 +177,7 @@ describe("Reports route handlers", () => {
     });
 
     it("returns zero MRR when no active subscriptions", async () => {
-      mockMembers = [{ id: 1, gymId: 1, status: "active", joinDate: "2024-01-01", riskTier: null }];
+      mockMembers = [{ id: 1, gymId: 1, status: "active", joinDate: "2024-01-01", riskTier: null, monthlyRevenue: null, lastVisitDate: null, daysSinceLastAttendance: null }];
       mockSubs = [];
       const handler = findHandler(router, "get", "reports/dashboard");
       const { req, res } = makeReqRes({ params: { gymId: "1" } });
@@ -182,9 +188,9 @@ describe("Reports route handlers", () => {
 
     it("includes member status breakdown array", async () => {
       mockMembers = [
-        { id: 1, gymId: 1, status: "active", joinDate: "2024-01-01", riskTier: null },
-        { id: 2, gymId: 1, status: "cancelled", joinDate: "2024-01-15", riskTier: null },
-        { id: 3, gymId: 1, status: "hold", joinDate: "2024-02-01", riskTier: null },
+        { id: 1, gymId: 1, status: "active", joinDate: "2024-01-01", riskTier: null, monthlyRevenue: null, lastVisitDate: null, daysSinceLastAttendance: null },
+        { id: 2, gymId: 1, status: "cancelled", joinDate: "2024-01-15", riskTier: null, monthlyRevenue: null, lastVisitDate: null, daysSinceLastAttendance: null },
+        { id: 3, gymId: 1, status: "hold", joinDate: "2024-02-01", riskTier: null, monthlyRevenue: null, lastVisitDate: null, daysSinceLastAttendance: null },
       ];
       mockSubs = [];
       const handler = findHandler(router, "get", "reports/dashboard");
@@ -199,8 +205,8 @@ describe("Reports route handlers", () => {
 
     it("computes engagement rate from attendance", async () => {
       mockMembers = [
-        { id: 1, gymId: 1, status: "active", joinDate: "2024-01-01", riskTier: null },
-        { id: 2, gymId: 1, status: "active", joinDate: "2024-02-01", riskTier: null },
+        { id: 1, gymId: 1, status: "active", joinDate: "2024-01-01", riskTier: null, monthlyRevenue: null, lastVisitDate: null, daysSinceLastAttendance: null },
+        { id: 2, gymId: 1, status: "active", joinDate: "2024-02-01", riskTier: null, monthlyRevenue: null, lastVisitDate: null, daysSinceLastAttendance: null },
       ];
       mockSubs = [];
       mockAttendance = [
