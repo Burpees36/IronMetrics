@@ -129,12 +129,12 @@ describe("Intelligence route handlers", () => {
   });
 
   describe("GET /intelligence/rsi", () => {
-    it("returns RSI score and band", async () => {
+    it("returns RSI score and band with blended metadata", async () => {
       mockMembers = [
-        { id: 1, gymId: 1, status: "active", firstName: "A", lastName: "B", email: "a@b.com", riskScore: null, lastVisitDate: null, attendanceCount30d: 5, joinDate: "2024-01-01" },
-        { id: 2, gymId: 1, status: "cancelled", firstName: "C", lastName: "D", email: "c@d.com", riskScore: null, lastVisitDate: null, attendanceCount30d: 0, joinDate: "2023-06-01" },
+        { id: 1, gymId: 1, status: "active", firstName: "A", lastName: "B", email: "a@b.com", riskScore: null, lastVisitDate: null, attendanceCount30d: 5, joinDate: "2024-01-01", monthlyRevenue: null, daysSinceLastAttendance: null },
+        { id: 2, gymId: 1, status: "cancelled", firstName: "C", lastName: "D", email: "c@d.com", riskScore: null, lastVisitDate: null, attendanceCount30d: 0, joinDate: "2023-06-01", monthlyRevenue: null, daysSinceLastAttendance: null },
       ];
-      mockSubs = [{ id: 1, gymId: 1, status: "active", amount: "150.00" }];
+      mockSubs = [{ id: 1, gymId: 1, memberId: 1, status: "active", amount: "150.00" }];
       const handler = findHandler(router, "get", "intelligence/rsi");
       const { req, res } = makeReqRes({ params: { gymId: "1" } });
       await handler(req, res);
@@ -144,6 +144,11 @@ describe("Intelligence route handlers", () => {
       expect(data).toHaveProperty("band");
       expect(typeof data.score).toBe("number");
       expect(["Strong", "Moderate", "Fragile"]).toContain(data.band);
+      expect(data).toHaveProperty("revenueSource");
+      expect(data.revenueSource).toBe("subscriptions_only");
+      expect(data).toHaveProperty("attendanceSource");
+      expect(data).toHaveProperty("hasSubscriptionData");
+      expect(data.hasSubscriptionData).toBe(true);
     });
 
     it("returns 400 for invalid gym ID", async () => {
@@ -165,8 +170,8 @@ describe("Intelligence route handlers", () => {
     });
 
     it("includes trend data", async () => {
-      mockMembers = [{ id: 1, gymId: 1, status: "active" }];
-      mockSubs = [{ id: 1, gymId: 1, status: "active", amount: "100.00" }];
+      mockMembers = [{ id: 1, gymId: 1, status: "active", monthlyRevenue: null, daysSinceLastAttendance: null, lastVisitDate: null }];
+      mockSubs = [{ id: 1, gymId: 1, memberId: 1, status: "active", amount: "100.00" }];
       const handler = findHandler(router, "get", "intelligence/rsi");
       const { req, res } = makeReqRes({ params: { gymId: "1" } });
       await handler(req, res);
@@ -249,9 +254,9 @@ describe("Intelligence route handlers", () => {
   describe("GET /intelligence/revenue-forecast", () => {
     it("returns revenue forecast", async () => {
       mockMembers = [
-        { id: 1, gymId: 1, status: "active", firstName: "A", lastName: "B", riskScore: null, lastVisitDate: null, attendanceCount30d: 5, joinDate: "2024-01-01", membershipType: "Premium", email: "a@b.com", profileImageUrl: null },
+        { id: 1, gymId: 1, status: "active", firstName: "A", lastName: "B", riskScore: null, lastVisitDate: null, attendanceCount30d: 5, joinDate: "2024-01-01", membershipType: "Premium", email: "a@b.com", profileImageUrl: null, monthlyRevenue: null, daysSinceLastAttendance: null },
       ];
-      mockSubs = [{ id: 1, gymId: 1, status: "active", amount: "150.00" }];
+      mockSubs = [{ id: 1, gymId: 1, memberId: 1, status: "active", amount: "150.00" }];
       const handler = findHandler(router, "get", "intelligence/revenue-forecast");
       const { req, res } = makeReqRes({ params: { gymId: "1" } });
       await handler(req, res);
@@ -264,9 +269,9 @@ describe("Intelligence route handlers", () => {
   describe("GET /intelligence/overview", () => {
     it("returns full overview with rsi and topRisks", async () => {
       mockMembers = [
-        { id: 1, gymId: 1, status: "active", firstName: "A", lastName: "B", email: "a@b.com", riskScore: null, lastVisitDate: null, attendanceCount30d: 5, joinDate: "2024-01-01", membershipType: "Premium", profileImageUrl: null },
+        { id: 1, gymId: 1, status: "active", firstName: "A", lastName: "B", email: "a@b.com", riskScore: null, lastVisitDate: null, attendanceCount30d: 5, joinDate: "2024-01-01", membershipType: "Premium", profileImageUrl: null, monthlyRevenue: null, daysSinceLastAttendance: null },
       ];
-      mockSubs = [{ id: 1, gymId: 1, status: "active", amount: "150.00" }];
+      mockSubs = [{ id: 1, gymId: 1, memberId: 1, status: "active", amount: "150.00" }];
       const handler = findHandler(router, "get", "intelligence/overview");
       const { req, res } = makeReqRes({ params: { gymId: "1" } });
       await handler(req, res);
