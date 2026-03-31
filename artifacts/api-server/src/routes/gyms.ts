@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { eq, and, count } from "drizzle-orm";
 import { db, gymsTable, gymStaffTable, membersTable } from "@workspace/db";
 import { CreateGymBody, UpdateGymBody, GetGymParams } from "@workspace/api-zod";
+import { activeMemberCondition } from "../blendedMetrics";
 
 const router: IRouter = Router();
 
@@ -51,7 +52,7 @@ router.get("/gyms", async (req, res): Promise<void> => {
     const [activeCountResult] = await db
       .select({ count: count() })
       .from(membersTable)
-      .where(and(eq(membersTable.gymId, gymId), eq(membersTable.status, "active")));
+      .where(and(eq(membersTable.gymId, gymId), activeMemberCondition(membersTable)));
     gyms.push({
       ...gym,
       memberCount: Number(memberCountResult?.count ?? 0),
@@ -121,7 +122,7 @@ router.get("/gyms/:gymId", async (req, res): Promise<void> => {
   const [activeCountResult] = await db
     .select({ count: count() })
     .from(membersTable)
-    .where(and(eq(membersTable.gymId, gymId), eq(membersTable.status, "active")));
+    .where(and(eq(membersTable.gymId, gymId), activeMemberCondition(membersTable)));
 
   res.json({
     ...gym,
@@ -184,7 +185,7 @@ router.patch("/gyms/:gymId", async (req, res): Promise<void> => {
   const [activeCountResult] = await db
     .select({ count: count() })
     .from(membersTable)
-    .where(and(eq(membersTable.gymId, gymId), eq(membersTable.status, "active")));
+    .where(and(eq(membersTable.gymId, gymId), activeMemberCondition(membersTable)));
 
   res.json({
     ...gym,

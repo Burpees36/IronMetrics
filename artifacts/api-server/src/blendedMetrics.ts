@@ -1,10 +1,14 @@
 import { eq, and, count, gte, sql, notInArray } from "drizzle-orm";
 import { db, membersTable, subscriptionsTable, attendanceTable } from "@workspace/db";
 
-const BILLABLE_STATUSES: ReadonlySet<string> = new Set(["active"]);
+export const BILLABLE_STATUSES = ["active"] as const;
 
 export function isActiveBillableMember(status: string): boolean {
-  return BILLABLE_STATUSES.has(status);
+  return (BILLABLE_STATUSES as readonly string[]).includes(status);
+}
+
+export function activeMemberCondition(table: typeof membersTable) {
+  return eq(table.status, BILLABLE_STATUSES[0]);
 }
 
 export interface BlendedMRRResult {
@@ -38,7 +42,7 @@ export async function computeBlendedMRR(gymId: number): Promise<BlendedMRRResult
       .from(membersTable)
       .where(and(
         eq(membersTable.gymId, gymId),
-        eq(membersTable.status, "active"),
+        activeMemberCondition(membersTable),
         sql`${membersTable.monthlyRevenue} IS NOT NULL`,
         sql`CAST(${membersTable.monthlyRevenue} AS numeric) > 0`,
         notInArray(membersTable.id, coveredMemberIds),
@@ -50,7 +54,7 @@ export async function computeBlendedMRR(gymId: number): Promise<BlendedMRRResult
       .from(membersTable)
       .where(and(
         eq(membersTable.gymId, gymId),
-        eq(membersTable.status, "active"),
+        activeMemberCondition(membersTable),
         sql`${membersTable.monthlyRevenue} IS NOT NULL`,
         sql`CAST(${membersTable.monthlyRevenue} AS numeric) > 0`,
       ));
@@ -60,7 +64,7 @@ export async function computeBlendedMRR(gymId: number): Promise<BlendedMRRResult
   const [activeBillableResult] = await db
     .select({ count: count() })
     .from(membersTable)
-    .where(and(eq(membersTable.gymId, gymId), eq(membersTable.status, "active")));
+    .where(and(eq(membersTable.gymId, gymId), activeMemberCondition(membersTable)));
 
   const activeBillableMembers = Number(activeBillableResult?.count ?? 0);
   const totalMRR = subscriptionMRR + wodifyMRR;
@@ -105,7 +109,7 @@ export async function computeBlendedEngagement(gymId: number): Promise<BlendedEn
   const [activeResult] = await db
     .select({ count: count() })
     .from(membersTable)
-    .where(and(eq(membersTable.gymId, gymId), eq(membersTable.status, "active")));
+    .where(and(eq(membersTable.gymId, gymId), activeMemberCondition(membersTable)));
   const totalActive = Number(activeResult?.count ?? 0);
 
   if (totalActive === 0) {
@@ -145,7 +149,7 @@ export async function computeBlendedEngagement(gymId: number): Promise<BlendedEn
     .from(membersTable)
     .where(and(
       eq(membersTable.gymId, gymId),
-      eq(membersTable.status, "active"),
+      activeMemberCondition(membersTable),
     ));
 
   let engagedThisWeek = attendanceTableMemberIds.size;

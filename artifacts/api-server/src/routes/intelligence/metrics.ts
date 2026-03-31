@@ -1,7 +1,7 @@
 import { eq, and, count, sql } from "drizzle-orm";
 import { db, membersTable, subscriptionsTable, leadsTable, invoicesTable } from "@workspace/db";
 import { calculateRiskScore, getRiskTier } from "./computations";
-import { getBlendedGymMetrics, computeBlendedMRR, getMemberRevenueFromMembersTable } from "../../blendedMetrics";
+import { getBlendedGymMetrics, computeBlendedMRR, getMemberRevenueFromMembersTable, activeMemberCondition, isActiveBillableMember } from "../../blendedMetrics";
 
 export async function getGymMetrics(gymId: number) {
   const blended = await getBlendedGymMetrics(gymId);
@@ -25,7 +25,7 @@ export async function getGymMetrics(gymId: number) {
 }
 
 export async function getRiskProfiles(gymId: number) {
-  const members = await db.select().from(membersTable).where(and(eq(membersTable.gymId, gymId), eq(membersTable.status, "active")));
+  const members = await db.select().from(membersTable).where(and(eq(membersTable.gymId, gymId), activeMemberCondition(membersTable)));
 
   const memberSubs = await db.select().from(subscriptionsTable).where(and(eq(subscriptionsTable.gymId, gymId), eq(subscriptionsTable.status, "active")));
   const subByMember: Record<number, number> = {};
@@ -66,7 +66,7 @@ export async function getRiskProfiles(gymId: number) {
 
 export async function getInterventions(gymId: number) {
   const [atRiskResult] = await db.select({ count: count() }).from(membersTable).where(
-    and(eq(membersTable.gymId, gymId), eq(membersTable.status, "active"),
+    and(eq(membersTable.gymId, gymId), activeMemberCondition(membersTable),
       sql`(${membersTable.riskTier} = 'critical' OR ${membersTable.riskTier} = 'high')`)
   );
   const atRiskCount = Number(atRiskResult?.count ?? 0);
@@ -80,7 +80,7 @@ export async function getInterventions(gymId: number) {
     : 0;
 
   const atRiskMembers = await db.select().from(membersTable).where(
-    and(eq(membersTable.gymId, gymId), eq(membersTable.status, "active"),
+    and(eq(membersTable.gymId, gymId), activeMemberCondition(membersTable),
       sql`(${membersTable.riskTier} = 'critical' OR ${membersTable.riskTier} = 'high')`)
   );
   const atRiskSubsByMember = await db.select().from(subscriptionsTable).where(and(eq(subscriptionsTable.gymId, gymId), eq(subscriptionsTable.status, "active")));
@@ -189,7 +189,7 @@ export async function computeRevenueForecast(gymId: number, currentMrr: number, 
     }
   } else {
     const allMembers = await db.select().from(membersTable).where(eq(membersTable.gymId, gymId));
-    const activeMembers = allMembers.filter(m => m.status === "active").length;
+    const activeMembers = allMembers.filter(m => isActiveBillableMember(m.status)).length;
     const totalMembers = allMembers.length;
 
     const monthlyChurnRate = churnRate > 0 ? (churnRate / 100) / Math.max(1, totalMembers > activeMembers ? 12 : 6) : 0;

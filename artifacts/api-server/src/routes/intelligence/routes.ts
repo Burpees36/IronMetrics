@@ -3,7 +3,7 @@ import { eq, and, count, sql, gte } from "drizzle-orm";
 import { db, membersTable, subscriptionsTable, attendanceTable, leadsTable, classesTable } from "@workspace/db";
 import { computeRSI } from "./computations";
 import { getGymMetrics, getRiskProfiles, getInterventions, computeRevenueForecast } from "./metrics";
-import { computeBlendedMRR, computeBlendedEngagement } from "../../blendedMetrics";
+import { computeBlendedMRR, computeBlendedEngagement, isActiveBillableMember } from "../../blendedMetrics";
 
 const router: IRouter = Router();
 
@@ -33,7 +33,7 @@ router.get("/gyms/:gymId/intelligence/rsi", async (req, res): Promise<void> => {
     let trendInsufficient = false;
 
     if (membersJoinedBefore30.length >= 5) {
-      const past30Active = membersJoinedBefore30.filter(m => m.status === "active").length;
+      const past30Active = membersJoinedBefore30.filter(m => isActiveBillableMember(m.status)).length;
       const past30Total = membersJoinedBefore30.length;
       const pastChurn30 = past30Total > 0 ? ((past30Total - past30Active) / past30Total) * 100 : 0;
       const pastAvgRev30 = past30Active > 0 ? metrics.totalRev / past30Active : metrics.avgRev;
@@ -44,7 +44,7 @@ router.get("/gyms/:gymId/intelligence/rsi", async (req, res): Promise<void> => {
     }
 
     if (membersJoinedBefore90.length >= 5) {
-      const past90Active = membersJoinedBefore90.filter(m => m.status === "active").length;
+      const past90Active = membersJoinedBefore90.filter(m => isActiveBillableMember(m.status)).length;
       const past90Total = membersJoinedBefore90.length;
       const pastChurn90 = past90Total > 0 ? ((past90Total - past90Active) / past90Total) * 100 : 0;
       const pastAvgRev90 = past90Active > 0 ? metrics.totalRev / past90Active : metrics.avgRev;
@@ -131,7 +131,7 @@ router.get("/gyms/:gymId/intelligence/cohorts", async (req, res): Promise<void> 
 
     const cohorts = Object.entries(monthBuckets).map(([month, cohortMembers]) => {
       const starting = cohortMembers.length;
-      const stillActive = cohortMembers.filter(m => m.status === "active").length;
+      const stillActive = cohortMembers.filter(m => isActiveBillableMember(m.status)).length;
       const retRate = starting > 0 ? Math.round((stillActive / starting) * 1000) / 10 : 0;
 
       const cohortStart = new Date(month + "-01");
@@ -139,13 +139,13 @@ router.get("/gyms/:gymId/intelligence/cohorts", async (req, res): Promise<void> 
       const day60 = new Date(cohortStart.getTime() + 60 * 24 * 60 * 60 * 1000);
 
       const retained30d = starting > 0 ? cohortMembers.filter(m => {
-        if (m.status === "active") return true;
+        if (isActiveBillableMember(m.status)) return true;
         if (m.status === "cancelled" && m.updatedAt && new Date(m.updatedAt) > day30) return true;
         return false;
       }).length : 0;
 
       const retained60d = starting > 0 ? cohortMembers.filter(m => {
-        if (m.status === "active") return true;
+        if (isActiveBillableMember(m.status)) return true;
         if (m.status === "cancelled" && m.updatedAt && new Date(m.updatedAt) > day60) return true;
         return false;
       }).length : 0;

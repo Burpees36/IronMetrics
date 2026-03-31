@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { eq, and, count, desc, gte, lt, sql } from "drizzle-orm";
 import { db, membersTable, subscriptionsTable, invoicesTable, attendanceTable, leadsTable, classesTable, membershipPlansTable } from "@workspace/db";
-import { getBlendedGymMetrics, computeBlendedMRR, computeBlendedEngagement } from "../blendedMetrics";
+import { getBlendedGymMetrics, computeBlendedMRR, computeBlendedEngagement, activeMemberCondition } from "../blendedMetrics";
 
 const router: IRouter = Router();
 
@@ -50,7 +50,7 @@ router.get("/gyms/:gymId/reports/dashboard", async (req, res): Promise<void> => 
   const churnedThisMonth = Number(churnedThisMonthCount?.count ?? 0);
 
   const atRiskMembers = await db.select({ count: count() }).from(membersTable).where(
-    and(eq(membersTable.gymId, gymId), eq(membersTable.status, "active"),
+    and(eq(membersTable.gymId, gymId), activeMemberCondition(membersTable),
       sql`(${membersTable.riskTier} = 'critical' OR ${membersTable.riskTier} = 'high')`)
   );
   const atRiskCount = Number(atRiskMembers[0]?.count ?? 0);
@@ -134,7 +134,7 @@ router.get("/gyms/:gymId/reports/membership", async (req, res): Promise<void> =>
   const gymId = parseGymId(req.params);
   if (!gymId) { res.status(400).json({ error: "Invalid gym ID" }); return; }
 
-  const [activeCount] = await db.select({ count: count() }).from(membersTable).where(and(eq(membersTable.gymId, gymId), eq(membersTable.status, "active")));
+  const [activeCount] = await db.select({ count: count() }).from(membersTable).where(and(eq(membersTable.gymId, gymId), activeMemberCondition(membersTable)));
   const [holdCount] = await db.select({ count: count() }).from(membersTable).where(and(eq(membersTable.gymId, gymId), eq(membersTable.status, "hold")));
   const [cancelledCount] = await db.select({ count: count() }).from(membersTable).where(and(eq(membersTable.gymId, gymId), eq(membersTable.status, "cancelled")));
   const [totalCount] = await db.select({ count: count() }).from(membersTable).where(eq(membersTable.gymId, gymId));
