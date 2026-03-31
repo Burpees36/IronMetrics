@@ -11,6 +11,7 @@ vi.mock("drizzle-orm", () => ({
   sql: Object.assign((() => ({})) as any, { raw: () => ({}) }),
   sum: () => ({}),
   avg: () => ({}),
+  notInArray: (left: any, values: any[]) => ({ _type: "notInArray", left, values }),
 }));
 
 let mockMembers: any[] = [];

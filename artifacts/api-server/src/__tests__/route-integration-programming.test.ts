@@ -7,7 +7,9 @@ vi.mock("drizzle-orm", () => ({
   lte: () => ({}),
   desc: () => ({}),
   asc: () => ({}),
+  ne: (left: any, right: any) => ({ _type: "ne", left, right }),
   sql: Object.assign((() => ({})) as any, { raw: () => ({}) }),
+  notInArray: (left: any, values: any[]) => ({ _type: "notInArray", left, values }),
 }));
 
 let mockDays: any[] = [];
@@ -95,6 +97,9 @@ vi.mock("@workspace/db", () => {
     programmingDaysTable: makeTable("programming_days"),
     programmingSectionsTable: makeTable("programming_sections"),
     workoutResultsTable: makeTable("workout_results"),
+    membersTable: makeTable("members"),
+    subscriptionsTable: makeTable("subscriptions"),
+    attendanceTable: makeTable("attendance"),
   };
 });
 
@@ -130,21 +135,27 @@ function makeReqRes(opts: { params?: any; query?: any; body?: any; role?: string
   return { req, res };
 }
 
-function findHandler(router: any, method: string, pathFragment: string, exact?: string) {
-  for (const layer of router.stack) {
-    if (layer.route) {
-      const routePath = layer.route.path;
-      const routeMethod = Object.keys(layer.route.methods)[0];
-      if (exact) {
-        if (routeMethod === method && routePath === exact) {
+function findHandler(router: any, method: string, pathFragment: string, exact?: string): any {
+  function search(stack: any[]): any {
+    for (const layer of stack) {
+      if (layer.route) {
+        const routePath = layer.route.path;
+        const routeMethod = Object.keys(layer.route.methods)[0];
+        if (exact) {
+          if (routeMethod === method && routePath === exact) {
+            return layer.route.stack[layer.route.stack.length - 1].handle;
+          }
+        } else if (routeMethod === method && routePath.includes(pathFragment)) {
           return layer.route.stack[layer.route.stack.length - 1].handle;
         }
-      } else if (routeMethod === method && routePath.includes(pathFragment)) {
-        return layer.route.stack[layer.route.stack.length - 1].handle;
+      } else if (layer.handle && layer.handle.stack) {
+        const found = search(layer.handle.stack);
+        if (found) return found;
       }
     }
+    return null;
   }
-  return null;
+  return search(router.stack);
 }
 
 describe("Programming route handlers", () => {
