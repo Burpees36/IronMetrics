@@ -1,4 +1,4 @@
-import { eq, and, count, gte, sql, notInArray } from "drizzle-orm";
+import { eq, and, count, gte, sql, notInArray, inArray } from "drizzle-orm";
 import { db, membersTable, subscriptionsTable, attendanceTable } from "@workspace/db";
 
 export const BILLABLE_STATUSES = ["active"] as const;
@@ -8,7 +8,10 @@ export function isActiveBillableMember(status: string): boolean {
 }
 
 export function activeMemberCondition(table: typeof membersTable) {
-  return eq(table.status, BILLABLE_STATUSES[0]);
+  if (BILLABLE_STATUSES.length === 1) {
+    return eq(table.status, BILLABLE_STATUSES[0]);
+  }
+  return inArray(table.status, [...BILLABLE_STATUSES]);
 }
 
 export interface BlendedMRRResult {
