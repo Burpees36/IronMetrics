@@ -1459,9 +1459,13 @@ export interface MorningBriefingSnapshot {
   rsiScore?: number;
   rsiBand?: string;
   atRiskMembers?: number;
+  atRiskCritical?: number;
+  atRiskHigh?: number;
   revenueAtRisk?: number;
   engagementRate?: number;
   staleLeads?: number;
+  newLeads?: number;
+  activeLeads?: number;
   failedPayments?: number;
   todayClasses?: number;
   classFillRate?: number;
@@ -1661,6 +1665,11 @@ export interface DashboardStats {
   classesThisWeek: number;
   openLeads: number;
   atRiskMembers: number;
+  atRiskCritical: number;
+  atRiskHigh: number;
+  revenueAtRisk: number;
+  /** Percentage of active members not at risk */
+  retentionRate: number;
   failedPayments: number;
   collectionRate: number;
   rsiScore: number;

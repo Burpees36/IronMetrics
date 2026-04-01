@@ -5,7 +5,7 @@ import {
   Users, TrendingUp, AlertTriangle, CalendarCheck, 
   ArrowUpRight, ArrowDownRight, Loader2, BrainCircuit, Rocket,
   Sun, CreditCard, UserCheck, ChevronRight, Sparkles,
-  ChevronDown, ChevronUp, UserPlus, Clock
+  ChevronDown, ChevronUp, UserPlus, Clock, ShieldCheck
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { AreaChart, Area, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
@@ -94,12 +94,17 @@ function MorningBriefing({ gymId }: { gymId: number }) {
     (item: any) => item.priority === "positive" || item.priority === "info"
   );
 
+  const criticalCount = snap?.atRiskCritical || 0;
+  const highCount = snap?.atRiskHigh || 0;
+  const atRiskTotal = snap?.atRiskMembers || 0;
+
   const attentionCards = [
     {
-      label: "Critical Members",
-      value: snap?.atRiskMembers || 0,
+      label: "At-Risk Members",
+      value: atRiskTotal,
+      subtitle: atRiskTotal > 0 ? `${criticalCount} critical · ${highCount} high` : undefined,
       icon: AlertTriangle,
-      color: (snap?.atRiskMembers || 0) > 0 ? "text-destructive bg-destructive/10 border-destructive/20" : "text-muted-foreground bg-muted/20 border-border",
+      color: atRiskTotal > 0 ? "text-destructive bg-destructive/10 border-destructive/20" : "text-muted-foreground bg-muted/20 border-border",
       link: "/intelligence",
     },
     {
@@ -179,6 +184,9 @@ function MorningBriefing({ gymId }: { gymId: number }) {
                         <span className="text-xl font-bold">{card.value}</span>
                       </div>
                       <p className="text-[11px] font-medium opacity-80">{card.label}</p>
+                      {card.subtitle && (
+                        <p className="text-[9px] opacity-60 mt-0.5">{card.subtitle}</p>
+                      )}
                     </div>
                   </Link>
                 ))}
@@ -279,7 +287,7 @@ export function Dashboard() {
     { title: "Active Members", value: stats.activeMembers, change: stats.newMembersThisMonth - stats.churnedThisMonth, icon: Users, suffix: "net this month" },
     { title: "Monthly Revenue", value: `$${(stats.mrr / 1000).toFixed(1)}k`, change: stats.mrrGrowth ?? undefined, icon: TrendingUp, suffix: stats.mrrGrowth != null ? "% vs last month" : "" },
     { title: "Engagement Rate", value: `${stats.engagementRate.toFixed(1)}%`, change: stats.engagementChange, icon: CalendarCheck, suffix: "pp vs last week" },
-    { title: "At Risk", value: stats.atRiskMembers, isNegative: true, icon: AlertTriangle, suffix: "need intervention" },
+    { title: "Retention", value: `${(stats.retentionRate ?? 100).toFixed(1)}%`, icon: ShieldCheck, suffix: "of members healthy" },
   ];
 
   return (
@@ -318,17 +326,19 @@ export function Dashboard() {
             <div className="relative z-10">
               <p className="text-[11px] md:text-xs font-medium text-muted-foreground mb-1 truncate">{kpi.title}</p>
               <h3 className="text-lg md:text-2xl font-display font-bold text-foreground mb-1 md:mb-2">{kpi.value}</h3>
-              {kpi.change !== undefined && (
+              {kpi.change !== undefined ? (
                 <div className="flex items-center gap-1 text-xs">
                   <span className={`flex items-center font-medium ${
-                    kpi.isNegative ? "text-destructive" : (kpi.change >= 0 ? "text-emerald-500" : "text-destructive")
+                    kpi.change >= 0 ? "text-emerald-500" : "text-destructive"
                   }`}>
                     {kpi.change >= 0 ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
                     {Math.abs(kpi.change)}
                   </span>
                   <span className="text-muted-foreground hidden sm:inline text-[10px]">{kpi.suffix}</span>
                 </div>
-              )}
+              ) : kpi.suffix ? (
+                <p className="text-[10px] text-muted-foreground">{kpi.suffix}</p>
+              ) : null}
             </div>
           </motion.div>
         ))}

@@ -22,6 +22,7 @@ const tierConfig: Record<string, { bg: string; text: string; label: string }> = 
 
 export function AtRiskMembersCard({ gymId }: { gymId: number }) {
   const [members, setMembers] = useState<RiskMember[]>([]);
+  const [allAtRisk, setAllAtRisk] = useState<RiskMember[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -29,17 +30,16 @@ export function AtRiskMembersCard({ gymId }: { gymId: number }) {
       .then((r) => (r.ok ? r.json() : []))
       .then((data) => {
         const list = Array.isArray(data) ? data : data.members || [];
-        setMembers(
-          list
-            .filter((m: RiskMember) => m.riskTier === "critical" || m.riskTier === "high")
-            .slice(0, 5)
-        );
+        const atRisk = list.filter((m: RiskMember) => m.riskTier === "critical" || m.riskTier === "high");
+        setAllAtRisk(atRisk);
+        setMembers(atRisk.slice(0, 5));
       })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, [gymId]);
 
-  const totalRevAtRisk = members.reduce((s, m) => s + (m.revenueAtRisk || 0), 0);
+  const totalRevAtRisk = allAtRisk.reduce((s, m) => s + (m.revenueAtRisk || 0), 0);
+  const totalCount = allAtRisk.length;
 
   return (
     <motion.div
@@ -53,9 +53,16 @@ export function AtRiskMembersCard({ gymId }: { gymId: number }) {
             <AlertTriangle className="h-4 w-4 text-destructive" />
           </div>
           <div>
-            <h3 className="text-sm font-semibold text-foreground">At-Risk Members</h3>
-            {members.length > 0 && (
-              <p className="text-[10px] text-muted-foreground">${totalRevAtRisk.toFixed(0)}/mo revenue at risk</p>
+            <div className="flex items-center gap-2">
+              <h3 className="text-sm font-semibold text-foreground">At-Risk Members</h3>
+              {totalCount > 0 && (
+                <span className="px-1.5 py-0.5 rounded-full text-[9px] font-semibold bg-destructive/10 text-destructive border border-destructive/20">
+                  {totalCount}
+                </span>
+              )}
+            </div>
+            {totalRevAtRisk > 0 && (
+              <p className="text-[10px] text-muted-foreground">${totalRevAtRisk.toLocaleString()}/mo revenue at risk</p>
             )}
           </div>
         </div>
@@ -110,6 +117,15 @@ export function AtRiskMembersCard({ gymId }: { gymId: number }) {
                 </Link>
               );
             })}
+            {totalCount > 5 && (
+              <Link href="/intelligence">
+                <div className="px-4 py-2.5 text-center hover:bg-muted/20 transition-colors cursor-pointer">
+                  <span className="text-[11px] font-medium text-primary">
+                    View all {totalCount} at-risk members →
+                  </span>
+                </div>
+              </Link>
+            )}
           </div>
         )}
       </div>

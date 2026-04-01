@@ -12,9 +12,13 @@ export interface MorningBriefingSnapshot {
   rsiScore?: number;
   rsiBand?: string;
   atRiskMembers?: number;
+  atRiskCritical?: number;
+  atRiskHigh?: number;
   revenueAtRisk?: number;
   engagementRate?: number;
   staleLeads?: number;
+  newLeads?: number;
+  activeLeads?: number;
   failedPayments?: number;
   todayClasses?: number;
   classFillRate?: number;

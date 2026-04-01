@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { eq, and, count, desc, gte, lt, sql } from "drizzle-orm";
 import { db, membersTable, subscriptionsTable, invoicesTable, attendanceTable, leadsTable, classesTable, membershipPlansTable } from "@workspace/db";
 import { getBlendedGymMetrics, computeBlendedMRR, computeBlendedEngagement, activeMemberCondition } from "../blendedMetrics";
+import { getRiskProfiles } from "./intelligence/metrics";
 
 const router: IRouter = Router();
 
@@ -49,11 +50,14 @@ router.get("/gyms/:gymId/reports/dashboard", async (req, res): Promise<void> => 
   ));
   const churnedThisMonth = Number(churnedThisMonthCount?.count ?? 0);
 
-  const atRiskMembers = await db.select({ count: count() }).from(membersTable).where(
-    and(eq(membersTable.gymId, gymId), activeMemberCondition(membersTable),
-      sql`(${membersTable.riskTier} = 'critical' OR ${membersTable.riskTier} = 'high')`)
-  );
-  const atRiskCount = Number(atRiskMembers[0]?.count ?? 0);
+  const riskProfiles = await getRiskProfiles(gymId);
+  const criticalRiskCount = riskProfiles.filter(r => r.riskTier === "critical").length;
+  const highRiskCount = riskProfiles.filter(r => r.riskTier === "high").length;
+  const atRiskCount = criticalRiskCount + highRiskCount;
+  const revenueAtRisk = riskProfiles.reduce((sum, r) => sum + r.revenueAtRisk, 0);
+  const retentionRate = blended.activeBillableMembers > 0
+    ? Math.round(((blended.activeBillableMembers - atRiskCount) / blended.activeBillableMembers) * 1000) / 10
+    : 100;
 
   const rsiResult = computeRSI(blended.churnRate, blended.avgRevPerMember, blended.netGrowth, blended.avgTenure);
 
@@ -113,6 +117,10 @@ router.get("/gyms/:gymId/reports/dashboard", async (req, res): Promise<void> => 
     classesThisWeek: Number(classesThisWeek?.count ?? 0),
     openLeads: Number(openLeadCount?.count ?? 0),
     atRiskMembers: atRiskCount,
+    atRiskCritical: criticalRiskCount,
+    atRiskHigh: highRiskCount,
+    revenueAtRisk: Math.round(revenueAtRisk),
+    retentionRate,
     failedPayments: failedSubs.length,
     collectionRate,
     rsiScore: Math.round(rsiResult.score * 10) / 10,

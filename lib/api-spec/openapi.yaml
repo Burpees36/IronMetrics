@@ -5884,11 +5884,19 @@ components:
           type: string
         atRiskMembers:
           type: number
+        atRiskCritical:
+          type: number
+        atRiskHigh:
+          type: number
         revenueAtRisk:
           type: number
         engagementRate:
           type: number
         staleLeads:
+          type: number
+        newLeads:
+          type: number
+        activeLeads:
           type: number
         failedPayments:
           type: number
@@ -6134,6 +6142,15 @@ components:
           type: integer
         atRiskMembers:
           type: integer
+        atRiskCritical:
+          type: integer
+        atRiskHigh:
+          type: integer
+        revenueAtRisk:
+          type: number
+        retentionRate:
+          type: number
+          description: Percentage of active members not at risk
         failedPayments:
           type: integer
         collectionRate:
@@ -6194,6 +6211,10 @@ components:
         - classesThisWeek
         - openLeads
         - atRiskMembers
+        - atRiskCritical
+        - atRiskHigh
+        - revenueAtRisk
+        - retentionRate
         - failedPayments
         - collectionRate
         - rsiScore

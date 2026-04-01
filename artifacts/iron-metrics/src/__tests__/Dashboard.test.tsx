@@ -34,15 +34,37 @@ vi.mock("lucide-react", () => ({
   TrendingUp: (props: any) => <span {...props}>TrendingUp</span>,
   AlertTriangle: (props: any) => <span {...props}>AlertTriangle</span>,
   CalendarCheck: (props: any) => <span {...props}>CalendarCheck</span>,
+  ShieldCheck: (props: any) => <span {...props}>ShieldCheck</span>,
   ArrowUpRight: (props: any) => <span {...props}>Up</span>,
   ArrowDownRight: (props: any) => <span {...props}>Down</span>,
   Loader2: (props: any) => <span data-testid="loader" {...props}>Loading</span>,
   BrainCircuit: (props: any) => <span {...props}>Brain</span>,
   Rocket: (props: any) => <span {...props}>Rocket</span>,
+  Sun: (props: any) => <span {...props}>Sun</span>,
+  CreditCard: (props: any) => <span {...props}>CreditCard</span>,
+  UserCheck: (props: any) => <span {...props}>UserCheck</span>,
+  ChevronRight: (props: any) => <span {...props}>ChevronRight</span>,
+  ChevronDown: (props: any) => <span {...props}>ChevronDown</span>,
+  ChevronUp: (props: any) => <span {...props}>ChevronUp</span>,
+  Sparkles: (props: any) => <span {...props}>Sparkles</span>,
+  UserPlus: (props: any) => <span {...props}>UserPlus</span>,
+  Clock: (props: any) => <span {...props}>Clock</span>,
 }));
 
 vi.mock("@/components/ui/button", () => ({
   Button: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+}));
+
+vi.mock("@/components/dashboard/SyncHealthBanner", () => ({
+  SyncHealthBanner: () => null,
+}));
+
+vi.mock("@/components/dashboard/AtRiskMembersCard", () => ({
+  AtRiskMembersCard: () => <div data-testid="at-risk-card">AtRiskMembersCard</div>,
+}));
+
+vi.mock("@/components/dashboard/RetentionActivityCard", () => ({
+  RetentionActivityCard: () => <div data-testid="retention-card">RetentionActivityCard</div>,
 }));
 
 const mockUseGym = vi.fn();
@@ -51,8 +73,10 @@ vi.mock("@/store/GymContext", () => ({
 }));
 
 const mockUseGetDashboardStats = vi.fn();
+const mockUseGetMorningBriefing = vi.fn();
 vi.mock("@workspace/api-client-react", () => ({
   useGetDashboardStats: (...args: any[]) => mockUseGetDashboardStats(...args),
+  useGetMorningBriefing: (...args: any[]) => mockUseGetMorningBriefing(...args),
 }));
 
 import { Dashboard } from "../pages/Dashboard";
@@ -67,7 +91,11 @@ const MOCK_STATS = {
   engagementChange: 3.1,
   classesThisWeek: 24,
   openLeads: 8,
-  atRiskMembers: 5,
+  atRiskMembers: 91,
+  atRiskCritical: 74,
+  atRiskHigh: 17,
+  revenueAtRisk: 5906,
+  retentionRate: 58.4,
   failedPayments: 2,
   collectionRate: 96.5,
   rsiScore: 74.3,
@@ -89,6 +117,7 @@ describe("Dashboard", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockFetch.mockResolvedValue({ ok: false });
+    mockUseGetMorningBriefing.mockReturnValue({ data: undefined, isLoading: false });
   });
 
   it("shows gym selection prompt when no gym is active", () => {
@@ -124,6 +153,15 @@ describe("Dashboard", () => {
     expect(screen.getByText("72.5%")).toBeInTheDocument();
   });
 
+  it("renders Retention KPI card instead of At Risk", () => {
+    mockUseGym.mockReturnValue({ activeGymId: 1 });
+    mockUseGetDashboardStats.mockReturnValue({ data: MOCK_STATS, isLoading: false });
+    render(<Dashboard />);
+    expect(screen.getByText("Retention")).toBeInTheDocument();
+    expect(screen.getByText("58.4%")).toBeInTheDocument();
+    expect(screen.queryByText("At Risk")).not.toBeInTheDocument();
+  });
+
   it("renders RSI score badge", () => {
     mockUseGym.mockReturnValue({ activeGymId: 1 });
     mockUseGetDashboardStats.mockReturnValue({ data: MOCK_STATS, isLoading: false });
@@ -131,41 +169,33 @@ describe("Dashboard", () => {
     expect(screen.getByText("RSI: 74.3 (Strong)")).toBeInTheDocument();
   });
 
-  it("renders at-risk members alert when > 0", () => {
+  it("renders MRR Trend chart container", () => {
     mockUseGym.mockReturnValue({ activeGymId: 1 });
     mockUseGetDashboardStats.mockReturnValue({ data: MOCK_STATS, isLoading: false });
     render(<Dashboard />);
-    expect(screen.getByText("Action Required: High Risk Members")).toBeInTheDocument();
-    expect(screen.getByText(/5 members flagged/)).toBeInTheDocument();
+    expect(screen.getByText("MRR Trend")).toBeInTheDocument();
   });
 
-  it("does not render at-risk alert when atRiskMembers is 0", () => {
-    mockUseGym.mockReturnValue({ activeGymId: 1 });
-    mockUseGetDashboardStats.mockReturnValue({ data: { ...MOCK_STATS, atRiskMembers: 0 }, isLoading: false });
-    render(<Dashboard />);
-    expect(screen.queryByText("Action Required: High Risk Members")).not.toBeInTheDocument();
-  });
-
-  it("renders revenue chart container", () => {
+  it("renders Owner Console heading", () => {
     mockUseGym.mockReturnValue({ activeGymId: 1 });
     mockUseGetDashboardStats.mockReturnValue({ data: MOCK_STATS, isLoading: false });
     render(<Dashboard />);
-    expect(screen.getByText("Revenue Trend")).toBeInTheDocument();
+    expect(screen.getByText("Owner Console")).toBeInTheDocument();
   });
 
-  it("renders member status breakdown chart", () => {
+  it("renders subtitle text", () => {
     mockUseGym.mockReturnValue({ activeGymId: 1 });
     mockUseGetDashboardStats.mockReturnValue({ data: MOCK_STATS, isLoading: false });
     render(<Dashboard />);
-    expect(screen.getByText("Member Status")).toBeInTheDocument();
+    expect(screen.getByText("Here's what needs your attention today.")).toBeInTheDocument();
   });
 
-  it("shows At Risk Members KPI card", () => {
+  it("renders AtRiskMembersCard and RetentionActivityCard", () => {
     mockUseGym.mockReturnValue({ activeGymId: 1 });
     mockUseGetDashboardStats.mockReturnValue({ data: MOCK_STATS, isLoading: false });
     render(<Dashboard />);
-    expect(screen.getByText("At Risk Members")).toBeInTheDocument();
-    expect(screen.getByText("5")).toBeInTheDocument();
+    expect(screen.getByTestId("at-risk-card")).toBeInTheDocument();
+    expect(screen.getByTestId("retention-card")).toBeInTheDocument();
   });
 
   it("calls useGetDashboardStats with correct gymId", () => {
@@ -186,17 +216,10 @@ describe("Dashboard", () => {
     }));
   });
 
-  it("renders Overview heading", () => {
+  it("shows retention rate suffix text", () => {
     mockUseGym.mockReturnValue({ activeGymId: 1 });
     mockUseGetDashboardStats.mockReturnValue({ data: MOCK_STATS, isLoading: false });
     render(<Dashboard />);
-    expect(screen.getByText("Overview")).toBeInTheDocument();
-  });
-
-  it("renders subtitle text", () => {
-    mockUseGym.mockReturnValue({ activeGymId: 1 });
-    mockUseGetDashboardStats.mockReturnValue({ data: MOCK_STATS, isLoading: false });
-    render(<Dashboard />);
-    expect(screen.getByText("Here's what's happening at your gym today.")).toBeInTheDocument();
+    expect(screen.getByText("of members healthy")).toBeInTheDocument();
   });
 });

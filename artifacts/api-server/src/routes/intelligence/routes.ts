@@ -285,27 +285,6 @@ router.get("/gyms/:gymId/intelligence/morning-briefing", async (req, res): Promi
 
     const items: { icon: string; priority: "critical" | "warning" | "info" | "positive"; message: string; action?: string; link?: string }[] = [];
 
-    if (criticalRisks.length > 0) {
-      const names = criticalRisks.slice(0, 3).map(r => r.memberName.split(" ")[0]).join(", ");
-      items.push({
-        icon: "alert",
-        priority: "critical",
-        message: `${criticalRisks.length} member${criticalRisks.length > 1 ? "s" : ""} at critical churn risk (${names}${criticalRisks.length > 3 ? "..." : ""})`,
-        action: "Review in Risk Radar",
-        link: "/intelligence",
-      });
-    }
-
-    if (highRisks.length > 0) {
-      items.push({
-        icon: "warning",
-        priority: "warning",
-        message: `${highRisks.length} member${highRisks.length > 1 ? "s" : ""} at high risk — $${Math.round(revenueAtRisk)}/mo at stake`,
-        action: "View Risk Profiles",
-        link: "/intelligence",
-      });
-    }
-
     if (failedSubs.length > 0) {
       const failedRev = failedSubs.reduce((sum, s) => sum + parseFloat(s.amount || "0"), 0);
       items.push({
@@ -379,6 +358,8 @@ router.get("/gyms/:gymId/intelligence/morning-briefing", async (req, res): Promi
         rsiScore: rsi.score,
         rsiBand: rsi.band,
         atRiskMembers: atRiskCount,
+        atRiskCritical: criticalRisks.length,
+        atRiskHigh: highRisks.length,
         revenueAtRisk: Math.round(revenueAtRisk),
         engagementRate,
         staleLeads: staleLeads.length,

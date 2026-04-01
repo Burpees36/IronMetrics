@@ -24,6 +24,11 @@ export interface DashboardStats {
   classesThisWeek: number;
   openLeads: number;
   atRiskMembers: number;
+  atRiskCritical: number;
+  atRiskHigh: number;
+  revenueAtRisk: number;
+  /** Percentage of active members not at risk */
+  retentionRate: number;
   failedPayments: number;
   collectionRate: number;
   rsiScore: number;
