@@ -30,7 +30,7 @@ export function SalesInsightsPanel({ gymId }: SalesInsightsPanelProps) {
   }
   const topSource = insights.sourcePerformance?.find((s: any) => s.rate > 0);
   if (topSource) {
-    callouts.push(`${topSource.source.replace("_", " ")} converts best (${topSource.rate}%)`);
+    callouts.push(`${topSource.source?.replace("_", " ") ?? "Unknown"} converts best (${topSource.rate}%)`);
   }
 
   return (

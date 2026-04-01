@@ -4,6 +4,6 @@ declare namespace Express {
     gymId?: number;
     billingRole?: string;
     billingPermissions?: string[];
-    programmingRole?: string;
+    programmingRole?: import("../middlewares/programmingRbac").ProgrammingRole;
   }
 }

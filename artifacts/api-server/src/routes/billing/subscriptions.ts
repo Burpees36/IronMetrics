@@ -6,7 +6,7 @@ import { stripeService } from "../../stripeService";
 import { getStripeClient } from "../../stripeClient";
 import { requireBillingPermission, requireBillingRead } from "../../middlewares/billingRbac";
 import { billingAuditLogger } from "../../billingAuditLogger";
-import { parseGymId, getActor } from "./helpers";
+import { parseGymId, paramStr, getActor } from "./helpers";
 
 const router: IRouter = Router();
 
@@ -100,11 +100,9 @@ router.patch("/gyms/:gymId/subscriptions/:subscriptionId", requireBillingPermiss
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
 
   const updateData: Record<string, any> = { ...parsed.data };
-  if (parsed.data.status === "cancelled" && !parsed.data.cancelledAt) {
+  if (parsed.data.status === "cancelled") {
     updateData.cancelledAt = new Date();
-  }
-  if (parsed.data.status === "cancelled" && !parsed.data.cancelReason) {
-    updateData.cancelReason = "Cancelled by staff";
+    updateData.cancelReason = updateData.cancelReason || "Cancelled by staff";
   }
 
   const [sub] = await db.update(subscriptionsTable).set(updateData).where(and(eq(subscriptionsTable.id, subId), eq(subscriptionsTable.gymId, gymId))).returning();
@@ -211,7 +209,7 @@ router.post("/gyms/:gymId/subscriptions/:subscriptionId/resume", requireBillingP
 router.post("/gyms/:gymId/subscriptions/:subscriptionId/change-plan", requireBillingPermission("billing.create_subscription"), async (req, res): Promise<void> => {
   const gymId = parseGymId(req.params);
   if (!gymId) { res.status(400).json({ error: "Invalid gym ID" }); return; }
-  const subscriptionId = parseInt(req.params.subscriptionId, 10);
+  const subscriptionId = parseInt(paramStr(req.params.subscriptionId), 10);
   const { newPlanId, timing } = req.body;
   if (!newPlanId || !["immediate", "next_cycle"].includes(timing)) {
     res.status(400).json({ error: "newPlanId and timing (immediate|next_cycle) required" }); return;
@@ -225,7 +223,7 @@ router.post("/gyms/:gymId/subscriptions/:subscriptionId/change-plan", requireBil
 router.post("/gyms/:gymId/subscriptions/:subscriptionId/preview-change", requireBillingRead(), async (req, res): Promise<void> => {
   const gymId = parseGymId(req.params);
   if (!gymId) { res.status(400).json({ error: "Invalid gym ID" }); return; }
-  const subscriptionId = parseInt(req.params.subscriptionId, 10);
+  const subscriptionId = parseInt(paramStr(req.params.subscriptionId), 10);
   const { newPlanId } = req.body;
   if (!newPlanId) { res.status(400).json({ error: "newPlanId required" }); return; }
   try {

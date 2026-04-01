@@ -230,7 +230,7 @@ export function useWodifySyncPolling({
     isFailed,
     completedResult,
     startSync,
-    refreshStatus: fetchStatus as () => Promise<void>,
+    refreshStatus: (async () => { await fetchStatus(); }) as () => Promise<void>,
     elapsedSeconds,
   };
 }

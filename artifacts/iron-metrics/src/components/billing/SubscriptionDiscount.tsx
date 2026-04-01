@@ -34,7 +34,7 @@ export function SubscriptionDiscount({ subscriptionId, stripeSubscriptionId }: P
   const handleApply = () => {
     if (!activeGymId || !selectedCode) return;
     applyMutation.mutate(
-      { gymId: activeGymId, subscriptionId, data: { discountCodeId: parseInt(selectedCode) } },
+      { gymId: activeGymId, subscriptionId, data: { discountId: parseInt(selectedCode) } },
       {
         onSuccess: () => {
           toast({ title: "Discount applied" });

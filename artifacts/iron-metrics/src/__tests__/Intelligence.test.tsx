@@ -128,8 +128,8 @@ describe("Intelligence Page", () => {
   });
 
   async function importAndRender() {
-    const mod = await import("../pages/Intelligence");
-    const Intelligence = mod.default || mod.Intelligence;
+    const mod: Record<string, unknown> = await import("../pages/Intelligence");
+    const Intelligence = (mod.default || mod.Intelligence) as React.ComponentType;
     return render(
       <QueryClientProvider client={queryClient}>
         <Intelligence />

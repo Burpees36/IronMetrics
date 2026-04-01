@@ -560,7 +560,7 @@ export class StripeService {
     let prorationPreview = null;
     if (timing === "immediate") {
       try {
-        const upcomingInvoice = await stripe.invoices.retrieveUpcoming({ subscription: sub.stripeSubscriptionId });
+        const upcomingInvoice = await stripe.invoices.createPreview({ subscription: sub.stripeSubscriptionId });
         prorationPreview = {
           amountDue: upcomingInvoice.amount_due / 100,
           credit: Math.abs(Math.min(0, upcomingInvoice.amount_due)) / 100,
@@ -589,10 +589,12 @@ export class StripeService {
     const stripeSub = await stripe.subscriptions.retrieve(sub.stripeSubscriptionId);
 
     try {
-      const preview = await stripe.invoices.retrieveUpcoming({
+      const preview = await stripe.invoices.createPreview({
         subscription: sub.stripeSubscriptionId,
-        subscription_items: [{ id: stripeSub.items.data[0].id, price: newStripePriceId }],
-        subscription_proration_behavior: "create_prorations",
+        subscription_details: {
+          items: [{ id: stripeSub.items.data[0].id, price: newStripePriceId }],
+          proration_behavior: "create_prorations",
+        },
       });
       return {
         currentAmount: parseFloat(sub.amount), newAmount: parseFloat(newPlan.price),
@@ -683,7 +685,7 @@ export class StripeService {
     if (discount.expiresAt && new Date(discount.expiresAt) < new Date()) throw new Error("Discount has expired");
 
     const stripe = await getUncachableStripeClient();
-    await stripe.subscriptions.update(sub.stripeSubscriptionId, { coupon: discount.stripeCouponId });
+    await stripe.subscriptions.update(sub.stripeSubscriptionId, { discounts: [{ coupon: discount.stripeCouponId }] });
 
     await db.update(discountCodesTable)
       .set({ timesRedeemed: sql`${discountCodesTable.timesRedeemed} + 1` })

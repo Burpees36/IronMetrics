@@ -4,7 +4,7 @@ import { db, discountCodesTable, gymsTable } from "@workspace/db";
 import { stripeService } from "../../stripeService";
 import { requireBillingPermission, requireBillingRead } from "../../middlewares/billingRbac";
 import { billingAuditLogger } from "../../billingAuditLogger";
-import { parseGymId, getActor } from "./helpers";
+import { parseGymId, paramStr, getActor } from "./helpers";
 
 const router: IRouter = Router();
 
@@ -35,7 +35,7 @@ router.post("/gyms/:gymId/discount-codes", requireBillingPermission("billing.cre
 router.patch("/gyms/:gymId/discount-codes/:id", requireBillingPermission("billing.create_plan"), async (req, res): Promise<void> => {
   const gymId = parseGymId(req.params);
   if (!gymId) { res.status(400).json({ error: "Invalid gym ID" }); return; }
-  const id = parseInt(req.params.id, 10);
+  const id = parseInt(paramStr(req.params.id), 10);
   const { isActive } = req.body;
   const [updated] = await db.update(discountCodesTable)
     .set({ isActive: !!isActive })
@@ -53,7 +53,7 @@ router.patch("/gyms/:gymId/discount-codes/:id", requireBillingPermission("billin
 router.post("/gyms/:gymId/subscriptions/:subscriptionId/apply-discount", requireBillingPermission("billing.create_subscription"), async (req, res): Promise<void> => {
   const gymId = parseGymId(req.params);
   if (!gymId) { res.status(400).json({ error: "Invalid gym ID" }); return; }
-  const subscriptionId = parseInt(req.params.subscriptionId, 10);
+  const subscriptionId = parseInt(paramStr(req.params.subscriptionId), 10);
   const { discountId } = req.body;
   if (!discountId) { res.status(400).json({ error: "discountId required" }); return; }
   try {
@@ -65,7 +65,7 @@ router.post("/gyms/:gymId/subscriptions/:subscriptionId/apply-discount", require
 router.delete("/gyms/:gymId/subscriptions/:subscriptionId/discount", requireBillingPermission("billing.create_subscription"), async (req, res): Promise<void> => {
   const gymId = parseGymId(req.params);
   if (!gymId) { res.status(400).json({ error: "Invalid gym ID" }); return; }
-  const subscriptionId = parseInt(req.params.subscriptionId, 10);
+  const subscriptionId = parseInt(paramStr(req.params.subscriptionId), 10);
   try {
     const result = await stripeService.removeDiscountFromSubscription(subscriptionId, gymId, getActor(req));
     res.json(result);

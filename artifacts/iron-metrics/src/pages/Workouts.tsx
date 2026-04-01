@@ -15,7 +15,7 @@ import {
   useListMembers,
   getListProgrammingDaysQueryKey,
 } from "@workspace/api-client-react";
-import type { ProgrammingDayWithSections } from "@workspace/api-client-react";
+import type { ProgrammingDayWithSections, SectionType as ApiSectionType } from "@workspace/api-client-react";
 import { useAuth } from "@workspace/replit-auth-web";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
@@ -38,7 +38,7 @@ import {
 } from "@/components/programming/CreateProgrammingPanel";
 import { MemberProgrammingView } from "@/components/programming/MemberProgrammingView";
 import { useUserRole } from "@/components/programming/useUserRole";
-import { SectionData, createEmptySection } from "@/components/programming/SectionEditor";
+import { SectionData, createEmptySection, type SectionType as LocalSectionType } from "@/components/programming/SectionEditor";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -72,7 +72,7 @@ function getWeekDates(date: Date): string[] {
 
 function programmingDayToData(day: ProgrammingDayWithSections): ProgrammingDayData {
   const sections: SectionData[] = day.sections.map((s) => {
-    const sectionTypeMap: Record<string, string> = {
+    const sectionTypeMap: Record<string, LocalSectionType> = {
       warmup: "warmup",
       strength: "strength",
       conditioning: "conditioning",
@@ -85,7 +85,7 @@ function programmingDayToData(day: ProgrammingDayWithSections): ProgrammingDayDa
     return {
       id: `section-${s.id}`,
       dbId: s.id,
-      type: sectionTypeMap[s.sectionType] || "conditioning",
+      type: sectionTypeMap[s.sectionType] ?? ("conditioning" as LocalSectionType),
       title: s.title,
       instructions: s.instructions || "",
       movements: s.movements || [],
@@ -108,7 +108,7 @@ function programmingDayToData(day: ProgrammingDayWithSections): ProgrammingDayDa
 }
 
 function sectionDataToApiBody(section: SectionData, orderIndex: number) {
-  const sectionTypeMap: Record<string, string> = {
+  const sectionTypeMap: Record<string, ApiSectionType> = {
     warmup: "warmup",
     strength: "strength",
     conditioning: "conditioning",
@@ -121,7 +121,7 @@ function sectionDataToApiBody(section: SectionData, orderIndex: number) {
   };
   return {
     orderIndex,
-    sectionType: sectionTypeMap[section.type] || "conditioning",
+    sectionType: sectionTypeMap[section.type] ?? ("conditioning" as const),
     title: section.title,
     instructions: section.instructions || null,
     timeCap: section.timeCap || null,

@@ -11,7 +11,7 @@ import {
   ChevronDown,
   ChevronUp,
 } from "lucide-react";
-import { getSectionTypeInfo, SectionData } from "./SectionEditor";
+import { getSectionTypeInfo, SectionData, type SectionType } from "./SectionEditor";
 import type { ProgrammingDayWithSections } from "@workspace/api-client-react";
 
 const LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
@@ -27,8 +27,8 @@ interface DayCardProps {
   animationDelay?: number;
 }
 
-function sectionTypeToUiType(sectionType: string): string {
-  const map: Record<string, string> = {
+function sectionTypeToUiType(sectionType: string): SectionType {
+  const map: Record<string, SectionType> = {
     warmup: "warmup",
     strength: "strength",
     conditioning: "conditioning",
@@ -38,7 +38,7 @@ function sectionTypeToUiType(sectionType: string): string {
     accessory: "accessory",
     custom: "custom",
   };
-  return map[sectionType] || "conditioning";
+  return map[sectionType] ?? "conditioning";
 }
 
 export function DayCard({

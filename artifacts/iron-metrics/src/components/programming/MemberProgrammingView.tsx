@@ -17,14 +17,14 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { getSectionTypeInfo } from "./SectionEditor";
+import { getSectionTypeInfo, type SectionType } from "./SectionEditor";
 import { useListSectionResults } from "@workspace/api-client-react";
 import type { ProgrammingDayWithSections, ProgrammingSection, WorkoutResult, Member } from "@workspace/api-client-react";
 
 const LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
-function sectionTypeToUiType(sectionType: string): string {
-  const map: Record<string, string> = {
+function sectionTypeToUiType(sectionType: string): SectionType {
+  const map: Record<string, SectionType> = {
     warmup: "warmup",
     strength: "strength",
     conditioning: "conditioning",
@@ -34,7 +34,7 @@ function sectionTypeToUiType(sectionType: string): string {
     accessory: "accessory",
     custom: "custom",
   };
-  return map[sectionType] || "conditioning";
+  return map[sectionType] ?? "conditioning";
 }
 
 function toDateString(d: Date): string {

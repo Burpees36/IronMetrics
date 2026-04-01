@@ -179,8 +179,8 @@ describe("Members Page", () => {
   });
 
   async function importAndRender() {
-    const mod = await import("../pages/Members");
-    const Members = mod.default || mod.Members;
+    const mod: Record<string, unknown> = await import("../pages/Members");
+    const Members = (mod.default || mod.Members) as React.ComponentType;
     const user = userEvent.setup();
     const result = render(
       <QueryClientProvider client={queryClient}>
