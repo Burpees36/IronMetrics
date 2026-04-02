@@ -316,5 +316,39 @@ describe("AI Task Generation", () => {
       const leadTasks = result.tasks.filter((t: any) => t.type === "leads");
       expect(leadTasks.length).toBe(4);
     });
+
+    it("sorts mixed categories: critical > high > billing > leads under cap", async () => {
+      mockMembers = [
+        {
+          id: 1, gymId: 1, status: "active", riskTier: "high",
+          firstName: "HighRisk", lastName: "Member", attendanceCount30d: 2,
+          lastVisitDate: new Date(Date.now() - 20 * 86400000),
+        },
+        {
+          id: 2, gymId: 1, status: "active", riskTier: "critical",
+          firstName: "CriticalRisk", lastName: "Member", attendanceCount30d: 0,
+          lastVisitDate: new Date(Date.now() - 35 * 86400000),
+        },
+        {
+          id: 3, gymId: 1, firstName: "Bill", lastName: "Payer", status: "active",
+          lastVisitDate: new Date(), attendanceCount30d: 10,
+        },
+      ];
+      mockSubscriptions = [{
+        id: 1, gymId: 1, memberId: 3, status: "past_due", planName: "Unlimited",
+      }];
+      mockLeads = [
+        { id: 1, gymId: 1, isStale: true, firstName: "Lead1", lastName: "Stale", source: "web" },
+        { id: 2, gymId: 1, isStale: true, firstName: "Lead2", lastName: "Stale", source: "web" },
+      ];
+      const result = await generateAiTasks(1);
+      expect(result.created).toBe(5);
+      const types = result.tasks.map((t: any) => t.type);
+      const critIdx = types.indexOf("outreach");
+      const billingIdx = types.indexOf("billing");
+      const leadsIdx = types.indexOf("leads");
+      expect(critIdx).toBeLessThan(billingIdx);
+      expect(billingIdx).toBeLessThan(leadsIdx);
+    });
   });
 });
