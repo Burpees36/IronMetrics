@@ -3,7 +3,7 @@ import { useGym } from "@/store/GymContext";
 import { useGetIntelligenceOverview } from "@workspace/api-client-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
-import { Loader2, Activity, ShieldAlert, Sparkles, TrendingUp, TrendingDown, Zap, AlertCircle, CheckCircle2, Circle, Clock } from "lucide-react";
+import { Loader2, Activity, ShieldAlert, Sparkles, TrendingUp, TrendingDown, Zap, AlertCircle, CheckCircle2, Circle, Clock, BarChart3, Info } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
 import { useIsMobile } from "@/hooks/useMobile";
 
@@ -36,6 +36,19 @@ function useRsiHistory(gymId: number | null, window: string) {
   });
 }
 
+function useBenchmarks(gymId: number | null) {
+  return useQuery({
+    queryKey: ["benchmarks", gymId],
+    queryFn: async () => {
+      const res = await fetch(`${API_BASE}/gyms/${gymId}/intelligence/benchmarks`, { credentials: "include" });
+      if (!res.ok) return null;
+      return res.json();
+    },
+    enabled: !!gymId,
+    staleTime: 60000,
+  });
+}
+
 function useToggleChecklist() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -56,7 +69,7 @@ function useToggleChecklist() {
 
 export function Intelligence() {
   const { activeGymId } = useGym();
-  const [activeTab, setActiveTab] = useState<"rsi" | "radar" | "interventions">("rsi");
+  const [activeTab, setActiveTab] = useState<"rsi" | "radar" | "interventions" | "benchmarks">("rsi");
   const [trendWindow, setTrendWindow] = useState<"30d" | "90d" | "all">("90d");
   const isMobile = useIsMobile();
   
@@ -66,6 +79,7 @@ export function Intelligence() {
 
   const { data: rsiHistory } = useRsiHistory(activeGymId, trendWindow);
   const { data: recData } = useRecommendationExecution(activeGymId);
+  const { data: benchmarkData } = useBenchmarks(activeGymId);
   const toggleChecklist = useToggleChecklist();
 
   if (!activeGymId) {
@@ -113,7 +127,7 @@ export function Intelligence() {
       </header>
 
       <div className="flex items-center gap-1 md:gap-2 border-b border-border overflow-x-auto scrollbar-none -mx-4 px-4 md:mx-0 md:px-0">
-        {(["rsi", "radar", "interventions"] as const).map((tab) => (
+        {(["rsi", "radar", "interventions", "benchmarks"] as const).map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
@@ -124,6 +138,7 @@ export function Intelligence() {
             {tab === "rsi" && "RSI Score"}
             {tab === "radar" && "Risk Radar"}
             {tab === "interventions" && "Interventions"}
+            {tab === "benchmarks" && "How You Compare"}
             {activeTab === tab && (
               <motion.div layoutId="intel-tab" className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary" />
             )}
@@ -530,8 +545,179 @@ export function Intelligence() {
               )}
             </div>
           )}
+
+          {activeTab === "benchmarks" && (
+            <BenchmarkSection data={benchmarkData} />
+          )}
         </motion.div>
       </AnimatePresence>
+    </div>
+  );
+}
+
+function formatBenchmarkValue(value: number, format: string): string {
+  if (format === "currency") return `$${Math.round(value)}`;
+  if (format === "percent") return `${value.toFixed(1)}%`;
+  if (format === "months") return value < 1 ? `${Math.round(value * 30)}d` : `${value.toFixed(1)} mo`;
+  return value.toFixed(1);
+}
+
+function BenchmarkBar({ comparison }: { comparison: any }) {
+  const { gymValue, industryMedian, p25, p75, percentileRank, percentileLabel, label, format, lowerIsBetter } = comparison;
+
+  const hasData = industryMedian !== null;
+  const allValues = hasData ? [p25, industryMedian, p75, gymValue] : [gymValue];
+  const min = Math.min(...allValues) * 0.8;
+  const max = Math.max(...allValues) * 1.2 || 1;
+  const range = max - min || 1;
+
+  const gymPos = ((gymValue - min) / range) * 100;
+  const medianPos = hasData ? ((industryMedian - min) / range) * 100 : 0;
+
+  const badgeColor = percentileRank === null ? "bg-muted text-muted-foreground" :
+    percentileRank >= 75 ? "bg-emerald-500/20 text-emerald-500" :
+    percentileRank >= 50 ? "bg-blue-500/20 text-blue-500" :
+    percentileRank >= 25 ? "bg-yellow-500/20 text-yellow-500" :
+    "bg-destructive/20 text-destructive";
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="bg-card border border-border rounded-xl p-4 md:p-5"
+    >
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
+        <div>
+          <h4 className="text-sm font-semibold text-foreground">{label}</h4>
+          <div className="flex items-center gap-2 mt-1">
+            <span className="text-lg font-bold text-foreground">{formatBenchmarkValue(gymValue, format)}</span>
+            {hasData && (
+              <span className="text-xs text-muted-foreground">
+                vs {formatBenchmarkValue(industryMedian, format)} median
+              </span>
+            )}
+          </div>
+        </div>
+        {percentileLabel && (
+          <span className={`px-3 py-1 rounded-full text-xs font-bold ${badgeColor} whitespace-nowrap`}>
+            {percentileLabel}
+          </span>
+        )}
+      </div>
+
+      {hasData ? (
+        <div className="relative h-8">
+          <div className="absolute inset-x-0 top-3 h-2 bg-muted rounded-full overflow-hidden">
+            <div
+              className="absolute h-full bg-muted-foreground/20 rounded-full"
+              style={{
+                left: `${Math.max(0, ((p25 - min) / range) * 100)}%`,
+                width: `${Math.max(1, ((p75 - p25) / range) * 100)}%`,
+              }}
+            />
+          </div>
+
+          <div
+            className="absolute top-1 w-0.5 h-6 bg-muted-foreground/40"
+            style={{ left: `${Math.max(2, Math.min(98, medianPos))}%` }}
+            title={`Industry Median: ${formatBenchmarkValue(industryMedian, format)}`}
+          />
+
+          <motion.div
+            initial={{ scale: 0 }}
+            animate={{ scale: 1 }}
+            transition={{ delay: 0.2 }}
+            className="absolute top-1.5 w-4 h-4 rounded-full bg-primary border-2 border-background shadow-md -ml-2"
+            style={{ left: `${Math.max(2, Math.min(98, gymPos))}%` }}
+            title={`Your gym: ${formatBenchmarkValue(gymValue, format)}`}
+          />
+        </div>
+      ) : (
+        <div className="h-8 flex items-center">
+          <div className="w-full h-2 bg-muted rounded-full" />
+        </div>
+      )}
+
+      {hasData && (
+        <div className="flex justify-between text-[10px] text-muted-foreground mt-1">
+          <span>P25: {formatBenchmarkValue(p25, format)}</span>
+          <span>P75: {formatBenchmarkValue(p75, format)}</span>
+        </div>
+      )}
+    </motion.div>
+  );
+}
+
+function BenchmarkSection({ data }: { data: any }) {
+  if (!data) {
+    return (
+      <div className="text-center py-12">
+        <BarChart3 className="h-12 w-12 text-muted-foreground/50 mx-auto mb-4" />
+        <h3 className="text-lg font-semibold text-foreground">Benchmarks Loading</h3>
+        <p className="text-sm text-muted-foreground mt-1">Industry benchmarks are being computed...</p>
+      </div>
+    );
+  }
+
+  if (data.insufficientData) {
+    return (
+      <div className="space-y-6">
+        <div className="bg-card border border-border rounded-2xl p-6 md:p-8 text-center">
+          <Info className="h-12 w-12 text-muted-foreground/50 mx-auto mb-4" />
+          <h3 className="text-lg font-semibold text-foreground mb-2">Not Enough Data Yet</h3>
+          <p className="text-sm text-muted-foreground max-w-md mx-auto">
+            {data.insufficientMessage}
+          </p>
+          <div className="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-muted rounded-lg text-xs text-muted-foreground">
+            <span>Your size category: <strong className="text-foreground">{data.sizeLabel}</strong></span>
+            <span>&middot;</span>
+            <span>{data.sampleCount} gym{data.sampleCount !== 1 ? "s" : ""} in segment</span>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {(data.comparisons || []).map((c: any) => (
+            <div key={c.metric} className="bg-card border border-border rounded-xl p-4">
+              <h4 className="text-sm font-medium text-muted-foreground mb-1">{c.label}</h4>
+              <p className="text-xl font-bold text-foreground">{formatBenchmarkValue(c.gymValue, c.format)}</p>
+              <p className="text-xs text-muted-foreground mt-1">Benchmark comparison pending</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <h3 className="text-lg font-semibold text-foreground">Industry Benchmarks</h3>
+          <p className="text-sm text-muted-foreground">
+            Compared against {data.sampleCount} gyms in the <strong>{data.sizeLabel}</strong> segment.
+          </p>
+        </div>
+        {data.computedAt && (
+          <span className="text-xs text-muted-foreground bg-muted px-3 py-1 rounded-lg">
+            Updated {new Date(data.computedAt).toLocaleDateString()}
+          </span>
+        )}
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {(data.comparisons || []).map((comparison: any, i: number) => (
+          <BenchmarkBar key={comparison.metric} comparison={comparison} />
+        ))}
+      </div>
+
+      <div className="bg-muted/50 border border-border rounded-xl p-4 flex items-start gap-3">
+        <Info className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
+        <p className="text-xs text-muted-foreground">
+          Benchmarks are computed from anonymized, aggregated data across all gyms on the platform.
+          No individual gym data is ever exposed. Percentile rankings show where your gym falls
+          relative to others of similar size.
+        </p>
+      </div>
     </div>
   );
 }

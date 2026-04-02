@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from "react";
 import { useGym } from "@/store/GymContext";
 import { useGetDashboardStats, useGetMorningBriefing } from "@workspace/api-client-react";
+import { useQuery } from "@tanstack/react-query";
 import {
   Users, TrendingUp, AlertTriangle, ArrowUpRight, ArrowDownRight,
   Loader2, BrainCircuit, Rocket, Sun, CreditCard, UserCheck,
   ChevronRight, Sparkles, ChevronDown, UserPlus, Clock, ShieldCheck,
-  Zap, CheckCircle2, Mail, MessageSquare, ArrowRight
+  Zap, CheckCircle2, Mail, MessageSquare, ArrowRight, BarChart3
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { AreaChart, Area, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
@@ -20,6 +21,8 @@ import { RetentionActivityCard } from "@/components/dashboard/RetentionActivityC
 import { cn } from "@/lib/utils";
 
 const API_BASE = import.meta.env.VITE_API_URL || "";
+const BASE_URL = import.meta.env.BASE_URL || "/";
+const BENCHMARK_API = `${BASE_URL}api`.replace(/\/+/g, "/");
 
 function OnboardingBanner({ gymId }: { gymId: number }) {
   const [show, setShow] = useState(false);
@@ -225,6 +228,66 @@ function buildActionItems(
       actionLink: item.link || null,
     };
   });
+}
+
+function BenchmarkHighlightsCard({ gymId }: { gymId: number }) {
+  const { data } = useQuery({
+    queryKey: ["benchmarks", gymId],
+    queryFn: async () => {
+      const res = await fetch(`${BENCHMARK_API}/gyms/${gymId}/intelligence/benchmarks`, { credentials: "include" });
+      if (!res.ok) return null;
+      return res.json();
+    },
+    enabled: !!gymId,
+    staleTime: 60000,
+  });
+
+  if (!data || data.insufficientData) return null;
+
+  const highlights = (data.comparisons || [])
+    .filter((c: any) => c.percentileRank !== null)
+    .sort((a: any, b: any) => b.percentileRank - a.percentileRank)
+    .slice(0, 3);
+
+  if (highlights.length === 0) return null;
+
+  return (
+    <Card className="shadow-sm">
+      <div className="p-4 border-b border-border flex items-center justify-between">
+        <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+          <BarChart3 className="w-4 h-4 text-primary" />
+          How You Compare
+        </h3>
+        <Link href="/intelligence">
+          <Button variant="ghost" size="sm" className="h-6 text-xs text-muted-foreground">View All</Button>
+        </Link>
+      </div>
+      <div className="p-4 space-y-3">
+        {highlights.map((h: any) => {
+          const badgeColor = h.percentileRank >= 75 ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/20" :
+            h.percentileRank >= 50 ? "bg-blue-500/15 text-blue-600 dark:text-blue-400 border-blue-500/20" :
+            h.percentileRank >= 25 ? "bg-yellow-500/15 text-yellow-600 dark:text-yellow-400 border-yellow-500/20" :
+            "bg-destructive/15 text-destructive border-destructive/20";
+
+          const verb = h.lowerIsBetter
+            ? (h.percentileRank >= 50 ? "better than" : "worse than")
+            : (h.percentileRank >= 50 ? "better than" : "behind");
+
+          return (
+            <div key={h.metric} className="flex items-center justify-between gap-3">
+              <span className="text-sm text-muted-foreground truncate">{h.label}</span>
+              <Badge variant="outline" className={cn("text-[11px] font-medium whitespace-nowrap", badgeColor)}>
+                {verb} {h.percentileRank}% of gyms
+              </Badge>
+            </div>
+          );
+        })}
+        <p className="text-[10px] text-muted-foreground pt-1">
+          vs. {data.sampleCount} similar-sized gyms
+        </p>
+      </div>
+    </Card>
+  );
 }
 
 export function Dashboard() {
@@ -504,6 +567,8 @@ export function Dashboard() {
               </ResponsiveContainer>
             </div>
           </Card>
+
+          <BenchmarkHighlightsCard gymId={activeGymId} />
 
           <Card className="shadow-sm">
             <div className="p-4 border-b border-border">

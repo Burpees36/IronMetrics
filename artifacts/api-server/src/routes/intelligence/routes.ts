@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { eq, and, count, sql, gte, desc, asc } from "drizzle-orm";
-import { db, membersTable, subscriptionsTable, attendanceTable, leadsTable, classesTable, rsiSnapshotsTable } from "@workspace/db";
+import { db, membersTable, subscriptionsTable, attendanceTable, leadsTable, classesTable, rsiSnapshotsTable, benchmarksTable } from "@workspace/db";
 import { computeRSI } from "./computations";
 import { getGymMetrics, getRiskProfiles, getInterventions, computeRevenueForecast } from "./metrics";
 import { computeBlendedMRR, computeBlendedEngagement, isActiveBillableMember } from "../../blendedMetrics";
@@ -423,6 +423,130 @@ router.get("/gyms/:gymId/intelligence/morning-briefing", async (req, res): Promi
   } catch (err) {
     console.error("[intelligence/morning-briefing] Failed to generate briefing:", err);
     res.status(500).json({ error: "Failed to generate morning briefing. Please try again." });
+  }
+});
+
+router.get("/gyms/:gymId/intelligence/benchmarks", async (req, res): Promise<void> => {
+  const gymId = parseGymId(req.params);
+  if (!gymId) { res.status(400).json({ error: "Invalid gym ID" }); return; }
+
+  try {
+    const metrics = await getGymMetrics(gymId);
+    const rsi = computeRSI(metrics.churnRate, metrics.avgRev, metrics.netGrowth, metrics.avgTenure);
+    const engagement = await computeBlendedEngagement(gymId);
+
+    const activeMemberCount = metrics.active;
+    const sizeSegment = activeMemberCount < 100 ? "small" : activeMemberCount <= 250 ? "medium" : "large";
+    const sizeLabel = sizeSegment === "small" ? "Small (<100 members)" : sizeSegment === "medium" ? "Medium (100-250 members)" : "Large (250+ members)";
+
+    const latestBenchmarks = await db
+      .select()
+      .from(benchmarksTable)
+      .where(eq(benchmarksTable.sizeSegment, sizeSegment))
+      .orderBy(desc(benchmarksTable.computedAt))
+      .limit(5);
+
+    const mostRecentDate = latestBenchmarks.length > 0 ? latestBenchmarks[0].computedAt : null;
+    const currentBenchmarks = mostRecentDate
+      ? latestBenchmarks.filter(b => b.computedAt?.getTime() === mostRecentDate.getTime())
+      : [];
+
+    const sampleCount = currentBenchmarks.length > 0 ? currentBenchmarks[0].sampleCount : 0;
+    const insufficientData = sampleCount < 5;
+
+    const gymValues: Record<string, number> = {
+      rsiScore: rsi.score,
+      churnRate: metrics.churnRate,
+      avgRevPerMember: metrics.avgRev,
+      avgTenure: metrics.avgTenure,
+      engagementRate: engagement.engagementRate,
+    };
+
+    const metricLabels: Record<string, string> = {
+      rsiScore: "RSI Score",
+      churnRate: "Churn Rate",
+      avgRevPerMember: "Avg Revenue/Member",
+      avgTenure: "Avg Tenure (months)",
+      engagementRate: "Engagement Rate",
+    };
+
+    const metricFormats: Record<string, string> = {
+      rsiScore: "score",
+      churnRate: "percent",
+      avgRevPerMember: "currency",
+      avgTenure: "months",
+      engagementRate: "percent",
+    };
+
+    const lowerIsBetter: Record<string, boolean> = {
+      rsiScore: false,
+      churnRate: true,
+      avgRevPerMember: false,
+      avgTenure: false,
+      engagementRate: false,
+    };
+
+    function computePercentileRank(value: number, benchmarkRow: typeof currentBenchmarks[0] | undefined, metric: string): number | null {
+      if (!benchmarkRow || insufficientData) return null;
+      const p25 = parseFloat(benchmarkRow.p25 || "0");
+      const p50 = parseFloat(benchmarkRow.p50 || "0");
+      const p75 = parseFloat(benchmarkRow.p75 || "0");
+      const p90 = parseFloat(benchmarkRow.p90 || "0");
+
+      let rank: number;
+      if (value <= p25) rank = 25 * (value / Math.max(p25, 0.01));
+      else if (value <= p50) rank = 25 + 25 * ((value - p25) / Math.max(p50 - p25, 0.01));
+      else if (value <= p75) rank = 50 + 25 * ((value - p50) / Math.max(p75 - p50, 0.01));
+      else if (value <= p90) rank = 75 + 15 * ((value - p75) / Math.max(p90 - p75, 0.01));
+      else rank = 90 + 10 * Math.min(1, (value - p90) / Math.max(p90 * 0.2, 0.01));
+
+      if (lowerIsBetter[metric]) rank = 100 - rank;
+      return Math.round(Math.max(0, Math.min(100, rank)));
+    }
+
+    function getPercentileLabel(rank: number | null): string | null {
+      if (rank === null) return null;
+      if (rank >= 85) return "Top 15%";
+      if (rank >= 75) return "Top 25%";
+      if (rank >= 50) return "Above Average";
+      if (rank >= 25) return "Below Average";
+      return "Bottom 25%";
+    }
+
+    const comparisons = Object.keys(gymValues).map(metric => {
+      const benchmarkRow = currentBenchmarks.find(b => b.metric === metric);
+      const gymValue = gymValues[metric];
+      const percentileRank = computePercentileRank(gymValue, benchmarkRow, metric);
+      const percentileLabel = getPercentileLabel(percentileRank);
+
+      return {
+        metric,
+        label: metricLabels[metric],
+        format: metricFormats[metric],
+        gymValue,
+        industryMedian: benchmarkRow && !insufficientData ? parseFloat(benchmarkRow.p50 || "0") : null,
+        p25: benchmarkRow && !insufficientData ? parseFloat(benchmarkRow.p25 || "0") : null,
+        p75: benchmarkRow && !insufficientData ? parseFloat(benchmarkRow.p75 || "0") : null,
+        p90: benchmarkRow && !insufficientData ? parseFloat(benchmarkRow.p90 || "0") : null,
+        percentileRank,
+        percentileLabel,
+        lowerIsBetter: lowerIsBetter[metric] ?? false,
+      };
+    });
+
+    res.json({
+      gymId,
+      sizeSegment,
+      sizeLabel,
+      sampleCount,
+      insufficientData,
+      insufficientMessage: insufficientData ? "Not enough data yet — benchmarks require at least 5 gyms in your size category." : null,
+      computedAt: mostRecentDate?.toISOString() ?? null,
+      comparisons,
+    });
+  } catch (err) {
+    console.error("[intelligence/benchmarks] Failed to compute benchmarks:", err);
+    res.status(500).json({ error: "Failed to compute benchmarks. Please try again." });
   }
 });
 
