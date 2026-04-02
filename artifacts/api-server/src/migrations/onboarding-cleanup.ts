@@ -3,9 +3,12 @@ import {
   db,
   aiTasksTable,
   retentionSequencesTable,
+  retentionSequenceStepsTable,
   retentionSequenceEventsTable,
   memberSequenceEnrollmentsTable,
+  gymsTable,
 } from "@workspace/db";
+import { DEFAULT_SEQUENCES } from "../routes/retention";
 
 export async function runOnboardingMigrationCleanup(): Promise<void> {
   try {
@@ -53,6 +56,55 @@ export async function runOnboardingMigrationCleanup(): Promise<void> {
         .where(inArray(retentionSequencesTable.id, sequenceIds));
 
       console.log(`[onboarding-cleanup] Removed ${newMemberSequences.length} "New Member Support" sequence(s) and ${enrollments.length} enrollment(s)`);
+    }
+
+    const allGyms = await db.select({ id: gymsTable.id }).from(gymsTable);
+    const allSequences = await db
+      .select({ gymId: retentionSequencesTable.gymId, type: retentionSequencesTable.type })
+      .from(retentionSequencesTable);
+
+    const gymTypeMap = new Map<number, Set<string>>();
+    for (const seq of allSequences) {
+      if (!gymTypeMap.has(seq.gymId)) {
+        gymTypeMap.set(seq.gymId, new Set());
+      }
+      gymTypeMap.get(seq.gymId)!.add(seq.type);
+    }
+
+    let totalSeeded = 0;
+    for (const gym of allGyms) {
+      const existingTypes = gymTypeMap.get(gym.id) ?? new Set();
+      if (existingTypes.size === 0) continue;
+
+      const toSeed = DEFAULT_SEQUENCES.filter((def) => !existingTypes.has(def.type));
+
+      for (const def of toSeed) {
+        const [seq] = await db.insert(retentionSequencesTable).values({
+          gymId: gym.id,
+          name: def.name,
+          description: def.description,
+          type: def.type,
+          isEnabled: false,
+          triggerConfig: def.triggerConfig,
+          cooldownDays: def.cooldownDays,
+        }).returning();
+
+        for (const step of def.steps) {
+          await db.insert(retentionSequenceStepsTable).values({
+            sequenceId: seq.id,
+            stepOrder: step.stepOrder,
+            actionType: step.actionType,
+            delayDays: step.delayDays,
+            config: step.config,
+          });
+        }
+
+        totalSeeded++;
+      }
+    }
+
+    if (totalSeeded > 0) {
+      console.log(`[onboarding-cleanup] Seeded ${totalSeeded} missing default sequence(s) across ${allGyms.length} gym(s)`);
     }
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);

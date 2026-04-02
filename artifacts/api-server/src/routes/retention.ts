@@ -11,7 +11,7 @@ const router: IRouter = Router();
 
 router.use("/gyms/:gymId", requireGymAccess);
 
-const DEFAULT_SEQUENCES = [
+export const DEFAULT_SEQUENCES = [
   {
     name: "Miss You",
     description: "Re-engage members who have stopped attending",
