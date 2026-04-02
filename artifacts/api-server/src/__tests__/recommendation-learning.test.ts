@@ -175,7 +175,7 @@ describe("ensureRecommendationCards", () => {
   it("creates multiple cards for different types", async () => {
     await ensureRecommendationCards(1, "2026-03-01", [
       { interventionType: "retention", headline: "Reach out", executionChecklist: ["Task 1"] },
-      { interventionType: "retention", headline: "Welcome new", executionChecklist: ["Task A"] },
+      { interventionType: "coaching", headline: "Improve programming", executionChecklist: ["Task A"] },
     ], { baselineMembers: 50, baselineMrr: 5000, baselineChurn: 5 });
     expect(mockCards).toHaveLength(2);
   });
