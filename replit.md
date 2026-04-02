@@ -2,7 +2,7 @@
 
 ## Overview
 
-Iron Metrics is a full production-grade gym management SaaS platform designed for CrossFit and functional fitness gyms. It provides comprehensive tools for gym operations, including member management, billing, scheduling, programming, lead management, and an AI-powered assistant. The platform aims to streamline administrative tasks, enhance member engagement, and provide actionable intelligence for gym owners.
+Iron Metrics is a full production-grade gym management SaaS platform designed for CrossFit and functional fitness gyms. It provides comprehensive tools for gym operations, including member management, billing, scheduling, programming, lead management, and an AI-powered assistant. The platform aims to streamline administrative tasks, enhance member engagement, and provide actionable intelligence for gym owners, enabling them to optimize operations and improve member retention.
 
 ## User Preferences
 
@@ -10,18 +10,15 @@ I prefer concise and direct communication. When making changes, please prioritiz
 
 ## System Architecture
 
-Iron Metrics is built as a pnpm workspace monorepo using TypeScript.
+Iron Metrics is built as a pnpm workspace monorepo using TypeScript, adhering to a structured architecture for scalability and maintainability.
 
 **Monorepo Structure:**
 - `artifacts/api-server/`: Express 5 API server.
 - `artifacts/iron-metrics/`: React + Vite frontend.
-- `artifacts/mockup-sandbox/`: Design prototyping sandbox (not part of sellable product).
 - `lib/`: Shared libraries including OpenAPI spec, generated API clients, Drizzle ORM schema, and Replit Auth hooks.
 
-**Audit Reference:** `.local/tier1-beta-audit.md` — current source of truth for Tier 1 beta readiness assessment. The old `IRON_METRICS_ANALYSIS.md` has been removed as stale.
-
 **Technology Stack:**
-- **Node.js:** 24, with pnpm as the package manager.
+- **Node.js:** 24, with pnpm.
 - **TypeScript:** 5.9.
 - **API:** Express 5.
 - **Frontend:** React, Vite, TailwindCSS v4, shadcn/ui.
@@ -29,9 +26,9 @@ Iron Metrics is built as a pnpm workspace monorepo using TypeScript.
 - **Validation:** Zod (`zod/v4`).
 - **API Codegen:** Orval (from OpenAPI spec).
 - **Auth:** Replit Auth (OIDC with PKCE).
-- **UI/UX Design:** Premium SaaS theme with light/dark mode toggle. Dark mode uses `hsl(224 35% 6%)` background, `hsl(224 35% 9%)` cards; light mode uses `hsl(210 20% 98%)` background with white cards. Both modes use 2xl rounded corners and a glass-panel effect. Primary accent is emerald green (`#10B981` / `hsl(160 84% 45%)` dark, `hsl(160 84% 39%)` light). Pro tier uses violet accent. Amber/yellow reserved for warning/caution semantic states only. Theme is managed by `ThemeProvider` context (`src/store/ThemeContext.tsx`), persisted to `localStorage` key `iron-metrics-theme`, and respects `prefers-color-scheme` on first visit. An inline script in `index.html` prevents flash on load. Toggle is in the landing page navbar (desktop + mobile) and the authenticated sidebar.
 
-**Key Features & Implementation:**
+**UI/UX Design:**
+A premium SaaS theme with light/dark mode toggle, 2xl rounded corners, and a glass-panel effect. The primary accent is emerald green, with violet for the Pro tier. Amber/yellow is reserved for warnings. Theme management uses `ThemeProvider` context, persisted to `localStorage`, and respects `prefers-color-scheme`.
 
 - **Subscription Tiers & Feature Gating:** Three tiers (Insights $99/mo, Growth $199/mo, Pro $299/mo) with beta access flag. Tier config is the single source of truth in `artifacts/api-server/src/tierConfig.ts`. Backend middleware `requireTierAccess` gates gated routes. Frontend uses `useGymTier` hook and `TierGate` component to show `UpgradePrompt` on locked pages. Sidebar nav items show a lock icon for locked routes. Three Stripe Products and Prices are created automatically on server startup (`platformStripeService.ts`). Platform subscription management via `/api/gyms/:gymId/platform-billing/*` endpoints. Stripe Checkout + Billing Portal for subscription management. Webhook handlers for `customer.subscription.*` events update the gym's `subscriptionTier` field. `isBetaAccess` flag grants free Pro access (toggled via `/api/admin/gyms/:gymId/beta-access` with `PLATFORM_OWNER_SECRET` header). Cancellation sets `platformCancelAtPeriodEnd` and downgrades at period end via webhook.
 - **DB fields added to gyms:** `subscriptionTier` (default: "none"), `isBetaAccess` (boolean), `stripeGymCustomerId`, `platformSubscriptionId`, `platformCancelAtPeriodEnd`, `platformCurrentPeriodEnd`.
@@ -58,32 +55,4 @@ Iron Metrics is built as a pnpm workspace monorepo using TypeScript.
 - **Data Integrity:** Drizzle numeric fields are handled as strings and parsed to floats. Backend returns parsed decimal dollars for subscription amounts. PostgreSQL `COUNT(*)` returns bigint (string in JS) — all count results are wrapped with `Number()` across all route files. Tenure calculations fall back to `createdAt` when `joinDate` is NULL. Revenue trend uses subscription MRR for current month when no invoices exist.
 - **Database Indexes:** Foreign key columns across all tables have B-tree indexes for query performance (attendance, members, member_notes, timeline_events, leads, lead_activities, workouts, workout_results, programming_days, subscriptions). Composite indexes on common query patterns (e.g., gym+status, gym+date, member+date).
 - **Date Columns:** All date-only fields use PostgreSQL `date` type with `mode: "string"` in Drizzle, returning/accepting YYYY-MM-DD strings in the API (joinDate, birthDate, workoutDate, nextFollowUpDate, currentPeriodStart/End, dueDate, programming date).
-
-## Wodify Integration
-- **Field Map:** `docs/integrations/wodify-field-map.ts` — source-of-truth mapping between Wodify API/CSV entities and Iron Metrics schema. LIVE-VERIFIED 2026-03-25 against api.wodify.com/v1.
-- **Integration Types:** `artifacts/api-server/src/routes/integrations/wodify/types.ts` — TypeScript interfaces for verified Wodify API response shapes (WodifyClient, WodifyMembership, WodifyClass, WodifyProgram, WodifyLead) and normalized Iron Metrics forms.
-- **API Probe:** `artifacts/api-server/src/routes/integrations/wodify/probe.ts` — one-time endpoint discovery script.
-- **Available Endpoints:** GET /clients (73 fields), GET /memberships (50 fields), GET /classes (69 fields), GET /programs (12 fields), GET /leads (47 fields). Pagination: ?page=N, 100/page.
-- **Unavailable:** /invoices, /attendance, /class-signins, /reservations, /client-statuses, /revenue-categories (all 403).
-- **Tier 1 Data Gap SOLVED:** /clients includes attendance summary: last_attendance, days_since_last_attendance, total_class_sign_ins, is_at_risk, current_weekstreak. No dedicated attendance endpoint needed for Tier 1 risk scores.
-- **Sync Order:** Clients → Memberships → Programs (optional) → Classes (Growth) → Leads (Growth).
-- **MRR Calculation:** membership.payment_plan.renewal_payment_option.renewal_cost (for auto-renew) or initial_payment_option.initial_cost. Interval from initial_payment_interval_time_unit/length.
-- **Schema Changes Needed:** `wodify_client_id` column on members, `wodify_api_key` on gyms, 'wodify-api' as sync_runs source.
-- **Observed Client Statuses:** 'Active', 'Inactive'. Date sentinel: '1900-01-01' = null/not-set.
-- **Remaining Questions:** Date range filtering params, rate limits (none observed).
-
-## External Dependencies
-
-- **Replit Auth:** For user authentication and authorization.
-- **Stripe:** For payment processing, subscriptions, invoices, and refunds. Integrated via Replit integration, uses `STRIPE_SECRET_KEY`, `STRIPE_PUBLISHABLE_KEY`, `STRIPE_ACCOUNT_ID`. Webhooks are managed.
-- **Resend/SendGrid:** For outbound email services (platform-wide key, gym-configured sender details).
-- **PostgreSQL:** Primary database.
-- **Vite:** Frontend build tool.
-- **TailwindCSS:** CSS framework.
-- **shadcn/ui:** UI component library.
-- **Recharts:** For charting and data visualization.
-- **Framer Motion:** For animations.
-- **Orval:** For API client code generation from OpenAPI spec.
-- **Zod:** For schema validation.
-- **PapaParse:** Client-side CSV parsing.
-- **express-rate-limit:** For API rate limiting.
+- **Dev Preview Bypass:** Development-only screenshot preview bypass via `previewMiddleware.ts`. Adding `?preview=1` to any route injects a mock user session and auto-selects the first gym, allowing the agent screenshot tool to render authenticated dashboard content. Completely disabled when `NODE_ENV === "production"`. Uses cookie persistence (`__dev_preview`) for SPA navigation continuity.

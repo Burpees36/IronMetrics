@@ -42,7 +42,7 @@ const queryClient = new QueryClient({
 
 function ProtectedRoute({ component: Component }: { component: React.ElementType }) {
   const { isAuthenticated, isLoading } = useAuth();
-  const { activeGymId } = useGym();
+  const { activeGymId, isGymLoading } = useGym();
   const [location, setLocation] = useLocation();
 
   React.useEffect(() => {
@@ -52,12 +52,12 @@ function ProtectedRoute({ component: Component }: { component: React.ElementType
   }, [isLoading, isAuthenticated, setLocation]);
 
   React.useEffect(() => {
-    if (!isLoading && isAuthenticated && !activeGymId && location !== "/select-gym") {
+    if (!isLoading && isAuthenticated && !isGymLoading && !activeGymId && location !== "/select-gym") {
       setLocation("/select-gym");
     }
-  }, [isLoading, isAuthenticated, activeGymId, location, setLocation]);
+  }, [isLoading, isAuthenticated, isGymLoading, activeGymId, location, setLocation]);
 
-  if (isLoading) return null;
+  if (isLoading || isGymLoading) return null;
   if (!isAuthenticated) return null;
 
   return (
