@@ -499,12 +499,7 @@ export function Dashboard() {
                   </div>
                   <span className="text-sm text-muted-foreground">Engagement Rate</span>
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium text-foreground">{stats.engagementRate.toFixed(1)}%</span>
-                  <span className={cn("text-xs", stats.engagementChange >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-destructive")}>
-                    {stats.engagementChange >= 0 ? "+" : ""}{stats.engagementChange.toFixed(1)}pp
-                  </span>
-                </div>
+                <span className="text-sm font-medium text-foreground">{stats.engagementRate.toFixed(1)}%</span>
               </div>
 
               <div className="flex items-center justify-between">
@@ -524,12 +519,7 @@ export function Dashboard() {
                   </div>
                   <span className="text-sm text-muted-foreground">At-Risk Members</span>
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium text-foreground">{stats.atRiskMembers}</span>
-                  {stats.atRiskCritical > 0 && (
-                    <span className="text-xs text-destructive">{stats.atRiskCritical} critical</span>
-                  )}
-                </div>
+                <span className="text-sm font-medium text-foreground">{stats.atRiskMembers}</span>
               </div>
 
               <div className="flex items-center justify-between">
