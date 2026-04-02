@@ -2867,8 +2867,8 @@ export const GetIntelligenceOverviewResponse = zod.object({
   rsi: zod.object({
     score: zod.number(),
     band: zod.enum(["Strong", "Moderate", "Fragile"]),
-    trend30d: zod.number(),
-    trend90d: zod.number(),
+    trend30d: zod.number().optional(),
+    trend90d: zod.number().optional(),
     components: zod.object({
       churnRate: zod.number(),
       avgRevPerMember: zod.number(),
@@ -2884,6 +2884,7 @@ export const GetIntelligenceOverviewResponse = zod.object({
         contribution: zod.number(),
       }),
     ),
+    trendInsufficient: zod.boolean().optional(),
     insight: zod.string(),
   }),
   topRisks: zod.array(
@@ -2953,8 +2954,8 @@ export const GetRetentionStabilityIndexParams = zod.object({
 export const GetRetentionStabilityIndexResponse = zod.object({
   score: zod.number(),
   band: zod.enum(["Strong", "Moderate", "Fragile"]),
-  trend30d: zod.number(),
-  trend90d: zod.number(),
+  trend30d: zod.number().optional(),
+  trend90d: zod.number().optional(),
   components: zod.object({
     churnRate: zod.number(),
     avgRevPerMember: zod.number(),
@@ -2970,7 +2971,35 @@ export const GetRetentionStabilityIndexResponse = zod.object({
       contribution: zod.number(),
     }),
   ),
+  trendInsufficient: zod.boolean().optional(),
   insight: zod.string(),
+});
+
+/**
+ * @summary Get RSI historical data points
+ */
+export const GetRsiHistoryParams = zod.object({
+  gymId: zod.coerce.number(),
+});
+
+export const getRsiHistoryQueryWindowDefault = `90d`;
+
+export const GetRsiHistoryQueryParams = zod.object({
+  window: zod
+    .enum(["30d", "90d", "all"])
+    .default(getRsiHistoryQueryWindowDefault),
+});
+
+export const GetRsiHistoryResponse = zod.object({
+  window: zod.string(),
+  dataPoints: zod.array(
+    zod.object({
+      date: zod.string(),
+      score: zod.number(),
+      band: zod.string(),
+    }),
+  ),
+  insufficient: zod.boolean(),
 });
 
 /**
@@ -3374,6 +3403,8 @@ export const GetDashboardStatsResponse = zod.object({
   collectionRate: zod.number(),
   rsiScore: zod.number(),
   rsiBand: zod.string(),
+  rsiTrend30d: zod.number().nullish(),
+  rsiTrendInsufficient: zod.boolean().optional(),
   revenueByMonth: zod.array(
     zod.object({
       month: zod.string(),

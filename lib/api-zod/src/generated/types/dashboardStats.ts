@@ -33,6 +33,8 @@ export interface DashboardStats {
   collectionRate: number;
   rsiScore: number;
   rsiBand: string;
+  rsiTrend30d?: number | null;
+  rsiTrendInsufficient?: boolean;
   revenueByMonth: DashboardStatsRevenueByMonthItem[];
   attendanceByDay: DashboardStatsAttendanceByDayItem[];
   memberStatusBreakdown: DashboardStatsMemberStatusBreakdownItem[];

@@ -3,7 +3,7 @@ import { useGym } from "@/store/GymContext";
 import { useGetIntelligenceOverview } from "@workspace/api-client-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
-import { Loader2, Activity, ShieldAlert, Sparkles, TrendingUp, Zap, AlertCircle, CheckCircle2, Circle } from "lucide-react";
+import { Loader2, Activity, ShieldAlert, Sparkles, TrendingUp, TrendingDown, Zap, AlertCircle, CheckCircle2, Circle, Clock } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
 import { useIsMobile } from "@/hooks/useMobile";
 
@@ -20,6 +20,19 @@ function useRecommendationExecution(gymId: number | null) {
     },
     enabled: !!gymId,
     staleTime: 30000,
+  });
+}
+
+function useRsiHistory(gymId: number | null, window: string) {
+  return useQuery({
+    queryKey: ["rsi-history", gymId, window],
+    queryFn: async () => {
+      const res = await fetch(`${API_BASE}/gyms/${gymId}/intelligence/rsi/history?window=${window}`, { credentials: "include" });
+      if (!res.ok) return { window, dataPoints: [], insufficient: true };
+      return res.json();
+    },
+    enabled: !!gymId,
+    staleTime: 60000,
   });
 }
 
@@ -44,12 +57,14 @@ function useToggleChecklist() {
 export function Intelligence() {
   const { activeGymId } = useGym();
   const [activeTab, setActiveTab] = useState<"rsi" | "radar" | "interventions">("rsi");
+  const [trendWindow, setTrendWindow] = useState<"30d" | "90d" | "all">("90d");
   const isMobile = useIsMobile();
   
   const { data: intel, isLoading, isError, error } = useGetIntelligenceOverview(activeGymId as number, {
     query: { enabled: !!activeGymId, retry: 2, staleTime: 30000 }
   });
 
+  const { data: rsiHistory } = useRsiHistory(activeGymId, trendWindow);
   const { data: recData } = useRecommendationExecution(activeGymId);
   const toggleChecklist = useToggleChecklist();
 
@@ -148,7 +163,8 @@ export function Intelligence() {
                 <p className="mt-4 md:mt-6 text-xs md:text-sm text-muted-foreground max-w-xs">{rsi.insight}</p>
               </div>
 
-              <div className="lg:col-span-2 bg-card border border-border rounded-2xl p-4 md:p-6 shadow-sm">
+              <div className="lg:col-span-2 space-y-4 md:space-y-6">
+              <div className="bg-card border border-border rounded-2xl p-4 md:p-6 shadow-sm">
                 <h3 className="text-base md:text-lg font-semibold text-foreground mb-4 md:mb-6">Index Composition</h3>
                 <div className="space-y-4 md:space-y-6">
                   {rsi.breakdown.map((item: any, i: number) => {
@@ -181,6 +197,119 @@ export function Intelligence() {
                     );
                   })}
                 </div>
+              </div>
+
+              <div className="bg-card border border-border rounded-2xl p-4 md:p-6 shadow-sm">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4 md:mb-6">
+                  <div>
+                    <h3 className="text-base md:text-lg font-semibold text-foreground">RSI Trend</h3>
+                    <div className="flex items-center gap-3 mt-1">
+                      {rsi.trendInsufficient ? (
+                        <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                          <Clock className="h-3.5 w-3.5" />
+                          Not enough data yet
+                        </span>
+                      ) : (
+                        <>
+                          {rsi.trend30d != null && (
+                            <span className={`flex items-center gap-1 text-xs font-medium ${rsi.trend30d >= 0 ? 'text-emerald-500' : 'text-destructive'}`}>
+                              {rsi.trend30d >= 0 ? <TrendingUp className="h-3.5 w-3.5" /> : <TrendingDown className="h-3.5 w-3.5" />}
+                              {rsi.trend30d >= 0 ? '+' : ''}{rsi.trend30d} (30d)
+                            </span>
+                          )}
+                          {rsi.trend90d != null && (
+                            <span className={`flex items-center gap-1 text-xs font-medium ${rsi.trend90d >= 0 ? 'text-emerald-500' : 'text-destructive'}`}>
+                              {rsi.trend90d >= 0 ? <TrendingUp className="h-3.5 w-3.5" /> : <TrendingDown className="h-3.5 w-3.5" />}
+                              {rsi.trend90d >= 0 ? '+' : ''}{rsi.trend90d} (90d)
+                            </span>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1 bg-muted rounded-lg p-0.5">
+                    {(["30d", "90d", "all"] as const).map(w => (
+                      <button
+                        key={w}
+                        onClick={() => setTrendWindow(w)}
+                        className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                          trendWindow === w ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                        }`}
+                      >
+                        {w === "30d" ? "30 Days" : w === "90d" ? "90 Days" : "All Time"}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {rsiHistory?.insufficient ? (
+                  <div className="h-[200px] flex items-center justify-center text-center">
+                    <div>
+                      <Clock className="h-8 w-8 text-muted-foreground/50 mx-auto mb-2" />
+                      <p className="text-sm text-muted-foreground">Not enough historical data yet</p>
+                      <p className="text-xs text-muted-foreground/70 mt-1">RSI snapshots are recorded daily. Check back in a few days.</p>
+                    </div>
+                  </div>
+                ) : rsiHistory?.dataPoints && rsiHistory.dataPoints.length > 0 ? (
+                  <div className="h-[200px] md:h-[250px] w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart data={rsiHistory.dataPoints} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
+                        <defs>
+                          <linearGradient id="colorRsi" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.2} />
+                            <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
+                          </linearGradient>
+                        </defs>
+                        <XAxis
+                          dataKey="date"
+                          tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
+                          tickFormatter={(val: string) => {
+                            const d = new Date(val + 'T00:00:00');
+                            return `${d.getMonth() + 1}/${d.getDate()}`;
+                          }}
+                          interval="preserveStartEnd"
+                          axisLine={false}
+                          tickLine={false}
+                        />
+                        <YAxis
+                          domain={[0, 100]}
+                          tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
+                          axisLine={false}
+                          tickLine={false}
+                        />
+                        <Tooltip
+                          contentStyle={{
+                            backgroundColor: 'hsl(var(--card))',
+                            borderColor: 'hsl(var(--border))',
+                            color: 'hsl(var(--foreground))',
+                            borderRadius: '8px',
+                            fontSize: '12px'
+                          }}
+                          formatter={(value: number) => [value.toFixed(1), 'RSI Score']}
+                          labelFormatter={(label: string) => {
+                            const d = new Date(label + 'T00:00:00');
+                            return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                          }}
+                        />
+                        <Area
+                          type="monotone"
+                          dataKey="score"
+                          stroke="hsl(var(--primary))"
+                          strokeWidth={2}
+                          fillOpacity={1}
+                          fill="url(#colorRsi)"
+                          dot={false}
+                          activeDot={{ r: 4, fill: 'hsl(var(--primary))' }}
+                        />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </div>
+                ) : (
+                  <div className="h-[200px] flex items-center justify-center">
+                    <Loader2 className="h-6 w-6 text-muted-foreground animate-spin" />
+                  </div>
+                )}
+              </div>
               </div>
             </div>
           )}

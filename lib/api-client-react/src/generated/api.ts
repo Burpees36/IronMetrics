@@ -87,6 +87,7 @@ import type {
   GetMemberBalance200,
   GetMemberBillingHistory200,
   GetMemberLinkedBilling200,
+  GetRsiHistoryParams,
   GetStripePublishableKey200,
   GraceEvaluationResponse,
   Gym,
@@ -139,6 +140,7 @@ import type {
   RetentionStabilityIndex,
   RevenueForecast,
   RevenueReport,
+  RsiHistory,
   Sale,
   ScheduledHold,
   SendEmailResponse,
@@ -9877,6 +9879,118 @@ export function useGetRetentionStabilityIndex<
     gymId,
     options,
   );
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Get RSI historical data points
+ */
+export const getGetRsiHistoryUrl = (
+  gymId: number,
+  params?: GetRsiHistoryParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/gyms/${gymId}/intelligence/rsi/history?${stringifiedParams}`
+    : `/api/gyms/${gymId}/intelligence/rsi/history`;
+};
+
+export const getRsiHistory = async (
+  gymId: number,
+  params?: GetRsiHistoryParams,
+  options?: RequestInit,
+): Promise<RsiHistory> => {
+  return customFetch<RsiHistory>(getGetRsiHistoryUrl(gymId, params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetRsiHistoryQueryKey = (
+  gymId: number,
+  params?: GetRsiHistoryParams,
+) => {
+  return [
+    `/api/gyms/${gymId}/intelligence/rsi/history`,
+    ...(params ? [params] : []),
+  ] as const;
+};
+
+export const getGetRsiHistoryQueryOptions = <
+  TData = Awaited<ReturnType<typeof getRsiHistory>>,
+  TError = ErrorType<unknown>,
+>(
+  gymId: number,
+  params?: GetRsiHistoryParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getRsiHistory>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetRsiHistoryQueryKey(gymId, params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getRsiHistory>>> = ({
+    signal,
+  }) => getRsiHistory(gymId, params, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!gymId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getRsiHistory>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetRsiHistoryQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getRsiHistory>>
+>;
+export type GetRsiHistoryQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get RSI historical data points
+ */
+
+export function useGetRsiHistory<
+  TData = Awaited<ReturnType<typeof getRsiHistory>>,
+  TError = ErrorType<unknown>,
+>(
+  gymId: number,
+  params?: GetRsiHistoryParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getRsiHistory>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetRsiHistoryQueryOptions(gymId, params, options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

@@ -4,6 +4,7 @@ import { startBillingMaintenanceScheduler } from "./schedulers/billing-maintenan
 import { startRetentionEngineScheduler } from "./schedulers/retention-engine";
 import { startWodifySyncScheduler } from "./schedulers/wodify-sync";
 import { startAiTaskScheduler } from "./schedulers/ai-task-scheduler";
+import { startRsiSnapshotScheduler } from "./schedulers/rsi-snapshots";
 
 const rawPort = process.env["PORT"];
 
@@ -32,4 +33,5 @@ app.listen(port, () => {
   startRetentionEngineScheduler();
   startWodifySyncScheduler();
   startAiTaskScheduler();
+  startRsiSnapshotScheduler();
 });

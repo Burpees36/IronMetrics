@@ -429,9 +429,27 @@ export function Dashboard() {
                 </p>
                 <div className="flex items-end justify-between mt-2">
                   <p className="text-xl font-bold text-foreground">{stats.rsiScore.toFixed(1)}</p>
-                  <Link href="/intelligence">
-                    <span className="text-xs text-primary font-medium hover:underline cursor-pointer">{stats.rsiBand}</span>
-                  </Link>
+                  <div className="text-right">
+                    {stats.rsiTrendInsufficient ? (
+                      <Link href="/intelligence">
+                        <span className="text-xs text-primary font-medium hover:underline cursor-pointer">{stats.rsiBand}</span>
+                      </Link>
+                    ) : stats.rsiTrend30d != null ? (
+                      <Link href="/intelligence">
+                        <span className={cn(
+                          "text-xs font-medium hover:underline cursor-pointer flex items-center gap-0.5",
+                          stats.rsiTrend30d >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-destructive"
+                        )}>
+                          {stats.rsiTrend30d >= 0 ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
+                          {stats.rsiTrend30d >= 0 ? '+' : ''}{stats.rsiTrend30d} (30d)
+                        </span>
+                      </Link>
+                    ) : (
+                      <Link href="/intelligence">
+                        <span className="text-xs text-primary font-medium hover:underline cursor-pointer">{stats.rsiBand}</span>
+                      </Link>
+                    )}
+                  </div>
                 </div>
               </CardContent>
             </Card>

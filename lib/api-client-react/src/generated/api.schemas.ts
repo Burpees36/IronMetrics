@@ -1293,10 +1293,11 @@ export type RetentionStabilityIndexBreakdownItem = {
 export interface RetentionStabilityIndex {
   score: number;
   band: RetentionStabilityIndexBand;
-  trend30d: number;
-  trend90d: number;
+  trend30d?: number;
+  trend90d?: number;
   components: RetentionStabilityIndexComponents;
   breakdown: RetentionStabilityIndexBreakdownItem[];
+  trendInsufficient?: boolean;
   insight: string;
 }
 
@@ -1417,6 +1418,18 @@ export interface IntelligenceOverview {
   topInterventions: Intervention[];
   revenueForecast: RevenueForecast;
   generatedAt: string;
+}
+
+export type RsiHistoryDataPointsItem = {
+  date: string;
+  score: number;
+  band: string;
+};
+
+export interface RsiHistory {
+  window: string;
+  dataPoints: RsiHistoryDataPointsItem[];
+  insufficient: boolean;
 }
 
 export interface CohortData {
@@ -1683,6 +1696,8 @@ export interface DashboardStats {
   collectionRate: number;
   rsiScore: number;
   rsiBand: string;
+  rsiTrend30d?: number | null;
+  rsiTrendInsufficient?: boolean;
   revenueByMonth: DashboardStatsRevenueByMonthItem[];
   attendanceByDay: DashboardStatsAttendanceByDayItem[];
   memberStatusBreakdown: DashboardStatsMemberStatusBreakdownItem[];
@@ -2236,6 +2251,19 @@ export const ListProgrammingDaysStatus = {
   draft: "draft",
   published: "published",
   archived: "archived",
+} as const;
+
+export type GetRsiHistoryParams = {
+  window?: GetRsiHistoryWindow;
+};
+
+export type GetRsiHistoryWindow =
+  (typeof GetRsiHistoryWindow)[keyof typeof GetRsiHistoryWindow];
+
+export const GetRsiHistoryWindow = {
+  "30d": "30d",
+  "90d": "90d",
+  all: "all",
 } as const;
 
 export type SubmitLeadCapture201 = {

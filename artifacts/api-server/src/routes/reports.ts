@@ -1,21 +1,11 @@
 import { Router, type IRouter } from "express";
-import { eq, and, count, desc, gte, lt, sql } from "drizzle-orm";
-import { db, membersTable, subscriptionsTable, invoicesTable, attendanceTable, leadsTable, classesTable, membershipPlansTable } from "@workspace/db";
+import { eq, and, count, desc, gte, lt, sql, asc } from "drizzle-orm";
+import { db, membersTable, subscriptionsTable, invoicesTable, attendanceTable, leadsTable, classesTable, membershipPlansTable, rsiSnapshotsTable } from "@workspace/db";
 import { getBlendedGymMetrics, computeBlendedMRR, computeBlendedEngagement, activeMemberCondition } from "../blendedMetrics";
 import { getRiskProfiles } from "./intelligence/metrics";
+import { computeRSI } from "./intelligence/computations";
 
 const router: IRouter = Router();
-
-function computeRSI(churnRate: number, avgRevPerMember: number, netGrowth: number, avgTenure: number) {
-  const churnNorm = Math.max(0, Math.min(100, 100 - churnRate * 10));
-  const revNorm = Math.min(100, (avgRevPerMember / 200) * 100);
-  const growthNorm = Math.max(0, Math.min(100, 50 + netGrowth * 5));
-  const tenureNorm = Math.min(100, (avgTenure / 24) * 100);
-  const weights = { churn: 0.35, rev: 0.25, growth: 0.2, tenure: 0.2 };
-  const score = churnNorm * weights.churn + revNorm * weights.rev + growthNorm * weights.growth + tenureNorm * weights.tenure;
-  const band = score >= 70 ? "Strong" : score >= 45 ? "Moderate" : "Fragile";
-  return { score: Math.round(score * 10) / 10, band };
-}
 
 function parseGymId(params: any): number | null {
   const raw = Array.isArray(params.gymId) ? params.gymId[0] : params.gymId;
@@ -125,6 +115,22 @@ router.get("/gyms/:gymId/reports/dashboard", async (req, res): Promise<void> => 
     collectionRate,
     rsiScore: Math.round(rsiResult.score * 10) / 10,
     rsiBand: rsiResult.band,
+    ...await (async () => {
+      const snapshots = await db.select()
+        .from(rsiSnapshotsTable)
+        .where(eq(rsiSnapshotsTable.gymId, gymId))
+        .orderBy(asc(rsiSnapshotsTable.recordedAt));
+      if (snapshots.length < 7) return { rsiTrend30d: null, rsiTrendInsufficient: true };
+      const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+      const snapshot30d = snapshots
+        .filter(s => s.recordedAt <= thirtyDaysAgo)
+        .sort((a, b) => b.recordedAt.localeCompare(a.recordedAt))[0];
+      if (!snapshot30d) return { rsiTrend30d: null, rsiTrendInsufficient: true };
+      return {
+        rsiTrend30d: Math.round((rsiResult.score - parseFloat(snapshot30d.score)) * 10) / 10,
+        rsiTrendInsufficient: false,
+      };
+    })(),
     revenueByMonth: months,
     attendanceByDay,
     memberStatusBreakdown: [

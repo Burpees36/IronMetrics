@@ -12,9 +12,10 @@ import type { RetentionStabilityIndexComponents } from "./retentionStabilityInde
 export interface RetentionStabilityIndex {
   score: number;
   band: RetentionStabilityIndexBand;
-  trend30d: number;
-  trend90d: number;
+  trend30d?: number;
+  trend90d?: number;
   components: RetentionStabilityIndexComponents;
   breakdown: RetentionStabilityIndexBreakdownItem[];
+  trendInsufficient?: boolean;
   insight: string;
 }

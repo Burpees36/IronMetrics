@@ -2778,6 +2778,32 @@ paths:
               schema:
                 $ref: "#/components/schemas/RetentionStabilityIndex"
 
+  /gyms/{gymId}/intelligence/rsi/history:
+    get:
+      operationId: getRsiHistory
+      tags: [intelligence]
+      summary: Get RSI historical data points
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: window
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: ["30d", "90d", "all"]
+            default: "90d"
+      responses:
+        "200":
+          description: RSI history data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RsiHistory"
+
   /gyms/{gymId}/intelligence/risk-radar:
     get:
       operationId: getMemberRiskRadar
@@ -5696,16 +5722,43 @@ components:
               - normalized
               - weight
               - contribution
+        trendInsufficient:
+          type: boolean
         insight:
           type: string
       required:
         - score
         - band
-        - trend30d
-        - trend90d
         - components
         - breakdown
         - insight
+
+    RsiHistory:
+      type: object
+      properties:
+        window:
+          type: string
+        dataPoints:
+          type: array
+          items:
+            type: object
+            properties:
+              date:
+                type: string
+              score:
+                type: number
+              band:
+                type: string
+            required:
+              - date
+              - score
+              - band
+        insufficient:
+          type: boolean
+      required:
+        - window
+        - dataPoints
+        - insufficient
 
     MemberRiskProfile:
       type: object
@@ -6189,6 +6242,11 @@ components:
           type: number
         rsiBand:
           type: string
+        rsiTrend30d:
+          type: number
+          nullable: true
+        rsiTrendInsufficient:
+          type: boolean
         revenueByMonth:
           type: array
           items:
