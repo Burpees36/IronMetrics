@@ -24,6 +24,7 @@ export interface SyncStatusData {
     errored: number;
     startedAt: string;
     completedAt: string | null;
+    triggeredBy: string | null;
     metadata?: {
       totalClients?: number;
       totalMemberships?: number;
@@ -37,6 +38,7 @@ export interface SyncStatusData {
     status: string;
     startedAt: string;
     completedAt: string | null;
+    triggeredBy: string | null;
   }>;
 }
 

@@ -2,6 +2,7 @@ import { initStripe } from "./stripeClient";
 import app from "./app";
 import { startBillingMaintenanceScheduler } from "./schedulers/billing-maintenance";
 import { startRetentionEngineScheduler } from "./schedulers/retention-engine";
+import { startWodifySyncScheduler } from "./schedulers/wodify-sync";
 
 const rawPort = process.env["PORT"];
 
@@ -28,4 +29,5 @@ app.listen(port, () => {
   console.log(`Server listening on port ${port}`);
   startBillingMaintenanceScheduler();
   startRetentionEngineScheduler();
+  startWodifySyncScheduler();
 });
