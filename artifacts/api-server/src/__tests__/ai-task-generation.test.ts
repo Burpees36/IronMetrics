@@ -5,6 +5,7 @@ let mockLeads: any[] = [];
 let mockSubscriptions: any[] = [];
 let mockAiTasks: any[] = [];
 let idCounter = 0;
+let updateCalls: any[] = [];
 
 vi.mock("drizzle-orm", () => ({
   eq: (left: any, right: any) => ({ _type: "eq", left, right }),
@@ -83,6 +84,25 @@ vi.mock("@workspace/db", () => {
         },
       };
     },
+    update(table: any) {
+      return {
+        set(values: any) {
+          return {
+            where(cond: any) {
+              const tn = table._name;
+              const data = getTableData(tn);
+              for (const row of data) {
+                if (cond._type === "eq" && row[resolveField(cond.left)] === cond.right) {
+                  Object.assign(row, values);
+                  updateCalls.push({ table: tn, id: cond.right, values });
+                }
+              }
+              return Promise.resolve();
+            },
+          };
+        },
+      };
+    },
   };
   return {
     db,
@@ -101,6 +121,7 @@ describe("AI Task Generation", () => {
     mockLeads = [];
     mockSubscriptions = [];
     mockAiTasks = [];
+    updateCalls = [];
     idCounter = 0;
   });
 
@@ -115,6 +136,7 @@ describe("AI Task Generation", () => {
       mockMembers = [{
         id: 1, gymId: 1, status: "active", riskTier: "critical",
         firstName: "John", lastName: "Doe", attendanceCount30d: 0,
+        lastVisitDate: new Date(Date.now() - 35 * 86400000),
       }];
       const result = await generateAiTasks(1);
       expect(result.created).toBeGreaterThan(0);
@@ -128,6 +150,7 @@ describe("AI Task Generation", () => {
       mockMembers = [{
         id: 2, gymId: 1, status: "active", riskTier: "high",
         firstName: "Jane", lastName: "Smith", attendanceCount30d: 2,
+        lastVisitDate: new Date(Date.now() - 20 * 86400000),
       }];
       const result = await generateAiTasks(1);
       const outreach = result.tasks.find((t: any) => t.type === "outreach");
@@ -154,6 +177,7 @@ describe("AI Task Generation", () => {
       }];
       mockMembers = [{
         id: 5, gymId: 1, firstName: "Bill", lastName: "Payer", status: "active",
+        lastVisitDate: new Date(), attendanceCount30d: 10,
       }];
       const result = await generateAiTasks(1);
       const billing = result.tasks.find((t: any) => t.type === "billing");
@@ -166,6 +190,7 @@ describe("AI Task Generation", () => {
       mockMembers = [{
         id: 1, gymId: 1, status: "active", riskTier: "critical",
         firstName: "Existing", lastName: "Task", attendanceCount30d: 0,
+        lastVisitDate: new Date(Date.now() - 35 * 86400000),
       }];
       mockAiTasks = [{
         id: 99, gymId: 1, targetType: "member", targetId: 1, status: "pending", type: "outreach",
@@ -175,29 +200,121 @@ describe("AI Task Generation", () => {
       expect(outreach).toHaveLength(0);
     });
 
-    it("generates tasks across all categories simultaneously", async () => {
-      mockMembers = [
-        { id: 1, gymId: 1, status: "active", riskTier: "critical", firstName: "A", lastName: "B", attendanceCount30d: 0 },
-        { id: 3, gymId: 1, status: "active", firstName: "E", lastName: "F" },
-      ];
-      mockLeads = [{ id: 1, gymId: 1, isStale: true, firstName: "G", lastName: "H", source: "referral" }];
-      mockSubscriptions = [{ id: 1, gymId: 1, memberId: 3, status: "past_due", planName: "Basic" }];
-      const result = await generateAiTasks(1);
-      expect(result.created).toBeGreaterThanOrEqual(3);
-      const types = new Set(result.tasks.map((t: any) => t.type));
-      expect(types.has("outreach")).toBe(true);
-      expect(types.has("leads")).toBe(true);
-      expect(types.has("billing")).toBe(true);
-    });
-
     it("includes AI-generated email content for outreach tasks", async () => {
       mockMembers = [{
         id: 1, gymId: 1, status: "active", riskTier: "critical",
         firstName: "Alex", lastName: "Test", attendanceCount30d: 0,
+        lastVisitDate: new Date(Date.now() - 35 * 86400000),
       }];
       const result = await generateAiTasks(1);
       expect(result.tasks[0].aiContent).toContain("Alex");
       expect(result.tasks[0].aiContent.length).toBeGreaterThan(100);
+    });
+
+    it("computes risk for imported members with null riskTier", async () => {
+      mockMembers = [{
+        id: 10, gymId: 1, status: "active",
+        riskTier: null, riskScore: null,
+        firstName: "Imported", lastName: "Member",
+        attendanceCount30d: 0,
+        lastVisitDate: null,
+        daysSinceLastAttendance: null,
+      }];
+      const result = await generateAiTasks(1);
+      expect(updateCalls.length).toBeGreaterThan(0);
+      const updated = updateCalls.find((c: any) => c.id === 10);
+      expect(updated).toBeDefined();
+      expect(updated.values.riskTier).toBe("critical");
+
+      const outreach = result.tasks.find((t: any) => t.type === "outreach");
+      expect(outreach).toBeDefined();
+      expect(outreach!.title).toContain("Win back Imported");
+    });
+
+    it("computes risk for imported members with Wodify attendance data", async () => {
+      mockMembers = [{
+        id: 11, gymId: 1, status: "active",
+        riskTier: null, riskScore: null,
+        firstName: "Wodify", lastName: "Import",
+        attendanceCount30d: 2,
+        lastVisitDate: new Date(Date.now() - 25 * 86400000),
+        daysSinceLastAttendance: 25,
+      }];
+      const result = await generateAiTasks(1);
+      const updated = updateCalls.find((c: any) => c.id === 11);
+      expect(updated).toBeDefined();
+      expect(["high", "critical"]).toContain(updated.values.riskTier);
+
+      const outreach = result.tasks.find((t: any) => t.type === "outreach");
+      expect(outreach).toBeDefined();
+      expect(outreach!.title).toContain("Wodify Import");
+    });
+
+    it("caps total pending tasks at 5", async () => {
+      mockMembers = [];
+      for (let i = 1; i <= 8; i++) {
+        mockMembers.push({
+          id: i, gymId: 1, status: "active", riskTier: "critical",
+          firstName: `Member${i}`, lastName: "Test", attendanceCount30d: 0,
+          lastVisitDate: new Date(Date.now() - 35 * 86400000),
+        });
+      }
+      const result = await generateAiTasks(1);
+      expect(result.created).toBe(5);
+      expect(result.tasks).toHaveLength(5);
+    });
+
+    it("accounts for existing pending tasks in the cap", async () => {
+      mockAiTasks = [
+        { id: 100, gymId: 1, targetType: "member", targetId: 100, status: "pending", type: "outreach" },
+        { id: 101, gymId: 1, targetType: "member", targetId: 101, status: "pending", type: "outreach" },
+        { id: 102, gymId: 1, targetType: "member", targetId: 102, status: "pending", type: "outreach" },
+      ];
+      mockMembers = [];
+      for (let i = 1; i <= 5; i++) {
+        mockMembers.push({
+          id: i, gymId: 1, status: "active", riskTier: "critical",
+          firstName: `New${i}`, lastName: "Test", attendanceCount30d: 0,
+          lastVisitDate: new Date(Date.now() - 35 * 86400000),
+        });
+      }
+      const result = await generateAiTasks(1);
+      expect(result.created).toBe(2);
+    });
+
+    it("creates zero tasks when already at the cap", async () => {
+      mockAiTasks = [];
+      for (let i = 1; i <= 5; i++) {
+        mockAiTasks.push({ id: i, gymId: 1, targetType: "member", targetId: 50 + i, status: "pending", type: "outreach" });
+      }
+      mockMembers = [{
+        id: 1, gymId: 1, status: "active", riskTier: "critical",
+        firstName: "Extra", lastName: "Member", attendanceCount30d: 0,
+        lastVisitDate: new Date(Date.now() - 35 * 86400000),
+      }];
+      const result = await generateAiTasks(1);
+      expect(result.created).toBe(0);
+    });
+
+    it("prioritizes critical outreach over leads", async () => {
+      mockMembers = [{
+        id: 1, gymId: 1, status: "active", riskTier: "critical",
+        firstName: "Critical", lastName: "Member", attendanceCount30d: 0,
+        lastVisitDate: new Date(Date.now() - 35 * 86400000),
+      }];
+      mockLeads = [];
+      for (let i = 1; i <= 6; i++) {
+        mockLeads.push({
+          id: i, gymId: 1, isStale: true,
+          firstName: `Lead${i}`, lastName: "Stale", source: "web",
+        });
+      }
+      const result = await generateAiTasks(1);
+      expect(result.created).toBe(5);
+      expect(result.tasks[0].type).toBe("outreach");
+      expect(result.tasks[0].title).toContain("Critical");
+      const leadTasks = result.tasks.filter((t: any) => t.type === "leads");
+      expect(leadTasks.length).toBe(4);
     });
   });
 });

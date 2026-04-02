@@ -1,5 +1,15 @@
-import { eq, and, sql, count } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import { db, aiTasksTable, membersTable, leadsTable, subscriptionsTable } from "@workspace/db";
+import { calculateRiskScore, getRiskTier } from "../routes/intelligence/computations";
+
+const MAX_PENDING_TASKS = 5;
+
+const PRIORITY_ORDER: Record<string, number> = {
+  critical_outreach: 0,
+  high_outreach: 1,
+  billing: 2,
+  leads: 3,
+};
 
 interface GeneratedTask {
   gymId: number;
@@ -11,6 +21,29 @@ interface GeneratedTask {
   targetId?: number;
   targetType?: string;
   aiContent?: string;
+  _sortKey?: number;
+}
+
+async function refreshRiskScores(gymId: number): Promise<void> {
+  const members = await db.select().from(membersTable).where(
+    and(eq(membersTable.gymId, gymId), eq(membersTable.status, "active"))
+  );
+
+  for (const m of members) {
+    const now = new Date();
+    const daysSinceLastVisit = m.lastVisitDate
+      ? Math.floor((now.getTime() - new Date(m.lastVisitDate).getTime()) / (1000 * 60 * 60 * 24))
+      : (m.daysSinceLastAttendance ?? 999);
+    const freshScore = calculateRiskScore(daysSinceLastVisit, m.attendanceCount30d);
+    const freshTier = getRiskTier(freshScore);
+
+    const storedScore = m.riskScore ? parseFloat(m.riskScore) : null;
+    if (storedScore === null || Math.abs(storedScore - freshScore) >= 1 || m.riskTier !== freshTier) {
+      await db.update(membersTable)
+        .set({ riskScore: String(Math.round(freshScore)), riskTier: freshTier })
+        .where(eq(membersTable.id, m.id));
+    }
+  }
 }
 
 async function generateAtRiskMemberTasks(gymId: number): Promise<GeneratedTask[]> {
@@ -44,6 +77,7 @@ async function generateAtRiskMemberTasks(gymId: number): Promise<GeneratedTask[]
       aiContent: isCritical
         ? `Hi ${member.firstName},\n\nI was thinking about you and wanted to reach out personally. We've got some exciting new programming and challenges coming up that I think you'd really enjoy.\n\nI'd love to set up a quick goal review session — just 15 minutes to catch up, see where you're at, and map out a plan that fits your schedule. No pressure at all, just a chance to reconnect.\n\nWould you be free for a coffee or a quick chat at the gym this week? I'll buy the coffee.\n\nLooking forward to hearing from you!`
         : `Hi ${member.firstName},\n\nJust wanted to reach out and see how things are going! It's been a little while since we've seen you, and we genuinely miss having you around.\n\nI'd love to schedule a quick goal review — even just 10 minutes to check in on your progress and make sure we're helping you hit your targets. We also have some awesome upcoming events and challenges that might be right up your alley.\n\nWant to grab a quick coffee or chat at the gym this week? Let me know what works for you!`,
+      _sortKey: isCritical ? PRIORITY_ORDER.critical_outreach : PRIORITY_ORDER.high_outreach,
     });
   }
   return tasks;
@@ -73,6 +107,7 @@ async function generateStaleLeadTasks(gymId: number): Promise<GeneratedTask[]> {
       targetId: lead.id,
       targetType: "lead",
       aiContent: `Hi ${lead.firstName},\n\nI wanted to follow up and see if you're still interested in checking us out!\n\nWe'd love to have you in for a No Sweat Intro — it's a free, no-pressure consultation where we sit down, learn about your goals, and show you around the gym. It's completely casual, takes about 20 minutes, and there's zero obligation.\n\nWe find it's the best way for people to see if we're the right fit. No workout required (unless you want to!).\n\nWould any of these times work for you this week?\n- [Morning option]\n- [Afternoon option]\n- [Evening option]\n\nJust let me know, and I'll get you on the calendar!`,
+      _sortKey: PRIORITY_ORDER.leads,
     });
   }
   return tasks;
@@ -103,24 +138,42 @@ async function generateFailedPaymentTasks(gymId: number): Promise<GeneratedTask[
       targetId: member.id,
       targetType: "member",
       aiContent: `Hi ${member.firstName},\n\nHope you're doing well! I wanted to give you a quick heads-up — it looks like there might be a small hiccup with the payment method on file for your membership.\n\nThese things happen all the time (expired cards, bank updates, etc.), and it's super easy to fix. We just want to make sure everything stays smooth so you don't miss any sessions.\n\nYou can update your info anytime, or just give us a call and we'll sort it out together in 2 minutes.\n\nThanks so much, and see you in class!`,
+      _sortKey: PRIORITY_ORDER.billing,
     });
   }
   return tasks;
 }
 
 export async function generateAiTasks(gymId: number): Promise<{ created: number; tasks: any[] }> {
+  await refreshRiskScores(gymId);
+
   const [atRiskTasks, leadTasks, billingTasks] = await Promise.all([
     generateAtRiskMemberTasks(gymId),
     generateStaleLeadTasks(gymId),
     generateFailedPaymentTasks(gymId),
   ]);
 
-  const allTasks = [...atRiskTasks, ...leadTasks, ...billingTasks];
+  const allCandidates = [...atRiskTasks, ...leadTasks, ...billingTasks];
 
-  if (allTasks.length === 0) {
+  if (allCandidates.length === 0) {
     return { created: 0, tasks: [] };
   }
 
-  const inserted = await db.insert(aiTasksTable).values(allTasks).returning();
+  allCandidates.sort((a, b) => (a._sortKey ?? 99) - (b._sortKey ?? 99));
+
+  const [pendingCount] = await db.select({ count: sql<number>`count(*)` })
+    .from(aiTasksTable)
+    .where(and(eq(aiTasksTable.gymId, gymId), eq(aiTasksTable.status, "pending")));
+
+  const currentPending = Number(pendingCount?.count ?? 0);
+  const slotsAvailable = Math.max(0, MAX_PENDING_TASKS - currentPending);
+
+  if (slotsAvailable === 0) {
+    return { created: 0, tasks: [] };
+  }
+
+  const toInsert = allCandidates.slice(0, slotsAvailable).map(({ _sortKey, ...task }) => task);
+
+  const inserted = await db.insert(aiTasksTable).values(toInsert).returning();
   return { created: inserted.length, tasks: inserted };
 }
