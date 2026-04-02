@@ -1,10 +1,15 @@
-import React, { useEffect } from "react";
+import React, { useState } from "react";
 import { useListGyms, useCreateGym } from "@workspace/api-client-react";
 import { useGym } from "@/store/GymContext";
 import { useLocation } from "wouter";
 import { motion } from "framer-motion";
 import { Building2, Plus, Loader2, ArrowRight } from "lucide-react";
 import { useAuth } from "@workspace/replit-auth-web";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { TIMEZONES } from "./onboarding/types";
 
 export function GymSelect() {
   const [, setLocation] = useLocation();
@@ -12,24 +17,26 @@ export function GymSelect() {
   const { logout } = useAuth();
   const { data: gyms, isLoading } = useListGyms();
   const createGym = useCreateGym();
+  const [showCreate, setShowCreate] = useState(false);
+  const [gymName, setGymName] = useState("");
+  const [timezone, setTimezone] = useState("America/New_York");
 
   const handleSelect = (id: number) => {
     setActiveGymId(id);
     setLocation("/dashboard");
   };
 
-  const handleCreateDemo = () => {
+  const handleCreateGym = () => {
+    if (!gymName.trim()) return;
     createGym.mutate({
       data: {
-        name: "Iron Forge Athletics",
-        timezone: "America/Los_Angeles",
-        city: "Seattle",
-        state: "WA"
+        name: gymName.trim(),
+        timezone,
       }
     }, {
       onSuccess: (data) => {
         setActiveGymId(data.id);
-        setLocation("/onboarding");
+        setLocation("/plan-selection");
       }
     });
   };
@@ -76,26 +83,62 @@ export function GymSelect() {
             </motion.button>
           ))}
 
-          <motion.button
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: (gyms?.length || 0) * 0.1 }}
-            onClick={handleCreateDemo}
-            className="bg-background border-2 border-dashed border-border rounded-2xl p-5 md:p-6 flex flex-col items-center justify-center cursor-pointer hover:border-primary/50 hover:bg-primary/5 transition-all duration-300 min-h-[180px] md:min-h-[200px] active:scale-[0.98] w-full focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
-            aria-label="Create Demo Gym"
-          >
-            {createGym.isPending ? (
-              <Loader2 className="h-8 w-8 text-primary animate-spin" />
-            ) : (
-              <>
-                <div className="h-12 w-12 bg-muted rounded-full flex items-center justify-center mb-4">
-                  <Plus className="h-6 w-6 text-muted-foreground" />
+          {!showCreate ? (
+            <motion.button
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: (gyms?.length || 0) * 0.1 }}
+              onClick={() => setShowCreate(true)}
+              className="bg-background border-2 border-dashed border-border rounded-2xl p-5 md:p-6 flex flex-col items-center justify-center cursor-pointer hover:border-primary/50 hover:bg-primary/5 transition-all duration-300 min-h-[180px] md:min-h-[200px] active:scale-[0.98] w-full focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
+              aria-label="Create My Gym"
+            >
+              <div className="h-12 w-12 bg-muted rounded-full flex items-center justify-center mb-4">
+                <Plus className="h-6 w-6 text-muted-foreground" />
+              </div>
+              <h3 className="text-lg font-semibold text-foreground">Create My Gym</h3>
+              <p className="text-sm text-muted-foreground mt-2 text-center">Set up a new workspace for your gym.</p>
+            </motion.button>
+          ) : (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="bg-card border border-primary/30 rounded-2xl p-5 md:p-6 sm:col-span-2 lg:col-span-2"
+            >
+              <h3 className="text-lg font-semibold text-foreground mb-4">Create My Gym</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label>Gym Name *</Label>
+                  <Input
+                    value={gymName}
+                    onChange={(e) => setGymName(e.target.value)}
+                    placeholder="CrossFit Iron Forge"
+                    autoFocus
+                    onKeyDown={(e) => e.key === "Enter" && handleCreateGym()}
+                  />
                 </div>
-                <h3 className="text-lg font-semibold text-foreground">Create Demo Gym</h3>
-                <p className="text-sm text-muted-foreground mt-2 text-center">Instantly provision a workspace with sample data.</p>
-              </>
-            )}
-          </motion.button>
+                <div>
+                  <Label>Timezone</Label>
+                  <Select value={timezone} onValueChange={setTimezone}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {TIMEZONES.map((tz) => (
+                        <SelectItem key={tz} value={tz}>{tz.replace(/_/g, " ")}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="flex gap-2 mt-4">
+                <Button onClick={handleCreateGym} disabled={!gymName.trim() || createGym.isPending}>
+                  {createGym.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
+                  Create & Continue <ArrowRight className="h-4 w-4 ml-1" />
+                </Button>
+                <Button variant="ghost" onClick={() => { setShowCreate(false); setGymName(""); }}>
+                  Cancel
+                </Button>
+              </div>
+            </motion.div>
+          )}
         </div>
         
         <div className="mt-8 md:mt-12 text-center">

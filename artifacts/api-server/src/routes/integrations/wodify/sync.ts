@@ -1,5 +1,5 @@
 import { eq, and, sql } from "drizzle-orm";
-import { db, membersTable, syncRunsTable, timelineEventsTable, gymsTable, mrrSnapshotsTable } from "@workspace/db";
+import { db, membersTable, syncRunsTable, timelineEventsTable, gymsTable, mrrSnapshotsTable, membershipPlansTable } from "@workspace/db";
 import { createWodifyClient } from "./client";
 import type { PageProgressCallback } from "./client";
 import { isWodifySentinelDate, normalizeWodifyStatus } from "./types";
@@ -487,8 +487,47 @@ export async function runWodifySync(
             createdAt: new Date(),
           },
         });
-      } catch (snapshotErr: any) {
-        console.error(`[MRR Snapshot] Failed to save snapshot for gym ${gymId}:`, snapshotErr?.message || snapshotErr);
+      } catch (snapshotErr: unknown) {
+        const msg = snapshotErr instanceof Error ? snapshotErr.message : String(snapshotErr);
+        console.error(`[MRR Snapshot] Failed to save snapshot for gym ${gymId}:`, msg);
+      }
+
+      try {
+        const allMembers = await db.select({
+          membershipType: membersTable.membershipType,
+          monthlyRevenue: membersTable.monthlyRevenue,
+        }).from(membersTable).where(eq(membersTable.gymId, gymId));
+
+        const planMap = new Map<string, number>();
+        for (const m of allMembers) {
+          if (!m.membershipType) continue;
+          const name = m.membershipType.trim();
+          if (!name) continue;
+          const rev = Number(m.monthlyRevenue) || 0;
+          const existing = planMap.get(name);
+          if (existing === undefined || rev > existing) {
+            planMap.set(name, rev);
+          }
+        }
+
+        const existingPlans = await db.select({ name: membershipPlansTable.name })
+          .from(membershipPlansTable)
+          .where(eq(membershipPlansTable.gymId, gymId));
+        const existingNames = new Set(existingPlans.map((p) => p.name.toLowerCase()));
+
+        for (const [planName, price] of planMap) {
+          if (existingNames.has(planName.toLowerCase())) continue;
+          await db.insert(membershipPlansTable).values({
+            gymId,
+            name: planName,
+            price: price.toFixed(2),
+            billingInterval: "monthly",
+            isActive: true,
+          });
+        }
+      } catch (planErr: unknown) {
+        const msg = planErr instanceof Error ? planErr.message : String(planErr);
+        console.error(`[Auto Plans] Failed to create plans for gym ${gymId}:`, msg);
       }
     }
 

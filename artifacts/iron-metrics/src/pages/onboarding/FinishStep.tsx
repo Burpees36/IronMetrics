@@ -2,7 +2,7 @@ import React from "react";
 import { motion } from "framer-motion";
 import { useLocation } from "wouter";
 import {
-  Building2, CreditCard, Users2, UserPlus, CalendarDays, Rocket,
+  Database, Building2, Rocket,
   Check, ChevronLeft, ArrowRight,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -19,11 +19,8 @@ export function FinishStep({ state, onFinish, onBack }: {
   const counts = state?.counts;
 
   const summaryItems = [
-    { label: "Gym Profile", complete: state?.stepStatus?.basics, icon: Building2 },
-    { label: "Membership Plans", complete: state?.stepStatus?.plans, count: counts?.plans, icon: CreditCard },
-    { label: "Staff & Coaches", complete: state?.stepStatus?.staff, count: counts?.staff, icon: Users2 },
-    { label: "Members", complete: state?.stepStatus?.members, count: counts?.members, icon: UserPlus },
-    { label: "Schedule", complete: state?.stepStatus?.schedule, count: counts?.upcomingClasses, icon: CalendarDays },
+    { label: "Member Data", complete: state?.stepStatus?.connect_data, count: counts?.members, icon: Database },
+    { label: "Gym Details", complete: state?.stepStatus?.gym_details, icon: Building2 },
   ];
 
   return (
@@ -38,7 +35,7 @@ export function FinishStep({ state, onFinish, onBack }: {
           <Rocket className="h-8 w-8 text-primary" />
         </motion.div>
         <h2 className="text-2xl font-display font-bold text-foreground mb-2">You're All Set!</h2>
-        <p className="text-muted-foreground">Here's a summary of what's been configured. You can always come back and adjust things later.</p>
+        <p className="text-muted-foreground">Here's a summary of your setup. You can always adjust things later in Settings.</p>
       </div>
 
       <div className="space-y-3 mb-8">
@@ -50,8 +47,8 @@ export function FinishStep({ state, onFinish, onBack }: {
               {item.complete ? <Check className="h-4 w-4" /> : <item.icon className="h-4 w-4" />}
             </div>
             <span className="flex-1 text-foreground">{item.label}</span>
-            {item.count !== undefined && (
-              <Badge variant="secondary">{item.count} {item.count === 1 ? "item" : "items"}</Badge>
+            {item.count !== undefined && item.count > 0 && (
+              <Badge variant="secondary">{item.count} {item.count === 1 ? "member" : "members"}</Badge>
             )}
             {item.complete ? (
               <Badge className="bg-green-500/10 text-green-400 border-green-500/20">Complete</Badge>
@@ -62,36 +59,9 @@ export function FinishStep({ state, onFinish, onBack }: {
         ))}
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <Button
-          className="w-full"
-          onClick={() => {
-            onFinish();
-          }}
-        >
-          Go to Dashboard <ArrowRight className="h-4 w-4 ml-2" />
-        </Button>
-        <Button
-          variant="outline"
-          className="w-full"
-          onClick={() => {
-            onFinish();
-            setTimeout(() => setLocation("/schedule"), 100);
-          }}
-        >
-          <CalendarDays className="h-4 w-4 mr-2" /> View Schedule
-        </Button>
-        <Button
-          variant="outline"
-          className="w-full"
-          onClick={() => {
-            onFinish();
-            setTimeout(() => setLocation("/members"), 100);
-          }}
-        >
-          <Users2 className="h-4 w-4 mr-2" /> View Members
-        </Button>
-      </div>
+      <Button className="w-full" onClick={onFinish}>
+        Go to Dashboard <ArrowRight className="h-4 w-4 ml-2" />
+      </Button>
 
       <div className="mt-6 pt-4 border-t border-border">
         <Button variant="ghost" size="sm" onClick={onBack}>

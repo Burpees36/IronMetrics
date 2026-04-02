@@ -6,14 +6,9 @@ import { Check, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { STEPS, apiFetch } from "./onboarding/types";
 import type { StepId, OnboardingState } from "./onboarding/types";
+import { ConnectDataStep } from "./onboarding/ConnectDataStep";
 import { BasicsStep } from "./onboarding/BasicsStep";
-import { PlansStep } from "./onboarding/PlansStep";
-import { StaffStep } from "./onboarding/StaffStep";
-import { MembersStep } from "./onboarding/MembersStep";
-import { ScheduleStep } from "./onboarding/ScheduleStep";
 import { FinishStep } from "./onboarding/FinishStep";
-
-const API_BASE = import.meta.env.VITE_API_URL || "";
 
 export function Onboarding() {
   const { activeGymId } = useGym();
@@ -21,7 +16,7 @@ export function Onboarding() {
   const { toast } = useToast();
   const [loading, setLoading] = useState(true);
   const [state, setState] = useState<OnboardingState | null>(null);
-  const [activeStep, setActiveStep] = useState<StepId>("basics");
+  const [activeStep, setActiveStep] = useState<StepId>("connect_data");
 
   const fetchOnboarding = useCallback(async () => {
     if (!activeGymId) return;
@@ -31,7 +26,12 @@ export function Onboarding() {
       if (data.isComplete) {
         setActiveStep("finish");
       } else {
-        setActiveStep(data.currentStep as StepId);
+        const validStepIds = STEPS.map((s) => s.id) as readonly string[];
+        if (validStepIds.includes(data.currentStep)) {
+          setActiveStep(data.currentStep as StepId);
+        } else {
+          setActiveStep("connect_data");
+        }
       }
     } catch (e) {
       console.error("Failed to fetch onboarding state", e);
@@ -51,8 +51,8 @@ export function Onboarding() {
       });
       setState(data);
       return true;
-    } catch (e: any) {
-      toast({ title: "Error", description: e.message, variant: "destructive" });
+    } catch (e: unknown) {
+      toast({ title: "Error", description: e instanceof Error ? e.message : "Unknown error", variant: "destructive" });
       return false;
     }
   };
@@ -83,21 +83,6 @@ export function Onboarding() {
   const handleFinish = async () => {
     const ok = await updateStep("finish");
     if (!ok) return;
-
-    try {
-      const res = await fetch(`${API_BASE}/api/gyms/${activeGymId}/platform-billing`, {
-        credentials: "include",
-      });
-      if (res.ok) {
-        const billing = await res.json();
-        const hasPlan = billing.isBetaAccess || (billing.subscriptionTier && billing.subscriptionTier !== "none");
-        if (!hasPlan) {
-          setLocation("/plan-selection");
-          return;
-        }
-      }
-    } catch (_) {}
-
     setLocation("/dashboard");
   };
 
@@ -117,10 +102,9 @@ export function Onboarding() {
     );
   }
 
-  const stepIdx = STEPS.findIndex((s) => s.id === activeStep);
-  const progress = state ? ((state.completedSteps.length + state.skippedSteps.length) / (STEPS.length - 1)) * 100 : 0;
   const isStepComplete = (id: string) => state?.completedSteps.includes(id) || state?.stepStatus[id] || false;
   const isStepSkipped = (id: string) => state?.skippedSteps.includes(id) || false;
+  const progress = state ? ((state.completedSteps.length + state.skippedSteps.length) / (STEPS.length - 1)) * 100 : 0;
 
   return (
     <div className="min-h-[80vh] pb-10">
@@ -131,7 +115,7 @@ export function Onboarding() {
               Set Up Your Gym
             </h1>
             <p className="text-muted-foreground">
-              Let's get everything configured so you can start managing your gym. This takes about 5 minutes.
+              Connect your data and you'll have insights in minutes.
             </p>
           </motion.div>
         </div>
@@ -191,48 +175,21 @@ export function Onboarding() {
             exit={{ opacity: 0, x: -20 }}
             transition={{ duration: 0.2 }}
           >
-            {activeStep === "basics" && (
+            {activeStep === "connect_data" && (
+              <ConnectDataStep
+                gymId={activeGymId}
+                onComplete={() => handleComplete("connect_data")}
+                onSkip={() => handleSkip("connect_data")}
+                isComplete={isStepComplete("connect_data")}
+              />
+            )}
+            {activeStep === "gym_details" && (
               <BasicsStep
                 gymId={activeGymId}
-                onComplete={() => handleComplete("basics")}
-                onSkip={() => handleSkip("basics")}
-                isComplete={isStepComplete("basics")}
-              />
-            )}
-            {activeStep === "plans" && (
-              <PlansStep
-                gymId={activeGymId}
-                onComplete={() => handleComplete("plans")}
-                onSkip={() => handleSkip("plans")}
+                onComplete={() => handleComplete("gym_details")}
+                onSkip={() => handleSkip("gym_details")}
                 onBack={handleBack}
-                isComplete={isStepComplete("plans")}
-              />
-            )}
-            {activeStep === "staff" && (
-              <StaffStep
-                gymId={activeGymId}
-                onComplete={() => handleComplete("staff")}
-                onSkip={() => handleSkip("staff")}
-                onBack={handleBack}
-                isComplete={isStepComplete("staff")}
-              />
-            )}
-            {activeStep === "members" && (
-              <MembersStep
-                gymId={activeGymId}
-                onComplete={() => handleComplete("members")}
-                onSkip={() => handleSkip("members")}
-                onBack={handleBack}
-                isComplete={isStepComplete("members")}
-              />
-            )}
-            {activeStep === "schedule" && (
-              <ScheduleStep
-                gymId={activeGymId}
-                onComplete={() => handleComplete("schedule")}
-                onSkip={() => handleSkip("schedule")}
-                onBack={handleBack}
-                isComplete={isStepComplete("schedule")}
+                isComplete={isStepComplete("gym_details")}
               />
             )}
             {activeStep === "finish" && (

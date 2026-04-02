@@ -1,13 +1,10 @@
 import {
-  Building2, CreditCard, Users2, UserPlus, CalendarDays, Rocket,
+  Database, Building2, Rocket,
 } from "lucide-react";
 
 export const STEPS = [
-  { id: "basics", label: "Gym Basics", icon: Building2, description: "Set up your gym profile" },
-  { id: "plans", label: "Membership Plans", icon: CreditCard, description: "Create your pricing" },
-  { id: "staff", label: "Staff & Coaches", icon: Users2, description: "Build your team" },
-  { id: "members", label: "Members", icon: UserPlus, description: "Add your members" },
-  { id: "schedule", label: "Schedule", icon: CalendarDays, description: "Create your first classes" },
+  { id: "connect_data", label: "Connect Your Data", icon: Database, description: "Import your members" },
+  { id: "gym_details", label: "Gym Details", icon: Building2, description: "Your gym profile" },
   { id: "finish", label: "Launch", icon: Rocket, description: "You're ready to go" },
 ] as const;
 
@@ -27,10 +24,7 @@ export interface OnboardingState {
   stepStatus: Record<string, boolean>;
   steps: string[];
   counts?: {
-    plans: number;
-    staff: number;
     members: number;
-    upcomingClasses: number;
   };
 }
 

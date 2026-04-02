@@ -62,6 +62,52 @@ function OnboardingBanner({ gymId }: { gymId: number }) {
   );
 }
 
+function ConnectWodifyBanner({ gymId }: { gymId: number }) {
+  const [show, setShow] = useState(false);
+  useEffect(() => {
+    fetch(`${API_BASE}/api/gyms/${gymId}/integrations/wodify/sync-status`, { credentials: "include" })
+      .then((r) => {
+        if (!r.ok) return null;
+        return r.json();
+      })
+      .then((data) => {
+        if (data && !data.hasApiKey) {
+          fetch(`${API_BASE}/api/gyms/${gymId}/members?limit=1`, { credentials: "include" })
+            .then((r) => r.ok ? r.json() : null)
+            .then((members) => {
+              const count = Array.isArray(members) ? members.length : members?.total ?? 0;
+              if (count === 0) setShow(true);
+            })
+            .catch(() => {});
+        }
+      })
+      .catch(() => {});
+  }, [gymId]);
+
+  if (!show) return null;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: -10 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-4 flex items-center justify-between"
+    >
+      <div className="flex items-center gap-3">
+        <Zap className="h-5 w-5 text-emerald-400" />
+        <div>
+          <p className="font-medium text-foreground text-sm">Connect Wodify to get started</p>
+          <p className="text-xs text-muted-foreground">Sync your members and revenue data automatically from Wodify.</p>
+        </div>
+      </div>
+      <Link href="/settings/integrations">
+        <Button size="sm" variant="outline" className="border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10">
+          Connect Now
+        </Button>
+      </Link>
+    </motion.div>
+  );
+}
+
 const iconMap: Record<string, React.ElementType> = {
   alert: AlertTriangle,
   warning: AlertTriangle,
@@ -340,6 +386,7 @@ export function Dashboard() {
   return (
     <div className="space-y-6 pb-10">
       <OnboardingBanner gymId={activeGymId} />
+      <ConnectWodifyBanner gymId={activeGymId} />
       <SyncHealthBanner gymId={activeGymId} />
 
       <header className="flex flex-col md:flex-row md:items-end justify-between gap-4">

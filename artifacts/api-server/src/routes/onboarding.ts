@@ -1,22 +1,19 @@
 import { Router, type IRouter } from "express";
-import { eq, and, count, gte } from "drizzle-orm";
+import { eq, and, count } from "drizzle-orm";
 import {
   db,
   gymOnboardingTable,
   gymsTable,
-  gymStaffTable,
   membersTable,
-  membershipPlansTable,
-  classesTable,
 } from "@workspace/db";
 
 const router: IRouter = Router();
 
-const STEPS = ["basics", "plans", "staff", "members", "schedule", "finish"] as const;
+const STEPS = ["connect_data", "gym_details", "finish"] as const;
 type StepId = (typeof STEPS)[number];
 const VALID_STEPS = new Set<string>(STEPS);
 
-function parseGymId(params: any): number | null {
+function parseGymId(params: Record<string, string | string[]>): number | null {
   const raw = Array.isArray(params.gymId) ? params.gymId[0] : params.gymId;
   const id = parseInt(raw, 10);
   return isNaN(id) ? null : id;
@@ -55,47 +52,23 @@ async function getOrCreateOnboarding(gymId: number) {
 async function computeStepStatus(gymId: number) {
   const [gym] = await db.select().from(gymsTable).where(eq(gymsTable.id, gymId));
 
-  const basicsComplete = !!(gym && gym.name && gym.timezone && (gym.email || gym.phone));
-
-  const plans = await db
-    .select({ count: count() })
-    .from(membershipPlansTable)
-    .where(and(eq(membershipPlansTable.gymId, gymId), eq(membershipPlansTable.isActive, true)));
-  const plansComplete = Number(plans[0]?.count ?? 0) > 0;
-
-  const staffCount = await db
-    .select({ count: count() })
-    .from(gymStaffTable)
-    .where(and(eq(gymStaffTable.gymId, gymId), eq(gymStaffTable.isActive, true)));
-  const staffComplete = Number(staffCount[0]?.count ?? 0) > 1;
-
   const memberCount = await db
     .select({ count: count() })
     .from(membersTable)
     .where(eq(membersTable.gymId, gymId));
-  const membersComplete = Number(memberCount[0]?.count ?? 0) > 0;
+  const membersTotal = Number(memberCount[0]?.count ?? 0);
+  const connectDataComplete = membersTotal > 0;
 
-  const now = new Date();
-  const upcomingClasses = await db
-    .select({ count: count() })
-    .from(classesTable)
-    .where(and(eq(classesTable.gymId, gymId), gte(classesTable.startTime, now)));
-  const scheduleComplete = Number(upcomingClasses[0]?.count ?? 0) > 0;
+  const gymDetailsComplete = !!(gym && gym.name && gym.timezone);
 
   return {
     stepStatus: {
-      basics: basicsComplete,
-      plans: plansComplete,
-      staff: staffComplete,
-      members: membersComplete,
-      schedule: scheduleComplete,
+      connect_data: connectDataComplete,
+      gym_details: gymDetailsComplete,
       finish: false,
     },
     counts: {
-      plans: Number(plans[0]?.count ?? 0),
-      staff: Number(staffCount[0]?.count ?? 0),
-      members: Number(memberCount[0]?.count ?? 0),
-      upcomingClasses: Number(upcomingClasses[0]?.count ?? 0),
+      members: membersTotal,
     },
   };
 }
