@@ -6,6 +6,7 @@ import { startWodifySyncScheduler } from "./schedulers/wodify-sync";
 import { startAiTaskScheduler } from "./schedulers/ai-task-scheduler";
 import { startRsiSnapshotScheduler } from "./schedulers/rsi-snapshots";
 import { startBenchmarkScheduler } from "./schedulers/benchmark-scheduler";
+import { runOnboardingMigrationCleanup } from "./migrations/onboarding-cleanup";
 
 const rawPort = process.env["PORT"];
 
@@ -27,6 +28,8 @@ try {
   console.error("Stripe initialization failed (non-fatal):", err.message);
   console.log("Server will start without Stripe features.");
 }
+
+await runOnboardingMigrationCleanup();
 
 app.listen(port, () => {
   console.log(`Server listening on port ${port}`);

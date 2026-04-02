@@ -150,49 +150,6 @@ const DEFAULT_SEQUENCES = [
     ],
   },
   {
-    name: "New Member Support",
-    description: "Extra support for new members showing early signs of disengagement",
-    type: "new_member",
-    triggerConfig: { type: "new_member_decline", joinDays: 90, inactiveDays: 7 },
-    cooldownDays: 30,
-    steps: [
-      { stepOrder: 1, actionType: "email", delayDays: 0, config: { 
-        subject: "Quick check-in, {{first_name}}!", 
-        body: "Hi {{first_name}},\n\nWelcome to the family! We noticed you might not have made it in recently and wanted to check in.\n\nStarting a new fitness routine can be tough. Here are some tips:\n• Try a different class time if your schedule changed\n• Don't worry about scaling — every workout is adjustable\n• Come say hi even if you're not sure what to do\n\nWe're here to help!\n\n{{gym_name}}" } },
-      { stepOrder: 2, actionType: "task", delayDays: 2, config: { 
-      title: "New member check-in — {{first_name}}",
-        description:
-          "Reach out personally.\n\n" +
-          "Ask:\n" +
-          "- How are they feeling?\n" +
-          "- Any confusion or hesitation?\n\n" +
-          "GOAL: Remove friction, make them feel welcome + schedule next class.",
-        assignTo: "coach" } },
-      { stepOrder: 3, actionType: "email", delayDays: 7, config: { 
-        subject: "Your {{gym_name}} journey", 
-        body:
-        "Hi {{first_name}},\n\n" +
-        "You don’t need to be perfect — you just need to be consistent.\n\n" +
-        "Every class you show up to builds momentum.\n\n" +
-        "We believe in you and we're here to support you every step of the way.\n\nSee you soon,\n {{gym_name}}" } },
-      {
-        stepOrder: 4,
-        actionType: "task",
-        delayDays: 10,
-        config: {
-          title: "Review first 2 weeks — {{first_name}}",
-          description:
-            "Check attendance.\n\n" +
-            "If <3 visits/week:\n" +
-            "- Adjust schedule\n" +
-            "- Reinforce habit expectations\n\n" +
-            "GOAL: Lock in routine before day 30.",
-          assignTo: "coach"
-        }
-      }
-   ]
-  },
-  {
     name: "Onboarding Journey",
     description: "Proactive 5-phase onboarding protocol guiding new members from first day through their 90-day goal review",
     type: "onboarding_journey",
