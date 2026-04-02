@@ -207,6 +207,7 @@ export function ImportMembersDialog({
     setWodifyPreviewRows([]);
     setWodifySummary(null);
     setWodifyApiError("");
+    setShowWodifyApiConfirm(false);
   }, []);
 
   const handleClose = useCallback(() => {
@@ -385,7 +386,10 @@ export function ImportMembersDialog({
     });
   }, []);
 
-  const handleWodifyApiSync = useCallback(async () => {
+  const [showWodifyApiConfirm, setShowWodifyApiConfirm] = useState(false);
+
+  const handleWodifyApiSyncConfirmed = useCallback(async () => {
+    setShowWodifyApiConfirm(false);
     setStep("wodify-api-sync");
     try {
       await startWodifyApiSync();
@@ -394,6 +398,10 @@ export function ImportMembersDialog({
       setStep("source");
     }
   }, [startWodifyApiSync, toast]);
+
+  const handleWodifyApiSync = useCallback(() => {
+    setShowWodifyApiConfirm(true);
+  }, []);
 
   const isImporting = step === "importing" || step === "wodify-importing" || step === "wodify-api-sync";
 
@@ -451,7 +459,31 @@ export function ImportMembersDialog({
               <motion.div key="source" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-4">
                 <p className="text-sm text-muted-foreground">Choose how you'd like to import your members:</p>
 
-                {hasWodifyApiKey && (
+                {hasWodifyApiKey && showWodifyApiConfirm ? (
+                  <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-4 space-y-3">
+                    <div className="flex items-center gap-2">
+                      <Zap className="h-4 w-4 text-emerald-400" />
+                      <p className="text-sm font-medium text-foreground">Sync all members from Wodify?</p>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      This will pull all members from your connected Wodify account. New members will be added and existing members will be updated with the latest data.
+                    </p>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={handleWodifyApiSyncConfirmed}
+                        className="flex-1 px-4 py-2 text-sm font-medium rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 transition-colors flex items-center justify-center gap-1.5"
+                      >
+                        <Zap className="h-3.5 w-3.5" /> Yes, Start Sync
+                      </button>
+                      <button
+                        onClick={() => setShowWodifyApiConfirm(false)}
+                        className="px-4 py-2 text-sm font-medium rounded-xl border border-border text-muted-foreground hover:bg-secondary transition-colors"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </motion.div>
+                ) : hasWodifyApiKey ? (
                   <button
                     onClick={handleWodifyApiSync}
                     className="w-full text-left bg-gradient-to-br from-emerald-500/10 via-card to-primary/5 border border-emerald-500/20 rounded-xl p-5 hover:border-emerald-500/40 transition-colors group"
@@ -472,7 +504,7 @@ export function ImportMembersDialog({
                       <span className="flex items-center gap-1"><CheckCircle2 className="h-3 w-3 text-emerald-500" /> Revenue calculated</span>
                     </div>
                   </button>
-                )}
+                ) : null}
 
                 <button
                   onClick={() => setStep("wodify-upload")}

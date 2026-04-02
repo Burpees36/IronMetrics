@@ -25,6 +25,7 @@ export function MembersStep({ gymId, onComplete, onSkip, onBack, isComplete }: S
   const [wodifyApiKey, setWodifyApiKey] = useState("");
   const [wodifyError, setWodifyError] = useState("");
   const [wodifyClientCount, setWodifyClientCount] = useState(0);
+  const [showSyncConfirm, setShowSyncConfirm] = useState(false);
 
   const onboardingApiBase = ((import.meta.env.VITE_API_URL || "") as string).replace(/\/$/, "");
   const {
@@ -223,7 +224,7 @@ export function MembersStep({ gymId, onComplete, onSkip, onBack, isComplete }: S
                     <p className="text-xs text-muted-foreground">Found {wodifyClientCount} clients</p>
                   </div>
                 </div>
-                <Button onClick={handleWodifySync} className="w-full">
+                <Button onClick={() => setShowSyncConfirm(true)} className="w-full">
                   <RefreshCw className="h-4 w-4 mr-2" /> Sync Members Now
                 </Button>
               </div>
@@ -301,11 +302,31 @@ export function MembersStep({ gymId, onComplete, onSkip, onBack, isComplete }: S
         )}
       </AnimatePresence>
 
-      {memberCount === 0 && wodifyState === "idle" && !showAddForm && (
+      {showSyncConfirm && (
+        <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-5 mb-6 space-y-3">
+          <div className="flex items-center gap-2">
+            <Zap className="h-4 w-4 text-emerald-400" />
+            <p className="text-sm font-medium text-foreground">Sync all members from Wodify?</p>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            This will pull all members from your Wodify account. New members will be added and existing members will be updated with the latest data.
+          </p>
+          <div className="flex gap-2">
+            <Button onClick={() => { setShowSyncConfirm(false); handleWodifySync(); }} className="flex-1">
+              <Zap className="h-3.5 w-3.5 mr-1" /> Yes, Start Sync
+            </Button>
+            <Button variant="outline" onClick={() => setShowSyncConfirm(false)}>
+              Cancel
+            </Button>
+          </div>
+        </motion.div>
+      )}
+
+      {memberCount === 0 && wodifyState === "idle" && !showAddForm && !showSyncConfirm && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
           {hasWodifyApiKey ? (
             <button
-              onClick={handleWodifySync}
+              onClick={() => setShowSyncConfirm(true)}
               className="bg-gradient-to-br from-emerald-500/10 via-background/50 to-primary/5 border border-emerald-500/20 rounded-xl p-6 hover:border-emerald-500/40 transition-all text-left group"
             >
               <Zap className="h-8 w-8 text-emerald-400 mb-3" />
