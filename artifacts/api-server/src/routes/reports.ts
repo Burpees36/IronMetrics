@@ -1,11 +1,30 @@
 import { Router, type IRouter } from "express";
 import { eq, and, count, desc, gte, lt, sql, asc } from "drizzle-orm";
-import { db, membersTable, subscriptionsTable, invoicesTable, attendanceTable, leadsTable, classesTable, membershipPlansTable, rsiSnapshotsTable } from "@workspace/db";
+import { db, membersTable, subscriptionsTable, invoicesTable, attendanceTable, leadsTable, classesTable, membershipPlansTable, rsiSnapshotsTable, mrrSnapshotsTable } from "@workspace/db";
 import { getBlendedGymMetrics, computeBlendedMRR, computeBlendedEngagement, activeMemberCondition } from "../blendedMetrics";
 import { getRiskProfiles } from "./intelligence/metrics";
 import { computeRSI } from "./intelligence/computations";
 
 const router: IRouter = Router();
+
+async function getSnapshotsByMonth(gymId: number): Promise<Record<string, { totalMRR: number; snapshotDate: string }>> {
+  const snapshots = await db.select({
+    snapshotDate: mrrSnapshotsTable.snapshotDate,
+    totalMRR: mrrSnapshotsTable.totalMRR,
+  }).from(mrrSnapshotsTable).where(eq(mrrSnapshotsTable.gymId, gymId)).orderBy(desc(mrrSnapshotsTable.snapshotDate));
+
+  const byMonth: Record<string, { totalMRR: number; snapshotDate: string }> = {};
+  for (const s of snapshots) {
+    const monthKey = s.snapshotDate.slice(0, 7);
+    if (!byMonth[monthKey]) {
+      byMonth[monthKey] = {
+        totalMRR: parseFloat(s.totalMRR),
+        snapshotDate: s.snapshotDate,
+      };
+    }
+  }
+  return byMonth;
+}
 
 function parseGymId(params: any): number | null {
   const raw = Array.isArray(params.gymId) ? params.gymId[0] : params.gymId;
@@ -62,6 +81,8 @@ router.get("/gyms/:gymId/reports/dashboard", async (req, res): Promise<void> => 
     invoicesByMonth[monthKey] = (invoicesByMonth[monthKey] ?? 0) + parseFloat(inv.amount || "0");
   }
 
+  const snapshotsByMonth = await getSnapshotsByMonth(gymId);
+
   const months = [];
   const currentMonthKey = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 7);
   for (let i = 11; i >= 0; i--) {
@@ -71,9 +92,15 @@ router.get("/gyms/:gymId/reports/dashboard", async (req, res): Promise<void> => 
       months.push({ month: monthKey, revenue: Math.round(mrrResult.totalMRR) });
     } else {
       const invoiceRev = invoicesByMonth[monthKey] ?? 0;
-      months.push({ month: monthKey, revenue: invoiceRev > 0 ? Math.round(invoiceRev) : 0 });
+      const snapshotRev = snapshotsByMonth[monthKey]?.totalMRR ?? 0;
+      const bestRev = Math.max(invoiceRev, snapshotRev);
+      months.push({ month: monthKey, revenue: bestRev > 0 ? Math.round(bestRev) : 0 });
     }
   }
+
+  const hasSnapshotData = Object.keys(snapshotsByMonth).length > 0;
+  const nonZeroMonths = months.filter(m => m.revenue > 0);
+  const sparseData = hasSnapshotData && nonZeroMonths.length < 3;
 
   const failedSubs = await db.select().from(subscriptionsTable).where(and(eq(subscriptionsTable.gymId, gymId), eq(subscriptionsTable.status, "past_due")));
 
@@ -131,7 +158,8 @@ router.get("/gyms/:gymId/reports/dashboard", async (req, res): Promise<void> => 
         rsiTrendInsufficient: false,
       };
     })(),
-    revenueByMonth: months,
+    revenueByMonth: sparseData ? nonZeroMonths : months,
+    revenueTrendSparse: sparseData,
     attendanceByDay,
     memberStatusBreakdown: [
       { status: "active", count: blended.activeBillableMembers },
@@ -278,6 +306,8 @@ router.get("/gyms/:gymId/reports/revenue", async (req, res): Promise<void> => {
     invoicesByMonthRev[monthKey] = (invoicesByMonthRev[monthKey] ?? 0) + parseFloat(inv.amount || "0");
   }
 
+  const snapshotsByMonthRev = await getSnapshotsByMonth(gymId);
+
   const byMonth = [];
   const currentMonthKeyRev = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 7);
   for (let i = 11; i >= 0; i--) {
@@ -288,10 +318,16 @@ router.get("/gyms/:gymId/reports/revenue", async (req, res): Promise<void> => {
       byMonth.push({ month: monthKey, membership, retail: 0, total: membership });
     } else {
       const invoiceRev = invoicesByMonthRev[monthKey] ?? 0;
-      const membership = invoiceRev > 0 ? Math.round(invoiceRev) : 0;
+      const snapshotRev = snapshotsByMonthRev[monthKey]?.totalMRR ?? 0;
+      const bestRev = Math.max(invoiceRev, snapshotRev);
+      const membership = bestRev > 0 ? Math.round(bestRev) : 0;
       byMonth.push({ month: monthKey, membership, retail: 0, total: membership });
     }
   }
+
+  const hasSnapshotDataRev = Object.keys(snapshotsByMonthRev).length > 0;
+  const nonZeroMonthsRev = byMonth.filter(m => m.total > 0);
+  const sparseDataRev = hasSnapshotDataRev && nonZeroMonthsRev.length < 3;
 
   res.json({
     mrr,
@@ -303,7 +339,8 @@ router.get("/gyms/:gymId/reports/revenue", async (req, res): Promise<void> => {
     retailRevenue: 0,
     failedRevenue,
     collectionRate,
-    byMonth,
+    byMonth: sparseDataRev ? nonZeroMonthsRev : byMonth,
+    revenueTrendSparse: sparseDataRev,
     revenueSource: blendedMRR.revenueSource,
   });
 });

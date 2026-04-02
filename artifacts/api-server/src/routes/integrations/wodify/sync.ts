@@ -1,10 +1,11 @@
-import { eq, and } from "drizzle-orm";
-import { db, membersTable, syncRunsTable, timelineEventsTable, gymsTable } from "@workspace/db";
+import { eq, and, sql } from "drizzle-orm";
+import { db, membersTable, syncRunsTable, timelineEventsTable, gymsTable, mrrSnapshotsTable } from "@workspace/db";
 import { createWodifyClient } from "./client";
 import type { PageProgressCallback } from "./client";
 import { isWodifySentinelDate, normalizeWodifyStatus } from "./types";
 import type { WodifyClient, WodifyMembership } from "./types";
 import { normalizePhone } from "../../members/import-utils";
+import { computeBlendedMRR } from "../../../blendedMetrics";
 
 export interface SyncProgress {
   phase: "fetching-clients" | "fetching-memberships" | "processing" | "writing" | "complete" | "failed";
@@ -460,6 +461,36 @@ export async function runWodifySync(
         progress: completeProgress,
       },
     }).where(eq(syncRunsTable.id, syncRun.id));
+
+    if (result.status === "completed" || result.status === "completed_with_errors") {
+      try {
+        const mrrData = await computeBlendedMRR(gymId);
+        const today = new Date().toISOString().split("T")[0];
+        await db.insert(mrrSnapshotsTable).values({
+          gymId,
+          snapshotDate: today,
+          totalMRR: mrrData.totalMRR.toFixed(2),
+          subscriptionMRR: mrrData.subscriptionMRR.toFixed(2),
+          wodifyMRR: mrrData.wodifyMRR.toFixed(2),
+          activeMemberCount: mrrData.activeBillableMembers,
+          arm: mrrData.arm.toFixed(2),
+          revenueSource: mrrData.revenueSource,
+        }).onConflictDoUpdate({
+          target: [mrrSnapshotsTable.gymId, mrrSnapshotsTable.snapshotDate],
+          set: {
+            totalMRR: mrrData.totalMRR.toFixed(2),
+            subscriptionMRR: mrrData.subscriptionMRR.toFixed(2),
+            wodifyMRR: mrrData.wodifyMRR.toFixed(2),
+            activeMemberCount: mrrData.activeBillableMembers,
+            arm: mrrData.arm.toFixed(2),
+            revenueSource: mrrData.revenueSource,
+            createdAt: new Date(),
+          },
+        });
+      } catch (snapshotErr: any) {
+        console.error(`[MRR Snapshot] Failed to save snapshot for gym ${gymId}:`, snapshotErr?.message || snapshotErr);
+      }
+    }
 
   } catch (err: any) {
     result.status = "failed";

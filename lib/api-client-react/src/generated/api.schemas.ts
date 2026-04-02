@@ -1705,6 +1705,8 @@ export interface DashboardStats {
   rsiTrend30d?: number | null;
   rsiTrendInsufficient?: boolean;
   revenueByMonth: DashboardStatsRevenueByMonthItem[];
+  /** True when fewer than 3 months of revenue data exist */
+  revenueTrendSparse?: boolean;
   attendanceByDay: DashboardStatsAttendanceByDayItem[];
   memberStatusBreakdown: DashboardStatsMemberStatusBreakdownItem[];
 }
@@ -1754,6 +1756,8 @@ export interface RevenueReport {
   failedRevenue: number;
   collectionRate: number;
   byMonth: RevenueReportByMonthItem[];
+  /** True when fewer than 3 months of revenue data exist */
+  revenueTrendSparse?: boolean;
 }
 
 export type AttendanceReportByDayOfWeekItem = {

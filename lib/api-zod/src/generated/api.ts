@@ -3456,6 +3456,10 @@ export const GetDashboardStatsResponse = zod.object({
       members: zod.number(),
     }),
   ),
+  revenueTrendSparse: zod
+    .boolean()
+    .optional()
+    .describe("True when fewer than 3 months of revenue data exist"),
   attendanceByDay: zod.array(
     zod.object({
       date: zod.string(),
@@ -3529,6 +3533,10 @@ export const GetRevenueReportResponse = zod.object({
       total: zod.number(),
     }),
   ),
+  revenueTrendSparse: zod
+    .boolean()
+    .optional()
+    .describe("True when fewer than 3 months of revenue data exist"),
 });
 
 /**

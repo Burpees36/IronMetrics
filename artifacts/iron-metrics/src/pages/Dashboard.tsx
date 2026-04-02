@@ -535,37 +535,51 @@ export function Dashboard() {
                 <Button variant="ghost" size="sm" className="h-6 text-xs text-muted-foreground">Details</Button>
               </Link>
             </div>
-            <div className="h-[140px] w-full pt-4">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={stats.revenueByMonth} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
-                  <defs>
-                    <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.15} />
-                      <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <RechartsTooltip
-                    contentStyle={{
-                      backgroundColor: 'hsl(var(--card))',
-                      borderColor: 'hsl(var(--border))',
-                      color: 'hsl(var(--foreground))',
-                      borderRadius: '8px',
-                      fontSize: '12px'
-                    }}
-                    itemStyle={{ color: 'hsl(var(--primary))' }}
-                    formatter={(value: number) => [`$${value.toLocaleString()}`, 'Revenue']}
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="revenue"
-                    stroke="hsl(var(--primary))"
-                    strokeWidth={2}
-                    fillOpacity={1}
-                    fill="url(#colorRevenue)"
-                  />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
+            {stats.revenueTrendSparse ? (
+              <div className="h-[140px] w-full flex flex-col items-center justify-center px-4 text-center">
+                <TrendingUp className="w-6 h-6 text-muted-foreground/40 mb-2" />
+                <p className="text-sm text-muted-foreground">
+                  Revenue trend will populate as data accumulates
+                </p>
+                {stats.revenueByMonth?.length > 0 && (
+                  <p className="text-xs text-muted-foreground/60 mt-1">
+                    {stats.revenueByMonth.length} data {stats.revenueByMonth.length === 1 ? "point" : "points"} so far
+                  </p>
+                )}
+              </div>
+            ) : (
+              <div className="h-[140px] w-full pt-4">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={stats.revenueByMonth} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.15} />
+                        <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <RechartsTooltip
+                      contentStyle={{
+                        backgroundColor: 'hsl(var(--card))',
+                        borderColor: 'hsl(var(--border))',
+                        color: 'hsl(var(--foreground))',
+                        borderRadius: '8px',
+                        fontSize: '12px'
+                      }}
+                      itemStyle={{ color: 'hsl(var(--primary))' }}
+                      formatter={(value: number) => [`$${value.toLocaleString()}`, 'Revenue']}
+                    />
+                    <Area
+                      type="monotone"
+                      dataKey="revenue"
+                      stroke="hsl(var(--primary))"
+                      strokeWidth={2}
+                      fillOpacity={1}
+                      fill="url(#colorRevenue)"
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            )}
           </Card>
 
           <BenchmarkHighlightsCard gymId={activeGymId} />

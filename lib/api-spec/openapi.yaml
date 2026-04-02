@@ -6358,6 +6358,9 @@ components:
               - month
               - revenue
               - members
+        revenueTrendSparse:
+          type: boolean
+          description: True when fewer than 3 months of revenue data exist
         attendanceByDay:
           type: array
           items:
@@ -6513,6 +6516,9 @@ components:
               - membership
               - retail
               - total
+        revenueTrendSparse:
+          type: boolean
+          description: True when fewer than 3 months of revenue data exist
       required:
         - mrr
         - arr
