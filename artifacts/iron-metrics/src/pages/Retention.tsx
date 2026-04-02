@@ -76,6 +76,7 @@ const TYPE_ICONS: Record<string, typeof Zap> = {
   check_in: Shield,
   win_back: Zap,
   new_member: Sparkles,
+  onboarding_journey: Users,
   custom: Settings2,
 };
 
@@ -84,6 +85,7 @@ const TYPE_COLORS: Record<string, string> = {
   check_in: "text-blue-500 bg-blue-500/15",
   win_back: "text-amber-500 bg-amber-500/15",
   new_member: "text-emerald-500 bg-emerald-500/15",
+  onboarding_journey: "text-teal-500 bg-teal-500/15",
   custom: "text-violet-500 bg-violet-500/15",
 };
 
@@ -139,8 +141,8 @@ function HowItWorksGuide({ onSeedDefaults, onDismiss, hasSequences }: {
             <p className="text-sm font-medium text-foreground">Set up your sequences</p>
             <p className="text-xs text-muted-foreground mt-0.5">
               {hasSequences
-                ? "You already have sequences created. Each one targets a different situation — members who stopped showing up, those at risk, or new members who are losing momentum. Feel free to change them to best suit your brand and needs."
-                : "Start with our 4 proven templates (\"Miss You\", \"Check-In\", \"Win Back\", \"New Member Support\") or create your own from scratch. Each one targets a different at-risk situation."}
+                ? "You already have sequences created. Each one targets a different situation — members who stopped showing up, those at risk, new members who are losing momentum, or a structured onboarding journey. Feel free to change them to best suit your brand and needs."
+                : "Start with our 5 proven templates (\"Miss You\", \"Check-In\", \"Win Back\", \"New Member Support\", \"Onboarding Journey\") or create your own from scratch. Each one targets a different situation."}
             </p>
           </div>
         </div>
@@ -446,7 +448,7 @@ export function Retention() {
                     <RefreshCw className="h-10 w-10 text-muted-foreground/50 mx-auto mb-4" />
                     <h3 className="text-lg font-semibold text-foreground mb-2">No Sequences Yet</h3>
                     <p className="text-sm text-muted-foreground mb-4 max-w-sm mx-auto">
-                      Get started with our 4 proven templates, or create your own custom sequence.
+                      Get started with our 5 proven templates, or create your own custom sequence.
                     </p>
                     <div className="flex items-center justify-center gap-3">
                       <button
@@ -624,6 +626,7 @@ function getTriggerSummary(trigger: TriggerConfig): string {
     case "no_attendance": return `No attendance for ${trigger.days || 10} days`;
     case "risk_score": return `Risk score >= ${trigger.threshold || 50}`;
     case "new_member_decline": return `New member (<${trigger.joinDays || 90}d) inactive ${trigger.inactiveDays || 7}d`;
+    case "new_member_join": return `New member joined within ${trigger.joinDays || 3} days`;
     default: return trigger.type;
   }
 }

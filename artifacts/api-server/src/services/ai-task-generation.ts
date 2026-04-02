@@ -49,38 +49,6 @@ async function generateAtRiskMemberTasks(gymId: number): Promise<GeneratedTask[]
   return tasks;
 }
 
-async function generateNewMemberOnboardingTasks(gymId: number): Promise<GeneratedTask[]> {
-  const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
-  const newMembers = await db.select().from(membersTable).where(
-    and(
-      eq(membersTable.gymId, gymId),
-      eq(membersTable.status, "active"),
-      sql`${membersTable.joinDate}::date > ${ninetyDaysAgo.toISOString().split("T")[0]}::date`
-    )
-  );
-
-  const existingTasks = await db.select().from(aiTasksTable).where(
-    and(eq(aiTasksTable.gymId, gymId), eq(aiTasksTable.type, "onboarding"), sql`${aiTasksTable.status} IN ('pending', 'approved', 'sent', 'completed')`)
-  );
-  const existingMemberIds = new Set(existingTasks.map(t => t.targetId));
-
-  const tasks: GeneratedTask[] = [];
-  for (const member of newMembers) {
-    if (existingMemberIds.has(member.id)) continue;
-    tasks.push({
-      gymId,
-      type: "onboarding",
-      title: `Onboarding plan for ${member.firstName} ${member.lastName}`,
-      description: `${member.firstName} joined recently. Set up a structured onboarding path with coach check-ins and milestone tracking.`,
-      priority: "medium",
-      status: "pending",
-      targetId: member.id,
-      targetType: "member",
-      aiContent: `Welcome ${member.firstName}!\n\nWe're so glad you're here. Here's your personalized 30-Day Onboarding Plan:\n\nWeek 1 — Foundations & Orientation\n- Complete your intro sessions with a coach\n- Tour the facility and meet the team\n- Set your initial goals (strength, fitness, lifestyle)\n\nWeek 2 — Find Your Rhythm\n- Try 3 different class times to find what fits your schedule\n- Pair up with a training buddy\n- Log your first workouts and start tracking progress\n\nWeek 3 — Coach Check-In\n- Scheduled 1-on-1 with your coach to review progress\n- Adjust scaling and movement progressions\n- Talk about nutrition and recovery\n\nWeek 4 — Celebrate Your Wins\n- Complete your first benchmark workout to set your baseline\n- Bright Spots Friday — we'll celebrate your early wins with the community!\n- Map out your next 90-day goals with your coach\n\nRemember: every expert was once a beginner. We're here for you every step of the way!`,
-    });
-  }
-  return tasks;
-}
 
 async function generateStaleLeadTasks(gymId: number): Promise<GeneratedTask[]> {
   const staleLeads = await db.select().from(leadsTable).where(
@@ -141,14 +109,13 @@ async function generateFailedPaymentTasks(gymId: number): Promise<GeneratedTask[
 }
 
 export async function generateAiTasks(gymId: number): Promise<{ created: number; tasks: any[] }> {
-  const [atRiskTasks, onboardingTasks, leadTasks, billingTasks] = await Promise.all([
+  const [atRiskTasks, leadTasks, billingTasks] = await Promise.all([
     generateAtRiskMemberTasks(gymId),
-    generateNewMemberOnboardingTasks(gymId),
     generateStaleLeadTasks(gymId),
     generateFailedPaymentTasks(gymId),
   ]);
 
-  const allTasks = [...atRiskTasks, ...onboardingTasks, ...leadTasks, ...billingTasks];
+  const allTasks = [...atRiskTasks, ...leadTasks, ...billingTasks];
 
   if (allTasks.length === 0) {
     return { created: 0, tasks: [] };

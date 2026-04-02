@@ -6161,7 +6161,7 @@ components:
           type: integer
         outreachType:
           type: string
-          enum: [at_risk, win_back, celebration, onboarding, billing]
+          enum: [at_risk, win_back, celebration, billing]
       required:
         - memberId
         - outreachType

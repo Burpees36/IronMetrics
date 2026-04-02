@@ -115,10 +115,6 @@ router.post("/gyms/:gymId/ai/generate-outreach", async (req, res): Promise<void>
       subject: `Congrats on your milestone, ${member.firstName}!`,
       content: `Hi ${member.firstName},\n\nWe wanted to take a moment to celebrate your commitment! Your consistency and effort haven't gone unnoticed.\n\nKeep up the amazing work — your dedication inspires everyone at the gym. We'll be celebrating wins like yours at our next Bright Spots Friday!`,
     },
-    onboarding: {
-      subject: `Welcome to the team, ${member.firstName}!`,
-      content: `Hi ${member.firstName},\n\nWelcome! We're so excited to have you as part of our community.\n\nHere's what your first few weeks look like:\n- Complete your intro sessions with a coach to get oriented\n- Try a few different class times to find your rhythm\n- Your coach will schedule a 1-on-1 check-in around week 3\n- At week 4, we'll do your first benchmark workout to set your baseline\n\nRemember: every expert was once a beginner. We're here for you every step of the way!`,
-    },
     billing: {
       subject: `Quick heads-up about your account, ${member.firstName}`,
       content: `Hi ${member.firstName},\n\nHope you're doing well! I wanted to give you a quick heads-up — it looks like there might be a small hiccup with the payment method on file for your membership.\n\nThese things happen all the time (expired cards, bank updates, etc.), and it's super easy to fix. We just want to make sure everything stays smooth so you don't miss any sessions.\n\nYou can update your info anytime, or just give us a call and we'll sort it out together in 2 minutes.\n\nThanks so much, and see you in class!`,
@@ -277,7 +273,6 @@ router.post("/gyms/:gymId/ai/tasks/:taskId/send-email", async (req, res): Promis
     outreach: `Checking in, ${recipientName.split(" ")[0]}`,
     leads: `Let's connect, ${recipientName.split(" ")[0]}`,
     billing: `Quick heads-up about your account, ${recipientName.split(" ")[0]}`,
-    onboarding: `Welcome to the team, ${recipientName.split(" ")[0]}!`,
   };
   const subject = task.subject || subjectMap[task.type] || `Message from your gym`;
 

@@ -14,16 +14,15 @@ import {
 } from "@/components/ui/dialog";
 import {
   Bot, Sparkles, Send, CheckCircle2, Clock, Loader2,
-  FileText, X, Filter, Users, CreditCard, UserPlus,
+  FileText, X, Filter, Users, CreditCard,
   Target, Megaphone, BarChart3, Edit2, RefreshCw,
   History, Mail, MailCheck, AlertCircle,
 } from "lucide-react";
 
-const EMAIL_TASK_TYPES = new Set(["outreach", "leads", "billing", "onboarding"]);
+const EMAIL_TASK_TYPES = new Set(["outreach", "leads", "billing"]);
 
 const TYPE_CONFIG: Record<string, { label: string; icon: React.ElementType; color: string }> = {
   outreach: { label: "Outreach", icon: Send, color: "bg-blue-500/10 text-blue-500" },
-  onboarding: { label: "Onboarding", icon: UserPlus, color: "bg-emerald-500/10 text-emerald-500" },
   billing: { label: "Billing", icon: CreditCard, color: "bg-amber-500/10 text-amber-500" },
   retention: { label: "Retention", icon: Users, color: "bg-purple-500/10 text-purple-500" },
   leads: { label: "Leads", icon: Target, color: "bg-cyan-500/10 text-cyan-500" },
@@ -242,7 +241,6 @@ export function AiOperator() {
       outreach: "Checking in",
       leads: "Let's connect",
       billing: "Quick heads-up about your account",
-      onboarding: "Welcome to the team!",
     };
     return subjectMap[task.type] || "Message from your gym";
   }

@@ -191,8 +191,103 @@ const DEFAULT_SEQUENCES = [
         }
       }
    ]
-  } 
-]; 
+  },
+  {
+    name: "Onboarding Journey",
+    description: "Proactive 5-phase onboarding protocol guiding new members from first day through their 90-day goal review",
+    type: "onboarding_journey",
+    triggerConfig: { type: "new_member_join", joinDays: 3 },
+    cooldownDays: 365,
+    steps: [
+      { stepOrder: 1, actionType: "email", delayDays: 0, config: {
+        subject: "Welcome to {{gym_name}}, {{first_name}}!",
+        body:
+          "Hi {{first_name}},\n\n" +
+          "We're so glad you're here! You just took the biggest step — showing up.\n\n" +
+          "Here's what happens next:\n" +
+          "→ Your No Sweat Intro (NSI) is where we learn about your goals and build your personalized plan\n" +
+          "→ We'll get you scheduled for OnRamp sessions to learn the foundations\n" +
+          "→ From there, you'll ease into group classes with full support\n\n" +
+          "Every expert was once a beginner. We're here for you every step of the way.\n\n" +
+          "See you soon,\n{{gym_name}}" } },
+      { stepOrder: 2, actionType: "task", delayDays: 1, config: {
+        title: "NSI follow-up: {{first_name}} {{last_name}}",
+        description:
+          "Confirm NSI is scheduled (should be within 48 hours of sign-up).\n\n" +
+          "During the NSI:\n" +
+          "- Ask 3-4 motivational interview questions (why now, what they've tried, goals)\n" +
+          "- Create their prescription (PT, semi-private, group, nutrition, or combo)\n" +
+          "- Fill out their goal sheet and do InBody scan if available\n" +
+          "- Schedule their first OnRamp session before they leave\n\n" +
+          "GOAL: Member leaves with a clear plan and their first OnRamp on the calendar.",
+        assignTo: "coach" } },
+      { stepOrder: 3, actionType: "email", delayDays: 7, config: {
+        subject: "How's your first week going, {{first_name}}?",
+        body:
+          "Hi {{first_name}},\n\n" +
+          "You've been with us for a week now — how are you feeling?\n\n" +
+          "By now you should be getting comfortable with the basics. A few reminders:\n" +
+          "• Don't worry about scaling — every workout is adjustable to you\n" +
+          "• Try a couple different class times to find your rhythm\n" +
+          "• Ask your coach anything — that's what we're here for\n\n" +
+          "The first few weeks are about building the habit. You're doing great.\n\n" +
+          "{{gym_name}}" } },
+      { stepOrder: 4, actionType: "task", delayDays: 14, config: {
+        title: "Day 14 check-in: {{first_name}} {{last_name}}",
+        description:
+          "Quick 5-minute check-in before or after class.\n\n" +
+          "Ask:\n" +
+          "- How are you feeling?\n" +
+          "- Any questions or things that aren't clicking?\n" +
+          "- Still tracking your habits?\n\n" +
+          "Check attendance — if < 3 visits/week, help adjust schedule.\n" +
+          "Introduce them to 2-3 regular members at their class time.\n\n" +
+          "GOAL: Reinforce habit, build social connections, remove any friction.",
+        assignTo: "coach" } },
+      { stepOrder: 5, actionType: "email", delayDays: 30, config: {
+        subject: "One month strong, {{first_name}}!",
+        body:
+          "Hi {{first_name}},\n\n" +
+          "You've been with us for a month — and that's a real milestone.\n\n" +
+          "Most people who make it past 30 days build a lasting routine. You're right on track.\n\n" +
+          "Keep showing up consistently and trust the process. The results are coming.\n\n" +
+          "If anything needs adjusting — schedule, programming, nutrition — just let us know.\n\n" +
+          "Proud of you,\n{{gym_name}}" } },
+      { stepOrder: 6, actionType: "task", delayDays: 60, config: {
+        title: "Day 60 habit check: {{first_name}} {{last_name}}",
+        description:
+          "Review attendance and engagement over the past 2 months.\n\n" +
+          "Check:\n" +
+          "- Attendance consistency (target: 3+ visits/week)\n" +
+          "- Habits tracking progress\n" +
+          "- Any barriers or concerns\n\n" +
+          "If attendance is slipping, offer adjustments (class time, programming, accountability partner).\n" +
+          "Remind them their 90-day goal review is coming up — keep momentum going.\n\n" +
+          "GOAL: Ensure member is on track for a strong 90-day review.",
+        assignTo: "coach" } },
+      { stepOrder: 7, actionType: "task", delayDays: 85, config: {
+        title: "Schedule 90-day goal review: {{first_name}} {{last_name}}",
+        description:
+          "Schedule the 90-day goal review appointment.\n\n" +
+          "Prep:\n" +
+          "- Pull their original goals from the NSI\n" +
+          "- Prepare InBody scan comparison if available\n" +
+          "- Note workout improvements and attendance stats\n\n" +
+          "This is the most important appointment after the NSI — it turns a new member into a long-term member.\n\n" +
+          "GOAL: Get the review on the calendar within the next 5 days.",
+        assignTo: "coach" } },
+      { stepOrder: 8, actionType: "email", delayDays: 90, config: {
+        subject: "90 days — look what you've done, {{first_name}}!",
+        body:
+          "Hi {{first_name}},\n\n" +
+          "90 days. You showed up, put in the work, and stuck with it.\n\n" +
+          "That's not a small thing — it's everything.\n\n" +
+          "Your coach will be going over your progress and setting new goals with you. This is where the next chapter starts.\n\n" +
+          "We're so proud of how far you've come. Here's to the next 90 days and beyond.\n\n" +
+          "{{gym_name}}" } },
+    ],
+  }
+];
 
 
 router.get("/gyms/:gymId/retention/sequences", async (req, res): Promise<void> => {
@@ -243,18 +338,21 @@ router.post("/gyms/:gymId/retention/sequences/seed-defaults", async (req, res): 
       return;
     }
 
-    const existing = await db.select({ id: retentionSequencesTable.id })
+    const existing = await db.select({ id: retentionSequencesTable.id, type: retentionSequencesTable.type })
       .from(retentionSequencesTable)
-      .where(eq(retentionSequencesTable.gymId, gymId))
-      .limit(1);
+      .where(eq(retentionSequencesTable.gymId, gymId));
 
-    if (existing.length > 0) {
-      res.status(400).json({ error: "Sequences already exist. Delete existing sequences before re-seeding." });
+    const existingTypes = new Set(existing.map(s => s.type));
+
+    const toCreate = DEFAULT_SEQUENCES.filter(def => !existingTypes.has(def.type));
+
+    if (toCreate.length === 0) {
+      res.status(400).json({ error: "All default sequences already exist." });
       return;
     }
 
     const created = [];
-    for (const def of DEFAULT_SEQUENCES) {
+    for (const def of toCreate) {
       const [seq] = await db.insert(retentionSequencesTable).values({
         gymId,
         name: def.name,

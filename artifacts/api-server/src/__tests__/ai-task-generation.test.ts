@@ -136,19 +136,6 @@ describe("AI Task Generation", () => {
       expect(outreach!.priority).toBe("medium");
     });
 
-    it("generates onboarding tasks for new members", async () => {
-      mockMembers = [{
-        id: 3, gymId: 1, status: "active", riskTier: "healthy",
-        firstName: "New", lastName: "Member",
-        joinDate: new Date().toISOString().split("T")[0],
-        attendanceCount30d: 5,
-      }];
-      const result = await generateAiTasks(1);
-      const onboarding = result.tasks.find((t: any) => t.type === "onboarding");
-      expect(onboarding).toBeDefined();
-      expect(onboarding!.title).toContain("Onboarding plan");
-    });
-
     it("generates stale lead follow-up tasks", async () => {
       mockLeads = [{
         id: 1, gymId: 1, isStale: true,
@@ -191,16 +178,14 @@ describe("AI Task Generation", () => {
     it("generates tasks across all categories simultaneously", async () => {
       mockMembers = [
         { id: 1, gymId: 1, status: "active", riskTier: "critical", firstName: "A", lastName: "B", attendanceCount30d: 0 },
-        { id: 2, gymId: 1, status: "active", riskTier: "healthy", firstName: "C", lastName: "D", joinDate: new Date().toISOString().split("T")[0], attendanceCount30d: 5 },
         { id: 3, gymId: 1, status: "active", firstName: "E", lastName: "F" },
       ];
       mockLeads = [{ id: 1, gymId: 1, isStale: true, firstName: "G", lastName: "H", source: "referral" }];
       mockSubscriptions = [{ id: 1, gymId: 1, memberId: 3, status: "past_due", planName: "Basic" }];
       const result = await generateAiTasks(1);
-      expect(result.created).toBeGreaterThanOrEqual(4);
+      expect(result.created).toBeGreaterThanOrEqual(3);
       const types = new Set(result.tasks.map((t: any) => t.type));
       expect(types.has("outreach")).toBe(true);
-      expect(types.has("onboarding")).toBe(true);
       expect(types.has("leads")).toBe(true);
       expect(types.has("billing")).toBe(true);
     });

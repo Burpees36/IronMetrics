@@ -86,6 +86,8 @@ export const ListGymsResponseItem = zod.object({
   fromEmail: zod.string().nullish(),
   fromName: zod.string().nullish(),
   ownerId: zod.string().optional(),
+  autoSuspendEnabled: zod.boolean().optional(),
+  autoSuspendBufferDays: zod.number().optional(),
   memberCount: zod.number(),
   activeCount: zod.number(),
   createdAt: zod.date(),
@@ -131,6 +133,8 @@ export const GetGymResponse = zod.object({
   fromEmail: zod.string().nullish(),
   fromName: zod.string().nullish(),
   ownerId: zod.string().optional(),
+  autoSuspendEnabled: zod.boolean().optional(),
+  autoSuspendBufferDays: zod.number().optional(),
   memberCount: zod.number(),
   activeCount: zod.number(),
   createdAt: zod.date(),
@@ -3229,13 +3233,7 @@ export const GenerateMemberOutreachParams = zod.object({
 
 export const GenerateMemberOutreachBody = zod.object({
   memberId: zod.number(),
-  outreachType: zod.enum([
-    "at_risk",
-    "win_back",
-    "celebration",
-    "onboarding",
-    "billing",
-  ]),
+  outreachType: zod.enum(["at_risk", "win_back", "celebration", "billing"]),
 });
 
 export const GenerateMemberOutreachResponse = zod.object({

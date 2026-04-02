@@ -140,6 +140,13 @@ function evaluateTrigger(trigger: TriggerConfig, member: {
       const daysSinceVisit = (now.getTime() - member.lastVisitDate.getTime()) / (1000 * 60 * 60 * 24);
       return daysSinceVisit >= inactiveDays;
     }
+    case "new_member_join": {
+      const joinDays = trigger.joinDays || 3;
+      const joinDateStr = member.joinDate || member.createdAt.toISOString().split("T")[0];
+      const joinDate = new Date(joinDateStr);
+      const memberAgeDays = (now.getTime() - joinDate.getTime()) / (1000 * 60 * 60 * 24);
+      return memberAgeDays <= joinDays;
+    }
     default:
       return false;
   }
@@ -165,7 +172,10 @@ async function advanceDueSteps(gymId: number): Promise<void> {
         continue;
       }
 
-      if (member.lastVisitDate) {
+      const [sequence] = await db.select().from(retentionSequencesTable)
+        .where(eq(retentionSequencesTable.id, enrollment.sequenceId));
+
+      if (member.lastVisitDate && sequence?.type !== "onboarding_journey") {
         const daysSinceVisit = (now.getTime() - member.lastVisitDate.getTime()) / (1000 * 60 * 60 * 24);
         if (daysSinceVisit < 3) {
           await exitEnrollment(enrollment.id, gymId, enrollment.memberId, enrollment.sequenceId, enrollment.currentStepIndex, "re_engaged");
@@ -184,8 +194,6 @@ async function advanceDueSteps(gymId: number): Promise<void> {
 
       const currentStep = steps[enrollment.currentStepIndex];
       const [gym] = await db.select().from(gymsTable).where(eq(gymsTable.id, gymId));
-      const [sequence] = await db.select().from(retentionSequencesTable)
-        .where(eq(retentionSequencesTable.id, enrollment.sequenceId));
 
       const templateVars: Record<string, string> = {
         first_name: member.firstName,
