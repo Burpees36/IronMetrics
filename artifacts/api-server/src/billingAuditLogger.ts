@@ -36,6 +36,8 @@ export type AuditAction =
   | "hold.cancelled"
   | "hold.auto_activated"
   | "hold.auto_completed"
+  | "recovery.auto_suspended"
+  | "recovery.auto_reactivated"
   | "credit.added"
   | "credit.removed"
   | "tax.configured"

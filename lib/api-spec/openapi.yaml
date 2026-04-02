@@ -3839,6 +3839,10 @@ components:
           type: ["string", "null"]
         ownerId:
           type: string
+        autoSuspendEnabled:
+          type: boolean
+        autoSuspendBufferDays:
+          type: integer
         memberCount:
           type: integer
         activeCount:
@@ -3909,6 +3913,10 @@ components:
           type: ["string", "null"]
         fromName:
           type: ["string", "null"]
+        autoSuspendEnabled:
+          type: boolean
+        autoSuspendBufferDays:
+          type: integer
 
     Member:
       type: object

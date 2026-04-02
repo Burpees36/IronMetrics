@@ -167,6 +167,14 @@ router.patch("/gyms/:gymId", async (req, res): Promise<void> => {
     }
   }
 
+  if (parsed.data.autoSuspendBufferDays !== undefined) {
+    const days = parsed.data.autoSuspendBufferDays;
+    if (!Number.isInteger(days) || days < 1 || days > 30) {
+      res.status(400).json({ error: "autoSuspendBufferDays must be an integer between 1 and 30" });
+      return;
+    }
+  }
+
   const [gym] = await db
     .update(gymsTable)
     .set(parsed.data)

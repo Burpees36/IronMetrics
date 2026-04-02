@@ -52,6 +52,8 @@ export interface Gym {
   /** @nullable */
   fromName?: string | null;
   ownerId?: string;
+  autoSuspendEnabled?: boolean;
+  autoSuspendBufferDays?: number;
   memberCount: number;
   activeCount: number;
   createdAt: string;
@@ -101,6 +103,8 @@ export interface UpdateGymBody {
   fromEmail?: string | null;
   /** @nullable */
   fromName?: string | null;
+  autoSuspendEnabled?: boolean;
+  autoSuspendBufferDays?: number;
 }
 
 export type MemberStatus = (typeof MemberStatus)[keyof typeof MemberStatus];

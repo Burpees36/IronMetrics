@@ -119,6 +119,8 @@ export const UpdateGymBody = zod.object({
   website: zod.string().nullish(),
   fromEmail: zod.string().nullish(),
   fromName: zod.string().nullish(),
+  autoSuspendEnabled: zod.boolean().optional(),
+  autoSuspendBufferDays: zod.number().optional(),
 });
 
 export const UpdateGymResponse = zod.object({
@@ -139,6 +141,8 @@ export const UpdateGymResponse = zod.object({
   fromEmail: zod.string().nullish(),
   fromName: zod.string().nullish(),
   ownerId: zod.string().optional(),
+  autoSuspendEnabled: zod.boolean().optional(),
+  autoSuspendBufferDays: zod.number().optional(),
   memberCount: zod.number(),
   activeCount: zod.number(),
   createdAt: zod.date(),

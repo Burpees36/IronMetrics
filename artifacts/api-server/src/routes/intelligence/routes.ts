@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { eq, and, count, sql, gte, desc, asc } from "drizzle-orm";
-import { db, membersTable, subscriptionsTable, attendanceTable, leadsTable, classesTable, rsiSnapshotsTable, benchmarksTable } from "@workspace/db";
+import { db, membersTable, subscriptionsTable, attendanceTable, leadsTable, classesTable, rsiSnapshotsTable, benchmarksTable, billingAuditLogsTable } from "@workspace/db";
 import { computeRSI } from "./computations";
 import { getGymMetrics, getRiskProfiles, getInterventions, computeRevenueForecast } from "./metrics";
 import { computeBlendedMRR, computeBlendedEngagement, isActiveBillableMember } from "../../blendedMetrics";
@@ -334,6 +334,43 @@ router.get("/gyms/:gymId/intelligence/morning-briefing", async (req, res): Promi
     const failedSubs = await db.select().from(subscriptionsTable).where(and(eq(subscriptionsTable.gymId, gymId), eq(subscriptionsTable.status, "past_due")));
 
     const items: { icon: string; priority: "critical" | "warning" | "info" | "positive"; message: string; action?: string; link?: string }[] = [];
+
+    const oneDayAgoTS = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    const recentAutoSuspensions = await db
+      .select({
+        id: billingAuditLogsTable.id,
+        memberId: billingAuditLogsTable.memberId,
+        createdAt: billingAuditLogsTable.createdAt,
+      })
+      .from(billingAuditLogsTable)
+      .where(
+        and(
+          eq(billingAuditLogsTable.gymId, gymId),
+          eq(billingAuditLogsTable.action, "recovery.auto_suspended"),
+          gte(billingAuditLogsTable.createdAt, oneDayAgoTS)
+        )
+      );
+
+    if (recentAutoSuspensions.length > 0) {
+      const memberIds = recentAutoSuspensions.map(s => s.memberId).filter(Boolean);
+      const suspendedMembers = memberIds.length > 0
+        ? await db.select({ id: membersTable.id, firstName: membersTable.firstName, lastName: membersTable.lastName }).from(membersTable).where(
+            and(eq(membersTable.gymId, gymId), sql`${membersTable.id} IN (${sql.join(memberIds.map(id => sql`${id}`), sql`, `)})`)
+          )
+        : [];
+      const memberNames = suspendedMembers.map(m => `${m.firstName} ${m.lastName}`);
+      const namesList = memberNames.length <= 3
+        ? memberNames.join(", ")
+        : `${memberNames.slice(0, 3).join(", ")} and ${memberNames.length - 3} more`;
+
+      items.push({
+        icon: "billing",
+        priority: "warning",
+        message: `${recentAutoSuspensions.length} member${recentAutoSuspensions.length > 1 ? "s were" : " was"} auto-suspended for non-payment: ${namesList}. Review and override if needed.`,
+        action: "Review Members",
+        link: "/members",
+      });
+    }
 
     if (failedSubs.length > 0) {
       const failedRev = failedSubs.reduce((sum, s) => sum + parseFloat(s.amount || "0"), 0);

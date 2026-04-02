@@ -5,7 +5,7 @@ import { paymentUpdateTokenService } from "../services/payment-update-token";
 import { billingAuditLogger } from "../billingAuditLogger";
 import { getStripeClient } from "../stripeClient";
 
-const MAINTENANCE_INTERVAL_MS = 6 * 60 * 60 * 1000;
+const MAINTENANCE_INTERVAL_MS = 1 * 60 * 60 * 1000;
 
 let schedulerTimer: ReturnType<typeof setInterval> | null = null;
 
@@ -30,6 +30,7 @@ async function runMaintenanceForAllGyms(): Promise<void> {
   let totalTokensCleaned = 0;
   let totalRecoveriesArchived = 0;
   let totalGraceEscalated = 0;
+  let totalAutoSuspended = 0;
   let totalHoldsActivated = 0;
   let totalHoldsEnded = 0;
   let totalErrors = 0;
@@ -42,16 +43,18 @@ async function runMaintenanceForAllGyms(): Promise<void> {
       ]);
 
       const graceResult = await billingRecoveryService.evaluateGraceDeadlines(gym.id);
+      const suspensionResult = await billingRecoveryService.evaluateAutoSuspensions(gym.id);
       const holdResult = await processScheduledHolds(gym.id);
 
       totalTokensCleaned += tokensCleaned;
       totalRecoveriesArchived += recoveriesArchived;
       totalGraceEscalated += graceResult.escalated;
+      totalAutoSuspended += suspensionResult.suspended;
       totalHoldsActivated += holdResult.activated;
       totalHoldsEnded += holdResult.ended;
-      totalErrors += graceResult.errors + holdResult.errors;
+      totalErrors += graceResult.errors + suspensionResult.errors + holdResult.errors;
 
-      if (tokensCleaned > 0 || recoveriesArchived > 0 || graceResult.escalated > 0 || holdResult.activated > 0 || holdResult.ended > 0) {
+      if (tokensCleaned > 0 || recoveriesArchived > 0 || graceResult.escalated > 0 || suspensionResult.suspended > 0 || holdResult.activated > 0 || holdResult.ended > 0) {
         await billingAuditLogger.log({
           gymId: gym.id,
           action: "maintenance.scheduled_run",
@@ -62,6 +65,8 @@ async function runMaintenanceForAllGyms(): Promise<void> {
             recoveriesArchived,
             graceEscalated: graceResult.escalated,
             graceErrors: graceResult.errors,
+            autoSuspended: suspensionResult.suspended,
+            autoSuspendErrors: suspensionResult.errors,
             holdsActivated: holdResult.activated,
             holdsEnded: holdResult.ended,
           },
@@ -76,7 +81,7 @@ async function runMaintenanceForAllGyms(): Promise<void> {
   console.log(
     `[billing-maintenance] Scheduled run complete: ${gyms.length} gyms processed, ` +
     `tokens=${totalTokensCleaned}, archived=${totalRecoveriesArchived}, ` +
-    `escalated=${totalGraceEscalated}, holds_started=${totalHoldsActivated}, holds_ended=${totalHoldsEnded}, errors=${totalErrors}`
+    `escalated=${totalGraceEscalated}, auto_suspended=${totalAutoSuspended}, holds_started=${totalHoldsActivated}, holds_ended=${totalHoldsEnded}, errors=${totalErrors}`
   );
 }
 
