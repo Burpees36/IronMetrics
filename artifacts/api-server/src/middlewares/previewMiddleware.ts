@@ -1,33 +1,47 @@
 import { type Request, type Response, type NextFunction } from "express";
 import { db, gymsTable, gymStaffTable, usersTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { eq, or } from "drizzle-orm";
 
 const PREVIEW_USER_ID = "__preview_user__";
+const PREVIEW_EMAIL = "preview@dev.local";
 
 async function ensurePreviewUser() {
   const [existing] = await db
     .select()
     .from(usersTable)
-    .where(eq(usersTable.id, PREVIEW_USER_ID));
+    .where(or(eq(usersTable.id, PREVIEW_USER_ID), eq(usersTable.email, PREVIEW_EMAIL)));
 
-  if (existing) return existing;
+  if (existing) {
+    if (existing.id !== PREVIEW_USER_ID) {
+      await db
+        .update(usersTable)
+        .set({ id: PREVIEW_USER_ID, updatedAt: new Date() })
+        .where(eq(usersTable.id, existing.id));
+      return { ...existing, id: PREVIEW_USER_ID };
+    }
+    return existing;
+  }
 
   const [user] = await db
     .insert(usersTable)
     .values({
       id: PREVIEW_USER_ID,
-      email: "preview@dev.local",
+      email: PREVIEW_EMAIL,
       firstName: "Preview",
       lastName: "User",
       profileImageUrl: null,
     })
-    .onConflictDoUpdate({
-      target: usersTable.id,
-      set: { updatedAt: new Date() },
-    })
+    .onConflictDoNothing()
     .returning();
 
-  return user;
+  if (user) return user;
+
+  const [fallback] = await db
+    .select()
+    .from(usersTable)
+    .where(or(eq(usersTable.id, PREVIEW_USER_ID), eq(usersTable.email, PREVIEW_EMAIL)));
+  if (!fallback) throw new Error("Failed to create or find preview user");
+  return fallback;
 }
 
 async function ensurePreviewUserHasGym(userId: string) {

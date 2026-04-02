@@ -33,15 +33,26 @@ vi.mock("@workspace/db", () => {
     billingWebhookEventsTable: makeTable("billing_webhook_events"),
     billingAuditLogsTable: makeTable("billing_audit_logs"),
     gymStaffTable: makeTable("gym_staff"),
+    scheduledHoldsTable: makeTable("scheduled_holds"),
     eq: (l: any, r: any) => ({ _type: "eq", left: l, right: r }),
     and: (...c: any[]) => ({ _type: "and", conditions: c }),
     lt: (l: any, r: any) => ({ _type: "lt", left: l, right: r }),
+    lte: (l: any, r: any) => ({ _type: "lte", left: l, right: r }),
     gt: (l: any, r: any) => ({ _type: "gt", left: l, right: r }),
     isNull: (c: any) => ({ _type: "isNull", col: c }),
     inArray: (l: any, v: any[]) => ({ _type: "inArray", left: l, values: v }),
     or: (...c: any[]) => ({ _type: "or", conditions: c }),
+    sql: Object.assign((() => ({})) as any, { raw: () => ({}) }),
   };
 });
+
+vi.mock("../stripeClient", () => ({
+  getStripeClient: vi.fn().mockReturnValue({
+    subscriptions: {
+      update: vi.fn().mockResolvedValue({}),
+    },
+  }),
+}));
 
 const mockCleanupExpiredTokens = vi.fn().mockResolvedValue(0);
 const mockArchiveOldResolved = vi.fn().mockResolvedValue(0);
@@ -59,10 +70,13 @@ vi.mock("../services/payment-update-token", () => ({
   },
 }));
 
+const mockEvaluateAutoSuspensions = vi.fn().mockResolvedValue({ suspended: 0, errors: 0 });
+
 vi.mock("../services/billing-recovery", () => ({
   billingRecoveryService: {
     evaluateGraceDeadlines: (...args: any[]) => mockEvaluateGrace(...args),
     archiveOldResolvedRecoveries: (...args: any[]) => mockArchiveOldResolved(...args),
+    evaluateAutoSuspensions: (...args: any[]) => mockEvaluateAutoSuspensions(...args),
     handlePaymentFailure: vi.fn(),
     resolveRecovery: vi.fn(),
     getActiveRecoveries: vi.fn(),
@@ -155,8 +169,8 @@ describe("Billing Maintenance Scheduler", () => {
     );
   });
 
-  it("interval constant is 6 hours", () => {
-    expect(MAINTENANCE_INTERVAL_MS).toBe(6 * 60 * 60 * 1000);
+  it("interval constant is 1 hour", () => {
+    expect(MAINTENANCE_INTERVAL_MS).toBe(1 * 60 * 60 * 1000);
   });
 
   it("prevents duplicate scheduler starts", () => {
