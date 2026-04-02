@@ -3212,6 +3212,7 @@ export const ListAiTasksResponseItem = zod.object({
   targetId: zod.number().nullish(),
   targetType: zod.string().nullish(),
   aiContent: zod.string().nullish(),
+  subject: zod.string().nullish(),
   createdAt: zod.date(),
 });
 export const ListAiTasksResponse = zod.array(ListAiTasksResponseItem);
@@ -3260,6 +3261,7 @@ export const GenerateAiTasksResponse = zod.object({
       targetId: zod.number().nullish(),
       targetType: zod.string().nullish(),
       aiContent: zod.string().nullish(),
+      subject: zod.string().nullish(),
       createdAt: zod.date(),
     }),
   ),
@@ -3278,6 +3280,7 @@ export const UpdateAiTaskBody = zod.object({
     .enum(["pending", "approved", "sent", "completed", "dismissed"])
     .optional(),
   aiContent: zod.string().nullish(),
+  subject: zod.string().nullish(),
 });
 
 export const UpdateAiTaskResponse = zod.object({
@@ -3291,6 +3294,7 @@ export const UpdateAiTaskResponse = zod.object({
   targetId: zod.number().nullish(),
   targetType: zod.string().nullish(),
   aiContent: zod.string().nullish(),
+  subject: zod.string().nullish(),
   createdAt: zod.date(),
 });
 
@@ -3307,6 +3311,17 @@ export const SendAiTaskEmailResponse = zod.object({
   messageId: zod.string().nullish(),
   recipientEmail: zod.string(),
   recipientName: zod.string(),
+});
+
+/**
+ * @summary Get the timestamp of the last automated AI task scan
+ */
+export const GetAiLastScanParams = zod.object({
+  gymId: zod.coerce.number(),
+});
+
+export const GetAiLastScanResponse = zod.object({
+  lastAutoScan: zod.date().nullish(),
 });
 
 /**

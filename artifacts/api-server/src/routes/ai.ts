@@ -5,6 +5,7 @@ import { CreateAiTaskBody, GenerateMemberOutreachBody, UpdateAiTaskBody } from "
 import { generateAiTasks } from "../services/ai-task-generation";
 import { getEmailService } from "../services/email-service";
 import { activeMemberCondition } from "../blendedMetrics";
+import { getLastAiScanTimestamp } from "../schedulers/ai-task-scheduler";
 
 const router: IRouter = Router();
 
@@ -57,9 +58,10 @@ router.patch("/gyms/:gymId/ai/tasks/:taskId", async (req, res): Promise<void> =>
   const updateData: Record<string, any> = {};
   if (parsed.data.status !== undefined) updateData.status = parsed.data.status;
   if (parsed.data.aiContent !== undefined) updateData.aiContent = parsed.data.aiContent;
+  if (parsed.data.subject !== undefined) updateData.subject = parsed.data.subject;
 
   if (Object.keys(updateData).length === 0) {
-    res.status(400).json({ error: "At least one of 'status' or 'aiContent' must be provided" });
+    res.status(400).json({ error: "At least one of 'status', 'aiContent', or 'subject' must be provided" });
     return;
   }
 
@@ -276,7 +278,7 @@ router.post("/gyms/:gymId/ai/tasks/:taskId/send-email", async (req, res): Promis
     billing: `Quick heads-up about your account, ${recipientName.split(" ")[0]}`,
     onboarding: `Welcome to the team, ${recipientName.split(" ")[0]}!`,
   };
-  const subject = subjectMap[task.type] || `Message from your gym`;
+  const subject = task.subject || subjectMap[task.type] || `Message from your gym`;
 
   const result = await emailService.sendEmail({
     to: recipientEmail,
@@ -310,6 +312,17 @@ router.post("/gyms/:gymId/ai/generate-tasks", async (req, res): Promise<void> =>
     console.error("Error generating AI tasks:", error);
     res.status(500).json({ error: "Failed to generate AI tasks" });
   }
+});
+
+router.get("/gyms/:gymId/ai/last-scan", async (req, res): Promise<void> => {
+  const gymId = parseGymId(req.params);
+  if (!gymId) { res.status(400).json({ error: "Invalid gym ID" }); return; }
+
+  const access = await verifyGymAccess(gymId, req.user!.id);
+  if (!access.allowed) { res.status(access.gym ? 403 : 404).json({ error: access.gym ? "You do not have access to this gym" : "Gym not found" }); return; }
+
+  const lastAutoScan = getLastAiScanTimestamp();
+  res.json({ lastAutoScan: lastAutoScan ? lastAutoScan.toISOString() : null });
 });
 
 export default router;

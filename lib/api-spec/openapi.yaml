@@ -3088,6 +3088,25 @@ paths:
               schema:
                 $ref: "#/components/schemas/SendEmailResponse"
 
+  /gyms/{gymId}/ai/last-scan:
+    get:
+      operationId: getAiLastScan
+      tags: [ai-operator]
+      summary: Get the timestamp of the last automated AI task scan
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Last auto-scan timestamp
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AiLastScanResponse"
+
   /gyms/{gymId}/ai/email-status:
     get:
       operationId: getAiEmailStatus
@@ -6023,6 +6042,8 @@ components:
           type: ["string", "null"]
         aiContent:
           type: ["string", "null"]
+        subject:
+          type: ["string", "null"]
         createdAt:
           type: string
           format: date-time
@@ -6068,6 +6089,8 @@ components:
           enum: [pending, approved, sent, completed, dismissed]
         aiContent:
           type: ["string", "null"]
+        subject:
+          type: ["string", "null"]
 
     GenerateAiTasksResponse:
       type: object
@@ -6097,6 +6120,13 @@ components:
         - success
         - recipientEmail
         - recipientName
+
+    AiLastScanResponse:
+      type: object
+      properties:
+        lastAutoScan:
+          type: ["string", "null"]
+          format: date-time
 
     EmailStatusResponse:
       type: object

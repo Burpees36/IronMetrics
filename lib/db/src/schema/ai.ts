@@ -14,6 +14,7 @@ export const aiTasksTable = pgTable("ai_tasks", {
   targetId: integer("target_id"),
   targetType: text("target_type"),
   aiContent: text("ai_content"),
+  subject: text("subject"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

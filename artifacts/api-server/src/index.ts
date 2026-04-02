@@ -3,6 +3,7 @@ import app from "./app";
 import { startBillingMaintenanceScheduler } from "./schedulers/billing-maintenance";
 import { startRetentionEngineScheduler } from "./schedulers/retention-engine";
 import { startWodifySyncScheduler } from "./schedulers/wodify-sync";
+import { startAiTaskScheduler } from "./schedulers/ai-task-scheduler";
 
 const rawPort = process.env["PORT"];
 
@@ -30,4 +31,5 @@ app.listen(port, () => {
   startBillingMaintenanceScheduler();
   startRetentionEngineScheduler();
   startWodifySyncScheduler();
+  startAiTaskScheduler();
 });

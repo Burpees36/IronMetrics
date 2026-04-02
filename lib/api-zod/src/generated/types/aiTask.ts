@@ -22,5 +22,7 @@ export interface AiTask {
   targetType?: string | null;
   /** @nullable */
   aiContent?: string | null;
+  /** @nullable */
+  subject?: string | null;
   createdAt: Date;
 }

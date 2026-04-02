@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from "react";
 import { useGym } from "@/store/GymContext";
-import { useListAiTasks, useGenerateOwnerBrief, useUpdateAiTask, useGenerateAiTasks, useGetDashboardStats, getListAiTasksQueryKey, useSendAiTaskEmail, useGetAiEmailStatus } from "@workspace/api-client-react";
+import { useListAiTasks, useGenerateOwnerBrief, useUpdateAiTask, useGenerateAiTasks, useGetDashboardStats, getListAiTasksQueryKey, useSendAiTaskEmail, useGetAiEmailStatus, useGetAiLastScan } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { motion, AnimatePresence } from "framer-motion";
@@ -19,7 +19,7 @@ import {
   History, Mail, MailCheck, AlertCircle,
 } from "lucide-react";
 
-const EMAIL_TASK_TYPES = new Set(["outreach", "leads", "billing"]);
+const EMAIL_TASK_TYPES = new Set(["outreach", "leads", "billing", "onboarding"]);
 
 const TYPE_CONFIG: Record<string, { label: string; icon: React.ElementType; color: string }> = {
   outreach: { label: "Outreach", icon: Send, color: "bg-blue-500/10 text-blue-500" },
@@ -60,6 +60,7 @@ export function AiOperator() {
   const [briefOpen, setBriefOpen] = useState(false);
   const [editTask, setEditTask] = useState<any | null>(null);
   const [editContent, setEditContent] = useState("");
+  const [editSubject, setEditSubject] = useState("");
   const [activeFilter, setActiveFilter] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"pending" | "history">("pending");
   const [historyFilter, setHistoryFilter] = useState<string | null>(null);
@@ -75,6 +76,10 @@ export function AiOperator() {
 
   const { data: emailStatus } = useGetAiEmailStatus(activeGymId as number, {
     query: { enabled: !!activeGymId }
+  });
+
+  const { data: lastScanData } = useGetAiLastScan(activeGymId as number, {
+    query: { enabled: !!activeGymId, refetchInterval: 60_000 }
   });
 
   const platformConfigured = emailStatus?.configured ?? false;
@@ -232,15 +237,26 @@ export function AiOperator() {
     );
   }
 
+  function getDefaultSubject(task: any): string {
+    const subjectMap: Record<string, string> = {
+      outreach: "Checking in",
+      leads: "Let's connect",
+      billing: "Quick heads-up about your account",
+      onboarding: "Welcome to the team!",
+    };
+    return subjectMap[task.type] || "Message from your gym";
+  }
+
   function openEditModal(task: any) {
     setEditTask(task);
     setEditContent(task.aiContent || "");
+    setEditSubject(task.subject || getDefaultSubject(task));
   }
 
   function handleSaveEdit() {
     if (!editTask) return;
     updateTask.mutate(
-      { gymId: activeGymId as number, taskId: editTask.id, data: { aiContent: editContent } },
+      { gymId: activeGymId as number, taskId: editTask.id, data: { aiContent: editContent, ...(isEmailType(editTask.type) ? { subject: editSubject || null } : {}) } },
       {
         onSuccess: () => {
           toast({ title: "Draft Updated", description: "Content has been saved." });
@@ -256,7 +272,7 @@ export function AiOperator() {
   function handleEditAndApprove() {
     if (!editTask) return;
     updateTask.mutate(
-      { gymId: activeGymId as number, taskId: editTask.id, data: { aiContent: editContent, status: "approved" as const } },
+      { gymId: activeGymId as number, taskId: editTask.id, data: { aiContent: editContent, ...(isEmailType(editTask.type) ? { subject: editSubject || null } : {}), status: "approved" as const } },
       {
         onSuccess: () => {
           toast({ title: "Task Completed", description: `"${editTask.title}" updated and completed.` });
@@ -288,7 +304,15 @@ export function AiOperator() {
               </div>
               <h1 className="text-2xl md:text-3xl font-display font-bold text-foreground">AI Operator</h1>
             </div>
-            <p className="text-sm md:text-base text-muted-foreground">Your autonomous gym management assistant.</p>
+            <p className="text-sm md:text-base text-muted-foreground">
+              Your autonomous gym management assistant.
+              {lastScanData?.lastAutoScan && (
+                <span className="ml-2 inline-flex items-center gap-1 text-xs text-muted-foreground/70">
+                  <Clock className="h-3 w-3" />
+                  Last auto-scan: {new Date(lastScanData.lastAutoScan).toLocaleString()}
+                </span>
+              )}
+            </p>
           </div>
           
           <div className="flex gap-2 w-full sm:w-auto">
@@ -621,12 +645,29 @@ export function AiOperator() {
             <DialogDescription>{editTask?.title}</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            <textarea
-              value={editContent}
-              onChange={(e) => setEditContent(e.target.value)}
-              rows={10}
-              className="w-full rounded-lg border border-border bg-background p-3 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary/50 resize-y"
-            />
+            {editTask && isEmailType(editTask.type) && (
+              <div>
+                <label className="block text-xs font-medium text-muted-foreground mb-1.5">Email Subject</label>
+                <input
+                  type="text"
+                  value={editSubject}
+                  onChange={(e) => setEditSubject(e.target.value)}
+                  placeholder="Email subject line..."
+                  className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                />
+              </div>
+            )}
+            <div>
+              {editTask && isEmailType(editTask.type) && (
+                <label className="block text-xs font-medium text-muted-foreground mb-1.5">Email Body</label>
+              )}
+              <textarea
+                value={editContent}
+                onChange={(e) => setEditContent(e.target.value)}
+                rows={10}
+                className="w-full rounded-lg border border-border bg-background p-3 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary/50 resize-y"
+              />
+            </div>
           </div>
           <DialogFooter className="gap-2 sm:gap-0">
             <button

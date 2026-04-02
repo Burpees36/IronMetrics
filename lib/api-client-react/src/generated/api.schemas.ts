@@ -1570,6 +1570,8 @@ export interface AiTask {
   targetType?: string | null;
   /** @nullable */
   aiContent?: string | null;
+  /** @nullable */
+  subject?: string | null;
   createdAt: string;
 }
 
@@ -1610,6 +1612,8 @@ export interface UpdateAiTaskBody {
   status?: UpdateAiTaskBodyStatus;
   /** @nullable */
   aiContent?: string | null;
+  /** @nullable */
+  subject?: string | null;
 }
 
 export interface GenerateAiTasksResponse {
@@ -1623,6 +1627,11 @@ export interface SendEmailResponse {
   messageId?: string | null;
   recipientEmail: string;
   recipientName: string;
+}
+
+export interface AiLastScanResponse {
+  /** @nullable */
+  lastAutoScan?: string | null;
 }
 
 export interface EmailStatusResponse {

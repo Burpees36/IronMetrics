@@ -12,23 +12,15 @@ import type {
   QueryKey,
   UseMutationOptions,
   UseMutationResult,
-  UseQueryOptions as _UseQueryOptions,
+  UseQueryOptions,
   UseQueryResult,
 } from "@tanstack/react-query";
-
-type UseQueryOptions<
-  TQueryFnData = unknown,
-  TError = unknown,
-  TData = TQueryFnData,
-  TQueryKey extends QueryKey = QueryKey,
-> = Omit<_UseQueryOptions<TQueryFnData, TError, TData, TQueryKey>, "queryKey"> & {
-  queryKey?: TQueryKey;
-};
 
 import type {
   AdjustBalanceBody,
   AdjustMemberBalance200,
   AiGeneratedContent,
+  AiLastScanResponse,
   AiTask,
   Announcement,
   ApplyDiscountToSubscription200,
@@ -11109,6 +11101,93 @@ export const useSendAiTaskEmail = <
 > => {
   return useMutation(getSendAiTaskEmailMutationOptions(options));
 };
+
+/**
+ * @summary Get the timestamp of the last automated AI task scan
+ */
+export const getGetAiLastScanUrl = (gymId: number) => {
+  return `/api/gyms/${gymId}/ai/last-scan`;
+};
+
+export const getAiLastScan = async (
+  gymId: number,
+  options?: RequestInit,
+): Promise<AiLastScanResponse> => {
+  return customFetch<AiLastScanResponse>(getGetAiLastScanUrl(gymId), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetAiLastScanQueryKey = (gymId: number) => {
+  return [`/api/gyms/${gymId}/ai/last-scan`] as const;
+};
+
+export const getGetAiLastScanQueryOptions = <
+  TData = Awaited<ReturnType<typeof getAiLastScan>>,
+  TError = ErrorType<unknown>,
+>(
+  gymId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getAiLastScan>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetAiLastScanQueryKey(gymId);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getAiLastScan>>> = ({
+    signal,
+  }) => getAiLastScan(gymId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!gymId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getAiLastScan>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetAiLastScanQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getAiLastScan>>
+>;
+export type GetAiLastScanQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get the timestamp of the last automated AI task scan
+ */
+
+export function useGetAiLastScan<
+  TData = Awaited<ReturnType<typeof getAiLastScan>>,
+  TError = ErrorType<unknown>,
+>(
+  gymId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getAiLastScan>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetAiLastScanQueryOptions(gymId, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
 
 /**
  * @summary Check if email sending is configured

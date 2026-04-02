@@ -9,6 +9,7 @@
 export * from "./adjustBalanceBody";
 export * from "./adjustMemberBalance200";
 export * from "./aiGeneratedContent";
+export * from "./aiLastScanResponse";
 export * from "./aiTask";
 export * from "./aiTaskPriority";
 export * from "./aiTaskStatus";
