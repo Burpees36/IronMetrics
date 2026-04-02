@@ -1,5 +1,6 @@
 import React from "react";
-import { Loader2, AlertTriangle, Search, Users, UserCircle, CheckCircle, Link2, DollarSign, Plus, XCircle } from "lucide-react";
+import type { GymClass } from "@workspace/api-client-react";
+import { Loader2, AlertTriangle, Search, Users, UserCircle, CheckCircle, Link2, DollarSign, Plus, XCircle, Clock } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
@@ -79,6 +80,7 @@ export interface MemberDialogsProps {
     emergencyContactPhone: string;
     membershipType: string;
     waiverSigned: boolean;
+    profileImageUrl: string;
   };
   setEditForm: React.Dispatch<React.SetStateAction<any>>;
   editErrors: Record<string, string>;
@@ -89,6 +91,15 @@ export interface MemberDialogsProps {
   statusAction: "hold" | "cancelled" | "active" | null;
   setStatusAction: (v: "hold" | "cancelled" | "active" | null) => void;
   handleStatusChange: () => void;
+
+  checkinOpen: boolean;
+  setCheckinOpen: (v: boolean) => void;
+  selectedClassId: number | null;
+  setSelectedClassId: (v: number | null) => void;
+  todayClasses: GymClass[] | undefined;
+  classesLoading: boolean;
+  handleCheckin: () => void;
+  checkinPending: boolean;
 }
 
 export function MemberDialogs(props: MemberDialogsProps) {
@@ -104,6 +115,7 @@ export function MemberDialogs(props: MemberDialogsProps) {
     changePlanSub, setChangePlanSub,
     editOpen, setEditOpen, editForm, setEditForm, editErrors, setEditErrors, handleEditSave, updatePending,
     statusAction, setStatusAction, handleStatusChange,
+    checkinOpen, setCheckinOpen, selectedClassId, setSelectedClassId, todayClasses, classesLoading, handleCheckin, checkinPending,
   } = props;
 
   return (
@@ -347,6 +359,49 @@ export function MemberDialogs(props: MemberDialogsProps) {
                 <Input id="edit-ec-phone" value={editForm.emergencyContactPhone} onChange={(e) => setEditForm((f: any) => ({ ...f, emergencyContactPhone: e.target.value }))} className="bg-background border-border" />
               </div>
             </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="edit-photo">Profile Photo</Label>
+              <div className="flex items-center gap-2">
+                <Input id="edit-photo" type="url" value={editForm.profileImageUrl} onChange={(e) => setEditForm((f: typeof editForm) => ({ ...f, profileImageUrl: e.target.value }))} className="bg-background border-border flex-1" placeholder="https://example.com/photo.jpg" />
+                <label className="flex items-center gap-1.5 px-3 py-2 bg-secondary hover:bg-secondary/80 text-sm text-foreground rounded-lg cursor-pointer transition-colors whitespace-nowrap">
+                  <Plus className="h-3.5 w-3.5" />
+                  Upload
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      try {
+                        const baseUrl = import.meta.env.BASE_URL || "/";
+                        const res = await fetch(`${baseUrl}api/storage/uploads/request-url`, {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ name: file.name, size: file.size, contentType: file.type }),
+                        });
+                        if (!res.ok) throw new Error("Failed to get upload URL");
+                        const { uploadURL, objectPath } = await res.json();
+                        const putRes = await fetch(uploadURL, { method: "PUT", body: file, headers: { "Content-Type": file.type } });
+                        if (!putRes.ok) throw new Error("Upload failed");
+                        const servingUrl = `${baseUrl}api/storage${objectPath}`;
+                        setEditForm((f: typeof editForm) => ({ ...f, profileImageUrl: servingUrl }));
+                      } catch {
+                        setEditErrors((prev) => ({ ...prev, profileImageUrl: "Photo upload failed. Try pasting a URL instead." }));
+                      }
+                      e.target.value = "";
+                    }}
+                  />
+                </label>
+              </div>
+              {editErrors.profileImageUrl && <p className="text-xs text-destructive">{editErrors.profileImageUrl}</p>}
+              {editForm.profileImageUrl && (
+                <div className="flex items-center gap-3 mt-2">
+                  <img src={editForm.profileImageUrl} alt="Preview" className="h-12 w-12 rounded-full object-cover border border-border" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                  <span className="text-xs text-muted-foreground">Photo preview</span>
+                </div>
+              )}
+            </div>
             <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/30 border border-border">
               <input
                 type="checkbox"
@@ -397,6 +452,63 @@ export function MemberDialogs(props: MemberDialogsProps) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <Dialog open={checkinOpen} onOpenChange={(open) => { setCheckinOpen(open); if (!open) setSelectedClassId(null); }}>
+        <DialogContent className="bg-card border-border max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><CheckCircle className="h-5 w-5 text-primary" /> Check In to Class</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">Select a class to check this member into today.</p>
+          {classesLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-6 w-6 text-primary animate-spin" />
+            </div>
+          ) : todayClasses && todayClasses.length > 0 ? (
+            <div className="max-h-[300px] overflow-y-auto space-y-1">
+              {todayClasses.map((cls) => (
+                <button
+                  key={cls.id}
+                  onClick={() => setSelectedClassId(cls.id)}
+                  className={`w-full flex items-center gap-3 p-3 rounded-xl text-left transition-colors ${
+                    selectedClassId === cls.id ? "bg-primary/10 border border-primary/30" : "bg-muted/20 border border-transparent hover:bg-muted/40"
+                  }`}
+                >
+                  <Clock className="h-4 w-4 text-muted-foreground shrink-0" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-foreground truncate">{cls.name}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {new Date(cls.startTime).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
+                      {" - "}
+                      {new Date(cls.endTime).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
+                      {cls.coachName ? ` | ${cls.coachName}` : ""}
+                    </p>
+                  </div>
+                  <div className="text-xs text-muted-foreground shrink-0">
+                    {cls.enrolled || 0}/{cls.capacity || "—"}
+                  </div>
+                  {selectedClassId === cls.id && <CheckCircle className="h-4 w-4 text-primary shrink-0" />}
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-6">
+              <Clock className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
+              <p className="text-sm text-muted-foreground">No classes scheduled for today.</p>
+            </div>
+          )}
+          <DialogFooter>
+            <button onClick={() => setCheckinOpen(false)} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors">Cancel</button>
+            <button
+              onClick={handleCheckin}
+              disabled={!selectedClassId || checkinPending}
+              className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground hover:bg-primary/90 rounded-lg font-medium transition-colors disabled:opacity-50"
+            >
+              {checkinPending && <Loader2 className="h-4 w-4 animate-spin" />}
+              Check In
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

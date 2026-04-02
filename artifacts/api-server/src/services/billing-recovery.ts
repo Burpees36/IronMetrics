@@ -4,6 +4,7 @@ import { billingAuditLogger } from "../billingAuditLogger";
 import { paymentUpdateTokenService } from "./payment-update-token";
 import { buildPaymentFailedEmail, buildGraceExpiredEmail, sendBillingEmail } from "./billing-email";
 import { getStripeClient } from "../stripeClient";
+import { logMemberEmailSent } from "./member-email";
 
 export const BILLING_RECOVERY_CONFIG = {
   GRACE_PERIOD_DAYS: 14,
@@ -160,6 +161,15 @@ export class BillingRecoveryService {
         .set({ lastNotifiedAt: new Date() })
         .where(eq(billingRecoveryTable.id, recoveryId));
       console.log(`[billing-recovery] Notification sent for recovery ${recoveryId}, email=${member.email}`);
+
+      await logMemberEmailSent({
+        memberId,
+        gymId,
+        to: member.email,
+        subject: email.subject,
+        emailType: "payment_failed",
+        timelineTitle: "Payment recovery email sent",
+      });
     } else {
       console.warn(`[billing-recovery] Email send failed for recovery ${recoveryId}: ${result.error}`);
     }
@@ -327,6 +337,17 @@ export class BillingRecoveryService {
             ...email,
             branding,
           });
+
+          if (emailResult.success) {
+            await logMemberEmailSent({
+              memberId: recovery.memberId,
+              gymId: recovery.gymId,
+              to: member.email,
+              subject: email.subject,
+              emailType: "grace_expired",
+              timelineTitle: "Final payment warning sent",
+            });
+          }
 
           await billingAuditLogger.log({
             gymId: recovery.gymId,

@@ -53,9 +53,18 @@ A premium SaaS theme with light/dark mode, 2xl rounded corners, and a glass-pane
 - **Date Columns:** All date-only fields use PostgreSQL `date` type, accepting/returning YYYY-MM-DD strings.
 - **Dev Preview Bypass:** Development-only feature to inject mock user sessions for authenticated dashboard content screenshots.
 
+## Object Storage
+
+Object storage (GCS-backed via Replit App Storage) is provisioned for file uploads. Storage routes are mounted at `/api/storage/*` (public routes, no auth required). The presigned URL upload flow: (1) POST `/api/storage/uploads/request-url` to get a presigned URL, (2) PUT the file directly to GCS. Server files: `lib/objectStorage.ts`, `lib/objectAcl.ts`, `routes/storage.ts`. Client lib at `lib/object-storage-web/`.
+
+## Member Email Timeline
+
+All member-targeted emails automatically log `email_sent` timeline events via the centralized `sendMemberEmail()` / `logMemberEmailSent()` functions in `services/member-email.ts`. This covers billing recovery, retention engine, and AI Operator emails.
+
 ## External Dependencies
 
 - **Stripe:** For billing, subscription management, payment processing, billing portal, and webhooks.
 - **Wodify API (api.wodify.com/v1):** For syncing client and membership data.
+- **Google Cloud Storage:** Object storage for file uploads (profile photos, etc.) via Replit App Storage.
 - **Google Calendar:** For class scheduling integration.
 - **PostgreSQL:** Relational database for all application data.

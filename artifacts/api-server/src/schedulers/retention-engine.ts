@@ -1,4 +1,5 @@
 import { db, gymsTable, membersTable, retentionSequencesTable, retentionSequenceStepsTable, memberSequenceEnrollmentsTable, retentionSequenceEventsTable, attendanceTable, aiTasksTable } from "@workspace/db";
+import { sendMemberEmail } from "../services/member-email";
 import { eq, and, sql, lte, ne, desc, gte, count, asc } from "drizzle-orm";
 import { getEmailService } from "../services/email-service";
 
@@ -239,13 +240,17 @@ async function executeStep(
     const emailService = getEmailService();
 
     if (emailService.isConfigured()) {
-      const result = await emailService.sendEmail({
+      const result = await sendMemberEmail({
+        memberId: member.id,
+        gymId,
         to: member.email,
         subject,
         text: body,
         html: `<div style="font-family:sans-serif;white-space:pre-line;">${body}</div>`,
         fromEmail: gym?.fromEmail || undefined,
         fromName: gym?.fromName || gym?.name || undefined,
+        emailType: "retention",
+        timelineTitle: "Retention email sent",
       });
 
       await db.insert(retentionSequenceEventsTable).values({

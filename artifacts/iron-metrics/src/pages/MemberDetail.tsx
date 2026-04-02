@@ -10,8 +10,9 @@ import {
   useSetDefaultPaymentMethod, useRemovePaymentMethod,
   useGetMemberLinkedBilling, useLinkMemberBilling, useUnlinkMemberBilling,
   getListPaymentMethodsQueryKey, getGetMemberLinkedBillingQueryKey,
-  useListMembers,
+  useListMembers, useListClasses, useCheckInToClass,
 } from "@workspace/api-client-react";
+import type { GymClass } from "@workspace/api-client-react";
 import type { ApiError } from "@workspace/api-client-react/custom-fetch";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRoute, useLocation } from "wouter";
@@ -21,7 +22,7 @@ import {
   Loader2, ArrowLeft, UserCircle, Mail, Phone, Calendar, Shield,
   MapPin, StickyNote, Clock, Edit, Pause, XCircle, Play, AlertTriangle,
   Activity, CreditCard, Plus, DollarSign, Receipt, RefreshCw,
-  Send, Copy, Star, Trash2, Link2, Unlink, Search, Users
+  Send, Copy, Star, Trash2, Link2, Unlink, Search, Users, CheckCircle
 } from "lucide-react";
 import { Link } from "wouter";
 import { Textarea } from "@/components/ui/textarea";
@@ -65,6 +66,7 @@ export function MemberDetail() {
     emergencyContactPhone: "",
     membershipType: "",
     waiverSigned: false,
+    profileImageUrl: "",
   });
   const [editErrors, setEditErrors] = useState<Record<string, string>>({});
 
@@ -114,6 +116,42 @@ export function MemberDetail() {
   const [linkOpen, setLinkOpen] = useState(false);
   const [linkSearch, setLinkSearch] = useState("");
   const [selectedLinkMember, setSelectedLinkMember] = useState<number | null>(null);
+  const [checkinOpen, setCheckinOpen] = useState(false);
+  const [selectedClassId, setSelectedClassId] = useState<number | null>(null);
+
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+  const todayEnd = new Date();
+  todayEnd.setHours(23, 59, 59, 999);
+
+  const { data: todayClasses, isLoading: classesLoading } = useListClasses(activeGymId as number, {
+    startDate: todayStart.toISOString(),
+    endDate: todayEnd.toISOString(),
+  }, {
+    query: { enabled: !!activeGymId && checkinOpen },
+  });
+
+  const checkInMutation = useCheckInToClass();
+
+  const handleCheckin = () => {
+    if (!activeGymId || !selectedClassId) return;
+    checkInMutation.mutate(
+      { gymId: activeGymId, classId: selectedClassId, data: { memberId } },
+      {
+        onSuccess: () => {
+          toast({ title: "Checked in", description: "Member has been checked into the class." });
+          setCheckinOpen(false);
+          setSelectedClassId(null);
+          invalidateAll();
+        },
+        onError: (err: unknown) => {
+          const apiErr = err as ApiError | undefined;
+          const msg = apiErr?.data?.error || apiErr?.message || "Check-in failed";
+          toast({ title: "Check-in failed", description: msg, variant: "destructive" });
+        },
+      }
+    );
+  };
 
   const invalidateAll = () => {
     queryClient.invalidateQueries({ queryKey: getGetMemberQueryKey(activeGymId as number, memberId) });
@@ -351,6 +389,7 @@ export function MemberDetail() {
         emergencyContactPhone: member.emergencyContactPhone || "",
         membershipType: member.membershipType || "",
         waiverSigned: member.waiverSigned || false,
+        profileImageUrl: member.profileImageUrl || "",
       });
       setEditErrors({});
       setEditOpen(true);
@@ -390,6 +429,7 @@ export function MemberDetail() {
           emergencyContactPhone: editForm.emergencyContactPhone || null,
           membershipType: editForm.membershipType || null,
           waiverSigned: editForm.waiverSigned,
+          profileImageUrl: editForm.profileImageUrl || null,
         },
       },
       {
@@ -553,6 +593,12 @@ export function MemberDetail() {
           </div>
 
           <div className="flex flex-wrap gap-2 shrink-0">
+            <button
+              onClick={() => { setCheckinOpen(true); setSelectedClassId(null); }}
+              className="flex items-center gap-2 px-3 py-2 bg-primary/10 border border-primary/20 rounded-xl text-sm font-medium text-primary hover:bg-primary/20 transition-colors"
+            >
+              <CheckCircle className="h-4 w-4" /> Check In
+            </button>
             <button
               onClick={handleEditOpen}
               className="flex items-center gap-2 px-3 py-2 bg-secondary border border-border rounded-xl text-sm font-medium text-foreground hover:bg-secondary transition-colors"
@@ -758,16 +804,23 @@ export function MemberDetail() {
               <div className="space-y-6">
                 {timeline.map((event) => (
                   <div key={event.id} className="relative flex gap-4 pl-10">
-                    <div className="absolute left-2.5 top-1 h-3 w-3 rounded-full bg-primary border-2 border-card" />
+                    <div className={`absolute left-2.5 top-1 h-3 w-3 rounded-full border-2 border-card ${
+                      event.type === "email_sent" ? "bg-blue-500" : "bg-primary"
+                    }`} />
                     <div className="flex-1">
                       <div className="flex items-center justify-between gap-2">
-                        <h4 className="text-sm font-medium text-foreground">{event.title}</h4>
+                        <div className="flex items-center gap-2">
+                          {event.type === "email_sent" && <Mail className="h-3.5 w-3.5 text-blue-500" />}
+                          <h4 className="text-sm font-medium text-foreground">{event.title}</h4>
+                        </div>
                         <span className="text-xs text-muted-foreground shrink-0">{new Date(event.date).toLocaleDateString()}</span>
                       </div>
                       {event.description && (
                         <p className="text-xs text-muted-foreground mt-1">{event.description}</p>
                       )}
-                      <span className="inline-block mt-1 px-2 py-0.5 bg-secondary rounded text-[10px] text-muted-foreground font-medium uppercase">{event.type}</span>
+                      <span className={`inline-block mt-1 px-2 py-0.5 rounded text-[10px] font-medium uppercase ${
+                        event.type === "email_sent" ? "bg-blue-500/10 text-blue-500" : "bg-secondary text-muted-foreground"
+                      }`}>{event.type === "email_sent" ? "EMAIL SENT" : event.type}</span>
                     </div>
                   </div>
                 ))}
@@ -1191,6 +1244,14 @@ export function MemberDetail() {
         statusAction={statusAction}
         setStatusAction={setStatusAction}
         handleStatusChange={handleStatusChange}
+        checkinOpen={checkinOpen}
+        setCheckinOpen={setCheckinOpen}
+        selectedClassId={selectedClassId}
+        setSelectedClassId={setSelectedClassId}
+        todayClasses={todayClasses}
+        classesLoading={classesLoading && checkinOpen}
+        handleCheckin={handleCheckin}
+        checkinPending={checkInMutation.isPending}
       />
     </div>
   );

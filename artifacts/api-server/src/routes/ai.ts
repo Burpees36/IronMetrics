@@ -1,6 +1,7 @@
 import { Router, type IRouter, type Request, type Response, type NextFunction } from "express";
 import { eq, desc, and } from "drizzle-orm";
 import { db, aiTasksTable, aiGeneratedContentTable, membersTable, leadsTable, gymsTable, gymStaffTable } from "@workspace/db";
+import { sendMemberEmail, logMemberEmailSent } from "../services/member-email";
 import { CreateAiTaskBody, GenerateMemberOutreachBody, UpdateAiTaskBody } from "@workspace/api-zod";
 import { generateAiTasks } from "../services/ai-task-generation";
 import { getEmailService } from "../services/email-service";
@@ -280,22 +281,43 @@ router.post("/gyms/:gymId/ai/tasks/:taskId/send-email", async (req, res): Promis
   };
   const subject = task.subject || subjectMap[task.type] || `Message from your gym`;
 
-  const result = await emailService.sendEmail({
-    to: recipientEmail,
-    subject,
-    text: task.aiContent,
-    fromEmail: gym.fromEmail,
-    fromName: gym.fromName || undefined,
-  });
+  if (task.targetType === "member" && task.targetId) {
+    const result = await sendMemberEmail({
+      memberId: task.targetId,
+      gymId,
+      to: recipientEmail,
+      subject,
+      text: task.aiContent,
+      fromEmail: gym.fromEmail,
+      fromName: gym.fromName || undefined,
+      emailType: task.type,
+      timelineTitle: "AI Operator email sent",
+    });
 
-  if (!result.success) {
-    res.status(500).json({ error: result.error || "Failed to send email" });
-    return;
+    if (!result.success) {
+      res.status(500).json({ error: result.error || "Failed to send email" });
+      return;
+    }
+
+    await db.update(aiTasksTable).set({ status: "sent", updatedAt: new Date() }).where(eq(aiTasksTable.id, taskId));
+    res.json({ success: true, messageId: result.messageId, recipientEmail, recipientName });
+  } else {
+    const result = await emailService.sendEmail({
+      to: recipientEmail,
+      subject,
+      text: task.aiContent,
+      fromEmail: gym.fromEmail,
+      fromName: gym.fromName || undefined,
+    });
+
+    if (!result.success) {
+      res.status(500).json({ error: result.error || "Failed to send email" });
+      return;
+    }
+
+    await db.update(aiTasksTable).set({ status: "sent", updatedAt: new Date() }).where(eq(aiTasksTable.id, taskId));
+    res.json({ success: true, messageId: result.messageId, recipientEmail, recipientName });
   }
-
-  await db.update(aiTasksTable).set({ status: "sent", updatedAt: new Date() }).where(eq(aiTasksTable.id, taskId));
-
-  res.json({ success: true, messageId: result.messageId, recipientEmail, recipientName });
 });
 
 router.post("/gyms/:gymId/ai/generate-tasks", async (req, res): Promise<void> => {
