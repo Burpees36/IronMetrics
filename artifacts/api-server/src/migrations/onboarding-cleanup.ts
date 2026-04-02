@@ -1,4 +1,4 @@
-import { eq, and, inArray } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import {
   db,
   aiTasksTable,
@@ -24,12 +24,7 @@ export async function runOnboardingMigrationCleanup(): Promise<void> {
     const newMemberSequences = await db
       .select({ id: retentionSequencesTable.id })
       .from(retentionSequencesTable)
-      .where(
-        and(
-          eq(retentionSequencesTable.type, "new_member"),
-          eq(retentionSequencesTable.name, "New Member Support"),
-        ),
-      );
+      .where(eq(retentionSequencesTable.type, "new_member"));
 
     if (newMemberSequences.length > 0) {
       const sequenceIds = newMemberSequences.map((s) => s.id);
@@ -74,9 +69,8 @@ export async function runOnboardingMigrationCleanup(): Promise<void> {
     let totalSeeded = 0;
     for (const gym of allGyms) {
       const existingTypes = gymTypeMap.get(gym.id) ?? new Set();
-      if (existingTypes.size === 0) continue;
-
       const toSeed = DEFAULT_SEQUENCES.filter((def) => !existingTypes.has(def.type));
+      if (toSeed.length === 0) continue;
 
       for (const def of toSeed) {
         const [seq] = await db.insert(retentionSequencesTable).values({
