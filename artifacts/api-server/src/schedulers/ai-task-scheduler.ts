@@ -1,5 +1,6 @@
 import { db, gymsTable } from "@workspace/db";
 import { generateAiTasks } from "../services/ai-task-generation";
+import { runOutcomeDetection } from "../services/outcome-detection";
 
 const DEFAULT_SCAN_HOUR = 5;
 const DEFAULT_SCAN_MINUTE = 0;
@@ -61,11 +62,19 @@ async function runAiTaskGenerationForAllGyms(): Promise<void> {
     }
   }
 
+  let outcomeResult = { evaluated: 0, updated: 0 };
+  try {
+    outcomeResult = await runOutcomeDetection();
+  } catch (err: any) {
+    console.error("[ai-task-scheduler] Error running outcome detection:", err.message);
+  }
+
   lastRunTimestamp = new Date();
 
   console.log(
     `[ai-task-scheduler] Scheduled run complete: ${gyms.length} gyms processed, ` +
-    `tasks_created=${totalCreated}, errors=${totalErrors}`
+    `tasks_created=${totalCreated}, errors=${totalErrors}, ` +
+    `outcomes_evaluated=${outcomeResult.evaluated}, outcomes_updated=${outcomeResult.updated}`
   );
 }
 

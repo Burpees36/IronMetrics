@@ -3284,6 +3284,20 @@ export const ListAiTasksResponseItem = zod.object({
   targetType: zod.string().nullish(),
   aiContent: zod.string().nullish(),
   subject: zod.string().nullish(),
+  outcome: zod
+    .union([
+      zod.literal("none"),
+      zod.literal("pending_observation"),
+      zod.literal("won_back"),
+      zod.literal("reactivated"),
+      zod.literal("converted"),
+      zod.literal("no_change"),
+      zod.literal(null),
+    ])
+    .nullish(),
+  outcomeDetectedAt: zod.date().nullish(),
+  revenueImpact: zod.string().nullish(),
+  actionedAt: zod.date().nullish(),
   createdAt: zod.date(),
 });
 export const ListAiTasksResponse = zod.array(ListAiTasksResponseItem);
@@ -3333,6 +3347,20 @@ export const GenerateAiTasksResponse = zod.object({
       targetType: zod.string().nullish(),
       aiContent: zod.string().nullish(),
       subject: zod.string().nullish(),
+      outcome: zod
+        .union([
+          zod.literal("none"),
+          zod.literal("pending_observation"),
+          zod.literal("won_back"),
+          zod.literal("reactivated"),
+          zod.literal("converted"),
+          zod.literal("no_change"),
+          zod.literal(null),
+        ])
+        .nullish(),
+      outcomeDetectedAt: zod.date().nullish(),
+      revenueImpact: zod.string().nullish(),
+      actionedAt: zod.date().nullish(),
       createdAt: zod.date(),
     }),
   ),
@@ -3366,6 +3394,20 @@ export const UpdateAiTaskResponse = zod.object({
   targetType: zod.string().nullish(),
   aiContent: zod.string().nullish(),
   subject: zod.string().nullish(),
+  outcome: zod
+    .union([
+      zod.literal("none"),
+      zod.literal("pending_observation"),
+      zod.literal("won_back"),
+      zod.literal("reactivated"),
+      zod.literal("converted"),
+      zod.literal("no_change"),
+      zod.literal(null),
+    ])
+    .nullish(),
+  outcomeDetectedAt: zod.date().nullish(),
+  revenueImpact: zod.string().nullish(),
+  actionedAt: zod.date().nullish(),
   createdAt: zod.date(),
 });
 
@@ -3382,6 +3424,42 @@ export const SendAiTaskEmailResponse = zod.object({
   messageId: zod.string().nullish(),
   recipientEmail: zod.string(),
   recipientName: zod.string(),
+});
+
+/**
+ * @summary Get AI Operator outcome tracking and revenue attribution stats
+ */
+export const GetAiImpactParams = zod.object({
+  gymId: zod.coerce.number(),
+});
+
+export const GetAiImpactQueryParams = zod.object({
+  startDate: zod.date().optional(),
+  endDate: zod.date().optional(),
+});
+
+export const GetAiImpactResponse = zod.object({
+  totalActioned: zod.number(),
+  outcomeCounts: zod.object({
+    won_back: zod.number(),
+    reactivated: zod.number(),
+    converted: zod.number(),
+    no_change: zod.number(),
+    pending_observation: zod.number(),
+  }),
+  successRate: zod.number(),
+  membersSaved: zod.number(),
+  totalRevenueRetained: zod.number(),
+  totalRevenueRecovered: zod.number(),
+  timeline: zod.array(
+    zod.object({
+      month: zod.string(),
+      won_back: zod.number(),
+      reactivated: zod.number(),
+      converted: zod.number(),
+      no_change: zod.number(),
+    }),
+  ),
 });
 
 /**

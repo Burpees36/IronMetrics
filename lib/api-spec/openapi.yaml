@@ -3200,6 +3200,37 @@ paths:
               schema:
                 $ref: "#/components/schemas/SendEmailResponse"
 
+  /gyms/{gymId}/ai/impact:
+    get:
+      operationId: getAiImpact
+      tags: [ai-operator]
+      summary: Get AI Operator outcome tracking and revenue attribution stats
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: startDate
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+        - name: endDate
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+      responses:
+        "200":
+          description: AI impact and revenue attribution data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AiImpactResponse"
+
   /gyms/{gymId}/ai/last-scan:
     get:
       operationId: getAiLastScan
@@ -6193,6 +6224,17 @@ components:
           type: ["string", "null"]
         subject:
           type: ["string", "null"]
+        outcome:
+          type: ["string", "null"]
+          enum: [none, pending_observation, won_back, reactivated, converted, no_change, null]
+        outcomeDetectedAt:
+          type: ["string", "null"]
+          format: date-time
+        revenueImpact:
+          type: ["string", "null"]
+        actionedAt:
+          type: ["string", "null"]
+          format: date-time
         createdAt:
           type: string
           format: date-time
@@ -6269,6 +6311,68 @@ components:
         - success
         - recipientEmail
         - recipientName
+
+    AiImpactResponse:
+      type: object
+      properties:
+        totalActioned:
+          type: integer
+        outcomeCounts:
+          type: object
+          properties:
+            won_back:
+              type: integer
+            reactivated:
+              type: integer
+            converted:
+              type: integer
+            no_change:
+              type: integer
+            pending_observation:
+              type: integer
+          required:
+            - won_back
+            - reactivated
+            - converted
+            - no_change
+            - pending_observation
+        successRate:
+          type: integer
+        membersSaved:
+          type: integer
+        totalRevenueRetained:
+          type: number
+        totalRevenueRecovered:
+          type: number
+        timeline:
+          type: array
+          items:
+            type: object
+            properties:
+              month:
+                type: string
+              won_back:
+                type: integer
+              reactivated:
+                type: integer
+              converted:
+                type: integer
+              no_change:
+                type: integer
+            required:
+              - month
+              - won_back
+              - reactivated
+              - converted
+              - no_change
+      required:
+        - totalActioned
+        - outcomeCounts
+        - successRate
+        - membersSaved
+        - totalRevenueRetained
+        - totalRevenueRecovered
+        - timeline
 
     AiLastScanResponse:
       type: object

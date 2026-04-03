@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from "react";
 import { useGym } from "@/store/GymContext";
-import { useListAiTasks, useGenerateOwnerBrief, useUpdateAiTask, useGenerateAiTasks, useGetDashboardStats, getListAiTasksQueryKey, useSendAiTaskEmail, useGetAiEmailStatus, useGetAiLastScan } from "@workspace/api-client-react";
+import { useListAiTasks, useGenerateOwnerBrief, useUpdateAiTask, useGenerateAiTasks, useGetDashboardStats, getListAiTasksQueryKey, useSendAiTaskEmail, useGetAiEmailStatus, useGetAiLastScan, useGetAiImpact } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { motion, AnimatePresence } from "framer-motion";
@@ -16,8 +16,10 @@ import {
   Bot, Sparkles, Send, CheckCircle2, Clock, Loader2,
   FileText, X, Filter, Users, CreditCard,
   Target, Megaphone, BarChart3, Edit2, RefreshCw,
-  History, Mail, MailCheck, AlertCircle, Info,
+  History, Mail, MailCheck, AlertCircle, Info, TrendingUp, DollarSign,
+  UserCheck, Eye, ArrowUpRight, ArrowDownRight,
 } from "lucide-react";
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from "recharts";
 
 const EMAIL_TASK_TYPES = new Set(["outreach", "leads", "billing"]);
 
@@ -35,6 +37,14 @@ const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
   completed: { label: "Completed", color: "bg-emerald-500/10 text-emerald-500" },
   dismissed: { label: "Dismissed", color: "bg-muted text-muted-foreground" },
   approved: { label: "Approved", color: "bg-primary/10 text-primary" },
+};
+
+const OUTCOME_CONFIG: Record<string, { label: string; color: string; icon: React.ElementType }> = {
+  won_back: { label: "Member returned", color: "bg-emerald-500/10 text-emerald-500 border-emerald-500/20", icon: UserCheck },
+  reactivated: { label: "Reactivated", color: "bg-emerald-500/10 text-emerald-500 border-emerald-500/20", icon: ArrowUpRight },
+  converted: { label: "Converted", color: "bg-primary/10 text-primary border-primary/20", icon: TrendingUp },
+  no_change: { label: "No change", color: "bg-muted text-muted-foreground border-border", icon: ArrowDownRight },
+  pending_observation: { label: "Observing", color: "bg-amber-500/10 text-amber-500 border-amber-500/20", icon: Eye },
 };
 
 function getTypeConfig(type: string) {
@@ -61,7 +71,7 @@ export function AiOperator() {
   const [editContent, setEditContent] = useState("");
   const [editSubject, setEditSubject] = useState("");
   const [activeFilter, setActiveFilter] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<"pending" | "history">("pending");
+  const [activeTab, setActiveTab] = useState<"pending" | "history" | "impact">("pending");
   const [historyFilter, setHistoryFilter] = useState<string | null>(null);
   const [sendingTaskId, setSendingTaskId] = useState<number | null>(null);
 
@@ -79,6 +89,10 @@ export function AiOperator() {
 
   const { data: lastScanData } = useGetAiLastScan(activeGymId as number, {
     query: { enabled: !!activeGymId, refetchInterval: 60_000 }
+  });
+
+  const { data: impactData } = useGetAiImpact(activeGymId as number, undefined, {
+    query: { enabled: !!activeGymId }
   });
 
   const platformConfigured = emailStatus?.configured ?? false;
@@ -373,6 +387,17 @@ export function AiOperator() {
                 <History className="h-3 w-3" />
                 History ({historyTasks.length})
               </button>
+              <button
+                onClick={() => { setActiveTab("impact"); setActiveFilter(null); setHistoryFilter(null); }}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                  activeTab === "impact"
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <TrendingUp className="h-3 w-3" />
+                Impact
+              </button>
             </div>
           </div>
 
@@ -450,6 +475,120 @@ export function AiOperator() {
               <X className="h-12 w-12 text-destructive/50 mb-4" />
               <h3 className="text-lg font-semibold text-foreground">Failed to load tasks</h3>
               <p className="text-muted-foreground text-sm mt-1">Please try refreshing the page.</p>
+            </div>
+          ) : activeTab === "impact" ? (
+            <div className="space-y-6 p-2">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
+                <div className="p-4 rounded-xl border border-border bg-background">
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                      <CheckCircle2 className="h-4 w-4 text-primary" />
+                    </div>
+                    <span className="text-xs text-muted-foreground font-medium">Tasks Actioned</span>
+                  </div>
+                  <p className="text-2xl font-bold text-foreground">{impactData?.totalActioned ?? 0}</p>
+                </div>
+                <div className="p-4 rounded-xl border border-border bg-background">
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="h-8 w-8 rounded-lg bg-emerald-500/10 flex items-center justify-center">
+                      <UserCheck className="h-4 w-4 text-emerald-500" />
+                    </div>
+                    <span className="text-xs text-muted-foreground font-medium">Members Saved</span>
+                  </div>
+                  <p className="text-2xl font-bold text-foreground">{impactData?.membersSaved ?? 0}</p>
+                </div>
+                <div className="p-4 rounded-xl border border-border bg-background">
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="h-8 w-8 rounded-lg bg-emerald-500/10 flex items-center justify-center">
+                      <TrendingUp className="h-4 w-4 text-emerald-500" />
+                    </div>
+                    <span className="text-xs text-muted-foreground font-medium">Success Rate</span>
+                  </div>
+                  <p className="text-2xl font-bold text-foreground">{impactData?.successRate ?? 0}%</p>
+                </div>
+                <div className="p-4 rounded-xl border border-border bg-background">
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="h-8 w-8 rounded-lg bg-emerald-500/10 flex items-center justify-center">
+                      <DollarSign className="h-4 w-4 text-emerald-500" />
+                    </div>
+                    <span className="text-xs text-muted-foreground font-medium">Revenue Impact</span>
+                  </div>
+                  <p className="text-2xl font-bold text-foreground">${((impactData?.totalRevenueRetained ?? 0) + (impactData?.totalRevenueRecovered ?? 0)).toLocaleString()}<span className="text-sm font-normal text-muted-foreground">/mo</span></p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="p-4 rounded-xl border border-border bg-background">
+                  <h3 className="text-sm font-semibold text-foreground mb-3">Revenue Breakdown</h3>
+                  <div className="space-y-3">
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs text-muted-foreground">Revenue Retained</span>
+                      <span className="text-sm font-medium text-emerald-500">${(impactData?.totalRevenueRetained ?? 0).toLocaleString()}/mo</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs text-muted-foreground">Revenue Recovered</span>
+                      <span className="text-sm font-medium text-emerald-500">${(impactData?.totalRevenueRecovered ?? 0).toLocaleString()}/mo</span>
+                    </div>
+                  </div>
+                </div>
+                <div className="p-4 rounded-xl border border-border bg-background">
+                  <h3 className="text-sm font-semibold text-foreground mb-3">Outcome Breakdown</h3>
+                  <div className="space-y-2">
+                    {[
+                      { key: "won_back", label: "Won Back", color: "bg-emerald-500" },
+                      { key: "reactivated", label: "Reactivated", color: "bg-emerald-400" },
+                      { key: "converted", label: "Converted", color: "bg-primary" },
+                      { key: "no_change", label: "No Change", color: "bg-muted-foreground" },
+                      { key: "pending_observation", label: "Observing", color: "bg-amber-500" },
+                    ].map(({ key, label, color }) => {
+                      const count = (impactData?.outcomeCounts as any)?.[key] ?? 0;
+                      const total = impactData?.totalActioned ?? 0;
+                      const pct = total > 0 ? Math.round((count / total) * 100) : 0;
+                      return (
+                        <div key={key} className="flex items-center gap-3">
+                          <div className={`h-2 w-2 rounded-full ${color} shrink-0`} />
+                          <span className="text-xs text-muted-foreground flex-1">{label}</span>
+                          <span className="text-xs font-medium text-foreground">{count}</span>
+                          <span className="text-xs text-muted-foreground w-8 text-right">{pct}%</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+
+              {impactData?.timeline && impactData.timeline.length > 0 && (
+                <div className="p-4 rounded-xl border border-border bg-background">
+                  <h3 className="text-sm font-semibold text-foreground mb-4">Outcomes Over Time</h3>
+                  <div className="h-64">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={impactData.timeline} margin={{ top: 5, right: 5, left: 0, bottom: 5 }}>
+                        <XAxis dataKey="month" tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" />
+                        <YAxis allowDecimals={false} tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" />
+                        <Tooltip
+                          contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px", fontSize: "12px" }}
+                          labelStyle={{ color: "hsl(var(--foreground))" }}
+                        />
+                        <Legend wrapperStyle={{ fontSize: "11px" }} />
+                        <Bar dataKey="won_back" name="Won Back" fill="#10b981" stackId="a" radius={[0, 0, 0, 0]} />
+                        <Bar dataKey="reactivated" name="Reactivated" fill="#34d399" stackId="a" />
+                        <Bar dataKey="converted" name="Converted" fill="hsl(var(--primary))" stackId="a" />
+                        <Bar dataKey="no_change" name="No Change" fill="#6b7280" stackId="a" radius={[4, 4, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              )}
+
+              {(!impactData || impactData.totalActioned === 0) && (
+                <div className="text-center py-12 flex flex-col items-center">
+                  <TrendingUp className="h-12 w-12 text-muted-foreground/50 mb-4" />
+                  <h3 className="text-lg font-semibold text-foreground">No Impact Data Yet</h3>
+                  <p className="text-muted-foreground text-sm mt-1 max-w-md">
+                    As you action AI tasks (approve, complete, or send emails), the system will track outcomes and show measurable results here.
+                  </p>
+                </div>
+              )}
             </div>
           ) : activeTab === "pending" ? (
             filteredPendingTasks.length > 0 ? (
@@ -610,13 +749,23 @@ export function AiOperator() {
                             </p>
                           </div>
                         </div>
-                        <div className="flex items-center gap-2 self-start shrink-0">
+                        <div className="flex items-center gap-2 self-start shrink-0 flex-wrap">
                           <span className={`px-2.5 py-1 rounded text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 ${statusCfg.color}`}>
                             {task.status === 'sent' && <MailCheck className="h-3 w-3" />}
                             {task.status === 'completed' && <CheckCircle2 className="h-3 w-3" />}
                             {task.status === 'dismissed' && <X className="h-3 w-3" />}
                             {statusCfg.label}
                           </span>
+                          {task.outcome && task.outcome !== "none" && OUTCOME_CONFIG[task.outcome] && (() => {
+                            const outcomeCfg = OUTCOME_CONFIG[task.outcome];
+                            const OutcomeIcon = outcomeCfg.icon;
+                            return (
+                              <span className={`px-2.5 py-1 rounded border text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 ${outcomeCfg.color}`}>
+                                <OutcomeIcon className="h-3 w-3" />
+                                {outcomeCfg.label}
+                              </span>
+                            );
+                          })()}
                         </div>
                       </div>
 
@@ -649,6 +798,13 @@ export function AiOperator() {
                           return null;
                         }
                       })()}
+
+                      {task.revenueImpact && parseFloat(task.revenueImpact) > 0 && (
+                        <div className="flex items-center gap-1.5 mb-3 text-xs text-emerald-500">
+                          <DollarSign className="h-3 w-3" />
+                          <span className="font-medium">${parseFloat(task.revenueImpact).toFixed(2)}/mo revenue impact</span>
+                        </div>
+                      )}
 
                       {task.aiContent && (
                         <div className="p-3 md:p-4 rounded-lg bg-secondary border border-border text-xs md:text-sm font-mono text-foreground/60 relative whitespace-pre-wrap">

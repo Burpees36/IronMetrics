@@ -1,6 +1,6 @@
 import { Router, type IRouter, type Request, type Response, type NextFunction } from "express";
-import { eq, desc, and } from "drizzle-orm";
-import { db, aiTasksTable, aiGeneratedContentTable, membersTable, leadsTable, gymsTable, gymStaffTable } from "@workspace/db";
+import { eq, desc, and, sql, gte, lte } from "drizzle-orm";
+import { db, aiTasksTable, aiGeneratedContentTable, membersTable, leadsTable, gymsTable, gymStaffTable, subscriptionsTable } from "@workspace/db";
 import { sendMemberEmail, logMemberEmailSent } from "../services/member-email";
 import { CreateAiTaskBody, GenerateMemberOutreachBody, UpdateAiTaskBody } from "@workspace/api-zod";
 import { generateAiTasks } from "../services/ai-task-generation";
@@ -69,6 +69,12 @@ router.patch("/gyms/:gymId/ai/tasks/:taskId", async (req, res): Promise<void> =>
 
   if (updateData.status === "approved") {
     updateData.status = "completed";
+  }
+
+  const isBeingActioned = (updateData.status === "completed" || updateData.status === "sent") && !existing.actionedAt;
+  if (isBeingActioned) {
+    updateData.actionedAt = new Date();
+    updateData.outcome = "pending_observation";
   }
 
   const [updated] = await db.update(aiTasksTable).set(updateData).where(eq(aiTasksTable.id, taskId)).returning();
@@ -311,7 +317,12 @@ router.post("/gyms/:gymId/ai/tasks/:taskId/send-email", async (req, res): Promis
       return;
     }
 
-    await db.update(aiTasksTable).set({ status: "sent", updatedAt: new Date() }).where(eq(aiTasksTable.id, taskId));
+    const emailUpdateData: Record<string, any> = { status: "sent", updatedAt: new Date() };
+    if (!task.actionedAt) {
+      emailUpdateData.actionedAt = new Date();
+      emailUpdateData.outcome = "pending_observation";
+    }
+    await db.update(aiTasksTable).set(emailUpdateData).where(eq(aiTasksTable.id, taskId));
     res.json({ success: true, messageId: result.messageId, recipientEmail, recipientName });
   } else {
     const result = await emailService.sendEmail({
@@ -327,7 +338,12 @@ router.post("/gyms/:gymId/ai/tasks/:taskId/send-email", async (req, res): Promis
       return;
     }
 
-    await db.update(aiTasksTable).set({ status: "sent", updatedAt: new Date() }).where(eq(aiTasksTable.id, taskId));
+    const leadEmailUpdateData: Record<string, any> = { status: "sent", updatedAt: new Date() };
+    if (!task.actionedAt) {
+      leadEmailUpdateData.actionedAt = new Date();
+      leadEmailUpdateData.outcome = "pending_observation";
+    }
+    await db.update(aiTasksTable).set(leadEmailUpdateData).where(eq(aiTasksTable.id, taskId));
     res.json({ success: true, messageId: result.messageId, recipientEmail, recipientName });
   }
 });
@@ -346,6 +362,93 @@ router.post("/gyms/:gymId/ai/generate-tasks", async (req, res): Promise<void> =>
     console.error("Error generating AI tasks:", error);
     res.status(500).json({ error: "Failed to generate AI tasks" });
   }
+});
+
+router.get("/gyms/:gymId/ai/impact", async (req, res): Promise<void> => {
+  const gymId = parseGymId(req.params);
+  if (!gymId) { res.status(400).json({ error: "Invalid gym ID" }); return; }
+
+  const access = await verifyGymAccess(gymId, req.user!.id);
+  if (!access.allowed) { res.status(access.gym ? 403 : 404).json({ error: access.gym ? "You do not have access to this gym" : "Gym not found" }); return; }
+
+  const conditions: any[] = [eq(aiTasksTable.gymId, gymId), sql`${aiTasksTable.actionedAt} IS NOT NULL`];
+
+  const startDate = req.query.startDate as string | undefined;
+  const endDate = req.query.endDate as string | undefined;
+  if (startDate) {
+    const parsed = new Date(startDate);
+    if (isNaN(parsed.getTime())) { res.status(400).json({ error: "Invalid startDate" }); return; }
+    conditions.push(gte(aiTasksTable.actionedAt, parsed));
+  }
+  if (endDate) {
+    const parsed = new Date(endDate);
+    if (isNaN(parsed.getTime())) { res.status(400).json({ error: "Invalid endDate" }); return; }
+    conditions.push(lte(aiTasksTable.actionedAt, parsed));
+  }
+
+  const actionedTasks = await db.select().from(aiTasksTable).where(and(...conditions));
+
+  const totalActioned = actionedTasks.length;
+  const outcomeCounts: Record<string, number> = {
+    won_back: 0,
+    reactivated: 0,
+    converted: 0,
+    no_change: 0,
+    pending_observation: 0,
+  };
+
+  let totalRevenueRetained = 0;
+  let totalRevenueRecovered = 0;
+  let membersSaved = 0;
+
+  for (const task of actionedTasks) {
+    const outcome = task.outcome || "none";
+    if (outcome in outcomeCounts) {
+      outcomeCounts[outcome]++;
+    }
+
+    const impact = task.revenueImpact ? parseFloat(task.revenueImpact) : 0;
+
+    if (outcome === "won_back") {
+      totalRevenueRetained += impact;
+      membersSaved++;
+    } else if (outcome === "reactivated") {
+      totalRevenueRecovered += impact;
+      membersSaved++;
+    } else if (outcome === "converted") {
+      membersSaved++;
+    }
+  }
+
+  const resolvedTasks = actionedTasks.filter(t => t.outcome && t.outcome !== "pending_observation" && t.outcome !== "none");
+  const successfulTasks = resolvedTasks.filter(t => ["won_back", "reactivated", "converted"].includes(t.outcome!));
+  const successRate = resolvedTasks.length > 0 ? Math.round((successfulTasks.length / resolvedTasks.length) * 100) : 0;
+
+  const monthlyBreakdown: Record<string, { won_back: number; reactivated: number; converted: number; no_change: number }> = {};
+  for (const task of actionedTasks) {
+    if (!task.actionedAt || !task.outcome || task.outcome === "pending_observation" || task.outcome === "none") continue;
+    const monthKey = `${task.actionedAt.getFullYear()}-${String(task.actionedAt.getMonth() + 1).padStart(2, "0")}`;
+    if (!monthlyBreakdown[monthKey]) {
+      monthlyBreakdown[monthKey] = { won_back: 0, reactivated: 0, converted: 0, no_change: 0 };
+    }
+    if (task.outcome in monthlyBreakdown[monthKey]) {
+      (monthlyBreakdown[monthKey] as any)[task.outcome]++;
+    }
+  }
+
+  const timeline = Object.entries(monthlyBreakdown)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([month, data]) => ({ month, ...data }));
+
+  res.json({
+    totalActioned,
+    outcomeCounts,
+    successRate,
+    membersSaved,
+    totalRevenueRetained: Math.round(totalRevenueRetained * 100) / 100,
+    totalRevenueRecovered: Math.round(totalRevenueRecovered * 100) / 100,
+    timeline,
+  });
 });
 
 router.get("/gyms/:gymId/ai/last-scan", async (req, res): Promise<void> => {

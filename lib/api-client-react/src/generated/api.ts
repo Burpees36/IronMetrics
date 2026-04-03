@@ -20,6 +20,7 @@ import type {
   AdjustBalanceBody,
   AdjustMemberBalance200,
   AiGeneratedContent,
+  AiImpactResponse,
   AiLastScanResponse,
   AiTask,
   Announcement,
@@ -84,6 +85,7 @@ import type {
   GenerateOutreachBody,
   GenerateRecoveryLinkBody,
   GenerateRecoveryLinkResponse,
+  GetAiImpactParams,
   GetCancelledMembersParams,
   GetMemberBalance200,
   GetMemberBillingHistory200,
@@ -11484,6 +11486,115 @@ export const useSendAiTaskEmail = <
 > => {
   return useMutation(getSendAiTaskEmailMutationOptions(options));
 };
+
+/**
+ * @summary Get AI Operator outcome tracking and revenue attribution stats
+ */
+export const getGetAiImpactUrl = (
+  gymId: number,
+  params?: GetAiImpactParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/gyms/${gymId}/ai/impact?${stringifiedParams}`
+    : `/api/gyms/${gymId}/ai/impact`;
+};
+
+export const getAiImpact = async (
+  gymId: number,
+  params?: GetAiImpactParams,
+  options?: RequestInit,
+): Promise<AiImpactResponse> => {
+  return customFetch<AiImpactResponse>(getGetAiImpactUrl(gymId, params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetAiImpactQueryKey = (
+  gymId: number,
+  params?: GetAiImpactParams,
+) => {
+  return [`/api/gyms/${gymId}/ai/impact`, ...(params ? [params] : [])] as const;
+};
+
+export const getGetAiImpactQueryOptions = <
+  TData = Awaited<ReturnType<typeof getAiImpact>>,
+  TError = ErrorType<unknown>,
+>(
+  gymId: number,
+  params?: GetAiImpactParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getAiImpact>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetAiImpactQueryKey(gymId, params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getAiImpact>>> = ({
+    signal,
+  }) => getAiImpact(gymId, params, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!gymId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getAiImpact>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetAiImpactQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getAiImpact>>
+>;
+export type GetAiImpactQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get AI Operator outcome tracking and revenue attribution stats
+ */
+
+export function useGetAiImpact<
+  TData = Awaited<ReturnType<typeof getAiImpact>>,
+  TError = ErrorType<unknown>,
+>(
+  gymId: number,
+  params?: GetAiImpactParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getAiImpact>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetAiImpactQueryOptions(gymId, params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
 
 /**
  * @summary Get the timestamp of the last automated AI task scan

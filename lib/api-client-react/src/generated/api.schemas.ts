@@ -1574,6 +1574,22 @@ export const AiTaskStatus = {
   dismissed: "dismissed",
 } as const;
 
+/**
+ * @nullable
+ */
+export type AiTaskOutcome =
+  | (typeof AiTaskOutcome)[keyof typeof AiTaskOutcome]
+  | null;
+
+export const AiTaskOutcome = {
+  none: "none",
+  pending_observation: "pending_observation",
+  won_back: "won_back",
+  reactivated: "reactivated",
+  converted: "converted",
+  no_change: "no_change",
+} as const;
+
 export interface AiTask {
   id: number;
   gymId: number;
@@ -1590,6 +1606,14 @@ export interface AiTask {
   aiContent?: string | null;
   /** @nullable */
   subject?: string | null;
+  /** @nullable */
+  outcome?: AiTaskOutcome;
+  /** @nullable */
+  outcomeDetectedAt?: string | null;
+  /** @nullable */
+  revenueImpact?: string | null;
+  /** @nullable */
+  actionedAt?: string | null;
   createdAt: string;
 }
 
@@ -1645,6 +1669,32 @@ export interface SendEmailResponse {
   messageId?: string | null;
   recipientEmail: string;
   recipientName: string;
+}
+
+export type AiImpactResponseOutcomeCounts = {
+  won_back: number;
+  reactivated: number;
+  converted: number;
+  no_change: number;
+  pending_observation: number;
+};
+
+export type AiImpactResponseTimelineItem = {
+  month: string;
+  won_back: number;
+  reactivated: number;
+  converted: number;
+  no_change: number;
+};
+
+export interface AiImpactResponse {
+  totalActioned: number;
+  outcomeCounts: AiImpactResponseOutcomeCounts;
+  successRate: number;
+  membersSaved: number;
+  totalRevenueRetained: number;
+  totalRevenueRecovered: number;
+  timeline: AiImpactResponseTimelineItem[];
 }
 
 export interface AiLastScanResponse {
@@ -2296,6 +2346,11 @@ export const GetRsiHistoryWindow = {
 
 export type SubmitLeadCapture201 = {
   message?: string;
+};
+
+export type GetAiImpactParams = {
+  startDate?: string;
+  endDate?: string;
 };
 
 export type PreviewPlanChangeBody = {

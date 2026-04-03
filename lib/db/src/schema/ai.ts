@@ -16,6 +16,10 @@ export const aiTasksTable = pgTable("ai_tasks", {
   aiContent: text("ai_content"),
   subject: text("subject"),
   personalizationMeta: text("personalization_meta"),
+  outcome: text("outcome").default("none"),
+  outcomeDetectedAt: timestamp("outcome_detected_at", { withTimezone: true }),
+  revenueImpact: numeric("revenue_impact", { precision: 10, scale: 2 }),
+  actionedAt: timestamp("actioned_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });
