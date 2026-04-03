@@ -797,7 +797,7 @@ export function AiInsights() {
               className="flex items-center justify-center gap-2 px-4 py-2.5 bg-card border border-border hover:border-primary/50 text-foreground rounded-xl font-medium transition-all shadow-sm disabled:opacity-50 min-h-[44px] flex-1 sm:flex-initial"
             >
               {generateTasksMutation.isPending ? <Loader2 className="h-5 w-5 animate-spin text-primary" /> : <RefreshCw className="h-5 w-5 text-primary" />}
-              <span>Scan</span>
+              <span>Scan Now</span>
             </button>
             <button
               onClick={() => generateBrief.mutate({ gymId: activeGymId as number })}
@@ -805,7 +805,7 @@ export function AiInsights() {
               className="flex items-center justify-center gap-2 px-4 py-2.5 bg-card border border-border hover:border-primary/50 text-foreground rounded-xl font-medium transition-all shadow-sm disabled:opacity-50 min-h-[44px] flex-1 sm:flex-initial"
             >
               {isGeneratingBrief ? <Loader2 className="h-5 w-5 animate-spin text-primary" /> : <Sparkles className="h-5 w-5 text-primary" />}
-              <span>Brief</span>
+              <span>Generate Brief</span>
             </button>
           </div>
         </div>
@@ -849,6 +849,7 @@ export function AiInsights() {
               activeMembers={activeMembers}
               atRiskMembers={atRiskMembers}
               pendingCount={pendingCount}
+              impactData={impactData}
             />
           )}
 
@@ -1007,12 +1008,13 @@ export function AiInsights() {
   );
 }
 
-function OverviewTab({ rsi, rsiHistory, trendWindow, setTrendWindow, morningBriefing, activeMembers, atRiskMembers, pendingCount }: {
+function OverviewTab({ rsi, rsiHistory, trendWindow, setTrendWindow, morningBriefing, activeMembers, atRiskMembers, pendingCount, impactData }: {
   rsi: { score: number; band: string; insight: string; breakdown: Array<{ metric: string; weight: number; normalized: number; value: number }>; trendInsufficient?: boolean; trend30d?: number | null; trend90d?: number | null };
   rsiHistory: { dataPoints?: Array<{ date: string; score: number; band: string }>; insufficient?: boolean } | undefined;
   trendWindow: "30d" | "90d" | "all";
   setTrendWindow: (w: "30d" | "90d" | "all") => void;
   morningBriefing: { summary?: string; items?: Array<{ icon: string; priority: string; message: string; action?: string; link?: string }>; snapshot?: Record<string, unknown> } | undefined;
+  impactData: { totalRevenueRetained?: number; totalRevenueRecovered?: number; totalActioned?: number; membersSaved?: number; successRate?: number; outcomeCounts?: Record<string, number>; timeline?: Array<Record<string, unknown>> } | undefined;
   activeMembers: number;
   atRiskMembers: number;
   pendingCount: number;
@@ -1044,15 +1046,15 @@ function OverviewTab({ rsi, rsiHistory, trendWindow, setTrendWindow, morningBrie
 
         <div className="lg:col-span-2 space-y-4">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <StatCard label="Active Members" value={String(activeMembers)} icon={Users} />
-            <StatCard label="At Risk" value={String(atRiskMembers)} icon={ShieldAlert} color={atRiskMembers > 0 ? "text-destructive" : undefined} />
-            <StatCard label="Pending Tasks" value={String(pendingCount)} icon={Activity} />
+            <StatCard label="At-Risk Members" value={String(atRiskMembers)} icon={ShieldAlert} color={atRiskMembers > 0 ? "text-destructive" : undefined} />
+            <StatCard label="Pending AI Tasks" value={String(pendingCount)} icon={Activity} />
+            <StatCard label="Revenue Impact" value={impactData?.totalRevenueRetained != null ? `$${Math.round(impactData.totalRevenueRetained).toLocaleString()}` : "—"} icon={TrendingUp} color="text-emerald-500" />
             <StatCard
-              label="RSI Trend"
-              value={rsi.trendInsufficient ? "—" : rsi.trend30d != null ? `${rsi.trend30d >= 0 ? '+' : ''}${rsi.trend30d}` : "—"}
-              icon={rsi.trend30d != null && rsi.trend30d >= 0 ? TrendingUp : TrendingDown}
-              color={rsi.trend30d != null ? (rsi.trend30d >= 0 ? "text-emerald-500" : "text-destructive") : undefined}
-              subtitle="30d"
+              label="RSI Score"
+              value={rsi.score != null ? String(rsi.score) : "—"}
+              icon={Zap}
+              color={rsi.band === "Strong" || rsi.band === "Excellent" ? "text-emerald-500" : rsi.band === "At Risk" || rsi.band === "Critical" ? "text-destructive" : undefined}
+              subtitle={rsi.band || undefined}
             />
           </div>
 
