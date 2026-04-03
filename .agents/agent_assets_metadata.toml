@@ -18,3 +18,9 @@ id = "1vf8i7F-XpZdLfQdtEKQG"
 uri = "file://.local/research/competitor-pricing-comparison.md"
 type = "text"
 title = "Competitor Pricing Comparison: Wodify vs. Mindbody vs. PushPress"
+
+[[outputs]]
+id = "siN-OmL2tDxpUZ3L_eCvO"
+uri = "file://docs/ai-product-roadmap.md"
+type = "text"
+title = "AI & Intelligence Product Roadmap"
