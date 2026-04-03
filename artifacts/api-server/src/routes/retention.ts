@@ -651,8 +651,9 @@ router.post("/gyms/:gymId/retention/enroll", async (req, res): Promise<void> => 
     });
 
     res.status(201).json(enrollment);
-  } catch (err: any) {
-    console.error("[retention] manual enroll error:", err.message);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Unknown error";
+    console.error("[retention] manual enroll error:", message);
     res.status(500).json({ error: "Failed to enroll member" });
   }
 });
