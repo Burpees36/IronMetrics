@@ -1,0 +1,1788 @@
+import React, { useState, useMemo } from "react";
+import { useGym } from "@/store/GymContext";
+import {
+  useGetIntelligenceOverview,
+  useListAiTasks,
+  useGenerateOwnerBrief,
+  useUpdateAiTask,
+  useGenerateAiTasks,
+  useGetDashboardStats,
+  getListAiTasksQueryKey,
+  useSendAiTaskEmail,
+  useGetAiEmailStatus,
+  useGetAiLastScan,
+  useGetAiImpact,
+  useGetAutopilotSettings,
+  useUpdateAutopilotSettings,
+  getGetAutopilotSettingsQueryKey,
+  useGetMorningBriefing,
+} from "@workspace/api-client-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useToast } from "@/hooks/use-toast";
+import { motion, AnimatePresence } from "framer-motion";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import {
+  BrainCircuit, Sparkles, Send, CheckCircle2, Clock, Loader2,
+  FileText, X, Filter, Users, CreditCard,
+  Target, Megaphone, BarChart3, Edit2, RefreshCw,
+  History, Mail, MailCheck, AlertCircle, Info, TrendingUp, TrendingDown, DollarSign,
+  UserCheck, Eye, ArrowUpRight, ArrowDownRight,
+  Settings, Zap, ShieldCheck, CalendarDays, Activity, ShieldAlert,
+} from "lucide-react";
+import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from "recharts";
+import { useIsMobile } from "@/hooks/useMobile";
+import { useGymTier } from "@/hooks/useGymTier";
+
+const BASE_URL = import.meta.env.BASE_URL || "/";
+const API_BASE = `${BASE_URL}api`.replace(/\/+/g, "/");
+
+const EMAIL_TASK_TYPES = new Set(["outreach", "leads", "billing"]);
+
+const TYPE_CONFIG: Record<string, { label: string; icon: React.ElementType; color: string }> = {
+  outreach: { label: "Outreach", icon: Send, color: "bg-blue-500/10 text-blue-500" },
+  billing: { label: "Billing", icon: CreditCard, color: "bg-amber-500/10 text-amber-500" },
+  retention: { label: "Retention", icon: Users, color: "bg-purple-500/10 text-purple-500" },
+  leads: { label: "Leads", icon: Target, color: "bg-cyan-500/10 text-cyan-500" },
+  campaign: { label: "Campaign", icon: Megaphone, color: "bg-pink-500/10 text-pink-500" },
+  analysis: { label: "Analysis", icon: BarChart3, color: "bg-orange-500/10 text-orange-500" },
+};
+
+const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
+  sent: { label: "Sent", color: "bg-blue-500/10 text-blue-500" },
+  completed: { label: "Completed", color: "bg-emerald-500/10 text-emerald-500" },
+  dismissed: { label: "Dismissed", color: "bg-muted text-muted-foreground" },
+  approved: { label: "Approved", color: "bg-primary/10 text-primary" },
+};
+
+const OUTCOME_CONFIG: Record<string, { label: string; color: string; icon: React.ElementType }> = {
+  won_back: { label: "Member returned", color: "bg-emerald-500/10 text-emerald-500 border-emerald-500/20", icon: UserCheck },
+  reactivated: { label: "Reactivated", color: "bg-emerald-500/10 text-emerald-500 border-emerald-500/20", icon: ArrowUpRight },
+  converted: { label: "Converted", color: "bg-primary/10 text-primary border-primary/20", icon: TrendingUp },
+  no_change: { label: "No change", color: "bg-muted text-muted-foreground border-border", icon: ArrowDownRight },
+  pending_observation: { label: "Observing", color: "bg-amber-500/10 text-amber-500 border-amber-500/20", icon: Eye },
+};
+
+function getTypeConfig(type: string) {
+  return TYPE_CONFIG[type] || { label: type, icon: FileText, color: "bg-secondary text-secondary-foreground" };
+}
+
+function isEmailType(type: string) {
+  return EMAIL_TASK_TYPES.has(type);
+}
+
+function hasTarget(task: { targetId?: number | null; targetType?: string | null }) {
+  return task.targetId && task.targetType;
+}
+
+function useRsiHistory(gymId: number | null, window: string) {
+  return useQuery({
+    queryKey: ["rsi-history", gymId, window],
+    queryFn: async () => {
+      const res = await fetch(`${API_BASE}/gyms/${gymId}/intelligence/rsi/history?window=${window}`, { credentials: "include" });
+      if (!res.ok) return { window, dataPoints: [], insufficient: true };
+      return res.json();
+    },
+    enabled: !!gymId,
+    staleTime: 60000,
+  });
+}
+
+function useBenchmarks(gymId: number | null) {
+  return useQuery({
+    queryKey: ["benchmarks", gymId],
+    queryFn: async () => {
+      const res = await fetch(`${API_BASE}/gyms/${gymId}/intelligence/benchmarks`, { credentials: "include" });
+      if (!res.ok) return null;
+      return res.json();
+    },
+    enabled: !!gymId,
+    staleTime: 60000,
+  });
+}
+
+function ToggleSwitch({ checked, onChange, disabled }: { checked: boolean; onChange: (v: boolean) => void; disabled?: boolean }) {
+  return (
+    <button
+      role="switch"
+      aria-checked={checked}
+      onClick={() => !disabled && onChange(!checked)}
+      disabled={disabled}
+      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary/50 focus:ring-offset-2 focus:ring-offset-background disabled:opacity-50 disabled:cursor-not-allowed ${
+        checked ? "bg-primary" : "bg-muted"
+      }`}
+    >
+      <span
+        className={`inline-block h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${
+          checked ? "translate-x-6" : "translate-x-1"
+        }`}
+      />
+    </button>
+  );
+}
+
+function AutopilotModal({ gymId, open, onOpenChange }: { gymId: number; open: boolean; onOpenChange: (v: boolean) => void }) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const settingsQueryKey = getGetAutopilotSettingsQueryKey(gymId);
+
+  const { data: settings, isLoading } = useGetAutopilotSettings(gymId, {
+    query: { enabled: !!gymId },
+  });
+
+  const updateSettings = useUpdateAutopilotSettings({
+    mutation: {
+      onMutate: async ({ data }) => {
+        await queryClient.cancelQueries({ queryKey: settingsQueryKey });
+        const previous = queryClient.getQueryData(settingsQueryKey);
+        queryClient.setQueryData(settingsQueryKey, (old: unknown) => {
+          if (!old) return old;
+          return { ...(old as Record<string, unknown>), ...data };
+        });
+        return { previous };
+      },
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: settingsQueryKey });
+        toast({ title: "Auto-Pilot Updated", description: "Settings saved successfully." });
+      },
+      onError: (_err: unknown, _vars: unknown, context: unknown) => {
+        const ctx = context as { previous?: unknown } | undefined;
+        if (ctx?.previous) {
+          queryClient.setQueryData(settingsQueryKey, ctx.previous);
+        }
+        toast({ title: "Error", description: "Failed to update settings.", variant: "destructive" });
+      },
+    },
+  });
+
+  const handleToggle = (key: string, value: boolean) => {
+    updateSettings.mutate({ gymId, data: { [key]: value } as Record<string, unknown> });
+  };
+
+  const handleCooldown = (days: number) => {
+    updateSettings.mutate({ gymId, data: { cooldownDays: days } as Record<string, unknown> });
+  };
+
+  const handleDigestFrequency = (freq: string) => {
+    updateSettings.mutate({ gymId, data: { digestFrequency: freq } as Record<string, unknown> });
+  };
+
+  const anyEnabled = settings?.autopilotOutreach || settings?.autopilotBilling || settings?.autopilotLeads;
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Zap className="h-5 w-5 text-primary" />
+            Auto-Pilot Settings
+          </DialogTitle>
+          <DialogDescription>
+            Enable auto-pilot to let the AI send emails automatically. You'll stay informed through digest summaries.
+          </DialogDescription>
+        </DialogHeader>
+
+        {isLoading ? (
+          <div className="flex justify-center py-8">
+            <Loader2 className="h-6 w-6 animate-spin text-primary" />
+          </div>
+        ) : settings ? (
+          <div className="space-y-6">
+            <div className="space-y-4">
+              <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+                <ShieldCheck className="h-4 w-4 text-primary" />
+                Auto-Send Categories
+              </h3>
+              <div className="space-y-3">
+                {([
+                  { key: "autopilotOutreach", label: "Outreach", desc: "At-risk member re-engagement", icon: Send, color: "bg-blue-500/10 text-blue-500" },
+                  { key: "autopilotBilling", label: "Billing", desc: "Failed payment follow-ups", icon: CreditCard, color: "bg-amber-500/10 text-amber-500" },
+                  { key: "autopilotLeads", label: "Leads", desc: "Stale lead follow-ups", icon: Target, color: "bg-cyan-500/10 text-cyan-500" },
+                ] as const).map((cat) => (
+                  <div key={cat.key} className="flex items-center justify-between p-3 rounded-lg bg-secondary/50 border border-border">
+                    <div className="flex items-center gap-3">
+                      <div className={`h-8 w-8 rounded-full flex items-center justify-center ${cat.color}`}>
+                        <cat.icon className="h-4 w-4" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-foreground">{cat.label}</p>
+                        <p className="text-xs text-muted-foreground">{cat.desc}</p>
+                      </div>
+                    </div>
+                    <ToggleSwitch
+                      checked={(settings as Record<string, unknown>)[cat.key] as boolean}
+                      onChange={(v) => handleToggle(cat.key, v)}
+                      disabled={updateSettings.isPending}
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+                <Clock className="h-4 w-4 text-primary" />
+                Cooldown Period
+              </h3>
+              <p className="text-xs text-muted-foreground">
+                Minimum days between auto-emails to the same person.
+              </p>
+              <div className="flex items-center gap-3">
+                <input
+                  type="range"
+                  min={1}
+                  max={90}
+                  value={settings.cooldownDays}
+                  onChange={(e) => handleCooldown(parseInt(e.target.value, 10))}
+                  disabled={updateSettings.isPending}
+                  className="flex-1 accent-primary"
+                />
+                <span className="text-sm font-mono font-medium text-foreground w-16 text-right">
+                  {settings.cooldownDays} day{settings.cooldownDays !== 1 ? "s" : ""}
+                </span>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+                <CalendarDays className="h-4 w-4 text-primary" />
+                Digest Frequency
+              </h3>
+              <p className="text-xs text-muted-foreground">
+                How often you receive a summary of auto-piloted actions.
+              </p>
+              <div className="flex gap-2">
+                {(["daily", "weekly", "disabled"] as const).map((freq) => (
+                  <button
+                    key={freq}
+                    onClick={() => handleDigestFrequency(freq)}
+                    disabled={updateSettings.isPending}
+                    className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-all border ${
+                      settings.digestFrequency === freq
+                        ? "bg-primary text-primary-foreground border-primary shadow-sm"
+                        : "bg-muted/50 text-muted-foreground border-border hover:border-primary/40 hover:text-foreground"
+                    }`}
+                  >
+                    {freq.charAt(0).toUpperCase() + freq.slice(1)}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {anyEnabled && (
+              <div className="flex items-start gap-2 p-3 rounded-lg bg-primary/5 border border-primary/20 text-xs text-muted-foreground">
+                <Info className="h-4 w-4 text-primary shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-medium text-foreground">Safety guardrails active</p>
+                  <p className="mt-0.5">
+                    Auto-pilot only sends to contacts with valid email addresses and respects a {settings.cooldownDays}-day cooldown per person.
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
+        ) : null}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function formatBenchmarkValue(value: number, format: string): string {
+  if (format === "currency") return `$${Math.round(value)}`;
+  if (format === "percent") return `${value.toFixed(1)}%`;
+  if (format === "months") return value < 1 ? `${Math.round(value * 30)}d` : `${value.toFixed(1)} mo`;
+  return value.toFixed(1);
+}
+
+function BenchmarkBar({ comparison }: { comparison: { gymValue: number; industryMedian: number | null; p25: number; p75: number; percentileRank: number | null; percentileLabel: string | null; label: string; format: string; lowerIsBetter?: boolean } }) {
+  const { gymValue, industryMedian, p25, p75, percentileRank, percentileLabel, label, format } = comparison;
+
+  const hasData = industryMedian !== null;
+  const allValues = hasData ? [p25, industryMedian, p75, gymValue] : [gymValue];
+  const min = Math.min(...allValues) * 0.8;
+  const max = Math.max(...allValues) * 1.2 || 1;
+  const range = max - min || 1;
+
+  const gymPos = ((gymValue - min) / range) * 100;
+  const medianPos = hasData ? (((industryMedian as number) - min) / range) * 100 : 0;
+
+  const badgeColor = percentileRank === null ? "bg-muted text-muted-foreground" :
+    percentileRank >= 75 ? "bg-emerald-500/20 text-emerald-500" :
+    percentileRank >= 50 ? "bg-blue-500/20 text-blue-500" :
+    percentileRank >= 25 ? "bg-yellow-500/20 text-yellow-500" :
+    "bg-destructive/20 text-destructive";
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="bg-card border border-border rounded-xl p-4 md:p-5"
+    >
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
+        <div>
+          <h4 className="text-sm font-semibold text-foreground">{label}</h4>
+          <div className="flex items-center gap-2 mt-1">
+            <span className="text-lg font-bold text-foreground">{formatBenchmarkValue(gymValue, format)}</span>
+            {hasData && (
+              <span className="text-xs text-muted-foreground">
+                vs {formatBenchmarkValue(industryMedian as number, format)} median
+              </span>
+            )}
+          </div>
+        </div>
+        {percentileLabel && (
+          <span className={`px-3 py-1 rounded-full text-xs font-bold ${badgeColor} whitespace-nowrap`}>
+            {percentileLabel}
+          </span>
+        )}
+      </div>
+
+      {hasData ? (
+        <div className="relative h-8">
+          <div className="absolute inset-x-0 top-3 h-2 bg-muted rounded-full overflow-hidden">
+            <div
+              className="absolute h-full bg-muted-foreground/20 rounded-full"
+              style={{
+                left: `${Math.max(0, ((p25 - min) / range) * 100)}%`,
+                width: `${Math.max(1, ((p75 - p25) / range) * 100)}%`,
+              }}
+            />
+          </div>
+          <div
+            className="absolute top-1 w-0.5 h-6 bg-muted-foreground/40"
+            style={{ left: `${Math.max(2, Math.min(98, medianPos))}%` }}
+          />
+          <motion.div
+            initial={{ scale: 0 }}
+            animate={{ scale: 1 }}
+            transition={{ delay: 0.2 }}
+            className="absolute top-1.5 w-4 h-4 rounded-full bg-primary border-2 border-background shadow-md -ml-2"
+            style={{ left: `${Math.max(2, Math.min(98, gymPos))}%` }}
+          />
+        </div>
+      ) : (
+        <div className="h-8 flex items-center">
+          <div className="w-full h-2 bg-muted rounded-full" />
+        </div>
+      )}
+
+      {hasData && (
+        <div className="flex justify-between text-[10px] text-muted-foreground mt-1">
+          <span>P25: {formatBenchmarkValue(p25, format)}</span>
+          <span>P75: {formatBenchmarkValue(p75, format)}</span>
+        </div>
+      )}
+    </motion.div>
+  );
+}
+
+function BenchmarkSection({ data }: { data: { insufficientData?: boolean; insufficientMessage?: string; sizeLabel?: string; sampleCount?: number; comparisons?: Array<{ metric: string; gymValue: number; industryMedian: number | null; p25: number; p75: number; percentileRank: number | null; percentileLabel: string | null; label: string; format: string }>; computedAt?: string } | null }) {
+  if (!data) {
+    return (
+      <div className="text-center py-12">
+        <BarChart3 className="h-12 w-12 text-muted-foreground/50 mx-auto mb-4" />
+        <h3 className="text-lg font-semibold text-foreground">Benchmarks Loading</h3>
+        <p className="text-sm text-muted-foreground mt-1">Industry benchmarks are being computed...</p>
+      </div>
+    );
+  }
+
+  if (data.insufficientData) {
+    return (
+      <div className="space-y-6">
+        <div className="bg-card border border-border rounded-2xl p-6 md:p-8 text-center">
+          <Info className="h-12 w-12 text-muted-foreground/50 mx-auto mb-4" />
+          <h3 className="text-lg font-semibold text-foreground mb-2">Not Enough Data Yet</h3>
+          <p className="text-sm text-muted-foreground max-w-md mx-auto">{data.insufficientMessage}</p>
+          <div className="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-muted rounded-lg text-xs text-muted-foreground">
+            <span>Your size category: <strong className="text-foreground">{data.sizeLabel}</strong></span>
+            <span>&middot;</span>
+            <span>{data.sampleCount} gym{data.sampleCount !== 1 ? "s" : ""} in segment</span>
+          </div>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {(data.comparisons || []).map((c) => (
+            <div key={c.metric} className="bg-card border border-border rounded-xl p-4">
+              <h4 className="text-sm font-medium text-muted-foreground mb-1">{c.label}</h4>
+              <p className="text-xl font-bold text-foreground">{formatBenchmarkValue(c.gymValue, c.format)}</p>
+              <p className="text-xs text-muted-foreground mt-1">Benchmark comparison pending</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <h3 className="text-lg font-semibold text-foreground">Industry Benchmarks</h3>
+          <p className="text-sm text-muted-foreground">
+            Compared against {data.sampleCount} gyms in the <strong>{data.sizeLabel}</strong> segment.
+          </p>
+        </div>
+        {data.computedAt && (
+          <span className="text-xs text-muted-foreground bg-muted px-3 py-1 rounded-lg">
+            Updated {new Date(data.computedAt).toLocaleDateString()}
+          </span>
+        )}
+      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {(data.comparisons || []).map((comparison) => (
+          <BenchmarkBar key={comparison.metric} comparison={comparison} />
+        ))}
+      </div>
+      <div className="bg-muted/50 border border-border rounded-xl p-4 flex items-start gap-3">
+        <Info className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
+        <p className="text-xs text-muted-foreground">
+          Benchmarks are computed from anonymized, aggregated data across all gyms on the platform.
+          No individual gym data is ever exposed. Percentile rankings show where your gym falls
+          relative to others of similar size.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+export function AiInsights() {
+  const { activeGymId } = useGym();
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const isMobile = useIsMobile();
+  const { tier } = useGymTier();
+  const isPro = tier === "pro" || tier === "enterprise";
+
+  const [activeTab, setActiveTab] = useState<"overview" | "risk" | "impact" | "benchmarks">("overview");
+  const [trendWindow, setTrendWindow] = useState<"30d" | "90d" | "all">("90d");
+  const [autopilotOpen, setAutopilotOpen] = useState(false);
+
+  const [isGeneratingBrief, setIsGeneratingBrief] = useState(false);
+  const [briefContent, setBriefContent] = useState<string | null>(null);
+  const [briefOpen, setBriefOpen] = useState(false);
+  const [editTask, setEditTask] = useState<Record<string, unknown> | null>(null);
+  const [editContent, setEditContent] = useState("");
+  const [editSubject, setEditSubject] = useState("");
+  const [activeFilter, setActiveFilter] = useState<string | null>(null);
+  const [taskView, setTaskView] = useState<"pending" | "history">("pending");
+  const [historyFilter, setHistoryFilter] = useState<string | null>(null);
+  const [sendingTaskId, setSendingTaskId] = useState<number | null>(null);
+  const [historyAutoFilter, setHistoryAutoFilter] = useState<"all" | "auto" | "manual">("all");
+
+  const { data: intel, isLoading: intelLoading, isError: intelError } = useGetIntelligenceOverview(activeGymId as number, {
+    query: { enabled: !!activeGymId, retry: 2, staleTime: 30000 }
+  });
+
+  const { data: morningBriefing } = useGetMorningBriefing(activeGymId as number, {
+    query: { enabled: !!activeGymId, staleTime: 60000 }
+  });
+
+  const { data: rsiHistory } = useRsiHistory(activeGymId, trendWindow);
+  const { data: benchmarkData } = useBenchmarks(activeGymId);
+
+  const { data: tasks, isLoading: tasksLoading, isError: tasksError } = useListAiTasks(activeGymId as number, {
+    query: { enabled: !!activeGymId }
+  });
+
+  const { data: stats } = useGetDashboardStats(activeGymId as number, {
+    query: { enabled: !!activeGymId }
+  });
+
+  const { data: emailStatus } = useGetAiEmailStatus(activeGymId as number, {
+    query: { enabled: !!activeGymId }
+  });
+
+  const { data: lastScanData } = useGetAiLastScan(activeGymId as number, {
+    query: { enabled: !!activeGymId, refetchInterval: 60_000 }
+  });
+
+  const { data: impactData } = useGetAiImpact(activeGymId as number, undefined, {
+    query: { enabled: !!activeGymId }
+  });
+
+  const platformConfigured = emailStatus?.configured ?? false;
+  const gymEmailConfigured = emailStatus?.gymEmailConfigured ?? false;
+  const emailReady = platformConfigured && gymEmailConfigured;
+
+  const generateBrief = useGenerateOwnerBrief({
+    mutation: {
+      onMutate: () => setIsGeneratingBrief(true),
+      onSuccess: (data: Record<string, unknown>) => {
+        setBriefContent(data.content as string);
+        setBriefOpen(true);
+        toast({ title: "Owner Brief Generated", description: "Your weekly brief is ready to review." });
+      },
+      onError: () => {
+        toast({ title: "Error", description: "Failed to generate brief. Please try again.", variant: "destructive" });
+      },
+      onSettled: () => setIsGeneratingBrief(false),
+    }
+  });
+
+  const queryKey = getListAiTasksQueryKey(activeGymId as number);
+
+  const updateTask = useUpdateAiTask({
+    mutation: {
+      onMutate: async ({ taskId, data }) => {
+        await queryClient.cancelQueries({ queryKey });
+        const previous = queryClient.getQueryData(queryKey);
+        queryClient.setQueryData(queryKey, (old: Array<Record<string, unknown>> | undefined) => {
+          if (!old) return old;
+          if (data.status === 'dismissed' || data.status === 'approved') {
+            return old.map((t) => {
+              if (t.id !== taskId) return t;
+              const newStatus = data.status === 'approved' ? 'completed' : 'dismissed';
+              return { ...t, status: newStatus, updatedAt: new Date().toISOString() };
+            });
+          }
+          return old.map((t) => t.id === taskId ? { ...t, ...data } : t);
+        });
+        return { previous };
+      },
+      onError: (_err: unknown, _vars: unknown, context: unknown) => {
+        const ctx = context as { previous?: unknown } | undefined;
+        if (ctx?.previous) {
+          queryClient.setQueryData(queryKey, ctx.previous);
+        }
+      },
+      onSettled: () => {
+        queryClient.invalidateQueries({ queryKey });
+      },
+    }
+  });
+
+  const sendEmail = useSendAiTaskEmail({
+    mutation: {
+      onSuccess: (data: Record<string, unknown>, variables: Record<string, unknown>) => {
+        queryClient.setQueryData(queryKey, (old: Array<Record<string, unknown>> | undefined) => {
+          if (!old) return old;
+          return old.map((t) => t.id === variables.taskId ? { ...t, status: 'sent', updatedAt: new Date().toISOString() } : t);
+        });
+        queryClient.invalidateQueries({ queryKey });
+        toast({ title: "Email Sent", description: `Email sent to ${data.recipientName} (${data.recipientEmail}).` });
+        setSendingTaskId(null);
+      },
+      onError: (err: unknown) => {
+        const error = err as { response?: { data?: { error?: string } } };
+        toast({ title: "Failed to Send", description: error?.response?.data?.error || "Could not send email. Please try again.", variant: "destructive" });
+        setSendingTaskId(null);
+      },
+    }
+  });
+
+  const generateTasksMutation = useGenerateAiTasks({
+    mutation: {
+      onSuccess: (data: Record<string, unknown>) => {
+        queryClient.invalidateQueries({ queryKey });
+        const created = data.created as number;
+        toast({ title: "Tasks Generated", description: `${created} new task${created !== 1 ? 's' : ''} created from gym data.` });
+      },
+      onError: () => {
+        toast({ title: "Error", description: "Failed to generate tasks.", variant: "destructive" });
+      },
+    }
+  });
+
+  const pendingTasks = useMemo(() => {
+    if (!tasks) return [];
+    return (tasks as Array<Record<string, unknown>>).filter((t) => t.status === 'pending');
+  }, [tasks]);
+
+  const historyTasks = useMemo(() => {
+    if (!tasks) return [];
+    return (tasks as Array<Record<string, unknown>>).filter((t) => ['sent', 'completed', 'dismissed', 'approved'].includes(t.status as string));
+  }, [tasks]);
+
+  const filteredPendingTasks = useMemo(() => {
+    if (!activeFilter) return pendingTasks;
+    return pendingTasks.filter((t) => t.type === activeFilter);
+  }, [pendingTasks, activeFilter]);
+
+  const filteredHistoryTasks = useMemo(() => {
+    let filtered = historyTasks;
+    if (historyFilter) {
+      filtered = filtered.filter((t) => t.status === historyFilter);
+    }
+    if (historyAutoFilter === "auto") {
+      filtered = filtered.filter((t) => t.autoSent);
+    } else if (historyAutoFilter === "manual") {
+      filtered = filtered.filter((t) => !t.autoSent);
+    }
+    return filtered;
+  }, [historyTasks, historyFilter, historyAutoFilter]);
+
+  const typeCountMap = useMemo(() => {
+    const map: Record<string, number> = {};
+    pendingTasks.forEach((t) => {
+      const type = t.type as string;
+      map[type] = (map[type] || 0) + 1;
+    });
+    return map;
+  }, [pendingTasks]);
+
+  const historyStatusCountMap = useMemo(() => {
+    const map: Record<string, number> = {};
+    historyTasks.forEach((t) => {
+      const status = t.status as string;
+      map[status] = (map[status] || 0) + 1;
+    });
+    return map;
+  }, [historyTasks]);
+
+  const historyAutoCount = useMemo(() => {
+    return historyTasks.filter((t) => t.autoSent).length;
+  }, [historyTasks]);
+
+  const availableTypes = Object.keys(typeCountMap).sort();
+  const pendingCount = pendingTasks.length;
+
+  function handleApprove(task: Record<string, unknown>) {
+    updateTask.mutate(
+      { gymId: activeGymId as number, taskId: task.id as number, data: { status: "approved" as const } },
+      {
+        onSuccess: () => {
+          toast({ title: "Task Completed", description: `"${task.title}" has been marked as complete.` });
+        },
+        onError: () => {
+          toast({ title: "Error", description: "Failed to complete task.", variant: "destructive" });
+        },
+      }
+    );
+  }
+
+  function handleSendEmail(task: Record<string, unknown>) {
+    setSendingTaskId(task.id as number);
+    sendEmail.mutate({ gymId: activeGymId as number, taskId: task.id as number });
+  }
+
+  function handleDismiss(task: Record<string, unknown>) {
+    updateTask.mutate(
+      { gymId: activeGymId as number, taskId: task.id as number, data: { status: "dismissed" as const } },
+      {
+        onSuccess: () => {
+          toast({ title: "Task Dismissed", description: `"${task.title}" has been dismissed.` });
+        },
+        onError: () => {
+          toast({ title: "Error", description: "Failed to dismiss task.", variant: "destructive" });
+        },
+      }
+    );
+  }
+
+  function getDefaultSubject(task: Record<string, unknown>): string {
+    const subjectMap: Record<string, string> = {
+      outreach: "Checking in",
+      leads: "Let's connect",
+      billing: "Quick heads-up about your account",
+    };
+    return subjectMap[task.type as string] || "Message from your gym";
+  }
+
+  function openEditModal(task: Record<string, unknown>) {
+    setEditTask(task);
+    setEditContent((task.aiContent as string) || "");
+    setEditSubject((task.subject as string) || getDefaultSubject(task));
+  }
+
+  function handleSaveEdit() {
+    if (!editTask) return;
+    updateTask.mutate(
+      { gymId: activeGymId as number, taskId: editTask.id as number, data: { aiContent: editContent, ...(isEmailType(editTask.type as string) ? { subject: editSubject || null } : {}) } },
+      {
+        onSuccess: () => {
+          toast({ title: "Draft Updated", description: "Content has been saved." });
+          setEditTask(null);
+        },
+        onError: () => {
+          toast({ title: "Error", description: "Failed to save changes.", variant: "destructive" });
+        },
+      }
+    );
+  }
+
+  function handleEditAndApprove() {
+    if (!editTask) return;
+    updateTask.mutate(
+      { gymId: activeGymId as number, taskId: editTask.id as number, data: { aiContent: editContent, ...(isEmailType(editTask.type as string) ? { subject: editSubject || null } : {}), status: "approved" as const } },
+      {
+        onSuccess: () => {
+          toast({ title: "Task Completed", description: `"${editTask.title}" updated and completed.` });
+          setEditTask(null);
+        },
+        onError: () => {
+          toast({ title: "Error", description: "Failed to complete task.", variant: "destructive" });
+        },
+      }
+    );
+  }
+
+  if (!activeGymId) {
+    return (
+      <div className="h-full flex items-center justify-center">
+        <p className="text-muted-foreground">Select a gym to view AI insights.</p>
+      </div>
+    );
+  }
+
+  if (intelLoading) {
+    return (
+      <div className="h-full flex items-center justify-center">
+        <Loader2 className="h-8 w-8 text-primary animate-spin" />
+      </div>
+    );
+  }
+
+  if (intelError || !intel) {
+    return (
+      <div className="h-full flex items-center justify-center">
+        <div className="text-center">
+          <AlertCircle className="h-12 w-12 text-destructive/50 mx-auto mb-4" />
+          <h3 className="text-lg font-semibold text-foreground mb-1">Unable to load AI insights</h3>
+          <p className="text-sm text-muted-foreground">Please try refreshing the page.</p>
+        </div>
+      </div>
+    );
+  }
+
+  const { rsi, topRisks } = intel;
+  const activeMembers = stats?.activeMembers ?? 0;
+  const atRiskMembers = stats?.atRiskMembers ?? 0;
+
+  const tabs = [
+    { key: "overview" as const, label: "Overview" },
+    { key: "risk" as const, label: "Risk & Action" },
+    { key: "impact" as const, label: "Impact" },
+    { key: "benchmarks" as const, label: "Benchmarks" },
+  ];
+
+  return (
+    <div className="space-y-4 md:space-y-6 pb-10">
+      <header className="flex flex-col gap-3 md:gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <div className="flex items-center gap-3 mb-1">
+              <div className="h-8 w-8 bg-primary/20 rounded-lg flex items-center justify-center border border-primary/30 shadow-[0_0_15px_rgba(16,185,129,0.3)]">
+                <BrainCircuit className="h-5 w-5 text-primary" />
+              </div>
+              <h1 className="text-2xl md:text-3xl font-display font-bold text-foreground">AI Insights</h1>
+            </div>
+            <p className="text-sm md:text-base text-muted-foreground">
+              Intelligence, actions, and impact in one place.
+              {lastScanData?.lastAutoScan && (
+                <span className="ml-2 inline-flex items-center gap-1 text-xs text-muted-foreground/70">
+                  <Clock className="h-3 w-3" />
+                  Last scan: {new Date(lastScanData.lastAutoScan).toLocaleString()}
+                </span>
+              )}
+            </p>
+          </div>
+
+          <div className="flex gap-2 w-full sm:w-auto">
+            <button
+              onClick={() => setAutopilotOpen(true)}
+              className="flex items-center justify-center gap-2 px-4 py-2.5 border rounded-xl font-medium transition-all shadow-sm min-h-[44px] flex-1 sm:flex-initial bg-card border-border hover:border-primary/50 text-foreground"
+            >
+              <Settings className="h-5 w-5 text-primary" />
+              <span>Auto-Pilot</span>
+            </button>
+            <button
+              onClick={() => generateTasksMutation.mutate({ gymId: activeGymId as number })}
+              disabled={generateTasksMutation.isPending}
+              className="flex items-center justify-center gap-2 px-4 py-2.5 bg-card border border-border hover:border-primary/50 text-foreground rounded-xl font-medium transition-all shadow-sm disabled:opacity-50 min-h-[44px] flex-1 sm:flex-initial"
+            >
+              {generateTasksMutation.isPending ? <Loader2 className="h-5 w-5 animate-spin text-primary" /> : <RefreshCw className="h-5 w-5 text-primary" />}
+              <span>Scan</span>
+            </button>
+            <button
+              onClick={() => generateBrief.mutate({ gymId: activeGymId as number })}
+              disabled={isGeneratingBrief}
+              className="flex items-center justify-center gap-2 px-4 py-2.5 bg-card border border-border hover:border-primary/50 text-foreground rounded-xl font-medium transition-all shadow-sm disabled:opacity-50 min-h-[44px] flex-1 sm:flex-initial"
+            >
+              {isGeneratingBrief ? <Loader2 className="h-5 w-5 animate-spin text-primary" /> : <Sparkles className="h-5 w-5 text-primary" />}
+              <span>Brief</span>
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <div className="flex items-center gap-1 md:gap-2 border-b border-border overflow-x-auto scrollbar-none -mx-4 px-4 md:mx-0 md:px-0">
+        {tabs.map((tab) => (
+          <button
+            key={tab.key}
+            onClick={() => setActiveTab(tab.key)}
+            className={`px-4 md:px-6 py-3 font-medium text-sm transition-colors relative whitespace-nowrap min-h-[44px] ${
+              activeTab === tab.key ? "text-primary" : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {tab.label}
+            {tab.key === "risk" && pendingCount > 0 && (
+              <span className="ml-1.5 px-1.5 py-0.5 text-[10px] font-bold rounded-full bg-destructive/20 text-destructive">{pendingCount}</span>
+            )}
+            {activeTab === tab.key && (
+              <motion.div layoutId="ai-insights-tab" className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary" />
+            )}
+          </button>
+        ))}
+      </div>
+
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={activeTab}
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -10 }}
+          transition={{ duration: 0.2 }}
+        >
+          {activeTab === "overview" && (
+            <OverviewTab
+              rsi={rsi}
+              rsiHistory={rsiHistory}
+              trendWindow={trendWindow}
+              setTrendWindow={setTrendWindow}
+              morningBriefing={morningBriefing}
+              activeMembers={activeMembers}
+              atRiskMembers={atRiskMembers}
+              pendingCount={pendingCount}
+            />
+          )}
+
+          {activeTab === "risk" && (
+            <RiskActionTab
+              topRisks={topRisks}
+              isMobile={isMobile}
+              tasks={tasks}
+              tasksLoading={tasksLoading}
+              tasksError={tasksError}
+              pendingTasks={pendingTasks}
+              filteredPendingTasks={filteredPendingTasks}
+              historyTasks={historyTasks}
+              filteredHistoryTasks={filteredHistoryTasks}
+              typeCountMap={typeCountMap}
+              historyStatusCountMap={historyStatusCountMap}
+              historyAutoCount={historyAutoCount}
+              availableTypes={availableTypes}
+              pendingCount={pendingCount}
+              activeFilter={activeFilter}
+              setActiveFilter={setActiveFilter}
+              taskView={taskView}
+              setTaskView={setTaskView}
+              historyFilter={historyFilter}
+              setHistoryFilter={setHistoryFilter}
+              historyAutoFilter={historyAutoFilter}
+              setHistoryAutoFilter={setHistoryAutoFilter}
+              sendingTaskId={sendingTaskId}
+              emailReady={emailReady}
+              platformConfigured={platformConfigured}
+              isPro={isPro}
+              handleApprove={handleApprove}
+              handleDismiss={handleDismiss}
+              handleSendEmail={handleSendEmail}
+              openEditModal={openEditModal}
+              updateTask={updateTask}
+              sendEmail={sendEmail}
+            />
+          )}
+
+          {activeTab === "impact" && (
+            <ImpactTab impactData={impactData} />
+          )}
+
+          {activeTab === "benchmarks" && (
+            <BenchmarkSection data={benchmarkData} />
+          )}
+        </motion.div>
+      </AnimatePresence>
+
+      <AutopilotModal gymId={activeGymId} open={autopilotOpen} onOpenChange={setAutopilotOpen} />
+
+      <Dialog open={!!editTask} onOpenChange={(open) => { if (!open) setEditTask(null); }}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Edit Draft Content</DialogTitle>
+            <DialogDescription>{editTask?.title as string}</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            {editTask && isEmailType(editTask.type as string) && (
+              <div>
+                <label className="block text-xs font-medium text-muted-foreground mb-1.5">Email Subject</label>
+                <input
+                  type="text"
+                  value={editSubject}
+                  onChange={(e) => setEditSubject(e.target.value)}
+                  placeholder="Email subject line..."
+                  className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                />
+              </div>
+            )}
+            <div>
+              {editTask && isEmailType(editTask.type as string) && (
+                <label className="block text-xs font-medium text-muted-foreground mb-1.5">Email Body</label>
+              )}
+              <textarea
+                value={editContent}
+                onChange={(e) => setEditContent(e.target.value)}
+                rows={10}
+                className="w-full rounded-lg border border-border bg-background p-3 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary/50 resize-y"
+              />
+            </div>
+          </div>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <button
+              onClick={() => setEditTask(null)}
+              className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleSaveEdit}
+              disabled={updateTask.isPending}
+              className="px-4 py-2 text-sm font-medium border border-border hover:border-primary/40 rounded-lg transition-colors disabled:opacity-50"
+            >
+              Save Draft
+            </button>
+            <button
+              onClick={handleEditAndApprove}
+              disabled={updateTask.isPending}
+              className="flex items-center gap-2 px-5 py-2 bg-primary text-primary-foreground hover:bg-primary/90 rounded-lg font-medium shadow-md shadow-primary/20 transition-all disabled:opacity-50"
+            >
+              <CheckCircle2 className="h-4 w-4" />
+              Save & Complete
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={briefOpen} onOpenChange={setBriefOpen}>
+        <DialogContent className="sm:max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Sparkles className="h-5 w-5 text-primary" />
+              Owner Brief
+            </DialogTitle>
+            <DialogDescription>AI-generated weekly strategic overview</DialogDescription>
+          </DialogHeader>
+          {briefContent && (
+            <div className="prose prose-sm prose-invert max-w-none">
+              {briefContent.split('\n').map((line, i) => {
+                if (line.startsWith('## ')) return <h2 key={i} className="text-lg font-bold text-foreground mt-4 mb-2">{line.replace('## ', '')}</h2>;
+                if (line.startsWith('### ')) return <h3 key={i} className="text-base font-semibold text-foreground mt-3 mb-1">{line.replace('### ', '')}</h3>;
+                if (line.startsWith('- **')) {
+                  const match = line.match(/^- \*\*(.+?)\*\*(.*)$/);
+                  if (match) return <p key={i} className="text-sm text-muted-foreground ml-4 my-0.5"><strong className="text-foreground">{match[1]}</strong>{match[2]}</p>;
+                }
+                if (line.startsWith('- ')) return <p key={i} className="text-sm text-muted-foreground ml-4 my-0.5">{line.replace('- ', '• ')}</p>;
+                if (line.match(/^\d+\./)) {
+                  const match = line.match(/^(\d+\.)\s*\*\*(.+?)\*\*:\s*(.*)$/);
+                  if (match) return <p key={i} className="text-sm text-muted-foreground ml-4 my-0.5">{match[1]} <strong className="text-foreground">{match[2]}</strong>: {match[3]}</p>;
+                  return <p key={i} className="text-sm text-muted-foreground ml-4 my-0.5">{line}</p>;
+                }
+                if (line.startsWith('[')) return <p key={i} className="text-xs text-primary/60 mt-4 italic">{line}</p>;
+                if (line.trim() === '') return <div key={i} className="h-2" />;
+                return <p key={i} className="text-sm text-muted-foreground my-0.5">{line}</p>;
+              })}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {!emailReady && activeTab === "risk" && pendingTasks.some((t) => isEmailType(t.type as string) && hasTarget(t as { targetId?: number | null; targetType?: string | null })) && (
+        <div className="flex items-center gap-3 px-4 py-3 bg-amber-500/10 border border-amber-500/20 rounded-xl text-sm">
+          <AlertCircle className="h-5 w-5 text-amber-500 shrink-0" />
+          <p className="text-muted-foreground">
+            {!platformConfigured ? (
+              <><strong className="text-foreground">Email service not connected.</strong> A Resend or SendGrid integration is needed to enable email sending.</>
+            ) : (
+              <><strong className="text-foreground">Email sender not configured.</strong> Go to <a href="/settings" className="text-primary underline underline-offset-2 hover:text-primary/80">Settings</a> to set your From Name and From Email.</>
+            )}
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function OverviewTab({ rsi, rsiHistory, trendWindow, setTrendWindow, morningBriefing, activeMembers, atRiskMembers, pendingCount }: {
+  rsi: { score: number; band: string; insight: string; breakdown: Array<{ metric: string; weight: number; normalized: number; value: number }>; trendInsufficient?: boolean; trend30d?: number | null; trend90d?: number | null };
+  rsiHistory: { dataPoints?: Array<{ date: string; score: number; band: string }>; insufficient?: boolean } | undefined;
+  trendWindow: "30d" | "90d" | "all";
+  setTrendWindow: (w: "30d" | "90d" | "all") => void;
+  morningBriefing: { summary?: string; items?: Array<{ icon: string; priority: string; message: string; action?: string; link?: string }>; snapshot?: Record<string, unknown> } | undefined;
+  activeMembers: number;
+  atRiskMembers: number;
+  pendingCount: number;
+}) {
+  return (
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">
+        <div className="bg-card border border-border rounded-2xl p-6 md:p-8 flex flex-col items-center justify-center text-center shadow-lg relative overflow-hidden">
+          <div className="absolute inset-0 bg-gradient-to-b from-primary/5 to-transparent pointer-events-none" />
+          <h2 className="text-base md:text-lg font-semibold text-muted-foreground mb-4">Retention Stability Index</h2>
+          <div className="relative">
+            <svg className="w-36 h-36 md:w-48 md:h-48 transform -rotate-90" viewBox="0 0 192 192">
+              <circle cx="96" cy="96" r="80" stroke="currentColor" strokeWidth="8" fill="transparent" className="text-muted" />
+              <circle cx="96" cy="96" r="80" stroke="currentColor" strokeWidth="12" fill="transparent"
+                strokeDasharray={`${(rsi.score / 100) * 502} 502`} className="text-primary drop-shadow-[0_0_10px_rgba(16,185,129,0.5)]"
+                strokeLinecap="round" />
+            </svg>
+            <div className="absolute inset-0 flex items-center justify-center flex-col">
+              <span className="text-4xl md:text-5xl font-display font-bold text-foreground">{rsi.score.toFixed(1)}</span>
+              <span className={`text-xs md:text-sm font-bold mt-1 px-3 py-0.5 rounded-full ${
+                rsi.band === 'Strong' ? 'bg-emerald-500/20 text-emerald-500' :
+                rsi.band === 'Moderate' ? 'bg-yellow-500/20 text-yellow-500' :
+                'bg-destructive/20 text-destructive'
+              }`}>{rsi.band}</span>
+            </div>
+          </div>
+          <p className="mt-4 md:mt-6 text-xs md:text-sm text-muted-foreground max-w-xs">{rsi.insight}</p>
+        </div>
+
+        <div className="lg:col-span-2 space-y-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <StatCard label="Active Members" value={String(activeMembers)} icon={Users} />
+            <StatCard label="At Risk" value={String(atRiskMembers)} icon={ShieldAlert} color={atRiskMembers > 0 ? "text-destructive" : undefined} />
+            <StatCard label="Pending Tasks" value={String(pendingCount)} icon={Activity} />
+            <StatCard
+              label="RSI Trend"
+              value={rsi.trendInsufficient ? "—" : rsi.trend30d != null ? `${rsi.trend30d >= 0 ? '+' : ''}${rsi.trend30d}` : "—"}
+              icon={rsi.trend30d != null && rsi.trend30d >= 0 ? TrendingUp : TrendingDown}
+              color={rsi.trend30d != null ? (rsi.trend30d >= 0 ? "text-emerald-500" : "text-destructive") : undefined}
+              subtitle="30d"
+            />
+          </div>
+
+          {morningBriefing?.items && morningBriefing.items.length > 0 && (
+            <div className="bg-card border border-border rounded-2xl p-4 md:p-5 shadow-sm">
+              <h3 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
+                <Sparkles className="h-4 w-4 text-primary" />
+                Morning Briefing
+              </h3>
+              <div className="space-y-2">
+                {morningBriefing.items.slice(0, 4).map((item, i) => {
+                  const priorityColors: Record<string, string> = {
+                    critical: "border-l-destructive",
+                    warning: "border-l-amber-500",
+                    info: "border-l-blue-500",
+                    positive: "border-l-emerald-500",
+                  };
+                  return (
+                    <div key={i} className={`border-l-2 ${priorityColors[item.priority] || "border-l-border"} pl-3 py-1`}>
+                      <p className="text-xs text-muted-foreground">{item.message}</p>
+                      {item.action && item.link && (
+                        <a href={item.link} className="text-[10px] text-primary hover:underline mt-0.5 inline-block">{item.action}</a>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="bg-card border border-border rounded-2xl p-4 md:p-6 shadow-sm">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4 md:mb-6">
+          <div>
+            <h3 className="text-base md:text-lg font-semibold text-foreground">RSI Trend</h3>
+            <div className="flex items-center gap-3 mt-1">
+              {rsi.trendInsufficient ? (
+                <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <Clock className="h-3.5 w-3.5" />
+                  Not enough data yet
+                </span>
+              ) : (
+                <>
+                  {rsi.trend30d != null && (
+                    <span className={`flex items-center gap-1 text-xs font-medium ${rsi.trend30d >= 0 ? 'text-emerald-500' : 'text-destructive'}`}>
+                      {rsi.trend30d >= 0 ? <TrendingUp className="h-3.5 w-3.5" /> : <TrendingDown className="h-3.5 w-3.5" />}
+                      {rsi.trend30d >= 0 ? '+' : ''}{rsi.trend30d} (30d)
+                    </span>
+                  )}
+                  {rsi.trend90d != null && (
+                    <span className={`flex items-center gap-1 text-xs font-medium ${rsi.trend90d >= 0 ? 'text-emerald-500' : 'text-destructive'}`}>
+                      {rsi.trend90d >= 0 ? <TrendingUp className="h-3.5 w-3.5" /> : <TrendingDown className="h-3.5 w-3.5" />}
+                      {rsi.trend90d >= 0 ? '+' : ''}{rsi.trend90d} (90d)
+                    </span>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+          <div className="flex items-center gap-1 bg-muted rounded-lg p-0.5">
+            {(["30d", "90d", "all"] as const).map(w => (
+              <button
+                key={w}
+                onClick={() => setTrendWindow(w)}
+                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                  trendWindow === w ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                {w === "30d" ? "30 Days" : w === "90d" ? "90 Days" : "All Time"}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {rsiHistory?.insufficient ? (
+          <div className="h-[200px] flex items-center justify-center text-center">
+            <div>
+              <Clock className="h-8 w-8 text-muted-foreground/50 mx-auto mb-2" />
+              <p className="text-sm text-muted-foreground">Not enough historical data yet</p>
+              <p className="text-xs text-muted-foreground/70 mt-1">RSI snapshots are recorded daily. Check back in a few days.</p>
+            </div>
+          </div>
+        ) : rsiHistory?.dataPoints && rsiHistory.dataPoints.length > 0 ? (
+          <div className="h-[200px] md:h-[250px] w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={rsiHistory.dataPoints} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="colorRsi" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.2} />
+                    <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <XAxis
+                  dataKey="date"
+                  tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
+                  tickFormatter={(val: string) => {
+                    const d = new Date(val + 'T00:00:00');
+                    return `${d.getMonth() + 1}/${d.getDate()}`;
+                  }}
+                  interval="preserveStartEnd"
+                  axisLine={false}
+                  tickLine={false}
+                />
+                <YAxis
+                  domain={[0, 100]}
+                  tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
+                  axisLine={false}
+                  tickLine={false}
+                />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: 'hsl(var(--card))',
+                    borderColor: 'hsl(var(--border))',
+                    color: 'hsl(var(--foreground))',
+                    borderRadius: '8px',
+                    fontSize: '12px'
+                  }}
+                  formatter={(value: number) => [value.toFixed(1), 'RSI Score']}
+                  labelFormatter={(label: string) => {
+                    const d = new Date(label + 'T00:00:00');
+                    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                  }}
+                />
+                <Area
+                  type="monotone"
+                  dataKey="score"
+                  stroke="hsl(var(--primary))"
+                  strokeWidth={2}
+                  fillOpacity={1}
+                  fill="url(#colorRsi)"
+                  dot={false}
+                  activeDot={{ r: 4, fill: 'hsl(var(--primary))' }}
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        ) : (
+          <div className="h-[200px] flex items-center justify-center">
+            <Loader2 className="h-6 w-6 text-muted-foreground animate-spin" />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function StatCard({ label, value, icon: Icon, color, subtitle }: { label: string; value: string; icon: React.ElementType; color?: string; subtitle?: string }) {
+  return (
+    <div className="bg-card border border-border rounded-xl p-3 md:p-4">
+      <div className="flex items-center gap-2 mb-1.5">
+        <Icon className={`h-4 w-4 ${color || "text-primary"}`} />
+        <span className="text-xs text-muted-foreground font-medium">{label}</span>
+      </div>
+      <div className="flex items-baseline gap-1">
+        <p className={`text-xl md:text-2xl font-bold ${color || "text-foreground"}`}>{value}</p>
+        {subtitle && <span className="text-[10px] text-muted-foreground">{subtitle}</span>}
+      </div>
+    </div>
+  );
+}
+
+function RiskActionTab({
+  topRisks, isMobile,
+  tasksLoading, tasksError,
+  filteredPendingTasks, historyTasks, filteredHistoryTasks,
+  typeCountMap, historyStatusCountMap, historyAutoCount,
+  availableTypes, pendingCount,
+  activeFilter, setActiveFilter,
+  taskView, setTaskView,
+  historyFilter, setHistoryFilter,
+  historyAutoFilter, setHistoryAutoFilter,
+  sendingTaskId, emailReady, platformConfigured, isPro,
+  handleApprove, handleDismiss, handleSendEmail, openEditModal,
+  updateTask, sendEmail,
+}: {
+  topRisks: Array<{ memberId: number; memberName: string; riskScore: number; riskTier: string; revenueAtRisk: number; signals: string[] }>;
+  isMobile: boolean;
+  tasks: unknown;
+  tasksLoading: boolean;
+  tasksError: boolean;
+  pendingTasks: Array<Record<string, unknown>>;
+  filteredPendingTasks: Array<Record<string, unknown>>;
+  historyTasks: Array<Record<string, unknown>>;
+  filteredHistoryTasks: Array<Record<string, unknown>>;
+  typeCountMap: Record<string, number>;
+  historyStatusCountMap: Record<string, number>;
+  historyAutoCount: number;
+  availableTypes: string[];
+  pendingCount: number;
+  activeFilter: string | null;
+  setActiveFilter: (v: string | null) => void;
+  taskView: "pending" | "history";
+  setTaskView: (v: "pending" | "history") => void;
+  historyFilter: string | null;
+  setHistoryFilter: (v: string | null) => void;
+  historyAutoFilter: "all" | "auto" | "manual";
+  setHistoryAutoFilter: (v: "all" | "auto" | "manual") => void;
+  sendingTaskId: number | null;
+  emailReady: boolean;
+  platformConfigured: boolean;
+  isPro: boolean;
+  handleApprove: (t: Record<string, unknown>) => void;
+  handleDismiss: (t: Record<string, unknown>) => void;
+  handleSendEmail: (t: Record<string, unknown>) => void;
+  openEditModal: (t: Record<string, unknown>) => void;
+  updateTask: { isPending: boolean };
+  sendEmail: { isPending: boolean };
+}) {
+  return (
+    <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 md:gap-6">
+      <div className="bg-card border border-border rounded-2xl shadow-sm overflow-hidden">
+        <div className="p-4 md:p-6 border-b border-border flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+          <div>
+            <h3 className="text-base md:text-lg font-semibold text-foreground">Risk Radar</h3>
+            <p className="text-xs md:text-sm text-muted-foreground">Members with high churn probability.</p>
+          </div>
+          <div className="bg-destructive/10 text-destructive px-3 md:px-4 py-2 rounded-lg font-bold text-sm whitespace-nowrap">
+            ${topRisks.reduce((acc, r) => acc + r.revenueAtRisk, 0).toLocaleString()} at risk
+          </div>
+        </div>
+        {topRisks.length > 0 ? (
+          <div className="max-h-[60vh] overflow-y-auto custom-scrollbar divide-y divide-border">
+            {topRisks.map((risk) => (
+              <div key={risk.memberId} className="p-4 space-y-2 hover:bg-secondary/30 transition-colors">
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-foreground text-sm">{risk.memberName}</span>
+                  <span className={`px-2.5 py-1 rounded-full text-xs font-semibold uppercase ${
+                    risk.riskTier === 'critical' ? 'bg-red-500/20 text-red-500' :
+                    risk.riskTier === 'high' ? 'bg-orange-500/20 text-orange-500' :
+                    'bg-yellow-500/20 text-yellow-500'
+                  }`}>{risk.riskTier}</span>
+                </div>
+                <div className="flex items-center justify-between text-sm">
+                  <div className="flex items-center gap-2">
+                    <div className="w-16 h-2 bg-muted rounded-full overflow-hidden">
+                      <div className="h-full bg-destructive" style={{ width: `${risk.riskScore}%` }} />
+                    </div>
+                    <span className="font-mono text-xs text-foreground">{risk.riskScore}</span>
+                  </div>
+                  <span className="font-medium text-foreground">${risk.revenueAtRisk}</span>
+                </div>
+                <div className="flex flex-wrap gap-1">
+                  {risk.signals.slice(0, 3).map((sig, i) => (
+                    <span key={i} className="px-2 py-0.5 bg-muted rounded text-[10px] text-muted-foreground">{sig}</span>
+                  ))}
+                  {risk.signals.length > 3 && <span className="px-2 py-0.5 text-[10px] text-muted-foreground">+{risk.signals.length - 3}</span>}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="p-12 text-center">
+            <ShieldAlert className="h-12 w-12 text-emerald-500/50 mx-auto mb-4" />
+            <h3 className="text-lg font-semibold text-foreground">No High-Risk Members</h3>
+            <p className="text-muted-foreground text-sm mt-1">All members are within healthy engagement levels.</p>
+          </div>
+        )}
+      </div>
+
+      <div className="bg-card border border-border rounded-2xl shadow-sm overflow-hidden flex flex-col">
+        <div className="p-3 md:p-4 border-b border-border bg-muted/30 shrink-0">
+          <div className="flex justify-between items-center mb-3">
+            <div className="flex gap-1 bg-muted/50 rounded-lg p-1">
+              <button
+                onClick={() => { setTaskView("pending"); setHistoryFilter(null); setHistoryAutoFilter("all"); }}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                  taskView === "pending"
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <Filter className="h-3 w-3" />
+                Pending ({pendingCount})
+              </button>
+              <button
+                onClick={() => { setTaskView("history"); setActiveFilter(null); }}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                  taskView === "history"
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <History className="h-3 w-3" />
+                History ({historyTasks.length})
+              </button>
+            </div>
+          </div>
+
+          {taskView === "pending" && availableTypes.length > 1 && (
+            <div className="flex flex-wrap gap-1.5">
+              <button
+                onClick={() => setActiveFilter(null)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                  activeFilter === null
+                    ? 'bg-primary text-primary-foreground shadow-sm'
+                    : 'bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground'
+                }`}
+              >
+                <Filter className="h-3 w-3" />
+                All ({pendingCount})
+              </button>
+              {availableTypes.map(type => {
+                const config = getTypeConfig(type);
+                const TypeIcon = config.icon;
+                return (
+                  <button
+                    key={type}
+                    onClick={() => setActiveFilter(activeFilter === type ? null : type)}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                      activeFilter === type
+                        ? 'bg-primary text-primary-foreground shadow-sm'
+                        : 'bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground'
+                    }`}
+                  >
+                    <TypeIcon className="h-3 w-3" />
+                    {config.label} ({typeCountMap[type]})
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {taskView === "history" && (
+            <div className="space-y-2">
+              {Object.keys(historyStatusCountMap).length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  <button
+                    onClick={() => setHistoryFilter(null)}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                      historyFilter === null
+                        ? 'bg-primary text-primary-foreground shadow-sm'
+                        : 'bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground'
+                    }`}
+                  >
+                    All ({historyTasks.length})
+                  </button>
+                  {Object.entries(historyStatusCountMap).sort().map(([status, count]) => {
+                    const statusCfg = STATUS_CONFIG[status] || { label: status, color: "bg-muted text-muted-foreground" };
+                    return (
+                      <button
+                        key={status}
+                        onClick={() => setHistoryFilter(historyFilter === status ? null : status)}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                          historyFilter === status
+                            ? 'bg-primary text-primary-foreground shadow-sm'
+                            : 'bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground'
+                        }`}
+                      >
+                        {statusCfg.label} ({count})
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+              {historyAutoCount > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  <button
+                    onClick={() => setHistoryAutoFilter("all")}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                      historyAutoFilter === "all"
+                        ? 'bg-primary/20 text-primary border border-primary/30'
+                        : 'bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground'
+                    }`}
+                  >
+                    All Sources
+                  </button>
+                  <button
+                    onClick={() => setHistoryAutoFilter(historyAutoFilter === "auto" ? "all" : "auto")}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                      historyAutoFilter === "auto"
+                        ? 'bg-primary/20 text-primary border border-primary/30'
+                        : 'bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground'
+                    }`}
+                  >
+                    <Zap className="h-3 w-3" />
+                    Auto-Pilot ({historyAutoCount})
+                  </button>
+                  <button
+                    onClick={() => setHistoryAutoFilter(historyAutoFilter === "manual" ? "all" : "manual")}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                      historyAutoFilter === "manual"
+                        ? 'bg-primary/20 text-primary border border-primary/30'
+                        : 'bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground'
+                    }`}
+                  >
+                    Manual ({historyTasks.length - historyAutoCount})
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-3 md:p-4 custom-scrollbar space-y-3 max-h-[60vh]">
+          {tasksLoading ? (
+            <div className="flex justify-center py-12"><Loader2 className="h-8 w-8 text-primary animate-spin" /></div>
+          ) : tasksError ? (
+            <div className="text-center py-16 flex flex-col items-center">
+              <X className="h-12 w-12 text-destructive/50 mb-4" />
+              <h3 className="text-lg font-semibold text-foreground">Failed to load tasks</h3>
+              <p className="text-muted-foreground text-sm mt-1">Please try refreshing the page.</p>
+            </div>
+          ) : taskView === "pending" ? (
+            filteredPendingTasks.length > 0 ? (
+              <AnimatePresence mode="popLayout">
+                {filteredPendingTasks.map((task, i) => {
+                  const config = getTypeConfig(task.type as string);
+                  const TypeIcon = config.icon;
+                  const canEmail = isEmailType(task.type as string) && hasTarget(task as { targetId?: number | null; targetType?: string | null });
+                  const isSending = sendingTaskId === (task.id as number);
+                  return (
+                    <motion.div
+                      key={task.id as number}
+                      layout
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, x: -20, transition: { duration: 0.2 } }}
+                      transition={{ delay: i * 0.05 }}
+                      className="p-4 rounded-xl border border-border bg-background hover:border-primary/40 transition-colors"
+                    >
+                      <div className="flex justify-between items-start gap-2 mb-2">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className={`h-8 w-8 rounded-full flex items-center justify-center shrink-0 ${config.color}`}>
+                            <TypeIcon className="h-4 w-4" />
+                          </div>
+                          <div className="min-w-0">
+                            <h4 className="font-semibold text-foreground text-sm truncate">{task.title as string}</h4>
+                            <p className="text-[10px] text-muted-foreground flex items-center gap-1 mt-0.5">
+                              <Clock className="h-3 w-3" /> {task.createdAt ? new Date(task.createdAt as string).toLocaleDateString() : 'Recently'}
+                              <span className="mx-0.5">·</span>
+                              <span className="capitalize">{config.label}</span>
+                            </p>
+                          </div>
+                        </div>
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider shrink-0 ${
+                          task.priority === 'high' ? 'bg-destructive/10 text-destructive' : task.priority === 'low' ? 'bg-muted text-muted-foreground' : 'bg-secondary text-secondary-foreground'
+                        }`}>
+                          {task.priority as string}
+                        </span>
+                      </div>
+
+                      <p className="text-xs text-muted-foreground mb-2">{task.description as string}</p>
+
+                      {task.personalizationMeta && (() => {
+                        try {
+                          const meta = JSON.parse(task.personalizationMeta as string);
+                          if (meta.dataPoints && meta.dataPoints.length > 0) {
+                            return (
+                              <div className="mb-2 flex flex-wrap items-center gap-1">
+                                <span className="flex items-center gap-1 text-[10px] uppercase font-bold text-muted-foreground mr-1">
+                                  <Info className="h-3 w-3" /> Using
+                                </span>
+                                {meta.dataPoints.map((dp: string, idx: number) => (
+                                  <span key={idx} className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-primary/10 text-primary border border-primary/20">
+                                    {dp}
+                                  </span>
+                                ))}
+                              </div>
+                            );
+                          }
+                          return null;
+                        } catch {
+                          return null;
+                        }
+                      })()}
+
+                      {task.aiContent && (
+                        <div className="mb-2 p-3 rounded-lg bg-secondary border border-border text-xs font-mono text-foreground/80 relative whitespace-pre-wrap max-h-32 overflow-y-auto">
+                          <div className="absolute -top-3 left-3 bg-background px-2 text-[10px] text-primary uppercase font-bold flex items-center gap-1">
+                            <Sparkles className="h-3 w-3" /> Draft
+                          </div>
+                          {task.aiContent as string}
+                        </div>
+                      )}
+
+                      <div className="flex flex-wrap justify-end gap-2 pt-1">
+                        <button
+                          onClick={() => handleDismiss(task)}
+                          disabled={updateTask.isPending || isSending}
+                          className="px-3 py-1.5 text-xs font-medium text-muted-foreground hover:text-destructive transition-colors min-h-[36px]"
+                        >
+                          Dismiss
+                        </button>
+                        <button
+                          onClick={() => openEditModal(task)}
+                          disabled={isSending}
+                          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground border border-border hover:border-primary/40 rounded-lg transition-colors min-h-[36px]"
+                        >
+                          <Edit2 className="h-3.5 w-3.5" />
+                          Edit
+                        </button>
+                        {canEmail && isPro && (
+                          <button
+                            onClick={() => emailReady ? handleSendEmail(task) : undefined}
+                            disabled={!emailReady || isSending || sendEmail.isPending}
+                            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors min-h-[36px] disabled:opacity-50 disabled:cursor-not-allowed ${emailReady ? "text-blue-400 hover:text-blue-300 border border-blue-500/30 hover:border-blue-500/50" : "text-muted-foreground border border-border"}`}
+                          >
+                            {isSending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Mail className="h-3.5 w-3.5" />}
+                            Send
+                          </button>
+                        )}
+                        <button
+                          onClick={() => handleApprove(task)}
+                          disabled={updateTask.isPending || isSending}
+                          className="flex items-center gap-1.5 px-4 py-1.5 bg-primary text-primary-foreground hover:bg-primary/90 rounded-lg font-medium shadow-md shadow-primary/20 transition-all min-h-[36px] disabled:opacity-50"
+                        >
+                          <CheckCircle2 className="h-3.5 w-3.5" />
+                          Complete
+                        </button>
+                      </div>
+                    </motion.div>
+                  );
+                })}
+              </AnimatePresence>
+            ) : (
+              <div className="text-center py-12 flex flex-col items-center">
+                <CheckCircle2 className="h-12 w-12 text-emerald-500/50 mb-4" />
+                <h3 className="text-lg font-semibold text-foreground">Inbox Zero</h3>
+                <p className="text-muted-foreground text-sm mt-1">
+                  {activeFilter ? `No pending ${getTypeConfig(activeFilter).label.toLowerCase()} tasks.` : 'All AI tasks have been handled.'}
+                </p>
+              </div>
+            )
+          ) : (
+            filteredHistoryTasks.length > 0 ? (
+              <div className="space-y-3">
+                {filteredHistoryTasks.map((task) => {
+                  const config = getTypeConfig(task.type as string);
+                  const TypeIcon = config.icon;
+                  const statusCfg = STATUS_CONFIG[task.status as string] || { label: task.status as string, color: "bg-muted text-muted-foreground" };
+                  return (
+                    <div
+                      key={task.id as number}
+                      className="p-4 rounded-xl border border-border bg-background/50 opacity-90"
+                    >
+                      <div className="flex justify-between items-start gap-2 mb-2">
+                        <div className="flex items-center gap-2.5">
+                          <div className={`h-8 w-8 rounded-full flex items-center justify-center shrink-0 ${config.color}`}>
+                            <TypeIcon className="h-4 w-4" />
+                          </div>
+                          <div className="min-w-0">
+                            <h4 className="font-semibold text-foreground text-sm flex items-center gap-2">
+                              {task.title as string}
+                              {task.autoSent && (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-primary/15 text-primary border border-primary/25">
+                                  <Zap className="h-3 w-3" />
+                                  Auto
+                                </span>
+                              )}
+                            </h4>
+                            <p className="text-[10px] text-muted-foreground flex items-center gap-1 mt-0.5">
+                              <Clock className="h-3 w-3" /> {task.updatedAt ? new Date(task.updatedAt as string).toLocaleDateString() : task.createdAt ? new Date(task.createdAt as string).toLocaleDateString() : 'Unknown'}
+                              <span className="mx-0.5">·</span>
+                              <span className="capitalize">{config.label}</span>
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1.5 shrink-0 flex-wrap">
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 ${statusCfg.color}`}>
+                            {task.status === 'sent' && <MailCheck className="h-3 w-3" />}
+                            {task.status === 'completed' && <CheckCircle2 className="h-3 w-3" />}
+                            {task.status === 'dismissed' && <X className="h-3 w-3" />}
+                            {statusCfg.label}
+                          </span>
+                          {task.outcome && task.outcome !== "none" && OUTCOME_CONFIG[task.outcome as string] && (() => {
+                            const outcomeCfg = OUTCOME_CONFIG[task.outcome as string];
+                            const OutcomeIcon = outcomeCfg.icon;
+                            return (
+                              <span className={`px-2 py-0.5 rounded border text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 ${outcomeCfg.color}`}>
+                                <OutcomeIcon className="h-3 w-3" />
+                                {outcomeCfg.label}
+                              </span>
+                            );
+                          })()}
+                        </div>
+                      </div>
+
+                      <p className="text-xs text-muted-foreground mb-2">{task.description as string}</p>
+
+                      {task.revenueImpact && parseFloat(task.revenueImpact as string) > 0 && (
+                        <div className="flex items-center gap-1.5 mb-2 text-xs text-emerald-500">
+                          <DollarSign className="h-3 w-3" />
+                          <span className="font-medium">${parseFloat(task.revenueImpact as string).toFixed(2)}/mo</span>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="text-center py-12 flex flex-col items-center">
+                <History className="h-12 w-12 text-muted-foreground/50 mb-4" />
+                <h3 className="text-lg font-semibold text-foreground">No History Yet</h3>
+                <p className="text-muted-foreground text-sm mt-1">
+                  {historyFilter ? `No ${STATUS_CONFIG[historyFilter]?.label.toLowerCase() || historyFilter} tasks.` : historyAutoFilter !== "all" ? `No ${historyAutoFilter === "auto" ? "auto-piloted" : "manually approved"} tasks.` : 'Completed and dismissed tasks will appear here.'}
+                </p>
+              </div>
+            )
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ImpactTab({ impactData }: {
+  impactData: {
+    totalActioned?: number;
+    outcomeCounts?: Record<string, number>;
+    successRate?: number;
+    membersSaved?: number;
+    totalRevenueRetained?: number;
+    totalRevenueRecovered?: number;
+    timeline?: Array<{ month: string; won_back: number; reactivated: number; converted: number; no_change: number }>;
+  } | undefined;
+}) {
+  return (
+    <div className="space-y-6">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
+        <div className="p-4 rounded-xl border border-border bg-card">
+          <div className="flex items-center gap-2 mb-2">
+            <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
+              <CheckCircle2 className="h-4 w-4 text-primary" />
+            </div>
+            <span className="text-xs text-muted-foreground font-medium">Tasks Actioned</span>
+          </div>
+          <p className="text-2xl font-bold text-foreground">{impactData?.totalActioned ?? 0}</p>
+        </div>
+        <div className="p-4 rounded-xl border border-border bg-card">
+          <div className="flex items-center gap-2 mb-2">
+            <div className="h-8 w-8 rounded-lg bg-emerald-500/10 flex items-center justify-center">
+              <UserCheck className="h-4 w-4 text-emerald-500" />
+            </div>
+            <span className="text-xs text-muted-foreground font-medium">Members Saved</span>
+          </div>
+          <p className="text-2xl font-bold text-foreground">{impactData?.membersSaved ?? 0}</p>
+        </div>
+        <div className="p-4 rounded-xl border border-border bg-card">
+          <div className="flex items-center gap-2 mb-2">
+            <div className="h-8 w-8 rounded-lg bg-emerald-500/10 flex items-center justify-center">
+              <TrendingUp className="h-4 w-4 text-emerald-500" />
+            </div>
+            <span className="text-xs text-muted-foreground font-medium">Success Rate</span>
+          </div>
+          <p className="text-2xl font-bold text-foreground">{impactData?.successRate ?? 0}%</p>
+        </div>
+        <div className="p-4 rounded-xl border border-border bg-card">
+          <div className="flex items-center gap-2 mb-2">
+            <div className="h-8 w-8 rounded-lg bg-emerald-500/10 flex items-center justify-center">
+              <DollarSign className="h-4 w-4 text-emerald-500" />
+            </div>
+            <span className="text-xs text-muted-foreground font-medium">Revenue Impact</span>
+          </div>
+          <p className="text-2xl font-bold text-foreground">${((impactData?.totalRevenueRetained ?? 0) + (impactData?.totalRevenueRecovered ?? 0)).toLocaleString()}<span className="text-sm font-normal text-muted-foreground">/mo</span></p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="p-4 rounded-xl border border-border bg-card">
+          <h3 className="text-sm font-semibold text-foreground mb-3">Revenue Breakdown</h3>
+          <div className="space-y-3">
+            <div className="flex justify-between items-center">
+              <span className="text-xs text-muted-foreground">Revenue Retained</span>
+              <span className="text-sm font-medium text-emerald-500">${(impactData?.totalRevenueRetained ?? 0).toLocaleString()}/mo</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-xs text-muted-foreground">Revenue Recovered</span>
+              <span className="text-sm font-medium text-emerald-500">${(impactData?.totalRevenueRecovered ?? 0).toLocaleString()}/mo</span>
+            </div>
+          </div>
+        </div>
+        <div className="p-4 rounded-xl border border-border bg-card">
+          <h3 className="text-sm font-semibold text-foreground mb-3">Outcome Breakdown</h3>
+          <div className="space-y-2">
+            {[
+              { key: "won_back", label: "Won Back", color: "bg-emerald-500" },
+              { key: "reactivated", label: "Reactivated", color: "bg-emerald-400" },
+              { key: "converted", label: "Converted", color: "bg-primary" },
+              { key: "no_change", label: "No Change", color: "bg-muted-foreground" },
+              { key: "pending_observation", label: "Observing", color: "bg-amber-500" },
+            ].map(({ key, label, color }) => {
+              const count = (impactData?.outcomeCounts as Record<string, number>)?.[key] ?? 0;
+              const total = impactData?.totalActioned ?? 0;
+              const pct = total > 0 ? Math.round((count / total) * 100) : 0;
+              return (
+                <div key={key} className="flex items-center gap-3">
+                  <div className={`h-2 w-2 rounded-full ${color} shrink-0`} />
+                  <span className="text-xs text-muted-foreground flex-1">{label}</span>
+                  <span className="text-xs font-medium text-foreground">{count}</span>
+                  <span className="text-xs text-muted-foreground w-8 text-right">{pct}%</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {impactData?.timeline && impactData.timeline.length > 0 && (
+        <div className="p-4 rounded-xl border border-border bg-card">
+          <h3 className="text-sm font-semibold text-foreground mb-4">Outcomes Over Time</h3>
+          <div className="h-64">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={impactData.timeline} margin={{ top: 5, right: 5, left: 0, bottom: 5 }}>
+                <XAxis dataKey="month" tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" />
+                <YAxis allowDecimals={false} tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" />
+                <Tooltip
+                  contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px", fontSize: "12px" }}
+                  labelStyle={{ color: "hsl(var(--foreground))" }}
+                />
+                <Legend wrapperStyle={{ fontSize: "11px" }} />
+                <Bar dataKey="won_back" name="Won Back" fill="#10b981" stackId="a" radius={[0, 0, 0, 0]} />
+                <Bar dataKey="reactivated" name="Reactivated" fill="#34d399" stackId="a" />
+                <Bar dataKey="converted" name="Converted" fill="hsl(var(--primary))" stackId="a" />
+                <Bar dataKey="no_change" name="No Change" fill="#6b7280" stackId="a" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      )}
+
+      {(!impactData || impactData.totalActioned === 0) && (
+        <div className="text-center py-12 flex flex-col items-center">
+          <TrendingUp className="h-12 w-12 text-muted-foreground/50 mb-4" />
+          <h3 className="text-lg font-semibold text-foreground">No Impact Data Yet</h3>
+          <p className="text-muted-foreground text-sm mt-1 max-w-md">
+            As you action AI tasks, the system will track outcomes and show measurable results here.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}

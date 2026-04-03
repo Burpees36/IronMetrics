@@ -3,9 +3,8 @@ import { Link, useLocation } from "wouter";
 import { useAuth } from "@workspace/replit-auth-web";
 import { 
   Dumbbell, LayoutDashboard, BrainCircuit, Users, CalendarDays, 
-  Target, CreditCard, Activity, Bot, LogOut, Loader2, Menu, X, BookOpen,
-  ShoppingBag, MessagesSquare, FileText, BarChart3, Settings, Sun, Moon, RefreshCw,
-  Lock
+  Target, CreditCard, Activity, LogOut, Menu, BookOpen,
+  Settings, Sun, Moon, RefreshCw, Lock
 } from "lucide-react";
 import { useGym } from "@/store/GymContext";
 import { useTheme } from "@/store/ThemeContext";
@@ -27,13 +26,12 @@ import {
 
 const NAV_ITEMS = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard, routeGroup: "dashboard" },
-  { name: "Intelligence", href: "/intelligence", icon: BrainCircuit, routeGroup: "intelligence" },
+  { name: "AI Insights", href: "/ai-insights", icon: BrainCircuit, routeGroup: "insights" },
   { name: "Members", href: "/members", icon: Users, routeGroup: "members", requiredTier: "growth" },
   { name: "Schedule", href: "/schedule", icon: CalendarDays, routeGroup: "schedule", requiredTier: "growth" },
   { name: "Leads", href: "/leads", icon: Target, routeGroup: "leads", requiredTier: "growth" },
   { name: "Billing", href: "/billing", icon: CreditCard, routeGroup: "billing" },
   { name: "Workouts", href: "/workouts", icon: Activity, routeGroup: "workouts", requiredTier: "growth" },
-  { name: "AI Operator", href: "/ai-operator", icon: Bot, routeGroup: "ai" },
   { name: "Retention", href: "/retention", icon: RefreshCw, routeGroup: "retention" },
   { name: "Resources", href: "/resources", icon: BookOpen, routeGroup: "resources" },
   { name: "Settings", href: "/settings", icon: Settings, routeGroup: "settings" },
@@ -41,10 +39,9 @@ const NAV_ITEMS = [
 
 const BOTTOM_NAV_ITEMS = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-  { name: "Intel", href: "/intelligence", icon: BrainCircuit },
+  { name: "AI Insights", href: "/ai-insights", icon: BrainCircuit },
   { name: "Members", href: "/members", icon: Users },
   { name: "Schedule", href: "/schedule", icon: CalendarDays },
-  { name: "AI", href: "/ai-operator", icon: Bot },
 ];
 
 function ThemeToggleButton({ className = "" }: { className?: string }) {

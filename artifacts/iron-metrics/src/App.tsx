@@ -14,10 +14,9 @@ import { LandingPage } from "@/pages/LandingPage";
 import { Login } from "@/pages/Login";
 import { GymSelect } from "@/pages/GymSelect";
 import { Dashboard } from "@/pages/Dashboard";
-import { Intelligence } from "@/pages/Intelligence";
+import { AiInsights } from "@/pages/AiInsights";
 import { Members } from "@/pages/Members";
 import { Schedule } from "@/pages/Schedule";
-import { AiOperator } from "@/pages/AiOperator";
 import { Leads } from "@/pages/Leads";
 import { Billing } from "@/pages/Billing";
 import { Workouts } from "@/pages/Workouts";
@@ -96,11 +95,12 @@ function Router() {
         )}
       </Route>
       <Route path="/dashboard" component={() => <ProtectedRoute component={Dashboard} />} />
-      <Route path="/intelligence" component={() => <ProtectedRoute component={Intelligence} />} />
+      <Route path="/ai-insights" component={() => <ProtectedRoute component={AiInsights} />} />
+      <Route path="/intelligence">{() => { const [, setLoc] = useLocation(); React.useEffect(() => setLoc("/ai-insights"), []); return null; }}</Route>
+      <Route path="/ai-operator">{() => { const [, setLoc] = useLocation(); React.useEffect(() => setLoc("/ai-insights"), []); return null; }}</Route>
       <Route path="/members/:memberId" component={() => <ProtectedRoute component={() => <TierGate routeGroup="members" feature="Member Management" requiredTier="growth"><MemberDetail /></TierGate>} />} />
       <Route path="/members" component={() => <ProtectedRoute component={() => <TierGate routeGroup="members" feature="Member Management" requiredTier="growth"><Members /></TierGate>} />} />
       <Route path="/schedule" component={() => <ProtectedRoute component={() => <TierGate routeGroup="schedule" feature="Scheduling" requiredTier="growth"><Schedule /></TierGate>} />} />
-      <Route path="/ai-operator" component={() => <ProtectedRoute component={AiOperator} />} />
       <Route path="/leads" component={() => <ProtectedRoute component={() => <TierGate routeGroup="leads" feature="Leads Pipeline" requiredTier="growth"><Leads /></TierGate>} />} />
       <Route path="/retention" component={() => <ProtectedRoute component={Retention} />} />
       <Route path="/billing" component={() => <ProtectedRoute component={Billing} />} />
