@@ -1,8 +1,8 @@
 import { Router, type IRouter, type Request, type Response, type NextFunction } from "express";
 import { eq, desc, and, sql, gte, lte } from "drizzle-orm";
-import { db, aiTasksTable, aiGeneratedContentTable, membersTable, leadsTable, gymsTable, gymStaffTable, subscriptionsTable } from "@workspace/db";
+import { db, aiTasksTable, aiGeneratedContentTable, membersTable, leadsTable, gymsTable, gymStaffTable, subscriptionsTable, aiOperatorSettingsTable } from "@workspace/db";
 import { sendMemberEmail, logMemberEmailSent } from "../services/member-email";
-import { CreateAiTaskBody, GenerateMemberOutreachBody, UpdateAiTaskBody } from "@workspace/api-zod";
+import { CreateAiTaskBody, GenerateMemberOutreachBody, UpdateAiTaskBody, UpdateAutopilotSettingsBody } from "@workspace/api-zod";
 import { generateAiTasks } from "../services/ai-task-generation";
 import { assembleMemberContext, buildMemberPersonalizationMeta } from "../services/personalization-context";
 import { getEmailService } from "../services/email-service";
@@ -460,6 +460,68 @@ router.get("/gyms/:gymId/ai/last-scan", async (req, res): Promise<void> => {
 
   const lastAutoScan = getLastAiScanTimestamp();
   res.json({ lastAutoScan: lastAutoScan ? lastAutoScan.toISOString() : null });
+});
+
+router.get("/gyms/:gymId/ai/autopilot-settings", async (req, res): Promise<void> => {
+  const gymId = parseGymId(req.params);
+  if (!gymId) { res.status(400).json({ error: "Invalid gym ID" }); return; }
+
+  const access = await verifyGymAccess(gymId, req.user!.id);
+  if (!access.allowed) { res.status(access.gym ? 403 : 404).json({ error: access.gym ? "You do not have access to this gym" : "Gym not found" }); return; }
+
+  let [settings] = await db.select().from(aiOperatorSettingsTable).where(eq(aiOperatorSettingsTable.gymId, gymId));
+
+  if (!settings) {
+    [settings] = await db.insert(aiOperatorSettingsTable).values({ gymId }).returning();
+  }
+
+  res.json({
+    autopilotOutreach: settings.autopilotOutreach,
+    autopilotBilling: settings.autopilotBilling,
+    autopilotLeads: settings.autopilotLeads,
+    cooldownDays: settings.cooldownDays,
+    digestFrequency: settings.digestFrequency,
+  });
+});
+
+router.put("/gyms/:gymId/ai/autopilot-settings", async (req, res): Promise<void> => {
+  const gymId = parseGymId(req.params);
+  if (!gymId) { res.status(400).json({ error: "Invalid gym ID" }); return; }
+
+  const access = await verifyGymAccess(gymId, req.user!.id);
+  if (!access.allowed) { res.status(access.gym ? 403 : 404).json({ error: access.gym ? "You do not have access to this gym" : "Gym not found" }); return; }
+
+  const parsed = UpdateAutopilotSettingsBody.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+
+  const updateData: Record<string, any> = {};
+  if (parsed.data.autopilotOutreach !== undefined) updateData.autopilotOutreach = parsed.data.autopilotOutreach;
+  if (parsed.data.autopilotBilling !== undefined) updateData.autopilotBilling = parsed.data.autopilotBilling;
+  if (parsed.data.autopilotLeads !== undefined) updateData.autopilotLeads = parsed.data.autopilotLeads;
+  if (parsed.data.cooldownDays !== undefined) updateData.cooldownDays = parsed.data.cooldownDays;
+  if (parsed.data.digestFrequency !== undefined) updateData.digestFrequency = parsed.data.digestFrequency;
+
+  if (Object.keys(updateData).length === 0) {
+    res.status(400).json({ error: "At least one setting must be provided" });
+    return;
+  }
+
+  let [existing] = await db.select().from(aiOperatorSettingsTable).where(eq(aiOperatorSettingsTable.gymId, gymId));
+
+  let settings;
+  if (existing) {
+    [settings] = await db.update(aiOperatorSettingsTable).set(updateData).where(eq(aiOperatorSettingsTable.gymId, gymId)).returning();
+  } else {
+    [settings] = await db.insert(aiOperatorSettingsTable).values({ gymId, ...updateData }).returning();
+  }
+
+  res.json({
+    autopilotOutreach: settings.autopilotOutreach,
+    autopilotBilling: settings.autopilotBilling,
+    autopilotLeads: settings.autopilotLeads,
+    cooldownDays: settings.cooldownDays,
+    digestFrequency: settings.digestFrequency,
+  });
 });
 
 export default router;

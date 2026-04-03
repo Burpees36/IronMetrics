@@ -1614,6 +1614,7 @@ export interface AiTask {
   revenueImpact?: string | null;
   /** @nullable */
   actionedAt?: string | null;
+  autoSent: boolean;
   createdAt: string;
 }
 
@@ -1695,6 +1696,44 @@ export interface AiImpactResponse {
   totalRevenueRetained: number;
   totalRevenueRecovered: number;
   timeline: AiImpactResponseTimelineItem[];
+}
+
+export type AutopilotSettingsDigestFrequency =
+  (typeof AutopilotSettingsDigestFrequency)[keyof typeof AutopilotSettingsDigestFrequency];
+
+export const AutopilotSettingsDigestFrequency = {
+  daily: "daily",
+  weekly: "weekly",
+  disabled: "disabled",
+} as const;
+
+export interface AutopilotSettings {
+  autopilotOutreach: boolean;
+  autopilotBilling: boolean;
+  autopilotLeads: boolean;
+  cooldownDays: number;
+  digestFrequency: AutopilotSettingsDigestFrequency;
+}
+
+export type UpdateAutopilotSettingsBodyDigestFrequency =
+  (typeof UpdateAutopilotSettingsBodyDigestFrequency)[keyof typeof UpdateAutopilotSettingsBodyDigestFrequency];
+
+export const UpdateAutopilotSettingsBodyDigestFrequency = {
+  daily: "daily",
+  weekly: "weekly",
+  disabled: "disabled",
+} as const;
+
+export interface UpdateAutopilotSettingsBody {
+  autopilotOutreach?: boolean;
+  autopilotBilling?: boolean;
+  autopilotLeads?: boolean;
+  /**
+   * @minimum 1
+   * @maximum 90
+   */
+  cooldownDays?: number;
+  digestFrequency?: UpdateAutopilotSettingsBodyDigestFrequency;
 }
 
 export interface AiLastScanResponse {

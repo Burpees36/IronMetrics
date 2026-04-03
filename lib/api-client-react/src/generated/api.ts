@@ -30,6 +30,7 @@ import type {
   Attendance,
   AttendanceReport,
   AuthUser,
+  AutopilotSettings,
   BillingMaintenanceResponse,
   BillingRecovery,
   BillingSummary,
@@ -158,6 +159,7 @@ import type {
   TimelineEvent,
   UnlinkMemberBilling200,
   UpdateAiTaskBody,
+  UpdateAutopilotSettingsBody,
   UpdateClassBody,
   UpdateClassTemplateBody,
   UpdateDiscountCodeBody,
@@ -11682,6 +11684,183 @@ export function useGetAiLastScan<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * @summary Get auto-pilot settings for a gym
+ */
+export const getGetAutopilotSettingsUrl = (gymId: number) => {
+  return `/api/gyms/${gymId}/ai/autopilot-settings`;
+};
+
+export const getAutopilotSettings = async (
+  gymId: number,
+  options?: RequestInit,
+): Promise<AutopilotSettings> => {
+  return customFetch<AutopilotSettings>(getGetAutopilotSettingsUrl(gymId), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetAutopilotSettingsQueryKey = (gymId: number) => {
+  return [`/api/gyms/${gymId}/ai/autopilot-settings`] as const;
+};
+
+export const getGetAutopilotSettingsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getAutopilotSettings>>,
+  TError = ErrorType<unknown>,
+>(
+  gymId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getAutopilotSettings>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetAutopilotSettingsQueryKey(gymId);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getAutopilotSettings>>
+  > = ({ signal }) =>
+    getAutopilotSettings(gymId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!gymId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getAutopilotSettings>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetAutopilotSettingsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getAutopilotSettings>>
+>;
+export type GetAutopilotSettingsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get auto-pilot settings for a gym
+ */
+
+export function useGetAutopilotSettings<
+  TData = Awaited<ReturnType<typeof getAutopilotSettings>>,
+  TError = ErrorType<unknown>,
+>(
+  gymId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getAutopilotSettings>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetAutopilotSettingsQueryOptions(gymId, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Update auto-pilot settings for a gym
+ */
+export const getUpdateAutopilotSettingsUrl = (gymId: number) => {
+  return `/api/gyms/${gymId}/ai/autopilot-settings`;
+};
+
+export const updateAutopilotSettings = async (
+  gymId: number,
+  updateAutopilotSettingsBody: UpdateAutopilotSettingsBody,
+  options?: RequestInit,
+): Promise<AutopilotSettings> => {
+  return customFetch<AutopilotSettings>(getUpdateAutopilotSettingsUrl(gymId), {
+    ...options,
+    method: "PUT",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(updateAutopilotSettingsBody),
+  });
+};
+
+export const getUpdateAutopilotSettingsMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateAutopilotSettings>>,
+    TError,
+    { gymId: number; data: BodyType<UpdateAutopilotSettingsBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateAutopilotSettings>>,
+  TError,
+  { gymId: number; data: BodyType<UpdateAutopilotSettingsBody> },
+  TContext
+> => {
+  const mutationKey = ["updateAutopilotSettings"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateAutopilotSettings>>,
+    { gymId: number; data: BodyType<UpdateAutopilotSettingsBody> }
+  > = (props) => {
+    const { gymId, data } = props ?? {};
+
+    return updateAutopilotSettings(gymId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateAutopilotSettingsMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateAutopilotSettings>>
+>;
+export type UpdateAutopilotSettingsMutationBody =
+  BodyType<UpdateAutopilotSettingsBody>;
+export type UpdateAutopilotSettingsMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Update auto-pilot settings for a gym
+ */
+export const useUpdateAutopilotSettings = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateAutopilotSettings>>,
+    TError,
+    { gymId: number; data: BodyType<UpdateAutopilotSettingsBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateAutopilotSettings>>,
+  TError,
+  { gymId: number; data: BodyType<UpdateAutopilotSettingsBody> },
+  TContext
+> => {
+  return useMutation(getUpdateAutopilotSettingsMutationOptions(options));
+};
 
 /**
  * @summary Check if email sending is configured

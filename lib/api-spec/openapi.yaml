@@ -3250,6 +3250,48 @@ paths:
               schema:
                 $ref: "#/components/schemas/AiLastScanResponse"
 
+  /gyms/{gymId}/ai/autopilot-settings:
+    get:
+      operationId: getAutopilotSettings
+      tags: [ai-operator]
+      summary: Get auto-pilot settings for a gym
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Auto-pilot settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AutopilotSettings"
+    put:
+      operationId: updateAutopilotSettings
+      tags: [ai-operator]
+      summary: Update auto-pilot settings for a gym
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateAutopilotSettingsBody"
+      responses:
+        "200":
+          description: Updated auto-pilot settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AutopilotSettings"
+
   /gyms/{gymId}/ai/email-status:
     get:
       operationId: getAiEmailStatus
@@ -6235,6 +6277,8 @@ components:
         actionedAt:
           type: ["string", "null"]
           format: date-time
+        autoSent:
+          type: boolean
         createdAt:
           type: string
           format: date-time
@@ -6246,6 +6290,7 @@ components:
         - description
         - priority
         - status
+        - autoSent
         - createdAt
 
     CreateAiTaskBody:
@@ -6373,6 +6418,44 @@ components:
         - totalRevenueRetained
         - totalRevenueRecovered
         - timeline
+
+    AutopilotSettings:
+      type: object
+      properties:
+        autopilotOutreach:
+          type: boolean
+        autopilotBilling:
+          type: boolean
+        autopilotLeads:
+          type: boolean
+        cooldownDays:
+          type: integer
+        digestFrequency:
+          type: string
+          enum: [daily, weekly, disabled]
+      required:
+        - autopilotOutreach
+        - autopilotBilling
+        - autopilotLeads
+        - cooldownDays
+        - digestFrequency
+
+    UpdateAutopilotSettingsBody:
+      type: object
+      properties:
+        autopilotOutreach:
+          type: boolean
+        autopilotBilling:
+          type: boolean
+        autopilotLeads:
+          type: boolean
+        cooldownDays:
+          type: integer
+          minimum: 1
+          maximum: 90
+        digestFrequency:
+          type: string
+          enum: [daily, weekly, disabled]
 
     AiLastScanResponse:
       type: object

@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from "react";
 import { useGym } from "@/store/GymContext";
-import { useListAiTasks, useGenerateOwnerBrief, useUpdateAiTask, useGenerateAiTasks, useGetDashboardStats, getListAiTasksQueryKey, useSendAiTaskEmail, useGetAiEmailStatus, useGetAiLastScan, useGetAiImpact } from "@workspace/api-client-react";
+import { useListAiTasks, useGenerateOwnerBrief, useUpdateAiTask, useGenerateAiTasks, useGetDashboardStats, getListAiTasksQueryKey, useSendAiTaskEmail, useGetAiEmailStatus, useGetAiLastScan, useGetAiImpact, useGetAutopilotSettings, useUpdateAutopilotSettings, getGetAutopilotSettingsQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { motion, AnimatePresence } from "framer-motion";
@@ -18,6 +18,7 @@ import {
   Target, Megaphone, BarChart3, Edit2, RefreshCw,
   History, Mail, MailCheck, AlertCircle, Info, TrendingUp, DollarSign,
   UserCheck, Eye, ArrowUpRight, ArrowDownRight,
+  Settings, Zap, ShieldCheck, CalendarDays,
 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from "recharts";
 
@@ -59,6 +60,242 @@ function hasTarget(task: any) {
   return task.targetId && task.targetType;
 }
 
+function ToggleSwitch({ checked, onChange, disabled }: { checked: boolean; onChange: (v: boolean) => void; disabled?: boolean }) {
+  return (
+    <button
+      role="switch"
+      aria-checked={checked}
+      onClick={() => !disabled && onChange(!checked)}
+      disabled={disabled}
+      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary/50 focus:ring-offset-2 focus:ring-offset-background disabled:opacity-50 disabled:cursor-not-allowed ${
+        checked ? "bg-primary" : "bg-muted"
+      }`}
+    >
+      <span
+        className={`inline-block h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${
+          checked ? "translate-x-6" : "translate-x-1"
+        }`}
+      />
+    </button>
+  );
+}
+
+function AutopilotSettingsPanel({ gymId }: { gymId: number }) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [settingsOpen, setSettingsOpen] = useState(false);
+
+  const settingsQueryKey = getGetAutopilotSettingsQueryKey(gymId);
+
+  const { data: settings, isLoading } = useGetAutopilotSettings(gymId, {
+    query: { enabled: !!gymId },
+  });
+
+  const updateSettings = useUpdateAutopilotSettings({
+    mutation: {
+      onMutate: async ({ data }) => {
+        await queryClient.cancelQueries({ queryKey: settingsQueryKey });
+        const previous = queryClient.getQueryData(settingsQueryKey);
+        queryClient.setQueryData(settingsQueryKey, (old: any) => {
+          if (!old) return old;
+          return { ...old, ...data };
+        });
+        return { previous };
+      },
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: settingsQueryKey });
+        toast({ title: "Auto-Pilot Updated", description: "Settings saved successfully." });
+      },
+      onError: (_err: any, _vars: any, context: any) => {
+        if (context?.previous) {
+          queryClient.setQueryData(settingsQueryKey, context.previous);
+        }
+        toast({ title: "Error", description: "Failed to update settings.", variant: "destructive" });
+      },
+    },
+  });
+
+  const handleToggle = (key: string, value: boolean) => {
+    updateSettings.mutate({
+      gymId,
+      data: { [key]: value } as any,
+    });
+  };
+
+  const handleCooldown = (days: number) => {
+    updateSettings.mutate({
+      gymId,
+      data: { cooldownDays: days } as any,
+    });
+  };
+
+  const handleDigestFrequency = (freq: string) => {
+    updateSettings.mutate({
+      gymId,
+      data: { digestFrequency: freq } as any,
+    });
+  };
+
+  const anyEnabled = settings?.autopilotOutreach || settings?.autopilotBilling || settings?.autopilotLeads;
+
+  return (
+    <>
+      <button
+        onClick={() => setSettingsOpen(true)}
+        className={`flex items-center justify-center gap-2 px-4 py-2.5 border rounded-xl font-medium transition-all shadow-sm min-h-[44px] flex-1 sm:flex-initial ${
+          anyEnabled
+            ? "bg-primary/10 border-primary/30 text-primary hover:border-primary/50"
+            : "bg-card border-border hover:border-primary/50 text-foreground"
+        }`}
+      >
+        {anyEnabled ? <Zap className="h-5 w-5" /> : <Settings className="h-5 w-5 text-primary" />}
+        <span>Auto-Pilot{anyEnabled ? " On" : ""}</span>
+      </button>
+
+      <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Zap className="h-5 w-5 text-primary" />
+              Auto-Pilot Settings
+            </DialogTitle>
+            <DialogDescription>
+              Enable auto-pilot to let the AI Operator send emails automatically. You'll stay informed through digest summaries.
+            </DialogDescription>
+          </DialogHeader>
+
+          {isLoading ? (
+            <div className="flex justify-center py-8">
+              <Loader2 className="h-6 w-6 animate-spin text-primary" />
+            </div>
+          ) : settings ? (
+            <div className="space-y-6">
+              <div className="space-y-4">
+                <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+                  <ShieldCheck className="h-4 w-4 text-primary" />
+                  Auto-Send Categories
+                </h3>
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between p-3 rounded-lg bg-secondary/50 border border-border">
+                    <div className="flex items-center gap-3">
+                      <div className="h-8 w-8 rounded-full flex items-center justify-center bg-blue-500/10 text-blue-500">
+                        <Send className="h-4 w-4" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-foreground">Outreach</p>
+                        <p className="text-xs text-muted-foreground">At-risk member re-engagement</p>
+                      </div>
+                    </div>
+                    <ToggleSwitch
+                      checked={settings.autopilotOutreach}
+                      onChange={(v) => handleToggle("autopilotOutreach", v)}
+                      disabled={updateSettings.isPending}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between p-3 rounded-lg bg-secondary/50 border border-border">
+                    <div className="flex items-center gap-3">
+                      <div className="h-8 w-8 rounded-full flex items-center justify-center bg-amber-500/10 text-amber-500">
+                        <CreditCard className="h-4 w-4" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-foreground">Billing</p>
+                        <p className="text-xs text-muted-foreground">Failed payment follow-ups</p>
+                      </div>
+                    </div>
+                    <ToggleSwitch
+                      checked={settings.autopilotBilling}
+                      onChange={(v) => handleToggle("autopilotBilling", v)}
+                      disabled={updateSettings.isPending}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between p-3 rounded-lg bg-secondary/50 border border-border">
+                    <div className="flex items-center gap-3">
+                      <div className="h-8 w-8 rounded-full flex items-center justify-center bg-cyan-500/10 text-cyan-500">
+                        <Target className="h-4 w-4" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-foreground">Leads</p>
+                        <p className="text-xs text-muted-foreground">Stale lead follow-ups</p>
+                      </div>
+                    </div>
+                    <ToggleSwitch
+                      checked={settings.autopilotLeads}
+                      onChange={(v) => handleToggle("autopilotLeads", v)}
+                      disabled={updateSettings.isPending}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+                  <Clock className="h-4 w-4 text-primary" />
+                  Cooldown Period
+                </h3>
+                <p className="text-xs text-muted-foreground">
+                  Minimum days between auto-emails to the same person.
+                </p>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="range"
+                    min={1}
+                    max={90}
+                    value={settings.cooldownDays}
+                    onChange={(e) => handleCooldown(parseInt(e.target.value, 10))}
+                    disabled={updateSettings.isPending}
+                    className="flex-1 accent-primary"
+                  />
+                  <span className="text-sm font-mono font-medium text-foreground w-16 text-right">
+                    {settings.cooldownDays} day{settings.cooldownDays !== 1 ? "s" : ""}
+                  </span>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+                  <CalendarDays className="h-4 w-4 text-primary" />
+                  Digest Frequency
+                </h3>
+                <p className="text-xs text-muted-foreground">
+                  How often you receive a summary of auto-piloted actions.
+                </p>
+                <div className="flex gap-2">
+                  {(["daily", "weekly", "disabled"] as const).map((freq) => (
+                    <button
+                      key={freq}
+                      onClick={() => handleDigestFrequency(freq)}
+                      disabled={updateSettings.isPending}
+                      className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-all border ${
+                        settings.digestFrequency === freq
+                          ? "bg-primary text-primary-foreground border-primary shadow-sm"
+                          : "bg-muted/50 text-muted-foreground border-border hover:border-primary/40 hover:text-foreground"
+                      }`}
+                    >
+                      {freq.charAt(0).toUpperCase() + freq.slice(1)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {anyEnabled && (
+                <div className="flex items-start gap-2 p-3 rounded-lg bg-primary/5 border border-primary/20 text-xs text-muted-foreground">
+                  <Info className="h-4 w-4 text-primary shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-medium text-foreground">Safety guardrails active</p>
+                    <p className="mt-0.5">
+                      Auto-pilot only sends to contacts with valid email addresses and respects a {settings.cooldownDays}-day cooldown per person. Disable any category at any time to revert to manual approval.
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : null}
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
 export function AiOperator() {
   const { activeGymId } = useGym();
   const { toast } = useToast();
@@ -74,6 +311,7 @@ export function AiOperator() {
   const [activeTab, setActiveTab] = useState<"pending" | "history" | "impact">("pending");
   const [historyFilter, setHistoryFilter] = useState<string | null>(null);
   const [sendingTaskId, setSendingTaskId] = useState<number | null>(null);
+  const [historyAutoFilter, setHistoryAutoFilter] = useState<"all" | "auto" | "manual">("all");
 
   const { data: tasks, isLoading: tasksLoading, isError: tasksError } = useListAiTasks(activeGymId as number, {
     query: { enabled: !!activeGymId }
@@ -191,9 +429,17 @@ export function AiOperator() {
   }, [pendingTasks, activeFilter]);
 
   const filteredHistoryTasks = useMemo(() => {
-    if (!historyFilter) return historyTasks;
-    return historyTasks.filter((t: any) => t.status === historyFilter);
-  }, [historyTasks, historyFilter]);
+    let filtered = historyTasks;
+    if (historyFilter) {
+      filtered = filtered.filter((t: any) => t.status === historyFilter);
+    }
+    if (historyAutoFilter === "auto") {
+      filtered = filtered.filter((t: any) => t.autoSent);
+    } else if (historyAutoFilter === "manual") {
+      filtered = filtered.filter((t: any) => !t.autoSent);
+    }
+    return filtered;
+  }, [historyTasks, historyFilter, historyAutoFilter]);
 
   const typeCountMap = useMemo(() => {
     const map: Record<string, number> = {};
@@ -209,6 +455,10 @@ export function AiOperator() {
       map[t.status] = (map[t.status] || 0) + 1;
     });
     return map;
+  }, [historyTasks]);
+
+  const historyAutoCount = useMemo(() => {
+    return historyTasks.filter((t: any) => t.autoSent).length;
   }, [historyTasks]);
 
   const availableTypes = Object.keys(typeCountMap).sort();
@@ -328,6 +578,7 @@ export function AiOperator() {
           </div>
           
           <div className="flex gap-2 w-full sm:w-auto">
+            <AutopilotSettingsPanel gymId={activeGymId} />
             <button
               onClick={() => generateTasksMutation.mutate({ gymId: activeGymId as number })}
               disabled={generateTasksMutation.isPending}
@@ -366,7 +617,7 @@ export function AiOperator() {
           <div className="flex justify-between items-center mb-3">
             <div className="flex gap-1 bg-muted/50 rounded-lg p-1">
               <button
-                onClick={() => { setActiveTab("pending"); setHistoryFilter(null); }}
+                onClick={() => { setActiveTab("pending"); setHistoryFilter(null); setHistoryAutoFilter("all"); }}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
                   activeTab === "pending"
                     ? "bg-background text-foreground shadow-sm"
@@ -435,34 +686,73 @@ export function AiOperator() {
             </div>
           )}
 
-          {activeTab === "history" && Object.keys(historyStatusCountMap).length > 0 && (
-            <div className="flex flex-wrap gap-1.5">
-              <button
-                onClick={() => setHistoryFilter(null)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                  historyFilter === null
-                    ? 'bg-primary text-primary-foreground shadow-sm'
-                    : 'bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground'
-                }`}
-              >
-                All ({historyTasks.length})
-              </button>
-              {Object.entries(historyStatusCountMap).sort().map(([status, count]) => {
-                const statusCfg = STATUS_CONFIG[status] || { label: status, color: "bg-muted text-muted-foreground" };
-                return (
+          {activeTab === "history" && (
+            <div className="space-y-2">
+              {Object.keys(historyStatusCountMap).length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
                   <button
-                    key={status}
-                    onClick={() => setHistoryFilter(historyFilter === status ? null : status)}
+                    onClick={() => setHistoryFilter(null)}
                     className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                      historyFilter === status
+                      historyFilter === null
                         ? 'bg-primary text-primary-foreground shadow-sm'
                         : 'bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground'
                     }`}
                   >
-                    {statusCfg.label} ({count})
+                    All ({historyTasks.length})
                   </button>
-                );
-              })}
+                  {Object.entries(historyStatusCountMap).sort().map(([status, count]) => {
+                    const statusCfg = STATUS_CONFIG[status] || { label: status, color: "bg-muted text-muted-foreground" };
+                    return (
+                      <button
+                        key={status}
+                        onClick={() => setHistoryFilter(historyFilter === status ? null : status)}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                          historyFilter === status
+                            ? 'bg-primary text-primary-foreground shadow-sm'
+                            : 'bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground'
+                        }`}
+                      >
+                        {statusCfg.label} ({count})
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+              {historyAutoCount > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  <button
+                    onClick={() => setHistoryAutoFilter("all")}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                      historyAutoFilter === "all"
+                        ? 'bg-primary/20 text-primary border border-primary/30'
+                        : 'bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground'
+                    }`}
+                  >
+                    All Sources
+                  </button>
+                  <button
+                    onClick={() => setHistoryAutoFilter(historyAutoFilter === "auto" ? "all" : "auto")}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                      historyAutoFilter === "auto"
+                        ? 'bg-primary/20 text-primary border border-primary/30'
+                        : 'bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground'
+                    }`}
+                  >
+                    <Zap className="h-3 w-3" />
+                    Auto-Pilot ({historyAutoCount})
+                  </button>
+                  <button
+                    onClick={() => setHistoryAutoFilter(historyAutoFilter === "manual" ? "all" : "manual")}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                      historyAutoFilter === "manual"
+                        ? 'bg-primary/20 text-primary border border-primary/30'
+                        : 'bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground'
+                    }`}
+                  >
+                    Manual ({historyTasks.length - historyAutoCount})
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -741,7 +1031,15 @@ export function AiOperator() {
                             <TypeIcon className="h-5 w-5" />
                           </div>
                           <div className="min-w-0">
-                            <h4 className="font-semibold text-foreground text-sm md:text-base">{task.title}</h4>
+                            <h4 className="font-semibold text-foreground text-sm md:text-base flex items-center gap-2">
+                              {task.title}
+                              {task.autoSent && (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-primary/15 text-primary border border-primary/25">
+                                  <Zap className="h-3 w-3" />
+                                  Auto
+                                </span>
+                              )}
+                            </h4>
                             <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
                               <Clock className="h-3 w-3" /> {task.updatedAt ? new Date(task.updatedAt).toLocaleDateString() : task.createdAt ? new Date(task.createdAt).toLocaleDateString() : 'Unknown'}
                               <span className="mx-1">·</span>
@@ -823,7 +1121,7 @@ export function AiOperator() {
                 <History className="h-12 w-12 text-muted-foreground/50 mb-4" />
                 <h3 className="text-lg font-semibold text-foreground">No History Yet</h3>
                 <p className="text-muted-foreground text-sm mt-1">
-                  {historyFilter ? `No ${STATUS_CONFIG[historyFilter]?.label.toLowerCase() || historyFilter} tasks.` : 'Completed and dismissed tasks will appear here.'}
+                  {historyFilter ? `No ${STATUS_CONFIG[historyFilter]?.label.toLowerCase() || historyFilter} tasks.` : historyAutoFilter !== "all" ? `No ${historyAutoFilter === "auto" ? "auto-piloted" : "manually approved"} tasks.` : 'Completed and dismissed tasks will appear here.'}
                 </p>
               </div>
             )

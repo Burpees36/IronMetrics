@@ -3298,6 +3298,7 @@ export const ListAiTasksResponseItem = zod.object({
   outcomeDetectedAt: zod.date().nullish(),
   revenueImpact: zod.string().nullish(),
   actionedAt: zod.date().nullish(),
+  autoSent: zod.boolean(),
   createdAt: zod.date(),
 });
 export const ListAiTasksResponse = zod.array(ListAiTasksResponseItem);
@@ -3361,6 +3362,7 @@ export const GenerateAiTasksResponse = zod.object({
       outcomeDetectedAt: zod.date().nullish(),
       revenueImpact: zod.string().nullish(),
       actionedAt: zod.date().nullish(),
+      autoSent: zod.boolean(),
       createdAt: zod.date(),
     }),
   ),
@@ -3408,6 +3410,7 @@ export const UpdateAiTaskResponse = zod.object({
   outcomeDetectedAt: zod.date().nullish(),
   revenueImpact: zod.string().nullish(),
   actionedAt: zod.date().nullish(),
+  autoSent: zod.boolean(),
   createdAt: zod.date(),
 });
 
@@ -3471,6 +3474,50 @@ export const GetAiLastScanParams = zod.object({
 
 export const GetAiLastScanResponse = zod.object({
   lastAutoScan: zod.date().nullish(),
+});
+
+/**
+ * @summary Get auto-pilot settings for a gym
+ */
+export const GetAutopilotSettingsParams = zod.object({
+  gymId: zod.coerce.number(),
+});
+
+export const GetAutopilotSettingsResponse = zod.object({
+  autopilotOutreach: zod.boolean(),
+  autopilotBilling: zod.boolean(),
+  autopilotLeads: zod.boolean(),
+  cooldownDays: zod.number(),
+  digestFrequency: zod.enum(["daily", "weekly", "disabled"]),
+});
+
+/**
+ * @summary Update auto-pilot settings for a gym
+ */
+export const UpdateAutopilotSettingsParams = zod.object({
+  gymId: zod.coerce.number(),
+});
+
+export const updateAutopilotSettingsBodyCooldownDaysMax = 90;
+
+export const UpdateAutopilotSettingsBody = zod.object({
+  autopilotOutreach: zod.boolean().optional(),
+  autopilotBilling: zod.boolean().optional(),
+  autopilotLeads: zod.boolean().optional(),
+  cooldownDays: zod
+    .number()
+    .min(1)
+    .max(updateAutopilotSettingsBodyCooldownDaysMax)
+    .optional(),
+  digestFrequency: zod.enum(["daily", "weekly", "disabled"]).optional(),
+});
+
+export const UpdateAutopilotSettingsResponse = zod.object({
+  autopilotOutreach: zod.boolean(),
+  autopilotBilling: zod.boolean(),
+  autopilotLeads: zod.boolean(),
+  cooldownDays: zod.number(),
+  digestFrequency: zod.enum(["daily", "weekly", "disabled"]),
 });
 
 /**

@@ -33,5 +33,6 @@ export interface AiTask {
   revenueImpact?: string | null;
   /** @nullable */
   actionedAt?: Date | null;
+  autoSent: boolean;
   createdAt: Date;
 }

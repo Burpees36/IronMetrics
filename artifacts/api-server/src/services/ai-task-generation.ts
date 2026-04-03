@@ -9,6 +9,7 @@ import {
   type MemberContext,
   type LeadContext,
 } from "./personalization-context";
+import { processAutopilotTasks } from "./autopilot-sender";
 
 const MAX_PENDING_TASKS = 5;
 
@@ -382,5 +383,26 @@ export async function generateAiTasks(gymId: number): Promise<{ created: number;
   const toInsert = allCandidates.slice(0, slotsAvailable).map(({ _sortKey, ...task }) => task);
 
   const inserted = await db.insert(aiTasksTable).values(toInsert).returning();
-  return { created: inserted.length, tasks: inserted };
+
+  if (inserted.length > 0) {
+    try {
+      const autopilotResult = await processAutopilotTasks(gymId, inserted);
+      if (autopilotResult.autoSentCount > 0) {
+        console.log(
+          `[ai-task-generation] Auto-pilot sent ${autopilotResult.autoSentCount} task(s) for gym ${gymId} (${autopilotResult.skippedCount} skipped)`
+        );
+      }
+    } catch (err: any) {
+      console.error(`[ai-task-generation] Auto-pilot processing error for gym ${gymId}:`, err.message);
+    }
+  }
+
+  const finalTasks = await db.select().from(aiTasksTable).where(
+    and(
+      eq(aiTasksTable.gymId, gymId),
+      sql`${aiTasksTable.id} IN (${sql.join(inserted.map(t => sql`${t.id}`), sql`, `)})`
+    )
+  );
+
+  return { created: inserted.length, tasks: finalTasks };
 }
