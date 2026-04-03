@@ -12,5 +12,5 @@ export const modules: ModuleMap = {
   "./components/mockups/dashboard-page/ActionFirstCommand.tsx": () => import("../components/mockups/dashboard-page/ActionFirstCommand.tsx"),
   "./components/mockups/dashboard-page/DailyGamePlan.tsx": () => import("../components/mockups/dashboard-page/DailyGamePlan.tsx"),
   "./components/mockups/dashboard-page/FinancialCockpit.tsx": () => import("../components/mockups/dashboard-page/FinancialCockpit.tsx"),
-  "./components/mockups/dashboard-page/MemberHealthMatrix.tsx": () => import("../components/mockups/dashboard-page/MemberHealthMatrix.tsx"),
+  "./components/mockups/dashboard-page/MemberHealthMatrix.tsx": () => import("../components/mockups/dashboard-page/MemberHealthMatrix.tsx")
 };
