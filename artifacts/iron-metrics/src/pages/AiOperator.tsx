@@ -16,7 +16,7 @@ import {
   Bot, Sparkles, Send, CheckCircle2, Clock, Loader2,
   FileText, X, Filter, Users, CreditCard,
   Target, Megaphone, BarChart3, Edit2, RefreshCw,
-  History, Mail, MailCheck, AlertCircle,
+  History, Mail, MailCheck, AlertCircle, Info,
 } from "lucide-react";
 
 const EMAIL_TASK_TYPES = new Set(["outreach", "leads", "billing"]);
@@ -494,6 +494,32 @@ export function AiOperator() {
                         {task.description}
                       </p>
 
+                      {task.personalizationMeta && (() => {
+                        try {
+                          const meta = JSON.parse(task.personalizationMeta);
+                          if (meta.dataPoints && meta.dataPoints.length > 0) {
+                            return (
+                              <div className="mb-3 md:mb-4 flex flex-wrap items-center gap-1.5">
+                                <span className="flex items-center gap-1 text-[10px] uppercase font-bold text-muted-foreground mr-1">
+                                  <Info className="h-3 w-3" /> Personalized using
+                                </span>
+                                {meta.dataPoints.map((dp: string, idx: number) => (
+                                  <span
+                                    key={idx}
+                                    className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-primary/10 text-primary border border-primary/20"
+                                  >
+                                    {dp}
+                                  </span>
+                                ))}
+                              </div>
+                            );
+                          }
+                          return null;
+                        } catch {
+                          return null;
+                        }
+                      })()}
+
                       {task.aiContent && (
                         <div className="mb-3 md:mb-4 p-3 md:p-4 rounded-lg bg-secondary border border-border text-xs md:text-sm font-mono text-foreground/80 relative whitespace-pre-wrap">
                           <div className="absolute -top-3 left-4 bg-background px-2 text-[10px] text-primary uppercase font-bold flex items-center gap-1">
@@ -597,6 +623,32 @@ export function AiOperator() {
                       <p className="text-xs md:text-sm text-muted-foreground mb-3">
                         {task.description}
                       </p>
+
+                      {task.personalizationMeta && (() => {
+                        try {
+                          const meta = JSON.parse(task.personalizationMeta);
+                          if (meta.dataPoints && meta.dataPoints.length > 0) {
+                            return (
+                              <div className="mb-3 flex flex-wrap items-center gap-1.5">
+                                <span className="flex items-center gap-1 text-[10px] uppercase font-bold text-muted-foreground/70 mr-1">
+                                  <Info className="h-3 w-3" /> Personalized using
+                                </span>
+                                {meta.dataPoints.map((dp: string, idx: number) => (
+                                  <span
+                                    key={idx}
+                                    className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-muted text-muted-foreground border border-border"
+                                  >
+                                    {dp}
+                                  </span>
+                                ))}
+                              </div>
+                            );
+                          }
+                          return null;
+                        } catch {
+                          return null;
+                        }
+                      })()}
 
                       {task.aiContent && (
                         <div className="p-3 md:p-4 rounded-lg bg-secondary border border-border text-xs md:text-sm font-mono text-foreground/60 relative whitespace-pre-wrap">

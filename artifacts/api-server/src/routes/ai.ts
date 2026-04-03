@@ -4,6 +4,7 @@ import { db, aiTasksTable, aiGeneratedContentTable, membersTable, leadsTable, gy
 import { sendMemberEmail, logMemberEmailSent } from "../services/member-email";
 import { CreateAiTaskBody, GenerateMemberOutreachBody, UpdateAiTaskBody } from "@workspace/api-zod";
 import { generateAiTasks } from "../services/ai-task-generation";
+import { assembleMemberContext, buildMemberPersonalizationMeta } from "../services/personalization-context";
 import { getEmailService } from "../services/email-service";
 import { activeMemberCondition } from "../blendedMetrics";
 import { getLastAiScanTimestamp } from "../schedulers/ai-task-scheduler";
@@ -98,30 +99,46 @@ router.post("/gyms/:gymId/ai/generate-outreach", async (req, res): Promise<void>
   const parsed = GenerateMemberOutreachBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
 
-  const { and } = await import("drizzle-orm");
-  const [member] = await db.select().from(membersTable).where(and(eq(membersTable.id, parsed.data.memberId), eq(membersTable.gymId, gymId)));
+  const { and: andOp } = await import("drizzle-orm");
+  const [member] = await db.select().from(membersTable).where(andOp(eq(membersTable.id, parsed.data.memberId), eq(membersTable.gymId, gymId)));
   if (!member) { res.status(404).json({ error: "Member not found" }); return; }
+
+  const ctx = await assembleMemberContext(member.id, gymId);
 
   const templates: Record<string, { subject: string; content: string }> = {
     at_risk: {
       subject: `Checking in, ${member.firstName}`,
-      content: `Hi ${member.firstName},\n\nJust wanted to reach out and see how things are going! It's been a little while since we've seen you, and we genuinely miss having you around.\n\nI'd love to schedule a quick goal review — even just 10 minutes to check in on your progress and make sure we're helping you hit your targets. We also have some great upcoming events and challenges that might be right up your alley.\n\nWant to grab a quick coffee or chat at the gym this week? Let me know what works for you!`,
+      content: ctx
+        ? `Hi ${member.firstName},\n\nJust wanted to reach out and see how things are going!${ctx.daysSinceLastVisit !== null ? ` It's been about ${ctx.daysSinceLastVisit} days since your last visit` : ` It's been a little while since we've seen you`}, and we genuinely miss having you around.${ctx.favoriteClassName ? `\n\nThe ${ctx.favoriteClassName}${ctx.favoriteTimeSlot ? ` ${ctx.favoriteTimeSlot}` : ""} crew is still going strong.` : ""}${ctx.tenureMonths > 0 ? ` You've been with us for ${ctx.tenureMonths} month${ctx.tenureMonths !== 1 ? "s" : ""} — that commitment matters.` : ""}\n\nI'd love to schedule a quick goal review — even just 10 minutes to check in on your progress.${ctx.lastCoachName ? ` Coach ${ctx.lastCoachName} would be glad to work with you.` : ""}\n\nWant to grab a quick coffee or chat at the gym this week? Let me know what works for you!`
+        : `Hi ${member.firstName},\n\nJust wanted to reach out and see how things are going! It's been a little while since we've seen you, and we genuinely miss having you around.\n\nI'd love to schedule a quick goal review — even just 10 minutes to check in on your progress and make sure we're helping you hit your targets. We also have some great upcoming events and challenges that might be right up your alley.\n\nWant to grab a quick coffee or chat at the gym this week? Let me know what works for you!`,
     },
     win_back: {
-      subject: `We'd love to reconnect, ${member.firstName}`,
-      content: `Hi ${member.firstName},\n\nI was thinking about you and wanted to reach out personally. We've got some exciting new programming and challenges coming up that I think you'd really enjoy.\n\nI'd love to set up a quick goal review session — just 15 minutes to catch up, see where you're at, and map out a plan that fits your schedule. No pressure at all, just a chance to reconnect.\n\nWould you be free for a coffee or a quick chat at the gym this week? I'll buy the coffee.`,
+      subject: ctx?.favoriteClassName ? `The ${ctx.favoriteClassName} crew misses you, ${member.firstName}` : `We'd love to reconnect, ${member.firstName}`,
+      content: ctx
+        ? `Hi ${member.firstName},\n\nI was thinking about you and wanted to reach out personally.${ctx.tenureMonths > 0 ? ` You've been part of our community for ${ctx.tenureMonths} month${ctx.tenureMonths !== 1 ? "s" : ""}, and that means a lot.` : ""}${ctx.favoriteClassName ? `\n\nThe ${ctx.favoriteClassName} crew has been asking about you.` : ""}${ctx.lastCoachName ? ` Coach ${ctx.lastCoachName} mentioned you the other day.` : ""}\n\nWe've got some exciting new programming and challenges coming up that I think you'd really enjoy.\n\nI'd love to set up a quick goal review session — just 15 minutes to catch up. No pressure at all.\n\nWould you be free for a coffee or a quick chat at the gym this week? I'll buy the coffee.`
+        : `Hi ${member.firstName},\n\nI was thinking about you and wanted to reach out personally. We've got some exciting new programming and challenges coming up that I think you'd really enjoy.\n\nI'd love to set up a quick goal review session — just 15 minutes to catch up, see where you're at, and map out a plan that fits your schedule. No pressure at all, just a chance to reconnect.\n\nWould you be free for a coffee or a quick chat at the gym this week? I'll buy the coffee.`,
     },
     celebration: {
       subject: `Congrats on your milestone, ${member.firstName}!`,
-      content: `Hi ${member.firstName},\n\nWe wanted to take a moment to celebrate your commitment! Your consistency and effort haven't gone unnoticed.\n\nKeep up the amazing work — your dedication inspires everyone at the gym. We'll be celebrating wins like yours at our next Bright Spots Friday!`,
+      content: ctx?.recentPRs?.length
+        ? `Hi ${member.firstName},\n\nWe wanted to take a moment to celebrate — you hit ${ctx.recentPRs.length} PR${ctx.recentPRs.length !== 1 ? "s" : ""} recently${ctx.recentPRs[0] ? `, including ${ctx.recentPRs[0].workoutTitle}` : ""}! Your consistency and effort haven't gone unnoticed.${ctx.tenureMonths > 0 ? `\n\n${ctx.tenureMonths} month${ctx.tenureMonths !== 1 ? "s" : ""} of dedication is something to be proud of.` : ""}\n\nKeep up the amazing work — your dedication inspires everyone at the gym!`
+        : `Hi ${member.firstName},\n\nWe wanted to take a moment to celebrate your commitment! Your consistency and effort haven't gone unnoticed.\n\nKeep up the amazing work — your dedication inspires everyone at the gym. We'll be celebrating wins like yours at our next Bright Spots Friday!`,
     },
     billing: {
       subject: `Quick heads-up about your account, ${member.firstName}`,
-      content: `Hi ${member.firstName},\n\nHope you're doing well! I wanted to give you a quick heads-up — it looks like there might be a small hiccup with the payment method on file for your membership.\n\nThese things happen all the time (expired cards, bank updates, etc.), and it's super easy to fix. We just want to make sure everything stays smooth so you don't miss any sessions.\n\nYou can update your info anytime, or just give us a call and we'll sort it out together in 2 minutes.\n\nThanks so much, and see you in class!`,
+      content: ctx
+        ? `Hi ${member.firstName},\n\nHope you're doing well! I wanted to give you a quick heads-up — it looks like there might be a small hiccup with the payment method on file for your${ctx.planName ? ` ${ctx.planName}` : ""} membership.\n\nThese things happen all the time (expired cards, bank updates, etc.), and it's super easy to fix. We just want to make sure everything stays smooth so you don't miss any sessions.${ctx.tenureMonths > 0 ? `\n\nYou've been with us for ${ctx.tenureMonths} month${ctx.tenureMonths !== 1 ? "s" : ""} — we want to keep it going!` : ""}\n\nYou can update your info anytime, or just give us a call and we'll sort it out together in 2 minutes.\n\nThanks so much, and see you in class!`
+        : `Hi ${member.firstName},\n\nHope you're doing well! I wanted to give you a quick heads-up — it looks like there might be a small hiccup with the payment method on file for your membership.\n\nThese things happen all the time (expired cards, bank updates, etc.), and it's super easy to fix. We just want to make sure everything stays smooth so you don't miss any sessions.\n\nYou can update your info anytime, or just give us a call and we'll sort it out together in 2 minutes.\n\nThanks so much, and see you in class!`,
     },
   };
 
   const template = templates[parsed.data.outreachType] || templates.at_risk;
+  const meta = ctx ? buildMemberPersonalizationMeta(ctx) : null;
+
+  const contextParts: string[] = [`Generated for ${member.firstName} ${member.lastName} (${parsed.data.outreachType})`];
+  if (meta && meta.dataPoints.length > 0) {
+    contextParts.push(`Using: ${meta.dataPoints.join(", ")}`);
+  }
 
   const [content] = await db.insert(aiGeneratedContentTable).values({
     gymId,
@@ -130,7 +147,7 @@ router.post("/gyms/:gymId/ai/generate-outreach", async (req, res): Promise<void>
     subject: template.subject,
     confidence: "0.85",
     isAiGenerated: true,
-    contextSummary: `Generated for ${member.firstName} ${member.lastName} (${parsed.data.outreachType})`,
+    contextSummary: contextParts.join(". "),
   }).returning();
 
   res.json({
