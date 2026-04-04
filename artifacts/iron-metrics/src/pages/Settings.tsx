@@ -3,7 +3,7 @@ import { useGym } from "@/store/GymContext";
 import { useGetGym } from "@workspace/api-client-react";
 import { useLocation } from "wouter";
 import { motion } from "framer-motion";
-import { Building2, Users, Mail, CreditCard, Shield, Palette, Puzzle, AlertTriangle, Settings as SettingsIcon } from "lucide-react";
+import { Building2, Users, Mail, CreditCard, Shield, Palette, Puzzle, AlertTriangle, Settings as SettingsIcon, Dumbbell } from "lucide-react";
 import { GeneralSettings } from "@/components/settings/GeneralSettings";
 import { StaffSettings } from "@/components/settings/StaffSettings";
 import { EmailSettings } from "@/components/settings/EmailSettings";
@@ -12,11 +12,13 @@ import { PlatformBillingSettings } from "@/components/settings/PlatformBillingSe
 import { SecuritySettings } from "@/components/settings/SecuritySettings";
 import { BrandingSettings } from "@/components/settings/BrandingSettings";
 import { IntegrationsSettings } from "@/components/settings/IntegrationsSettings";
+import { ProgrammingSettings } from "@/components/settings/ProgrammingSettings";
 import { DangerZone } from "@/components/settings/DangerZone";
 
 const SECTIONS = [
   { id: "general", label: "General", icon: Building2 },
   { id: "staff", label: "Staff & Access", icon: Users },
+  { id: "programming", label: "Programming", icon: Dumbbell },
   { id: "email", label: "Email & Notifications", icon: Mail },
   { id: "platform-billing", label: "Platform Subscription", icon: CreditCard },
   { id: "billing", label: "Member Billing", icon: CreditCard },
@@ -105,6 +107,7 @@ export function Settings() {
 
             {activeSection === "general" && <GeneralSettings gymId={activeGymId} />}
             {activeSection === "staff" && <StaffSettings gymId={activeGymId} />}
+            {activeSection === "programming" && <ProgrammingSettings gymId={activeGymId} />}
             {activeSection === "email" && <EmailSettings gymId={activeGymId} />}
             {activeSection === "platform-billing" && <PlatformBillingSettings />}
             {activeSection === "billing" && <BillingSettings />}

@@ -2869,6 +2869,99 @@ export const LogSectionResultBody = zod.object({
 });
 
 /**
+ * @summary Get programming preferences for a gym
+ */
+export const GetProgrammingPreferencesParams = zod.object({
+  gymId: zod.coerce.number(),
+});
+
+export const GetProgrammingPreferencesResponse = zod.object({
+  id: zod.number().optional(),
+  gymId: zod.number(),
+  methodology: zod.string(),
+  structureTemplate: zod.array(zod.string()),
+  equipment: zod.array(zod.string()),
+  constraints: zod.string().nullish(),
+  defaultTimeDomains: zod.record(zod.string(), zod.string()).optional(),
+  autoPublishEnabled: zod.boolean().optional(),
+  autoPublishTime: zod.string().nullish(),
+  autoPublishLeadDays: zod.number().optional(),
+  createdAt: zod.date().optional(),
+  updatedAt: zod.date().optional(),
+});
+
+/**
+ * @summary Update programming preferences for a gym
+ */
+export const UpdateProgrammingPreferencesParams = zod.object({
+  gymId: zod.coerce.number(),
+});
+
+export const UpdateProgrammingPreferencesBody = zod.object({
+  methodology: zod.string().optional(),
+  structureTemplate: zod.array(zod.string()).optional(),
+  equipment: zod.array(zod.string()).optional(),
+  constraints: zod.string().nullish(),
+  defaultTimeDomains: zod.record(zod.string(), zod.string()).optional(),
+  autoPublishEnabled: zod.boolean().optional(),
+  autoPublishTime: zod.string().nullish(),
+  autoPublishLeadDays: zod.number().optional(),
+});
+
+export const UpdateProgrammingPreferencesResponse = zod.object({
+  id: zod.number().optional(),
+  gymId: zod.number(),
+  methodology: zod.string(),
+  structureTemplate: zod.array(zod.string()),
+  equipment: zod.array(zod.string()),
+  constraints: zod.string().nullish(),
+  defaultTimeDomains: zod.record(zod.string(), zod.string()).optional(),
+  autoPublishEnabled: zod.boolean().optional(),
+  autoPublishTime: zod.string().nullish(),
+  autoPublishLeadDays: zod.number().optional(),
+  createdAt: zod.date().optional(),
+  updatedAt: zod.date().optional(),
+});
+
+/**
+ * @summary AI-generate a single day of programming
+ */
+export const GenerateProgrammingDayParams = zod.object({
+  gymId: zod.coerce.number(),
+});
+
+export const generateProgrammingDayBodyOverwriteDefault = false;
+
+export const GenerateProgrammingDayBody = zod.object({
+  date: zod.date(),
+  overwrite: zod.boolean().default(generateProgrammingDayBodyOverwriteDefault),
+});
+
+/**
+ * @summary AI-generate a full week of programming
+ */
+export const GenerateProgrammingWeekParams = zod.object({
+  gymId: zod.coerce.number(),
+});
+
+export const GenerateProgrammingWeekBody = zod.object({
+  startDate: zod.date(),
+});
+
+/**
+ * @summary Trigger auto-publish for upcoming draft programming
+ */
+export const TriggerAutoPublishParams = zod.object({
+  gymId: zod.coerce.number(),
+});
+
+export const TriggerAutoPublishResponse = zod.object({
+  published: zod.number().optional(),
+  targetDate: zod.string().optional(),
+  message: zod.string().optional(),
+});
+
+/**
  * @summary List announcements
  */
 export const ListAnnouncementsParams = zod.object({

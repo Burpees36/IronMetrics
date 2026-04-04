@@ -84,8 +84,11 @@ import type {
   ErrorEnvelope,
   GenerateAiTasksResponse,
   GenerateOutreachBody,
+  GenerateProgrammingDayBody,
+  GenerateProgrammingWeekBody,
   GenerateRecoveryLinkBody,
   GenerateRecoveryLinkResponse,
+  GenerateWeekResponse,
   GetAiImpactParams,
   GetCancelledMembersParams,
   GetMemberBalance200,
@@ -135,6 +138,7 @@ import type {
   PreviewPlanChangeBody,
   Product,
   ProgrammingDayWithSections,
+  ProgrammingPreferences,
   ProgrammingSection,
   RefundPaymentBody,
   RefundRecord,
@@ -157,6 +161,7 @@ import type {
   SuccessResponse,
   TaxConfig,
   TimelineEvent,
+  TriggerAutoPublish200,
   UnlinkMemberBilling200,
   UpdateAiTaskBody,
   UpdateAutopilotSettingsBody,
@@ -169,6 +174,7 @@ import type {
   UpdateMemberBody,
   UpdateMembershipPlanBody,
   UpdateProgrammingDayBody,
+  UpdateProgrammingPreferencesBody,
   UpdateProgrammingSectionBody,
   UpdateStaffBody,
   UpdateSubscriptionBody,
@@ -9796,6 +9802,455 @@ export const useLogSectionResult = <
   TContext
 > => {
   return useMutation(getLogSectionResultMutationOptions(options));
+};
+
+/**
+ * @summary Get programming preferences for a gym
+ */
+export const getGetProgrammingPreferencesUrl = (gymId: number) => {
+  return `/api/gyms/${gymId}/programming/preferences`;
+};
+
+export const getProgrammingPreferences = async (
+  gymId: number,
+  options?: RequestInit,
+): Promise<ProgrammingPreferences> => {
+  return customFetch<ProgrammingPreferences>(
+    getGetProgrammingPreferencesUrl(gymId),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetProgrammingPreferencesQueryKey = (gymId: number) => {
+  return [`/api/gyms/${gymId}/programming/preferences`] as const;
+};
+
+export const getGetProgrammingPreferencesQueryOptions = <
+  TData = Awaited<ReturnType<typeof getProgrammingPreferences>>,
+  TError = ErrorType<unknown>,
+>(
+  gymId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getProgrammingPreferences>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetProgrammingPreferencesQueryKey(gymId);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getProgrammingPreferences>>
+  > = ({ signal }) =>
+    getProgrammingPreferences(gymId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!gymId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getProgrammingPreferences>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetProgrammingPreferencesQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getProgrammingPreferences>>
+>;
+export type GetProgrammingPreferencesQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get programming preferences for a gym
+ */
+
+export function useGetProgrammingPreferences<
+  TData = Awaited<ReturnType<typeof getProgrammingPreferences>>,
+  TError = ErrorType<unknown>,
+>(
+  gymId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getProgrammingPreferences>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetProgrammingPreferencesQueryOptions(gymId, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Update programming preferences for a gym
+ */
+export const getUpdateProgrammingPreferencesUrl = (gymId: number) => {
+  return `/api/gyms/${gymId}/programming/preferences`;
+};
+
+export const updateProgrammingPreferences = async (
+  gymId: number,
+  updateProgrammingPreferencesBody: UpdateProgrammingPreferencesBody,
+  options?: RequestInit,
+): Promise<ProgrammingPreferences> => {
+  return customFetch<ProgrammingPreferences>(
+    getUpdateProgrammingPreferencesUrl(gymId),
+    {
+      ...options,
+      method: "PUT",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(updateProgrammingPreferencesBody),
+    },
+  );
+};
+
+export const getUpdateProgrammingPreferencesMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateProgrammingPreferences>>,
+    TError,
+    { gymId: number; data: BodyType<UpdateProgrammingPreferencesBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateProgrammingPreferences>>,
+  TError,
+  { gymId: number; data: BodyType<UpdateProgrammingPreferencesBody> },
+  TContext
+> => {
+  const mutationKey = ["updateProgrammingPreferences"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateProgrammingPreferences>>,
+    { gymId: number; data: BodyType<UpdateProgrammingPreferencesBody> }
+  > = (props) => {
+    const { gymId, data } = props ?? {};
+
+    return updateProgrammingPreferences(gymId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateProgrammingPreferencesMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateProgrammingPreferences>>
+>;
+export type UpdateProgrammingPreferencesMutationBody =
+  BodyType<UpdateProgrammingPreferencesBody>;
+export type UpdateProgrammingPreferencesMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Update programming preferences for a gym
+ */
+export const useUpdateProgrammingPreferences = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateProgrammingPreferences>>,
+    TError,
+    { gymId: number; data: BodyType<UpdateProgrammingPreferencesBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateProgrammingPreferences>>,
+  TError,
+  { gymId: number; data: BodyType<UpdateProgrammingPreferencesBody> },
+  TContext
+> => {
+  return useMutation(getUpdateProgrammingPreferencesMutationOptions(options));
+};
+
+/**
+ * @summary AI-generate a single day of programming
+ */
+export const getGenerateProgrammingDayUrl = (gymId: number) => {
+  return `/api/gyms/${gymId}/programming/generate-day`;
+};
+
+export const generateProgrammingDay = async (
+  gymId: number,
+  generateProgrammingDayBody: GenerateProgrammingDayBody,
+  options?: RequestInit,
+): Promise<ProgrammingDayWithSections> => {
+  return customFetch<ProgrammingDayWithSections>(
+    getGenerateProgrammingDayUrl(gymId),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(generateProgrammingDayBody),
+    },
+  );
+};
+
+export const getGenerateProgrammingDayMutationOptions = <
+  TError = ErrorType<ErrorEnvelope>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof generateProgrammingDay>>,
+    TError,
+    { gymId: number; data: BodyType<GenerateProgrammingDayBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof generateProgrammingDay>>,
+  TError,
+  { gymId: number; data: BodyType<GenerateProgrammingDayBody> },
+  TContext
+> => {
+  const mutationKey = ["generateProgrammingDay"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof generateProgrammingDay>>,
+    { gymId: number; data: BodyType<GenerateProgrammingDayBody> }
+  > = (props) => {
+    const { gymId, data } = props ?? {};
+
+    return generateProgrammingDay(gymId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type GenerateProgrammingDayMutationResult = NonNullable<
+  Awaited<ReturnType<typeof generateProgrammingDay>>
+>;
+export type GenerateProgrammingDayMutationBody =
+  BodyType<GenerateProgrammingDayBody>;
+export type GenerateProgrammingDayMutationError = ErrorType<ErrorEnvelope>;
+
+/**
+ * @summary AI-generate a single day of programming
+ */
+export const useGenerateProgrammingDay = <
+  TError = ErrorType<ErrorEnvelope>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof generateProgrammingDay>>,
+    TError,
+    { gymId: number; data: BodyType<GenerateProgrammingDayBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof generateProgrammingDay>>,
+  TError,
+  { gymId: number; data: BodyType<GenerateProgrammingDayBody> },
+  TContext
+> => {
+  return useMutation(getGenerateProgrammingDayMutationOptions(options));
+};
+
+/**
+ * @summary AI-generate a full week of programming
+ */
+export const getGenerateProgrammingWeekUrl = (gymId: number) => {
+  return `/api/gyms/${gymId}/programming/generate-week`;
+};
+
+export const generateProgrammingWeek = async (
+  gymId: number,
+  generateProgrammingWeekBody: GenerateProgrammingWeekBody,
+  options?: RequestInit,
+): Promise<GenerateWeekResponse> => {
+  return customFetch<GenerateWeekResponse>(
+    getGenerateProgrammingWeekUrl(gymId),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(generateProgrammingWeekBody),
+    },
+  );
+};
+
+export const getGenerateProgrammingWeekMutationOptions = <
+  TError = ErrorType<ErrorEnvelope>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof generateProgrammingWeek>>,
+    TError,
+    { gymId: number; data: BodyType<GenerateProgrammingWeekBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof generateProgrammingWeek>>,
+  TError,
+  { gymId: number; data: BodyType<GenerateProgrammingWeekBody> },
+  TContext
+> => {
+  const mutationKey = ["generateProgrammingWeek"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof generateProgrammingWeek>>,
+    { gymId: number; data: BodyType<GenerateProgrammingWeekBody> }
+  > = (props) => {
+    const { gymId, data } = props ?? {};
+
+    return generateProgrammingWeek(gymId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type GenerateProgrammingWeekMutationResult = NonNullable<
+  Awaited<ReturnType<typeof generateProgrammingWeek>>
+>;
+export type GenerateProgrammingWeekMutationBody =
+  BodyType<GenerateProgrammingWeekBody>;
+export type GenerateProgrammingWeekMutationError = ErrorType<ErrorEnvelope>;
+
+/**
+ * @summary AI-generate a full week of programming
+ */
+export const useGenerateProgrammingWeek = <
+  TError = ErrorType<ErrorEnvelope>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof generateProgrammingWeek>>,
+    TError,
+    { gymId: number; data: BodyType<GenerateProgrammingWeekBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof generateProgrammingWeek>>,
+  TError,
+  { gymId: number; data: BodyType<GenerateProgrammingWeekBody> },
+  TContext
+> => {
+  return useMutation(getGenerateProgrammingWeekMutationOptions(options));
+};
+
+/**
+ * @summary Trigger auto-publish for upcoming draft programming
+ */
+export const getTriggerAutoPublishUrl = (gymId: number) => {
+  return `/api/gyms/${gymId}/programming/auto-publish`;
+};
+
+export const triggerAutoPublish = async (
+  gymId: number,
+  options?: RequestInit,
+): Promise<TriggerAutoPublish200> => {
+  return customFetch<TriggerAutoPublish200>(getTriggerAutoPublishUrl(gymId), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getTriggerAutoPublishMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof triggerAutoPublish>>,
+    TError,
+    { gymId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof triggerAutoPublish>>,
+  TError,
+  { gymId: number },
+  TContext
+> => {
+  const mutationKey = ["triggerAutoPublish"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof triggerAutoPublish>>,
+    { gymId: number }
+  > = (props) => {
+    const { gymId } = props ?? {};
+
+    return triggerAutoPublish(gymId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type TriggerAutoPublishMutationResult = NonNullable<
+  Awaited<ReturnType<typeof triggerAutoPublish>>
+>;
+
+export type TriggerAutoPublishMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Trigger auto-publish for upcoming draft programming
+ */
+export const useTriggerAutoPublish = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof triggerAutoPublish>>,
+    TError,
+    { gymId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof triggerAutoPublish>>,
+  TError,
+  { gymId: number },
+  TContext
+> => {
+  return useMutation(getTriggerAutoPublishMutationOptions(options));
 };
 
 /**

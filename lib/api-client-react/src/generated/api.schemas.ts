@@ -1192,6 +1192,50 @@ export interface ReorderSectionsBody {
   sectionIds: number[];
 }
 
+export type ProgrammingPreferencesDefaultTimeDomains = {
+  [key: string]: string;
+};
+
+export interface ProgrammingPreferences {
+  id?: number;
+  gymId: number;
+  methodology: string;
+  structureTemplate: string[];
+  equipment: string[];
+  /** @nullable */
+  constraints?: string | null;
+  defaultTimeDomains?: ProgrammingPreferencesDefaultTimeDomains;
+  autoPublishEnabled?: boolean;
+  /** @nullable */
+  autoPublishTime?: string | null;
+  autoPublishLeadDays?: number;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export type UpdateProgrammingPreferencesBodyDefaultTimeDomains = {
+  [key: string]: string;
+};
+
+export interface UpdateProgrammingPreferencesBody {
+  methodology?: string;
+  structureTemplate?: string[];
+  equipment?: string[];
+  /** @nullable */
+  constraints?: string | null;
+  defaultTimeDomains?: UpdateProgrammingPreferencesBodyDefaultTimeDomains;
+  autoPublishEnabled?: boolean;
+  /** @nullable */
+  autoPublishTime?: string | null;
+  autoPublishLeadDays?: number;
+}
+
+export interface GenerateWeekResponse {
+  days: ProgrammingDayWithSections[];
+  generated: number;
+  skipped: number;
+}
+
 export type AnnouncementAudience =
   (typeof AnnouncementAudience)[keyof typeof AnnouncementAudience];
 
@@ -2369,6 +2413,21 @@ export const ListProgrammingDaysStatus = {
   published: "published",
   archived: "archived",
 } as const;
+
+export type GenerateProgrammingDayBody = {
+  date: string;
+  overwrite?: boolean;
+};
+
+export type GenerateProgrammingWeekBody = {
+  startDate: string;
+};
+
+export type TriggerAutoPublish200 = {
+  published?: number;
+  targetDate?: string;
+  message?: string;
+};
 
 export type GetRsiHistoryParams = {
   window?: GetRsiHistoryWindow;

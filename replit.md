@@ -28,7 +28,7 @@ Iron Metrics is built as a pnpm workspace monorepo using TypeScript, designed fo
 - **Auth:** Replit Auth (OIDC with PKCE).
 
 **UI/UX Design:**
-A premium SaaS theme with light/dark mode, 2xl rounded corners, and a glass-panel effect. Primary accent is emerald green; violet for Pro tier; amber/yellow for warnings. Theme context `ThemeProvider` persists to `localStorage` and respects `prefers-color-scheme`.
+A premium SaaS theme with light/dark mode, 2xl rounded corners, and a glass-panel effect. The primary accent color is emerald green, with violet for the Pro tier and amber/yellow for warnings. The theme context (`ThemeProvider`) persists to `localStorage` and respects `prefers-color-scheme`.
 
 **Technical Implementations & Feature Specifications:**
 
@@ -38,7 +38,7 @@ A premium SaaS theme with light/dark mode, 2xl rounded corners, and a glass-pane
 - **Lead Management:** Kanban-style pipeline, activity timelines, follow-up scheduling, and public lead capture form.
 - **Class Scheduling:** Weekly calendar with RBAC-aware UI, capacity tracking, check-ins, templates, and Google Calendar-style overlap rendering.
 - **Billing:** Comprehensive command center with plans, subscriptions, payments, refunds, and Stripe integration. Includes audit logs, recovery flows, payment method management, linked billing, plan changes, scheduled holds, discount codes, account credits, and tax configuration.
-- **Programming Hub:** Daily programming interface with section-based workout builder and result logging.
+- **Programming Hub:** Daily programming interface with section-based workout builder, result logging, and AI-generated programming capabilities (full week or individual day) using OpenAI. AI generation considers gym methodology, structure templates, equipment, and periodization rules, creating drafts for review. Supports regeneration of existing days with overwrite confirmation.
 - **AI Insights (Strategic Ops Board at `/ai-insights`):** Single-scroll layout with AI-generated interventions sorted by urgency/score on the left, and key metrics (RSI gauge, mini stat cards, Risk Radar, RSI Trend chart, AI Impact Summary) on the right. Includes a full AI Task Inbox. "Auto-Pilot" renamed to "Smart Actions".
     - **AI Task Queue:** Manages AI-generated content (outreach, owner briefs) with approval/dismissal and email sending. Features autonomous daily scheduling, personalization using member/lead context, outcome tracking, and revenue attribution.
     - **Auto-Pilot Mode:** Allows owners to enable per-category auto-send for AI-generated tasks with safety guardrails (valid email, cooldowns) and a configurable digest.
@@ -47,7 +47,7 @@ A premium SaaS theme with light/dark mode, 2xl rounded corners, and a glass-pane
 - **Blended Metrics:** Service (`blendedMetrics.ts`) combines subscription data with Wodify-imported member data for accurate MRR, active members, ARM, and engagement rate calculations.
 - **MRR Snapshots:** `mrr_snapshots` table stores daily MRR snapshots for historical reporting and trend analysis, prioritizing actual data over estimates.
 - **Owner Console Dashboard (Action-First Command):** Action-queue-first layout featuring onboarding/sync banners, a header with critical counts and MRR growth, a two-column grid for action items, and a KPI sidebar.
-- **Settings:** Full administration panel for gym identity, staff/access management (RBAC), email/notifications, billing, security, branding, and integrations.
+- **Settings:** Full administration panel for gym identity, staff/access management (RBAC), programming preferences, email/notifications, billing, security, branding, and integrations.
 - **Onboarding Wizard:** A streamlined 3-step guided setup for new gyms: Connect Data, Gym Details, and Launch.
 - **Error Handling:** Centralized error handling with structured responses, logging, and React `ErrorBoundary`.
 - **Rate Limiting:** `express-rate-limit` for API protection.
@@ -62,4 +62,5 @@ A premium SaaS theme with light/dark mode, 2xl rounded corners, and a glass-pane
 -   **Wodify API (api.wodify.com/v1):** For syncing client and membership data.
 -   **Google Cloud Storage:** Object storage for file uploads (profile photos, etc.) via Replit App Storage.
 -   **Google Calendar:** For class scheduling integration.
+-   **OpenAI (via Replit AI Integrations):** For AI-generated workout programming using GPT-5.2.
 -   **PostgreSQL:** Relational database for all application data.

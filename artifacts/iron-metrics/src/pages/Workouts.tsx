@@ -13,6 +13,8 @@ import {
   useReorderProgrammingSections,
   useLogSectionResult,
   useListMembers,
+  useGenerateProgrammingDay,
+  useGenerateProgrammingWeek,
   getListProgrammingDaysQueryKey,
 } from "@workspace/api-client-react";
 import type { ProgrammingDayWithSections, SectionType as ApiSectionType } from "@workspace/api-client-react";
@@ -28,6 +30,8 @@ import {
   CalendarDays,
   Dumbbell,
   Eye,
+  Sparkles,
+  Wand2,
 } from "lucide-react";
 
 import { DateNavigation } from "@/components/programming/DateNavigation";
@@ -295,6 +299,9 @@ export function Workouts() {
   const deleteSectionMutation = useDeleteProgrammingSection();
   const reorderSectionsMutation = useReorderProgrammingSections();
   const logSectionResultMutation = useLogSectionResult();
+  const generateDayMutation = useGenerateProgrammingDay();
+  const generateWeekMutation = useGenerateProgrammingWeek();
+  const [isGenerating, setIsGenerating] = useState(false);
 
   const invalidateProgramming = useCallback(() => {
     if (activeGymId) {
@@ -303,6 +310,76 @@ export function Workouts() {
       });
     }
   }, [activeGymId, queryClient]);
+
+  const handleGenerateDay = useCallback(
+    async (targetDate?: string, overwrite?: boolean) => {
+      if (!activeGymId) return;
+      setIsGenerating(true);
+      try {
+        await generateDayMutation.mutateAsync({
+          gymId: activeGymId,
+          data: { date: targetDate || dateStr, overwrite: overwrite ?? false },
+        });
+        invalidateProgramming();
+        toast({
+          title: overwrite ? "Day Regenerated" : "Day Generated",
+          description: "AI-generated programming has been created as a draft. Review and edit before publishing.",
+        });
+      } catch (error: unknown) {
+        const err = error as { status?: number; data?: { error?: string }; message?: string };
+        if (err.status === 409 && !overwrite) {
+          const confirmed = window.confirm(
+            "Programming already exists for this date. Do you want to replace it with a new AI-generated workout?"
+          );
+          if (confirmed) {
+            await handleGenerateDay(targetDate, true);
+            return;
+          }
+          setIsGenerating(false);
+          return;
+        }
+        toast({
+          title: "Generation Failed",
+          description: err?.data?.error || err?.message || "Failed to generate programming. Please try again.",
+          variant: "destructive",
+        });
+      } finally {
+        setIsGenerating(false);
+      }
+    },
+    [activeGymId, dateStr, generateDayMutation, invalidateProgramming, toast]
+  );
+
+  const handleGenerateWeek = useCallback(
+    async () => {
+      if (!activeGymId) return;
+      setIsGenerating(true);
+      try {
+        const result = await generateWeekMutation.mutateAsync({
+          gymId: activeGymId,
+          data: { startDate: weekDates[0] },
+        });
+        invalidateProgramming();
+        const resultData = result as { generated?: number; skipped?: number };
+        const generated = resultData?.generated ?? 0;
+        const skipped = resultData?.skipped ?? 0;
+        toast({
+          title: "Week Generated",
+          description: `${generated} days of programming created as drafts.${skipped > 0 ? ` ${skipped} days skipped (already exist).` : ""} Review and edit before publishing.`,
+        });
+      } catch (error: unknown) {
+        const err = error as { data?: { error?: string }; message?: string };
+        toast({
+          title: "Generation Failed",
+          description: err?.data?.error || err?.message || "Failed to generate week. Please try again.",
+          variant: "destructive",
+        });
+      } finally {
+        setIsGenerating(false);
+      }
+    },
+    [activeGymId, weekDates, generateWeekMutation, invalidateProgramming, toast]
+  );
 
   const daysByDate = useMemo(() => {
     const map: Record<string, ProgrammingDayWithSections> = {};
@@ -626,16 +703,40 @@ export function Workouts() {
             Build and publish daily programming for your athletes.
           </p>
         </div>
-        <button
-          onClick={() => {
-            setEditData(null);
-            setPanelOpen(true);
-          }}
-          className="flex items-center gap-2 px-4 py-2.5 bg-primary text-primary-foreground hover:bg-primary/90 rounded-xl font-medium transition-colors shadow-lg shadow-primary/20"
-        >
-          <Plus className="h-5 w-5" />
-          <span>New Day</span>
-        </button>
+        <div className="flex items-center gap-2 flex-wrap">
+          {isGenerating && (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground animate-pulse">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              <span>Generating...</span>
+            </div>
+          )}
+          <button
+            onClick={() => handleGenerateDay()}
+            disabled={isGenerating}
+            className="flex items-center gap-2 px-4 py-2.5 bg-violet-600 text-white hover:bg-violet-700 rounded-xl font-medium transition-colors shadow-lg shadow-violet-600/20 disabled:opacity-50"
+          >
+            <Wand2 className="h-4 w-4" />
+            <span className="hidden sm:inline">Generate Day</span>
+          </button>
+          <button
+            onClick={handleGenerateWeek}
+            disabled={isGenerating}
+            className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-violet-600 to-purple-600 text-white hover:from-violet-700 hover:to-purple-700 rounded-xl font-medium transition-colors shadow-lg shadow-purple-600/20 disabled:opacity-50"
+          >
+            <Sparkles className="h-4 w-4" />
+            <span className="hidden sm:inline">Generate Week</span>
+          </button>
+          <button
+            onClick={() => {
+              setEditData(null);
+              setPanelOpen(true);
+            }}
+            className="flex items-center gap-2 px-4 py-2.5 bg-primary text-primary-foreground hover:bg-primary/90 rounded-xl font-medium transition-colors shadow-lg shadow-primary/20"
+          >
+            <Plus className="h-5 w-5" />
+            <span>New Day</span>
+          </button>
+        </div>
       </header>
 
       <DateNavigation
@@ -706,16 +807,26 @@ export function Workouts() {
                   day: "numeric",
                 })}
               </p>
-              <button
-                onClick={() => {
-                  setEditData(null);
-                  setPanelOpen(true);
-                }}
-                className="mt-4 inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
-              >
-                <Plus className="h-4 w-4" />
-                Create Programming
-              </button>
+              <div className="flex items-center justify-center gap-2 mt-4">
+                <button
+                  onClick={() => handleGenerateDay()}
+                  disabled={isGenerating}
+                  className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg bg-violet-600 text-white hover:bg-violet-700 transition-colors disabled:opacity-50"
+                >
+                  {isGenerating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />}
+                  AI Generate
+                </button>
+                <button
+                  onClick={() => {
+                    setEditData(null);
+                    setPanelOpen(true);
+                  }}
+                  className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+                >
+                  <Plus className="h-4 w-4" />
+                  Create Manually
+                </button>
+              </div>
             </motion.div>
           )}
         </div>

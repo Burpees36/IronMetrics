@@ -7,6 +7,7 @@ import { startAiTaskScheduler } from "./schedulers/ai-task-scheduler";
 import { startRsiSnapshotScheduler } from "./schedulers/rsi-snapshots";
 import { startBenchmarkScheduler } from "./schedulers/benchmark-scheduler";
 import { startAutopilotDigestScheduler } from "./schedulers/autopilot-digest-scheduler";
+import { startAutoPublishScheduler } from "./schedulers/auto-publish-scheduler";
 import { runOnboardingMigrationCleanup } from "./migrations/onboarding-cleanup";
 
 const rawPort = process.env["PORT"];
@@ -41,4 +42,5 @@ app.listen(port, () => {
   startRsiSnapshotScheduler();
   startBenchmarkScheduler();
   startAutopilotDigestScheduler();
+  startAutoPublishScheduler();
 });
