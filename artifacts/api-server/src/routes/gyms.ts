@@ -3,6 +3,7 @@ import { eq, and, count } from "drizzle-orm";
 import { db, gymsTable, gymStaffTable, membersTable } from "@workspace/db";
 import { CreateGymBody, UpdateGymBody, GetGymParams } from "@workspace/api-zod";
 import { activeMemberCondition } from "../blendedMetrics";
+import { applyOwnerVoice, type CommunicationStyle } from "../services/ai-task-generation";
 
 const router: IRouter = Router();
 
@@ -199,6 +200,45 @@ router.patch("/gyms/:gymId", async (req, res): Promise<void> => {
     ...gym,
     memberCount: Number(memberCountResult?.count ?? 0),
     activeCount: Number(activeCountResult?.count ?? 0),
+  });
+});
+
+router.post("/gyms/:gymId/preview-voice", async (req, res): Promise<void> => {
+  const gymId = Number(req.params.gymId);
+  if (!gymId || isNaN(gymId)) {
+    res.status(400).json({ error: "Invalid gym ID" });
+    return;
+  }
+
+  const [staffEntry] = await db.select().from(gymStaffTable).where(
+    and(eq(gymStaffTable.gymId, gymId), eq(gymStaffTable.userId, req.user!.id), eq(gymStaffTable.isActive, true))
+  );
+  if (!staffEntry || !["gym_owner", "admin"].includes(staffEntry.role)) {
+    res.status(403).json({ error: "Only owners and admins can preview voice settings" });
+    return;
+  }
+
+  const { tone, rules, samples } = req.body || {};
+  const validTones = ["casual_friendly", "professional", "motivational_coach"];
+
+  const safeTone = typeof tone === "string" && validTones.includes(tone) ? tone : "casual_friendly";
+  const safeRules = Array.isArray(rules) ? rules.filter((r: unknown) => typeof r === "string").slice(0, 20) : [];
+  const safeSamples = Array.isArray(samples) ? samples.filter((s: unknown) => typeof s === "string").slice(0, 5) : [];
+
+  const style: CommunicationStyle = {
+    tone: safeTone,
+    rules: safeRules,
+    samples: safeSamples,
+  };
+
+  const sampleContent = `Hi Sarah,\n\nJust wanted to check in — it's been a little while since we've seen you, and we genuinely miss having you around.\n\nYou've been part of our community for 8 months, and we value that. I'd love to schedule a quick goal review — even just 10 minutes to check in on your progress.\n\nWant to grab a quick coffee or chat at the gym this week? Let me know what works for you!\n\nLooking forward to hearing from you!`;
+  const sampleSubject = "Checking in, Sarah";
+
+  const result = applyOwnerVoice(sampleContent, sampleSubject, style);
+
+  res.json({
+    original: { subject: sampleSubject, content: sampleContent },
+    styled: { subject: result.subject, content: result.content },
   });
 });
 

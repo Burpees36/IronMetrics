@@ -4157,6 +4157,16 @@ components:
           type: boolean
         autoSuspendBufferDays:
           type: integer
+        communicationStyleTone:
+          type: string
+        communicationStyleRules:
+          type: array
+          items:
+            type: string
+        communicationStyleSamples:
+          type: array
+          items:
+            type: string
         memberCount:
           type: integer
         activeCount:
@@ -4231,6 +4241,16 @@ components:
           type: boolean
         autoSuspendBufferDays:
           type: integer
+        communicationStyleTone:
+          type: string
+        communicationStyleRules:
+          type: array
+          items:
+            type: string
+        communicationStyleSamples:
+          type: array
+          items:
+            type: string
 
     Member:
       type: object

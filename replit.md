@@ -23,12 +23,12 @@ Iron Metrics is built as a pnpm workspace monorepo using TypeScript, designed fo
 - **Database:** PostgreSQL with Drizzle ORM.
 - **Validation:** Zod (`zod/v4`).
 - **API Codegen:** Orval (from OpenAPI spec).
-- **Auth:** Replit Auth (OIDC with PKCE).
+- **Authentication:** Replit Auth (OIDC with PKCE).
 
 **UI/UX Design:**
 A premium SaaS theme with light/dark mode, 2xl rounded corners, and a glass-panel effect. The primary accent color is emerald green, with violet for the Pro tier and amber/yellow for warnings. The theme context (`ThemeProvider`) persists to `localStorage` and respects `prefers-color-scheme`.
 
-**Technical Implementations & Feature Specifications:**
+**Key Features & Implementations:**
 
 - **Subscription Tiers & Feature Gating:** Three tiers (Insights, Growth, Pro) with beta access. Backend uses `requireTierAccess` middleware, frontend uses `useGymTier` hook and `TierGate` component.
 - **Multi-tenancy:** `gyms` table provides isolated workspaces with `requireGymAccess` middleware.
@@ -46,7 +46,8 @@ A premium SaaS theme with light/dark mode, 2xl rounded corners, and a glass-pane
 - **Blended Metrics:** Service (`blendedMetrics.ts`) combines subscription data with Wodify-imported member data for accurate MRR, active members, ARM, and engagement rate calculations.
 - **MRR Snapshots:** `mrr_snapshots` table stores daily MRR snapshots for historical reporting and trend analysis, prioritizing actual data over estimates.
 - **Owner Console Dashboard (Action-First Command):** Action-queue-first layout featuring onboarding/sync banners, a header with critical counts and MRR growth, a two-column grid for action items, and a KPI sidebar.
-- **Settings:** Full administration panel for gym identity, staff/access management (RBAC), programming preferences, email/notifications, billing, security, branding, and integrations.
+- **Communication Style (Owner Voice):** A settings section where gym owners configure their communication tone (Casual & Friendly, Professional, Motivational Coach), define custom word-replacement rules, and paste writing samples. The AI task generation system applies these voice settings to all outreach templates. Includes a live preview feature. Schema fields: `communication_style_tone`, `communication_style_rules`, `communication_style_samples` on the gyms table.
+- **Settings:** Full administration panel for gym identity, staff/access management (RBAC), programming preferences, email/notifications, billing, security, branding, communication style, and integrations.
 - **Onboarding Wizard:** A streamlined 3-step guided setup for new gyms: Connect Data, Gym Details, and Launch.
 - **Error Handling:** Centralized error handling with structured responses, logging, and React `ErrorBoundary`.
 - **Rate Limiting:** `express-rate-limit` for API protection.

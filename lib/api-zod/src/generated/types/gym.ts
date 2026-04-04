@@ -38,6 +38,9 @@ export interface Gym {
   ownerId?: string;
   autoSuspendEnabled?: boolean;
   autoSuspendBufferDays?: number;
+  communicationStyleTone?: string;
+  communicationStyleRules?: string[];
+  communicationStyleSamples?: string[];
   memberCount: number;
   activeCount: number;
   createdAt: Date;

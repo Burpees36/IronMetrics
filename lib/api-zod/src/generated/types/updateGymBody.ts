@@ -35,4 +35,7 @@ export interface UpdateGymBody {
   fromName?: string | null;
   autoSuspendEnabled?: boolean;
   autoSuspendBufferDays?: number;
+  communicationStyleTone?: string;
+  communicationStyleRules?: string[];
+  communicationStyleSamples?: string[];
 }

@@ -1,5 +1,5 @@
 import { eq, and, sql } from "drizzle-orm";
-import { db, aiTasksTable, membersTable, leadsTable, subscriptionsTable } from "@workspace/db";
+import { db, aiTasksTable, membersTable, leadsTable, subscriptionsTable, gymsTable } from "@workspace/db";
 import { calculateRiskScore, getRiskTier } from "../routes/intelligence/computations";
 import {
   assembleMemberContext,
@@ -10,6 +10,145 @@ import {
   type LeadContext,
 } from "./personalization-context";
 import { processAutopilotTasks } from "./autopilot-sender";
+
+export interface CommunicationStyle {
+  tone: string;
+  rules: string[];
+  samples: string[];
+}
+
+const TONE_SIGN_OFFS: Record<string, string[]> = {
+  casual_friendly: [
+    "See you in the gym!",
+    "Looking forward to hearing from you!",
+    "Hope to see you soon!",
+    "Talk soon!",
+  ],
+  professional: [
+    "Best regards,",
+    "Looking forward to connecting,",
+    "Thank you for your time,",
+    "Sincerely,",
+  ],
+  motivational_coach: [
+    "Let's crush it!",
+    "Your best is yet to come!",
+    "Let's get after it!",
+    "Stay strong!",
+  ],
+};
+
+const TONE_GREETINGS: Record<string, string[]> = {
+  casual_friendly: ["Hi", "Hey", "Hi there"],
+  professional: ["Dear", "Hello", "Good day"],
+  motivational_coach: ["Hey", "What's up", "Hey there"],
+};
+
+function getRandomElement<T>(arr: T[]): T {
+  return arr[Math.floor(Math.random() * arr.length)];
+}
+
+function extractStylePatterns(samples: string[]): { avgSentenceLength: "short" | "medium" | "long"; usesExclamation: boolean; usesEmoji: boolean; commonClosing: string | null } {
+  if (samples.length === 0) {
+    return { avgSentenceLength: "medium", usesExclamation: false, usesEmoji: false, commonClosing: null };
+  }
+
+  let totalSentences = 0;
+  let totalWords = 0;
+  let exclamationCount = 0;
+  let emojiCount = 0;
+  const closings: string[] = [];
+
+  for (const sample of samples) {
+    const sentences = sample.split(/[.!?]+/).filter(s => s.trim().length > 0);
+    totalSentences += sentences.length;
+    totalWords += sample.split(/\s+/).length;
+    if (sample.includes("!")) exclamationCount++;
+    if (/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}]/u.test(sample)) emojiCount++;
+
+    const lines = sample.trim().split("\n").filter(l => l.trim().length > 0);
+    if (lines.length > 0) {
+      closings.push(lines[lines.length - 1].trim());
+    }
+  }
+
+  const avgWords = totalSentences > 0 ? totalWords / totalSentences : 10;
+  const avgSentenceLength = avgWords < 8 ? "short" : avgWords > 15 ? "long" : "medium";
+  const usesExclamation = exclamationCount >= samples.length / 2;
+  const usesEmoji = emojiCount >= samples.length / 2;
+
+  const closingCounts: Record<string, number> = {};
+  for (const c of closings) {
+    closingCounts[c] = (closingCounts[c] || 0) + 1;
+  }
+  const mostCommonClosing = Object.entries(closingCounts).sort((a, b) => b[1] - a[1])[0];
+  const commonClosing = mostCommonClosing && mostCommonClosing[1] >= 2 ? mostCommonClosing[0] : null;
+
+  return { avgSentenceLength, usesExclamation, usesEmoji, commonClosing };
+}
+
+export function applyOwnerVoice(content: string, subject: string, style: CommunicationStyle): { content: string; subject: string } {
+  let processed = content;
+  let processedSubject = subject;
+
+  const greetings = TONE_GREETINGS[style.tone] || TONE_GREETINGS.casual_friendly;
+  processed = processed.replace(/^Hi /, `${getRandomElement(greetings)} `);
+
+  let customSignOff: string | null = null;
+
+  for (const rule of style.rules) {
+    const match = rule.match(/^(?:never\s+say|replace)\s+['"](.+?)['"]\s*(?:,\s*(?:say|with)\s+['"](.+?)['"])?$/i);
+    if (match) {
+      const find = match[1];
+      const replacement = match[2] || "";
+      const regex = new RegExp(find.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi");
+      processed = processed.replace(regex, replacement);
+      processedSubject = processedSubject.replace(regex, replacement);
+    }
+
+    const signOffMatch = rule.match(/^(?:always\s+)?sign\s+off\s+with\s+['"](.+?)['"]$/i);
+    if (signOffMatch) {
+      customSignOff = signOffMatch[1];
+    }
+  }
+
+  const signOff = customSignOff || getRandomElement(TONE_SIGN_OFFS[style.tone] || TONE_SIGN_OFFS.casual_friendly);
+  processed = processed.replace(/\n\n(?:Looking forward to hearing from you!|Hope to see you soon!|Talk soon!|Best regards,|Sincerely,|See you in the gym!|Let me know what works for you!|Let me know what day works best!)$/, `\n\n${signOff}`);
+
+  const samplePatterns = extractStylePatterns(style.samples);
+
+  if (samplePatterns.commonClosing && !customSignOff) {
+    processed = processed.replace(/\n\n[^]*$/, (lastBlock) => {
+      const lines = lastBlock.split("\n").filter(l => l.trim());
+      if (lines.length <= 1) return `\n\n${samplePatterns.commonClosing}`;
+      return lastBlock;
+    });
+  }
+
+  if (samplePatterns.usesExclamation && style.tone === "motivational_coach") {
+    processed = processed.replace(/\.\n/g, "!\n");
+  }
+
+  return { content: processed, subject: processedSubject };
+}
+
+async function fetchCommunicationStyle(gymId: number): Promise<CommunicationStyle> {
+  const [gym] = await db.select({
+    tone: gymsTable.communicationStyleTone,
+    rules: gymsTable.communicationStyleRules,
+    samples: gymsTable.communicationStyleSamples,
+  }).from(gymsTable).where(eq(gymsTable.id, gymId));
+
+  if (!gym) {
+    return { tone: "casual_friendly", rules: [], samples: [] };
+  }
+
+  return {
+    tone: gym.tone || "casual_friendly",
+    rules: gym.rules || [],
+    samples: gym.samples || [],
+  };
+}
 
 const MAX_PENDING_TASKS = 5;
 
@@ -355,13 +494,24 @@ async function generateFailedPaymentTasks(gymId: number): Promise<GeneratedTask[
 export async function generateAiTasks(gymId: number): Promise<{ created: number; tasks: any[] }> {
   await refreshRiskScores(gymId);
 
-  const [atRiskTasks, leadTasks, billingTasks] = await Promise.all([
+  const [atRiskTasks, leadTasks, billingTasks, commStyle] = await Promise.all([
     generateAtRiskMemberTasks(gymId),
     generateStaleLeadTasks(gymId),
     generateFailedPaymentTasks(gymId),
+    fetchCommunicationStyle(gymId),
   ]);
 
   const allCandidates = [...atRiskTasks, ...leadTasks, ...billingTasks];
+
+  if (commStyle.rules.length > 0 || commStyle.tone !== "casual_friendly") {
+    for (const task of allCandidates) {
+      if (task.aiContent && task.subject) {
+        const voiceApplied = applyOwnerVoice(task.aiContent, task.subject, commStyle);
+        task.aiContent = voiceApplied.content;
+        task.subject = voiceApplied.subject;
+      }
+    }
+  }
 
   if (allCandidates.length === 0) {
     return { created: 0, tasks: [] };
