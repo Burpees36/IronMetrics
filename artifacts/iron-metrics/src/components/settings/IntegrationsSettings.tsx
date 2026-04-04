@@ -73,7 +73,8 @@ export function IntegrationsSettings({ gymId, onNavigateToSection }: Props) {
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.15 }}
-            className="bg-card border border-border rounded-2xl p-5 shadow-sm"
+            onClick={() => onNavigateToSection?.("sms")}
+            className="bg-card border border-border rounded-2xl p-5 shadow-sm cursor-pointer hover:border-primary/30 transition-colors"
           >
             <div className="flex items-start justify-between mb-3">
               <div>
@@ -88,17 +89,14 @@ export function IntegrationsSettings({ gymId, onNavigateToSection }: Props) {
                 {smsConfigured ? "Connected" : "Not Configured"}
               </Badge>
             </div>
-            <button
-              onClick={() => onNavigateToSection?.("sms")}
-              className={`w-full px-4 py-2 text-sm font-medium rounded-xl border transition-colors flex items-center justify-center gap-2 ${
-                smsConfigured
-                  ? "border-border text-muted-foreground hover:bg-secondary"
-                  : "border-primary/30 text-primary hover:bg-primary/10"
-              }`}
-            >
+            <div className={`w-full px-4 py-2 text-sm font-medium rounded-xl border transition-colors flex items-center justify-center gap-2 ${
+              smsConfigured
+                ? "border-border text-muted-foreground"
+                : "border-primary/30 text-primary"
+            }`}>
               {smsConfigured ? "Manage" : "Configure"}
               <ExternalLink className="h-3.5 w-3.5" />
-            </button>
+            </div>
           </motion.div>
         </div>
       </motion.div>
