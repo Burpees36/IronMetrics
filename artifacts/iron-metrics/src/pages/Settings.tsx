@@ -119,7 +119,7 @@ export function Settings() {
             {activeSection === "security" && <SecuritySettings />}
             {activeSection === "communication" && <CommunicationStyleSettings gymId={activeGymId} />}
             {activeSection === "branding" && <BrandingSettings gymId={activeGymId} />}
-            {activeSection === "integrations" && <IntegrationsSettings />}
+            {activeSection === "integrations" && <IntegrationsSettings gymId={activeGymId} onNavigateToSection={(id) => setActiveSection(id as SectionId)} />}
             {activeSection === "danger" && <DangerZone gymName={gym?.name || "gym"} />}
           </motion.div>
         </main>
