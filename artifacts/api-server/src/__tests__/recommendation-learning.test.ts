@@ -175,7 +175,7 @@ describe("ensureRecommendationCards", () => {
   it("creates multiple cards for different types", async () => {
     await ensureRecommendationCards(1, "2026-03-01", [
       { interventionType: "retention", headline: "Reach out", executionChecklist: ["Task 1"] },
-      { interventionType: "onboarding", headline: "Welcome new", executionChecklist: ["Task A"] },
+      { interventionType: "coaching", headline: "Improve programming", executionChecklist: ["Task A"] },
     ], { baselineMembers: 50, baselineMrr: 5000, baselineChurn: 5 });
     expect(mockCards).toHaveLength(2);
   });
@@ -289,9 +289,9 @@ describe("logOwnerAction", () => {
     expect(result.classifiedType).toBeNull();
   });
 
-  it("classifies onboarding actions", async () => {
+  it("classifies onboarding actions as retention", async () => {
     const result = await logOwnerAction(1, "2026-03-01", "Set up welcome intro for new member");
-    expect(result.classifiedType).toBe("onboarding");
+    expect(result.classifiedType).toBe("retention");
   });
 });
 
@@ -319,11 +319,11 @@ describe("upsertLearningStat", () => {
   });
 
   it("applies quality weight based on roster size", async () => {
-    await upsertLearningStat("onboarding", 1, 0.8, 1.0, 10);
+    await upsertLearningStat("coaching", 1, 0.8, 1.0, 10);
     const smallGymImpact = parseFloat(mockStats[0].expectedImpact);
     mockStats = [];
     idCounter = 100;
-    await upsertLearningStat("onboarding", 1, 0.8, 1.0, 100);
+    await upsertLearningStat("coaching", 1, 0.8, 1.0, 100);
     const largeGymImpact = parseFloat(mockStats[0].expectedImpact);
     expect(largeGymImpact).toBeGreaterThan(smallGymImpact);
   });

@@ -78,18 +78,33 @@ export function Leads() {
 
   const handleMoveStage = (lead: any, newStage: string) => {
     if (!activeGymId) return;
+
+    const queryKey = getListLeadsQueryKey(activeGymId as number, { search: search || undefined });
+    const previousLeads = queryClient.getQueryData(queryKey);
+    const previousSelectedLead = selectedLead;
+
+    queryClient.setQueryData(queryKey, (old: any[] | undefined) => {
+      if (!old) return old;
+      return old.map((l: any) => l.id === lead.id ? { ...l, stage: newStage } : l);
+    });
+
+    if (drawerOpen && selectedLead?.id === lead.id) {
+      setSelectedLead({ ...lead, stage: newStage });
+    }
+
     updateLeadMutation.mutate(
       { gymId: activeGymId, leadId: lead.id, data: { stage: newStage as any } },
       {
         onSuccess: () => {
           toast({ title: "Stage updated", description: `${lead.firstName} moved to ${STAGE_CONFIG[newStage]?.label || newStage}.` });
           invalidateAll();
-          if (drawerOpen && selectedLead?.id === lead.id) {
-            setSelectedLead({ ...lead, stage: newStage });
-          }
         },
         onError: () => {
-          toast({ title: "Error", description: "Failed to update stage." });
+          queryClient.setQueryData(queryKey, previousLeads);
+          if (drawerOpen && selectedLead?.id === lead.id) {
+            setSelectedLead(previousSelectedLead);
+          }
+          toast({ title: "Error", description: "Failed to update stage. The card has been moved back.", variant: "destructive" });
         },
       }
     );

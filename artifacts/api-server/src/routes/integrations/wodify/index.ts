@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, desc, and } from "drizzle-orm";
+import { eq, desc, and, gt } from "drizzle-orm";
 import { db, gymsTable, syncRunsTable } from "@workspace/db";
 import { createWodifyClient } from "./client";
 import { runWodifySync } from "./sync";
@@ -64,11 +64,17 @@ router.post("/gyms/:gymId/integrations/wodify/sync", async (req, res): Promise<v
   const triggeredBy = (req as any).user?.claims?.sub || "unknown";
 
   try {
+    const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000);
     const result = await db.transaction(async (tx) => {
       const [existingRun] = await tx
         .select()
         .from(syncRunsTable)
-        .where(and(eq(syncRunsTable.gymId, gymId), eq(syncRunsTable.source, "wodify-api"), eq(syncRunsTable.status, "running")))
+        .where(and(
+          eq(syncRunsTable.gymId, gymId),
+          eq(syncRunsTable.source, "wodify-api"),
+          eq(syncRunsTable.status, "running"),
+          gt(syncRunsTable.startedAt, thirtyMinutesAgo),
+        ))
         .limit(1);
 
       if (existingRun) {
@@ -136,7 +142,7 @@ router.get("/gyms/:gymId/integrations/wodify/sync-status", async (req, res): Pro
     .from(syncRunsTable)
     .where(and(eq(syncRunsTable.gymId, gymId), eq(syncRunsTable.source, "wodify-api")))
     .orderBy(desc(syncRunsTable.startedAt))
-    .limit(5);
+    .limit(10);
 
   const maskedKey = gym?.wodifyApiKey
     ? `····${gym.wodifyApiKey.slice(-4)}`

@@ -24,6 +24,7 @@ import cors from "cors";
 import cookieParser from "cookie-parser";
 import rateLimit, { type Options } from "express-rate-limit";
 import { authMiddleware } from "./middlewares/authMiddleware";
+import { previewMiddleware } from "./middlewares/previewMiddleware";
 import { WebhookHandlers } from "./webhookHandlers";
 import router from "./routes";
 import paymentUpdatePublicRouter from "./routes/payment-update-public";
@@ -140,6 +141,9 @@ app.use("/api", apiLimiter);
 // Public routes that do not require authentication (e.g., payment update links, lead capture)
 app.use("/api", paymentUpdatePublicRouter);
 app.use("/api", leadCaptureRouter);
+
+// Dev-only preview bypass — must run before authMiddleware
+app.use(previewMiddleware);
 
 // Authentication middleware — everything below this point requires a valid session
 app.use(authMiddleware);

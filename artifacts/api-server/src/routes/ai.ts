@@ -1,10 +1,13 @@
 import { Router, type IRouter, type Request, type Response, type NextFunction } from "express";
-import { eq, desc, and } from "drizzle-orm";
-import { db, aiTasksTable, aiGeneratedContentTable, membersTable, leadsTable, gymsTable, gymStaffTable } from "@workspace/db";
-import { CreateAiTaskBody, GenerateMemberOutreachBody, UpdateAiTaskBody } from "@workspace/api-zod";
+import { eq, desc, and, sql, gte, lte } from "drizzle-orm";
+import { db, aiTasksTable, aiGeneratedContentTable, membersTable, leadsTable, gymsTable, gymStaffTable, subscriptionsTable, aiOperatorSettingsTable } from "@workspace/db";
+import { sendMemberEmail, logMemberEmailSent } from "../services/member-email";
+import { CreateAiTaskBody, GenerateMemberOutreachBody, UpdateAiTaskBody, UpdateAutopilotSettingsBody } from "@workspace/api-zod";
 import { generateAiTasks } from "../services/ai-task-generation";
+import { assembleMemberContext, buildMemberPersonalizationMeta } from "../services/personalization-context";
 import { getEmailService } from "../services/email-service";
 import { activeMemberCondition } from "../blendedMetrics";
+import { getLastAiScanTimestamp } from "../schedulers/ai-task-scheduler";
 
 const router: IRouter = Router();
 
@@ -57,14 +60,21 @@ router.patch("/gyms/:gymId/ai/tasks/:taskId", async (req, res): Promise<void> =>
   const updateData: Record<string, any> = {};
   if (parsed.data.status !== undefined) updateData.status = parsed.data.status;
   if (parsed.data.aiContent !== undefined) updateData.aiContent = parsed.data.aiContent;
+  if (parsed.data.subject !== undefined) updateData.subject = parsed.data.subject;
 
   if (Object.keys(updateData).length === 0) {
-    res.status(400).json({ error: "At least one of 'status' or 'aiContent' must be provided" });
+    res.status(400).json({ error: "At least one of 'status', 'aiContent', or 'subject' must be provided" });
     return;
   }
 
   if (updateData.status === "approved") {
     updateData.status = "completed";
+  }
+
+  const isBeingActioned = (updateData.status === "completed" || updateData.status === "sent") && !existing.actionedAt;
+  if (isBeingActioned) {
+    updateData.actionedAt = new Date();
+    updateData.outcome = "pending_observation";
   }
 
   const [updated] = await db.update(aiTasksTable).set(updateData).where(eq(aiTasksTable.id, taskId)).returning();
@@ -95,34 +105,46 @@ router.post("/gyms/:gymId/ai/generate-outreach", async (req, res): Promise<void>
   const parsed = GenerateMemberOutreachBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
 
-  const { and } = await import("drizzle-orm");
-  const [member] = await db.select().from(membersTable).where(and(eq(membersTable.id, parsed.data.memberId), eq(membersTable.gymId, gymId)));
+  const { and: andOp } = await import("drizzle-orm");
+  const [member] = await db.select().from(membersTable).where(andOp(eq(membersTable.id, parsed.data.memberId), eq(membersTable.gymId, gymId)));
   if (!member) { res.status(404).json({ error: "Member not found" }); return; }
+
+  const ctx = await assembleMemberContext(member.id, gymId);
 
   const templates: Record<string, { subject: string; content: string }> = {
     at_risk: {
       subject: `Checking in, ${member.firstName}`,
-      content: `Hi ${member.firstName},\n\nJust wanted to reach out and see how things are going! It's been a little while since we've seen you, and we genuinely miss having you around.\n\nI'd love to schedule a quick goal review — even just 10 minutes to check in on your progress and make sure we're helping you hit your targets. We also have some great upcoming events and challenges that might be right up your alley.\n\nWant to grab a quick coffee or chat at the gym this week? Let me know what works for you!`,
+      content: ctx
+        ? `Hi ${member.firstName},\n\nJust wanted to reach out and see how things are going!${ctx.daysSinceLastVisit !== null ? ` It's been about ${ctx.daysSinceLastVisit} days since your last visit` : ` It's been a little while since we've seen you`}, and we genuinely miss having you around.${ctx.favoriteClassName ? `\n\nThe ${ctx.favoriteClassName}${ctx.favoriteTimeSlot ? ` ${ctx.favoriteTimeSlot}` : ""} crew is still going strong.` : ""}${ctx.tenureMonths > 0 ? ` You've been with us for ${ctx.tenureMonths} month${ctx.tenureMonths !== 1 ? "s" : ""} — that commitment matters.` : ""}\n\nI'd love to schedule a quick goal review — even just 10 minutes to check in on your progress.${ctx.lastCoachName ? ` Coach ${ctx.lastCoachName} would be glad to work with you.` : ""}\n\nWant to grab a quick coffee or chat at the gym this week? Let me know what works for you!`
+        : `Hi ${member.firstName},\n\nJust wanted to reach out and see how things are going! It's been a little while since we've seen you, and we genuinely miss having you around.\n\nI'd love to schedule a quick goal review — even just 10 minutes to check in on your progress and make sure we're helping you hit your targets. We also have some great upcoming events and challenges that might be right up your alley.\n\nWant to grab a quick coffee or chat at the gym this week? Let me know what works for you!`,
     },
     win_back: {
-      subject: `We'd love to reconnect, ${member.firstName}`,
-      content: `Hi ${member.firstName},\n\nI was thinking about you and wanted to reach out personally. We've got some exciting new programming and challenges coming up that I think you'd really enjoy.\n\nI'd love to set up a quick goal review session — just 15 minutes to catch up, see where you're at, and map out a plan that fits your schedule. No pressure at all, just a chance to reconnect.\n\nWould you be free for a coffee or a quick chat at the gym this week? I'll buy the coffee.`,
+      subject: ctx?.favoriteClassName ? `The ${ctx.favoriteClassName} crew misses you, ${member.firstName}` : `We'd love to reconnect, ${member.firstName}`,
+      content: ctx
+        ? `Hi ${member.firstName},\n\nI was thinking about you and wanted to reach out personally.${ctx.tenureMonths > 0 ? ` You've been part of our community for ${ctx.tenureMonths} month${ctx.tenureMonths !== 1 ? "s" : ""}, and that means a lot.` : ""}${ctx.favoriteClassName ? `\n\nThe ${ctx.favoriteClassName} crew has been asking about you.` : ""}${ctx.lastCoachName ? ` Coach ${ctx.lastCoachName} mentioned you the other day.` : ""}\n\nWe've got some exciting new programming and challenges coming up that I think you'd really enjoy.\n\nI'd love to set up a quick goal review session — just 15 minutes to catch up. No pressure at all.\n\nWould you be free for a coffee or a quick chat at the gym this week? I'll buy the coffee.`
+        : `Hi ${member.firstName},\n\nI was thinking about you and wanted to reach out personally. We've got some exciting new programming and challenges coming up that I think you'd really enjoy.\n\nI'd love to set up a quick goal review session — just 15 minutes to catch up, see where you're at, and map out a plan that fits your schedule. No pressure at all, just a chance to reconnect.\n\nWould you be free for a coffee or a quick chat at the gym this week? I'll buy the coffee.`,
     },
     celebration: {
       subject: `Congrats on your milestone, ${member.firstName}!`,
-      content: `Hi ${member.firstName},\n\nWe wanted to take a moment to celebrate your commitment! Your consistency and effort haven't gone unnoticed.\n\nKeep up the amazing work — your dedication inspires everyone at the gym. We'll be celebrating wins like yours at our next Bright Spots Friday!`,
-    },
-    onboarding: {
-      subject: `Welcome to the team, ${member.firstName}!`,
-      content: `Hi ${member.firstName},\n\nWelcome! We're so excited to have you as part of our community.\n\nHere's what your first few weeks look like:\n- Complete your intro sessions with a coach to get oriented\n- Try a few different class times to find your rhythm\n- Your coach will schedule a 1-on-1 check-in around week 3\n- At week 4, we'll do your first benchmark workout to set your baseline\n\nRemember: every expert was once a beginner. We're here for you every step of the way!`,
+      content: ctx?.recentPRs?.length
+        ? `Hi ${member.firstName},\n\nWe wanted to take a moment to celebrate — you hit ${ctx.recentPRs.length} PR${ctx.recentPRs.length !== 1 ? "s" : ""} recently${ctx.recentPRs[0] ? `, including ${ctx.recentPRs[0].workoutTitle}` : ""}! Your consistency and effort haven't gone unnoticed.${ctx.tenureMonths > 0 ? `\n\n${ctx.tenureMonths} month${ctx.tenureMonths !== 1 ? "s" : ""} of dedication is something to be proud of.` : ""}\n\nKeep up the amazing work — your dedication inspires everyone at the gym!`
+        : `Hi ${member.firstName},\n\nWe wanted to take a moment to celebrate your commitment! Your consistency and effort haven't gone unnoticed.\n\nKeep up the amazing work — your dedication inspires everyone at the gym. We'll be celebrating wins like yours at our next Bright Spots Friday!`,
     },
     billing: {
       subject: `Quick heads-up about your account, ${member.firstName}`,
-      content: `Hi ${member.firstName},\n\nHope you're doing well! I wanted to give you a quick heads-up — it looks like there might be a small hiccup with the payment method on file for your membership.\n\nThese things happen all the time (expired cards, bank updates, etc.), and it's super easy to fix. We just want to make sure everything stays smooth so you don't miss any sessions.\n\nYou can update your info anytime, or just give us a call and we'll sort it out together in 2 minutes.\n\nThanks so much, and see you in class!`,
+      content: ctx
+        ? `Hi ${member.firstName},\n\nHope you're doing well! I wanted to give you a quick heads-up — it looks like there might be a small hiccup with the payment method on file for your${ctx.planName ? ` ${ctx.planName}` : ""} membership.\n\nThese things happen all the time (expired cards, bank updates, etc.), and it's super easy to fix. We just want to make sure everything stays smooth so you don't miss any sessions.${ctx.tenureMonths > 0 ? `\n\nYou've been with us for ${ctx.tenureMonths} month${ctx.tenureMonths !== 1 ? "s" : ""} — we want to keep it going!` : ""}\n\nYou can update your info anytime, or just give us a call and we'll sort it out together in 2 minutes.\n\nThanks so much, and see you in class!`
+        : `Hi ${member.firstName},\n\nHope you're doing well! I wanted to give you a quick heads-up — it looks like there might be a small hiccup with the payment method on file for your membership.\n\nThese things happen all the time (expired cards, bank updates, etc.), and it's super easy to fix. We just want to make sure everything stays smooth so you don't miss any sessions.\n\nYou can update your info anytime, or just give us a call and we'll sort it out together in 2 minutes.\n\nThanks so much, and see you in class!`,
     },
   };
 
   const template = templates[parsed.data.outreachType] || templates.at_risk;
+  const meta = ctx ? buildMemberPersonalizationMeta(ctx) : null;
+
+  const contextParts: string[] = [`Generated for ${member.firstName} ${member.lastName} (${parsed.data.outreachType})`];
+  if (meta && meta.dataPoints.length > 0) {
+    contextParts.push(`Using: ${meta.dataPoints.join(", ")}`);
+  }
 
   const [content] = await db.insert(aiGeneratedContentTable).values({
     gymId,
@@ -131,7 +153,7 @@ router.post("/gyms/:gymId/ai/generate-outreach", async (req, res): Promise<void>
     subject: template.subject,
     confidence: "0.85",
     isAiGenerated: true,
-    contextSummary: `Generated for ${member.firstName} ${member.lastName} (${parsed.data.outreachType})`,
+    contextSummary: contextParts.join(". "),
   }).returning();
 
   res.json({
@@ -274,26 +296,56 @@ router.post("/gyms/:gymId/ai/tasks/:taskId/send-email", async (req, res): Promis
     outreach: `Checking in, ${recipientName.split(" ")[0]}`,
     leads: `Let's connect, ${recipientName.split(" ")[0]}`,
     billing: `Quick heads-up about your account, ${recipientName.split(" ")[0]}`,
-    onboarding: `Welcome to the team, ${recipientName.split(" ")[0]}!`,
   };
-  const subject = subjectMap[task.type] || `Message from your gym`;
+  const subject = task.subject || subjectMap[task.type] || `Message from your gym`;
 
-  const result = await emailService.sendEmail({
-    to: recipientEmail,
-    subject,
-    text: task.aiContent,
-    fromEmail: gym.fromEmail,
-    fromName: gym.fromName || undefined,
-  });
+  if (task.targetType === "member" && task.targetId) {
+    const result = await sendMemberEmail({
+      memberId: task.targetId,
+      gymId,
+      to: recipientEmail,
+      subject,
+      text: task.aiContent,
+      fromEmail: gym.fromEmail,
+      fromName: gym.fromName || undefined,
+      emailType: task.type,
+      timelineTitle: "AI Operator email sent",
+    });
 
-  if (!result.success) {
-    res.status(500).json({ error: result.error || "Failed to send email" });
-    return;
+    if (!result.success) {
+      res.status(500).json({ error: result.error || "Failed to send email" });
+      return;
+    }
+
+    const emailUpdateData: Record<string, any> = { status: "sent", updatedAt: new Date() };
+    if (!task.actionedAt) {
+      emailUpdateData.actionedAt = new Date();
+      emailUpdateData.outcome = "pending_observation";
+    }
+    await db.update(aiTasksTable).set(emailUpdateData).where(eq(aiTasksTable.id, taskId));
+    res.json({ success: true, messageId: result.messageId, recipientEmail, recipientName });
+  } else {
+    const result = await emailService.sendEmail({
+      to: recipientEmail,
+      subject,
+      text: task.aiContent,
+      fromEmail: gym.fromEmail,
+      fromName: gym.fromName || undefined,
+    });
+
+    if (!result.success) {
+      res.status(500).json({ error: result.error || "Failed to send email" });
+      return;
+    }
+
+    const leadEmailUpdateData: Record<string, any> = { status: "sent", updatedAt: new Date() };
+    if (!task.actionedAt) {
+      leadEmailUpdateData.actionedAt = new Date();
+      leadEmailUpdateData.outcome = "pending_observation";
+    }
+    await db.update(aiTasksTable).set(leadEmailUpdateData).where(eq(aiTasksTable.id, taskId));
+    res.json({ success: true, messageId: result.messageId, recipientEmail, recipientName });
   }
-
-  await db.update(aiTasksTable).set({ status: "sent", updatedAt: new Date() }).where(eq(aiTasksTable.id, taskId));
-
-  res.json({ success: true, messageId: result.messageId, recipientEmail, recipientName });
 });
 
 router.post("/gyms/:gymId/ai/generate-tasks", async (req, res): Promise<void> => {
@@ -310,6 +362,166 @@ router.post("/gyms/:gymId/ai/generate-tasks", async (req, res): Promise<void> =>
     console.error("Error generating AI tasks:", error);
     res.status(500).json({ error: "Failed to generate AI tasks" });
   }
+});
+
+router.get("/gyms/:gymId/ai/impact", async (req, res): Promise<void> => {
+  const gymId = parseGymId(req.params);
+  if (!gymId) { res.status(400).json({ error: "Invalid gym ID" }); return; }
+
+  const access = await verifyGymAccess(gymId, req.user!.id);
+  if (!access.allowed) { res.status(access.gym ? 403 : 404).json({ error: access.gym ? "You do not have access to this gym" : "Gym not found" }); return; }
+
+  const conditions: any[] = [eq(aiTasksTable.gymId, gymId), sql`${aiTasksTable.actionedAt} IS NOT NULL`];
+
+  const startDate = req.query.startDate as string | undefined;
+  const endDate = req.query.endDate as string | undefined;
+  if (startDate) {
+    const parsed = new Date(startDate);
+    if (isNaN(parsed.getTime())) { res.status(400).json({ error: "Invalid startDate" }); return; }
+    conditions.push(gte(aiTasksTable.actionedAt, parsed));
+  }
+  if (endDate) {
+    const parsed = new Date(endDate);
+    if (isNaN(parsed.getTime())) { res.status(400).json({ error: "Invalid endDate" }); return; }
+    conditions.push(lte(aiTasksTable.actionedAt, parsed));
+  }
+
+  const actionedTasks = await db.select().from(aiTasksTable).where(and(...conditions));
+
+  const totalActioned = actionedTasks.length;
+  const outcomeCounts: Record<string, number> = {
+    won_back: 0,
+    reactivated: 0,
+    converted: 0,
+    no_change: 0,
+    pending_observation: 0,
+  };
+
+  let totalRevenueRetained = 0;
+  let totalRevenueRecovered = 0;
+  let membersSaved = 0;
+
+  for (const task of actionedTasks) {
+    const outcome = task.outcome || "none";
+    if (outcome in outcomeCounts) {
+      outcomeCounts[outcome]++;
+    }
+
+    const impact = task.revenueImpact ? parseFloat(task.revenueImpact) : 0;
+
+    if (outcome === "won_back") {
+      totalRevenueRetained += impact;
+      membersSaved++;
+    } else if (outcome === "reactivated") {
+      totalRevenueRecovered += impact;
+      membersSaved++;
+    } else if (outcome === "converted") {
+      membersSaved++;
+    }
+  }
+
+  const resolvedTasks = actionedTasks.filter(t => t.outcome && t.outcome !== "pending_observation" && t.outcome !== "none");
+  const successfulTasks = resolvedTasks.filter(t => ["won_back", "reactivated", "converted"].includes(t.outcome!));
+  const successRate = resolvedTasks.length > 0 ? Math.round((successfulTasks.length / resolvedTasks.length) * 100) : 0;
+
+  const monthlyBreakdown: Record<string, { won_back: number; reactivated: number; converted: number; no_change: number }> = {};
+  for (const task of actionedTasks) {
+    if (!task.actionedAt || !task.outcome || task.outcome === "pending_observation" || task.outcome === "none") continue;
+    const monthKey = `${task.actionedAt.getFullYear()}-${String(task.actionedAt.getMonth() + 1).padStart(2, "0")}`;
+    if (!monthlyBreakdown[monthKey]) {
+      monthlyBreakdown[monthKey] = { won_back: 0, reactivated: 0, converted: 0, no_change: 0 };
+    }
+    if (task.outcome in monthlyBreakdown[monthKey]) {
+      (monthlyBreakdown[monthKey] as any)[task.outcome]++;
+    }
+  }
+
+  const timeline = Object.entries(monthlyBreakdown)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([month, data]) => ({ month, ...data }));
+
+  res.json({
+    totalActioned,
+    outcomeCounts,
+    successRate,
+    membersSaved,
+    totalRevenueRetained: Math.round(totalRevenueRetained * 100) / 100,
+    totalRevenueRecovered: Math.round(totalRevenueRecovered * 100) / 100,
+    timeline,
+  });
+});
+
+router.get("/gyms/:gymId/ai/last-scan", async (req, res): Promise<void> => {
+  const gymId = parseGymId(req.params);
+  if (!gymId) { res.status(400).json({ error: "Invalid gym ID" }); return; }
+
+  const access = await verifyGymAccess(gymId, req.user!.id);
+  if (!access.allowed) { res.status(access.gym ? 403 : 404).json({ error: access.gym ? "You do not have access to this gym" : "Gym not found" }); return; }
+
+  const lastAutoScan = getLastAiScanTimestamp();
+  res.json({ lastAutoScan: lastAutoScan ? lastAutoScan.toISOString() : null });
+});
+
+router.get("/gyms/:gymId/ai/autopilot-settings", async (req, res): Promise<void> => {
+  const gymId = parseGymId(req.params);
+  if (!gymId) { res.status(400).json({ error: "Invalid gym ID" }); return; }
+
+  const access = await verifyGymAccess(gymId, req.user!.id);
+  if (!access.allowed) { res.status(access.gym ? 403 : 404).json({ error: access.gym ? "You do not have access to this gym" : "Gym not found" }); return; }
+
+  let [settings] = await db.select().from(aiOperatorSettingsTable).where(eq(aiOperatorSettingsTable.gymId, gymId));
+
+  if (!settings) {
+    [settings] = await db.insert(aiOperatorSettingsTable).values({ gymId }).returning();
+  }
+
+  res.json({
+    autopilotOutreach: settings.autopilotOutreach,
+    autopilotBilling: settings.autopilotBilling,
+    autopilotLeads: settings.autopilotLeads,
+    cooldownDays: settings.cooldownDays,
+    digestFrequency: settings.digestFrequency,
+  });
+});
+
+router.put("/gyms/:gymId/ai/autopilot-settings", async (req, res): Promise<void> => {
+  const gymId = parseGymId(req.params);
+  if (!gymId) { res.status(400).json({ error: "Invalid gym ID" }); return; }
+
+  const access = await verifyGymAccess(gymId, req.user!.id);
+  if (!access.allowed) { res.status(access.gym ? 403 : 404).json({ error: access.gym ? "You do not have access to this gym" : "Gym not found" }); return; }
+
+  const parsed = UpdateAutopilotSettingsBody.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+
+  const updateData: Record<string, any> = {};
+  if (parsed.data.autopilotOutreach !== undefined) updateData.autopilotOutreach = parsed.data.autopilotOutreach;
+  if (parsed.data.autopilotBilling !== undefined) updateData.autopilotBilling = parsed.data.autopilotBilling;
+  if (parsed.data.autopilotLeads !== undefined) updateData.autopilotLeads = parsed.data.autopilotLeads;
+  if (parsed.data.cooldownDays !== undefined) updateData.cooldownDays = parsed.data.cooldownDays;
+  if (parsed.data.digestFrequency !== undefined) updateData.digestFrequency = parsed.data.digestFrequency;
+
+  if (Object.keys(updateData).length === 0) {
+    res.status(400).json({ error: "At least one setting must be provided" });
+    return;
+  }
+
+  let [existing] = await db.select().from(aiOperatorSettingsTable).where(eq(aiOperatorSettingsTable.gymId, gymId));
+
+  let settings;
+  if (existing) {
+    [settings] = await db.update(aiOperatorSettingsTable).set(updateData).where(eq(aiOperatorSettingsTable.gymId, gymId)).returning();
+  } else {
+    [settings] = await db.insert(aiOperatorSettingsTable).values({ gymId, ...updateData }).returning();
+  }
+
+  res.json({
+    autopilotOutreach: settings.autopilotOutreach,
+    autopilotBilling: settings.autopilotBilling,
+    autopilotLeads: settings.autopilotLeads,
+    cooldownDays: settings.cooldownDays,
+    digestFrequency: settings.digestFrequency,
+  });
 });
 
 export default router;

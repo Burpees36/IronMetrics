@@ -59,7 +59,7 @@ export function PlanSelection() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           tier: tierId,
-          successUrl: `${baseUrl}/dashboard?subscribed=1`,
+          successUrl: `${baseUrl}/onboarding?subscribed=1`,
           cancelUrl: `${baseUrl}/plan-selection`,
         }),
       });

@@ -2,6 +2,12 @@ import { initStripe } from "./stripeClient";
 import app from "./app";
 import { startBillingMaintenanceScheduler } from "./schedulers/billing-maintenance";
 import { startRetentionEngineScheduler } from "./schedulers/retention-engine";
+import { startWodifySyncScheduler } from "./schedulers/wodify-sync";
+import { startAiTaskScheduler } from "./schedulers/ai-task-scheduler";
+import { startRsiSnapshotScheduler } from "./schedulers/rsi-snapshots";
+import { startBenchmarkScheduler } from "./schedulers/benchmark-scheduler";
+import { startAutopilotDigestScheduler } from "./schedulers/autopilot-digest-scheduler";
+import { runOnboardingMigrationCleanup } from "./migrations/onboarding-cleanup";
 
 const rawPort = process.env["PORT"];
 
@@ -24,8 +30,15 @@ try {
   console.log("Server will start without Stripe features.");
 }
 
+await runOnboardingMigrationCleanup();
+
 app.listen(port, () => {
   console.log(`Server listening on port ${port}`);
   startBillingMaintenanceScheduler();
   startRetentionEngineScheduler();
+  startWodifySyncScheduler();
+  startAiTaskScheduler();
+  startRsiSnapshotScheduler();
+  startBenchmarkScheduler();
+  startAutopilotDigestScheduler();
 });

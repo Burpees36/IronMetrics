@@ -18,7 +18,17 @@ export function useAuth(): AuthState {
   useEffect(() => {
     let cancelled = false;
 
-    fetch("/api/auth/user", { credentials: "include" })
+    const params = new URLSearchParams(window.location.search);
+    const isPreview = params.get("preview") === "1";
+    if (isPreview) {
+      document.cookie = "__dev_preview=1;path=/;max-age=1800;samesite=lax";
+    }
+    const headers: Record<string, string> = {};
+    if (isPreview) {
+      headers["X-Preview"] = "1";
+    }
+
+    fetch("/api/auth/user", { credentials: "include", headers })
       .then((res) => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         return res.json() as Promise<{ user: AuthUser | null }>;

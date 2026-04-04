@@ -16,7 +16,7 @@ router.get(
       return;
     }
 
-    const role = req.programmingRole;
+    const role = req.programmingRole ?? "member";
     const { startDate, endDate, status } = req.query;
 
     const conditions: any[] = [eq(programmingDaysTable.gymId, gymId)];
@@ -71,7 +71,7 @@ router.get(
       return;
     }
 
-    const role = req.programmingRole;
+    const role = req.programmingRole ?? "member";
 
     const dayWithSections = await getDayWithSections(dayId);
     if (!dayWithSections || dayWithSections.gymId !== gymId) {

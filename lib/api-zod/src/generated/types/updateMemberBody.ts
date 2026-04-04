@@ -30,4 +30,6 @@ export interface UpdateMemberBody {
   membershipType?: string | null;
   waiverSigned?: boolean;
   tags?: string[];
+  /** @nullable */
+  profileImageUrl?: string | null;
 }

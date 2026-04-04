@@ -33,4 +33,6 @@ export interface UpdateGymBody {
   fromEmail?: string | null;
   /** @nullable */
   fromName?: string | null;
+  autoSuspendEnabled?: boolean;
+  autoSuspendBufferDays?: number;
 }

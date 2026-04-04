@@ -14,6 +14,13 @@ export const aiTasksTable = pgTable("ai_tasks", {
   targetId: integer("target_id"),
   targetType: text("target_type"),
   aiContent: text("ai_content"),
+  subject: text("subject"),
+  personalizationMeta: text("personalization_meta"),
+  outcome: text("outcome").default("none"),
+  outcomeDetectedAt: timestamp("outcome_detected_at", { withTimezone: true }),
+  revenueImpact: numeric("revenue_impact", { precision: 10, scale: 2 }),
+  actionedAt: timestamp("actioned_at", { withTimezone: true }),
+  autoSent: boolean("auto_sent").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });
@@ -37,3 +44,19 @@ export const aiGeneratedContentTable = pgTable("ai_generated_content", {
 export const insertAiGeneratedContentSchema = createInsertSchema(aiGeneratedContentTable).omit({ id: true, createdAt: true });
 export type InsertAiGeneratedContent = z.infer<typeof insertAiGeneratedContentSchema>;
 export type AiGeneratedContent = typeof aiGeneratedContentTable.$inferSelect;
+
+export const aiOperatorSettingsTable = pgTable("ai_operator_settings", {
+  id: serial("id").primaryKey(),
+  gymId: integer("gym_id").notNull().references(() => gymsTable.id).unique(),
+  autopilotOutreach: boolean("autopilot_outreach").notNull().default(false),
+  autopilotBilling: boolean("autopilot_billing").notNull().default(false),
+  autopilotLeads: boolean("autopilot_leads").notNull().default(false),
+  cooldownDays: integer("cooldown_days").notNull().default(14),
+  digestFrequency: text("digest_frequency").notNull().default("daily"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
+});
+
+export const insertAiOperatorSettingsSchema = createInsertSchema(aiOperatorSettingsTable).omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertAiOperatorSettings = z.infer<typeof insertAiOperatorSettingsSchema>;
+export type AiOperatorSettings = typeof aiOperatorSettingsTable.$inferSelect;

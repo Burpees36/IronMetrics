@@ -21,7 +21,7 @@ export function Schedule() {
   const calendarRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
-  const canManage = role === "gym_owner" || role === "admin" || role === "owner";
+  const canManage = role === "gym_owner" || role === "admin";
   const canOperate = canManage || role === "coach" || role === "head_coach" || role === "front_desk";
 
   const [weekOffset, setWeekOffset] = useState(0);
@@ -397,7 +397,7 @@ export function Schedule() {
   function handleCheckIn(memberId: number) {
     if (!activeGymId || !checkinClassId) return;
     checkInMutation.mutate(
-      { gymId: activeGymId, classId: checkinClassId, data: { memberId, status: "checked_in" } },
+      { gymId: activeGymId, classId: checkinClassId, data: { memberId, status: "present" as const } },
       {
         onSuccess: () => {
           toast({ title: "Checked In", description: "Member has been checked in." });

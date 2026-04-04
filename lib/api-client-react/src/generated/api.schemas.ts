@@ -52,6 +52,8 @@ export interface Gym {
   /** @nullable */
   fromName?: string | null;
   ownerId?: string;
+  autoSuspendEnabled?: boolean;
+  autoSuspendBufferDays?: number;
   memberCount: number;
   activeCount: number;
   createdAt: string;
@@ -101,6 +103,8 @@ export interface UpdateGymBody {
   fromEmail?: string | null;
   /** @nullable */
   fromName?: string | null;
+  autoSuspendEnabled?: boolean;
+  autoSuspendBufferDays?: number;
 }
 
 export type MemberStatus = (typeof MemberStatus)[keyof typeof MemberStatus];
@@ -326,6 +330,8 @@ export interface UpdateMemberBody {
   membershipType?: string | null;
   waiverSigned?: boolean;
   tags?: string[];
+  /** @nullable */
+  profileImageUrl?: string | null;
 }
 
 export interface CreateMemberNoteBody {
@@ -1293,10 +1299,11 @@ export type RetentionStabilityIndexBreakdownItem = {
 export interface RetentionStabilityIndex {
   score: number;
   band: RetentionStabilityIndexBand;
-  trend30d: number;
-  trend90d: number;
+  trend30d?: number;
+  trend90d?: number;
   components: RetentionStabilityIndexComponents;
   breakdown: RetentionStabilityIndexBreakdownItem[];
+  trendInsufficient?: boolean;
   insight: string;
 }
 
@@ -1419,6 +1426,18 @@ export interface IntelligenceOverview {
   generatedAt: string;
 }
 
+export type RsiHistoryDataPointsItem = {
+  date: string;
+  score: number;
+  band: string;
+};
+
+export interface RsiHistory {
+  window: string;
+  dataPoints: RsiHistoryDataPointsItem[];
+  insufficient: boolean;
+}
+
 export interface CohortData {
   cohortMonth: string;
   startingMembers: number;
@@ -1459,9 +1478,13 @@ export interface MorningBriefingSnapshot {
   rsiScore?: number;
   rsiBand?: string;
   atRiskMembers?: number;
+  atRiskCritical?: number;
+  atRiskHigh?: number;
   revenueAtRisk?: number;
   engagementRate?: number;
   staleLeads?: number;
+  newLeads?: number;
+  activeLeads?: number;
   failedPayments?: number;
   todayClasses?: number;
   classFillRate?: number;
@@ -1524,7 +1547,6 @@ export const GenerateOutreachBodyOutreachType = {
   at_risk: "at_risk",
   win_back: "win_back",
   celebration: "celebration",
-  onboarding: "onboarding",
   billing: "billing",
 } as const;
 
@@ -1552,6 +1574,22 @@ export const AiTaskStatus = {
   dismissed: "dismissed",
 } as const;
 
+/**
+ * @nullable
+ */
+export type AiTaskOutcome =
+  | (typeof AiTaskOutcome)[keyof typeof AiTaskOutcome]
+  | null;
+
+export const AiTaskOutcome = {
+  none: "none",
+  pending_observation: "pending_observation",
+  won_back: "won_back",
+  reactivated: "reactivated",
+  converted: "converted",
+  no_change: "no_change",
+} as const;
+
 export interface AiTask {
   id: number;
   gymId: number;
@@ -1566,6 +1604,17 @@ export interface AiTask {
   targetType?: string | null;
   /** @nullable */
   aiContent?: string | null;
+  /** @nullable */
+  subject?: string | null;
+  /** @nullable */
+  outcome?: AiTaskOutcome;
+  /** @nullable */
+  outcomeDetectedAt?: string | null;
+  /** @nullable */
+  revenueImpact?: string | null;
+  /** @nullable */
+  actionedAt?: string | null;
+  autoSent: boolean;
   createdAt: string;
 }
 
@@ -1606,6 +1655,8 @@ export interface UpdateAiTaskBody {
   status?: UpdateAiTaskBodyStatus;
   /** @nullable */
   aiContent?: string | null;
+  /** @nullable */
+  subject?: string | null;
 }
 
 export interface GenerateAiTasksResponse {
@@ -1619,6 +1670,75 @@ export interface SendEmailResponse {
   messageId?: string | null;
   recipientEmail: string;
   recipientName: string;
+}
+
+export type AiImpactResponseOutcomeCounts = {
+  won_back: number;
+  reactivated: number;
+  converted: number;
+  no_change: number;
+  pending_observation: number;
+};
+
+export type AiImpactResponseTimelineItem = {
+  month: string;
+  won_back: number;
+  reactivated: number;
+  converted: number;
+  no_change: number;
+};
+
+export interface AiImpactResponse {
+  totalActioned: number;
+  outcomeCounts: AiImpactResponseOutcomeCounts;
+  successRate: number;
+  membersSaved: number;
+  totalRevenueRetained: number;
+  totalRevenueRecovered: number;
+  timeline: AiImpactResponseTimelineItem[];
+}
+
+export type AutopilotSettingsDigestFrequency =
+  (typeof AutopilotSettingsDigestFrequency)[keyof typeof AutopilotSettingsDigestFrequency];
+
+export const AutopilotSettingsDigestFrequency = {
+  daily: "daily",
+  weekly: "weekly",
+  disabled: "disabled",
+} as const;
+
+export interface AutopilotSettings {
+  autopilotOutreach: boolean;
+  autopilotBilling: boolean;
+  autopilotLeads: boolean;
+  cooldownDays: number;
+  digestFrequency: AutopilotSettingsDigestFrequency;
+}
+
+export type UpdateAutopilotSettingsBodyDigestFrequency =
+  (typeof UpdateAutopilotSettingsBodyDigestFrequency)[keyof typeof UpdateAutopilotSettingsBodyDigestFrequency];
+
+export const UpdateAutopilotSettingsBodyDigestFrequency = {
+  daily: "daily",
+  weekly: "weekly",
+  disabled: "disabled",
+} as const;
+
+export interface UpdateAutopilotSettingsBody {
+  autopilotOutreach?: boolean;
+  autopilotBilling?: boolean;
+  autopilotLeads?: boolean;
+  /**
+   * @minimum 1
+   * @maximum 90
+   */
+  cooldownDays?: number;
+  digestFrequency?: UpdateAutopilotSettingsBodyDigestFrequency;
+}
+
+export interface AiLastScanResponse {
+  /** @nullable */
+  lastAutoScan?: string | null;
 }
 
 export interface EmailStatusResponse {
@@ -1661,11 +1781,20 @@ export interface DashboardStats {
   classesThisWeek: number;
   openLeads: number;
   atRiskMembers: number;
+  atRiskCritical: number;
+  atRiskHigh: number;
+  revenueAtRisk: number;
+  /** Percentage of active members not at risk */
+  retentionRate: number;
   failedPayments: number;
   collectionRate: number;
   rsiScore: number;
   rsiBand: string;
+  rsiTrend30d?: number | null;
+  rsiTrendInsufficient?: boolean;
   revenueByMonth: DashboardStatsRevenueByMonthItem[];
+  /** True when fewer than 3 months of revenue data exist */
+  revenueTrendSparse?: boolean;
   attendanceByDay: DashboardStatsAttendanceByDayItem[];
   memberStatusBreakdown: DashboardStatsMemberStatusBreakdownItem[];
 }
@@ -1715,6 +1844,8 @@ export interface RevenueReport {
   failedRevenue: number;
   collectionRate: number;
   byMonth: RevenueReportByMonthItem[];
+  /** True when fewer than 3 months of revenue data exist */
+  revenueTrendSparse?: boolean;
 }
 
 export type AttendanceReportByDayOfWeekItem = {
@@ -2036,6 +2167,25 @@ export interface CheckinStatus {
   holdId?: number;
 }
 
+export interface UploadUrlRequest {
+  /** @minLength 1 */
+  name: string;
+  /** @minimum 1 */
+  size: number;
+  /** @minLength 1 */
+  contentType: string;
+}
+
+export interface UploadUrlResponse {
+  uploadURL: string;
+  objectPath: string;
+  metadata?: UploadUrlRequest;
+}
+
+export interface ErrorEnvelope {
+  error: string;
+}
+
 export type ListMembersParams = {
   status?: string;
   search?: string;
@@ -2220,8 +2370,26 @@ export const ListProgrammingDaysStatus = {
   archived: "archived",
 } as const;
 
+export type GetRsiHistoryParams = {
+  window?: GetRsiHistoryWindow;
+};
+
+export type GetRsiHistoryWindow =
+  (typeof GetRsiHistoryWindow)[keyof typeof GetRsiHistoryWindow];
+
+export const GetRsiHistoryWindow = {
+  "30d": "30d",
+  "90d": "90d",
+  all: "all",
+} as const;
+
 export type SubmitLeadCapture201 = {
   message?: string;
+};
+
+export type GetAiImpactParams = {
+  startDate?: string;
+  endDate?: string;
 };
 
 export type PreviewPlanChangeBody = {

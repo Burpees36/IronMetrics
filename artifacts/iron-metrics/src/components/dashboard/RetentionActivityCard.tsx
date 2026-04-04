@@ -95,9 +95,11 @@ export function RetentionActivityCard({ gymId }: { gymId: number }) {
           </div>
           <div>
             <h3 className="text-sm font-semibold text-foreground">Retention Activity</h3>
-            {enrollments.active > 0 && (
-              <p className="text-[10px] text-muted-foreground">{enrollments.active} active enrollment{enrollments.active !== 1 ? "s" : ""}</p>
-            )}
+            <p className="text-[10px] text-muted-foreground">
+              {enrollments.active > 0
+                ? `${enrollments.active} active sequence${enrollments.active !== 1 ? "s" : ""} running`
+                : "Automated outreach & follow-ups"}
+            </p>
           </div>
         </div>
         <Link href="/retention">
@@ -118,10 +120,15 @@ export function RetentionActivityCard({ gymId }: { gymId: number }) {
             <div className="h-10 w-10 bg-primary/10 rounded-full flex items-center justify-center mb-2">
               <Activity className="h-5 w-5 text-primary" />
             </div>
-            <p className="text-xs font-medium text-foreground">No activity yet</p>
-            <p className="text-[10px] text-muted-foreground mt-0.5">Retention sequences will log events here</p>
+            <p className="text-xs font-medium text-foreground">No retention activity yet</p>
+            <p className="text-[10px] text-muted-foreground mt-0.5 max-w-[200px]">
+              Create a retention sequence to automatically engage at-risk members
+            </p>
             <Link href="/retention">
-              <span className="text-[10px] text-primary hover:underline mt-2 inline-block">Set up sequences →</span>
+              <span className="mt-3 inline-flex items-center gap-1 text-[11px] font-medium text-primary hover:text-primary/80 transition-colors">
+                Set up sequences
+                <ChevronRight className="h-3 w-3" />
+              </span>
             </Link>
           </div>
         ) : (

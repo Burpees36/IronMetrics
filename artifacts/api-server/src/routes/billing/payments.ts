@@ -4,7 +4,7 @@ import { db, paymentsTable, refundsTable } from "@workspace/db";
 import { stripeService } from "../../stripeService";
 import { getStripeClient } from "../../stripeClient";
 import { requireBillingPermission, requireBillingRead } from "../../middlewares/billingRbac";
-import { parseGymId, getActor } from "./helpers";
+import { parseGymId, paramStr, getActor } from "./helpers";
 
 const router: IRouter = Router();
 
@@ -12,7 +12,7 @@ router.get("/gyms/:gymId/payment-methods/:paymentMethodId", requireBillingRead()
   const gymId = parseGymId(req.params);
   if (!gymId) { res.status(400).json({ error: "Invalid gym ID" }); return; }
 
-  const pmId = req.params.paymentMethodId;
+  const pmId = paramStr(req.params.paymentMethodId);
   if (!pmId) { res.status(400).json({ error: "Payment method ID is required" }); return; }
 
   try {
@@ -70,7 +70,7 @@ router.get("/gyms/:gymId/members/:memberId/payment-methods", requireBillingRead(
 router.post("/gyms/:gymId/members/:memberId/payment-methods/:paymentMethodId/set-default", requireBillingPermission("billing.create_subscription"), async (req, res): Promise<void> => {
   const gymId = parseGymId(req.params);
   const memberId = parseInt(String(req.params.memberId), 10);
-  const paymentMethodId = req.params.paymentMethodId;
+  const paymentMethodId = paramStr(req.params.paymentMethodId);
   if (!gymId || isNaN(memberId) || !paymentMethodId) { res.status(400).json({ error: "Invalid IDs" }); return; }
 
   try {
@@ -84,7 +84,7 @@ router.post("/gyms/:gymId/members/:memberId/payment-methods/:paymentMethodId/set
 router.delete("/gyms/:gymId/members/:memberId/payment-methods/:paymentMethodId", requireBillingPermission("billing.create_subscription"), async (req, res): Promise<void> => {
   const gymId = parseGymId(req.params);
   const memberId = parseInt(String(req.params.memberId), 10);
-  const paymentMethodId = req.params.paymentMethodId;
+  const paymentMethodId = paramStr(req.params.paymentMethodId);
   if (!gymId || isNaN(memberId) || !paymentMethodId) { res.status(400).json({ error: "Invalid IDs" }); return; }
 
   try {
@@ -171,7 +171,7 @@ router.get("/gyms/:gymId/refunds", requireBillingRead(), async (req, res): Promi
 router.get("/gyms/:gymId/members/:memberId/stripe-invoices", requireBillingRead(), async (req, res): Promise<void> => {
   const gymId = parseGymId(req.params);
   if (!gymId) { res.status(400).json({ error: "Invalid gym ID" }); return; }
-  const memberId = parseInt(req.params.memberId, 10);
+  const memberId = parseInt(paramStr(req.params.memberId), 10);
   try {
     const invoices = await stripeService.getMemberStripeInvoices(memberId, gymId);
     res.json(invoices);
@@ -181,7 +181,7 @@ router.get("/gyms/:gymId/members/:memberId/stripe-invoices", requireBillingRead(
 router.get("/gyms/:gymId/members/:memberId/balance", requireBillingRead(), async (req, res): Promise<void> => {
   const gymId = parseGymId(req.params);
   if (!gymId) { res.status(400).json({ error: "Invalid gym ID" }); return; }
-  const memberId = parseInt(req.params.memberId, 10);
+  const memberId = parseInt(paramStr(req.params.memberId), 10);
   try {
     const balance = await stripeService.getMemberBalance(memberId, gymId);
     res.json({ balance });
@@ -191,7 +191,7 @@ router.get("/gyms/:gymId/members/:memberId/balance", requireBillingRead(), async
 router.post("/gyms/:gymId/members/:memberId/balance", requireBillingPermission("billing.create_subscription"), async (req, res): Promise<void> => {
   const gymId = parseGymId(req.params);
   if (!gymId) { res.status(400).json({ error: "Invalid gym ID" }); return; }
-  const memberId = parseInt(req.params.memberId, 10);
+  const memberId = parseInt(paramStr(req.params.memberId), 10);
   const { amount, description } = req.body;
   if (!amount || !description) { res.status(400).json({ error: "amount and description required" }); return; }
   try {

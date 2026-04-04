@@ -12,6 +12,11 @@ function parseGymId(params: any): number | null {
   return isNaN(id) ? null : id;
 }
 
+function paramStr(value: string | string[] | undefined): string {
+  if (Array.isArray(value)) return value[0] ?? "";
+  return value ?? "";
+}
+
 function getWeekBounds(dateStr: string) {
   const date = new Date(dateStr);
   const weekStart = startOfWeek(date, { weekStartsOn: 1 });
@@ -237,7 +242,7 @@ router.get("/gyms/:gymId/class-templates", async (req, res): Promise<void> => {
 
 router.get("/gyms/:gymId/class-templates/:templateId", async (req, res): Promise<void> => {
   const gymId = parseGymId(req.params);
-  const templateId = parseInt(req.params.templateId, 10);
+  const templateId = parseInt(paramStr(req.params.templateId), 10);
   if (!gymId || isNaN(templateId)) { res.status(400).json({ error: "Invalid IDs" }); return; }
 
   const [template] = await db
@@ -315,7 +320,7 @@ router.post("/gyms/:gymId/class-templates", requireScheduleManage(), async (req,
 
 router.patch("/gyms/:gymId/class-templates/:templateId", requireScheduleManage(), async (req, res): Promise<void> => {
   const gymId = parseGymId(req.params);
-  const templateId = parseInt(req.params.templateId, 10);
+  const templateId = parseInt(paramStr(req.params.templateId), 10);
   if (!gymId || isNaN(templateId)) { res.status(400).json({ error: "Invalid IDs" }); return; }
 
   const { name, description } = req.body;
@@ -335,7 +340,7 @@ router.patch("/gyms/:gymId/class-templates/:templateId", requireScheduleManage()
 
 router.delete("/gyms/:gymId/class-templates/:templateId", requireScheduleManage(), async (req, res): Promise<void> => {
   const gymId = parseGymId(req.params);
-  const templateId = parseInt(req.params.templateId, 10);
+  const templateId = parseInt(paramStr(req.params.templateId), 10);
   if (!gymId || isNaN(templateId)) { res.status(400).json({ error: "Invalid IDs" }); return; }
 
   await db.delete(classTemplatesTable).where(
@@ -346,7 +351,7 @@ router.delete("/gyms/:gymId/class-templates/:templateId", requireScheduleManage(
 
 router.post("/gyms/:gymId/class-templates/:templateId/apply", requireScheduleManage(), async (req, res): Promise<void> => {
   const gymId = parseGymId(req.params);
-  const templateId = parseInt(req.params.templateId, 10);
+  const templateId = parseInt(paramStr(req.params.templateId), 10);
   if (!gymId || isNaN(templateId)) { res.status(400).json({ error: "Invalid IDs" }); return; }
 
   const { targetWeek, selectedItemIds } = req.body;
@@ -438,7 +443,7 @@ router.post("/gyms/:gymId/class-templates/:templateId/apply", requireScheduleMan
 
 router.post("/gyms/:gymId/class-templates/:templateId/apply/preview", requireScheduleManage(), async (req, res): Promise<void> => {
   const gymId = parseGymId(req.params);
-  const templateId = parseInt(req.params.templateId, 10);
+  const templateId = parseInt(paramStr(req.params.templateId), 10);
   if (!gymId || isNaN(templateId)) { res.status(400).json({ error: "Invalid IDs" }); return; }
 
   const { targetWeek } = req.body;

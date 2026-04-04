@@ -41,8 +41,94 @@ tags:
     description: AI operator tools
   - name: reporting
     description: Reports and dashboards
+  - name: Storage
+    description: Object storage upload and serving endpoints.
 
 paths:
+  /storage/uploads/request-url:
+    post:
+      tags: [Storage]
+      operationId: requestUploadUrl
+      summary: Request a presigned URL for file upload
+      description: |
+        Returns a presigned GCS URL for direct upload. The client sends JSON
+        metadata here, then uploads the file directly to the returned URL.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UploadUrlRequest'
+      responses:
+        '200':
+          description: Presigned upload URL generated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UploadUrlResponse'
+        '400':
+          description: Missing or invalid required fields.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '500':
+          description: Failed to generate upload URL.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+  /storage/public-objects/{filePath}:
+    get:
+      tags: [Storage]
+      operationId: getPublicObject
+      summary: Serve a public asset from PUBLIC_OBJECT_SEARCH_PATHS
+      parameters:
+        - name: filePath
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Object content streamed with correct Content-Type.
+          content:
+            '*/*':
+              schema:
+                type: string
+                format: binary
+        '404':
+          description: File not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+  /storage/objects/{objectPath}:
+    get:
+      tags: [Storage]
+      operationId: getStorageObject
+      summary: Serve an object entity from PRIVATE_OBJECT_DIR
+      parameters:
+        - name: objectPath
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Object content streamed with correct Content-Type.
+          content:
+            '*/*':
+              schema:
+                type: string
+                format: binary
+        '404':
+          description: Object not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+
   /healthz:
     get:
       operationId: healthCheck
@@ -2778,6 +2864,32 @@ paths:
               schema:
                 $ref: "#/components/schemas/RetentionStabilityIndex"
 
+  /gyms/{gymId}/intelligence/rsi/history:
+    get:
+      operationId: getRsiHistory
+      tags: [intelligence]
+      summary: Get RSI historical data points
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: window
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: ["30d", "90d", "all"]
+            default: "90d"
+      responses:
+        "200":
+          description: RSI history data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RsiHistory"
+
   /gyms/{gymId}/intelligence/risk-radar:
     get:
       operationId: getMemberRiskRadar
@@ -3087,6 +3199,98 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/SendEmailResponse"
+
+  /gyms/{gymId}/ai/impact:
+    get:
+      operationId: getAiImpact
+      tags: [ai-operator]
+      summary: Get AI Operator outcome tracking and revenue attribution stats
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: startDate
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+        - name: endDate
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+      responses:
+        "200":
+          description: AI impact and revenue attribution data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AiImpactResponse"
+
+  /gyms/{gymId}/ai/last-scan:
+    get:
+      operationId: getAiLastScan
+      tags: [ai-operator]
+      summary: Get the timestamp of the last automated AI task scan
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Last auto-scan timestamp
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AiLastScanResponse"
+
+  /gyms/{gymId}/ai/autopilot-settings:
+    get:
+      operationId: getAutopilotSettings
+      tags: [ai-operator]
+      summary: Get auto-pilot settings for a gym
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Auto-pilot settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AutopilotSettings"
+    put:
+      operationId: updateAutopilotSettings
+      tags: [ai-operator]
+      summary: Update auto-pilot settings for a gym
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateAutopilotSettingsBody"
+      responses:
+        "200":
+          description: Updated auto-pilot settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AutopilotSettings"
 
   /gyms/{gymId}/ai/email-status:
     get:
@@ -3794,6 +3998,10 @@ components:
           type: ["string", "null"]
         ownerId:
           type: string
+        autoSuspendEnabled:
+          type: boolean
+        autoSuspendBufferDays:
+          type: integer
         memberCount:
           type: integer
         activeCount:
@@ -3864,6 +4072,10 @@ components:
           type: ["string", "null"]
         fromName:
           type: ["string", "null"]
+        autoSuspendEnabled:
+          type: boolean
+        autoSuspendBufferDays:
+          type: integer
 
     Member:
       type: object
@@ -4059,6 +4271,8 @@ components:
           type: array
           items:
             type: string
+        profileImageUrl:
+          type: ["string", "null"]
 
     MemberNote:
       type: object
@@ -5677,16 +5891,43 @@ components:
               - normalized
               - weight
               - contribution
+        trendInsufficient:
+          type: boolean
         insight:
           type: string
       required:
         - score
         - band
-        - trend30d
-        - trend90d
         - components
         - breakdown
         - insight
+
+    RsiHistory:
+      type: object
+      properties:
+        window:
+          type: string
+        dataPoints:
+          type: array
+          items:
+            type: object
+            properties:
+              date:
+                type: string
+              score:
+                type: number
+              band:
+                type: string
+            required:
+              - date
+              - score
+              - band
+        insufficient:
+          type: boolean
+      required:
+        - window
+        - dataPoints
+        - insufficient
 
     MemberRiskProfile:
       type: object
@@ -5884,11 +6125,19 @@ components:
           type: string
         atRiskMembers:
           type: number
+        atRiskCritical:
+          type: number
+        atRiskHigh:
+          type: number
         revenueAtRisk:
           type: number
         engagementRate:
           type: number
         staleLeads:
+          type: number
+        newLeads:
+          type: number
+        activeLeads:
           type: number
         failedPayments:
           type: number
@@ -5985,7 +6234,7 @@ components:
           type: integer
         outreachType:
           type: string
-          enum: [at_risk, win_back, celebration, onboarding, billing]
+          enum: [at_risk, win_back, celebration, billing]
       required:
         - memberId
         - outreachType
@@ -6015,6 +6264,21 @@ components:
           type: ["string", "null"]
         aiContent:
           type: ["string", "null"]
+        subject:
+          type: ["string", "null"]
+        outcome:
+          type: ["string", "null"]
+          enum: [none, pending_observation, won_back, reactivated, converted, no_change, null]
+        outcomeDetectedAt:
+          type: ["string", "null"]
+          format: date-time
+        revenueImpact:
+          type: ["string", "null"]
+        actionedAt:
+          type: ["string", "null"]
+          format: date-time
+        autoSent:
+          type: boolean
         createdAt:
           type: string
           format: date-time
@@ -6026,6 +6290,7 @@ components:
         - description
         - priority
         - status
+        - autoSent
         - createdAt
 
     CreateAiTaskBody:
@@ -6060,6 +6325,8 @@ components:
           enum: [pending, approved, sent, completed, dismissed]
         aiContent:
           type: ["string", "null"]
+        subject:
+          type: ["string", "null"]
 
     GenerateAiTasksResponse:
       type: object
@@ -6089,6 +6356,113 @@ components:
         - success
         - recipientEmail
         - recipientName
+
+    AiImpactResponse:
+      type: object
+      properties:
+        totalActioned:
+          type: integer
+        outcomeCounts:
+          type: object
+          properties:
+            won_back:
+              type: integer
+            reactivated:
+              type: integer
+            converted:
+              type: integer
+            no_change:
+              type: integer
+            pending_observation:
+              type: integer
+          required:
+            - won_back
+            - reactivated
+            - converted
+            - no_change
+            - pending_observation
+        successRate:
+          type: integer
+        membersSaved:
+          type: integer
+        totalRevenueRetained:
+          type: number
+        totalRevenueRecovered:
+          type: number
+        timeline:
+          type: array
+          items:
+            type: object
+            properties:
+              month:
+                type: string
+              won_back:
+                type: integer
+              reactivated:
+                type: integer
+              converted:
+                type: integer
+              no_change:
+                type: integer
+            required:
+              - month
+              - won_back
+              - reactivated
+              - converted
+              - no_change
+      required:
+        - totalActioned
+        - outcomeCounts
+        - successRate
+        - membersSaved
+        - totalRevenueRetained
+        - totalRevenueRecovered
+        - timeline
+
+    AutopilotSettings:
+      type: object
+      properties:
+        autopilotOutreach:
+          type: boolean
+        autopilotBilling:
+          type: boolean
+        autopilotLeads:
+          type: boolean
+        cooldownDays:
+          type: integer
+        digestFrequency:
+          type: string
+          enum: [daily, weekly, disabled]
+      required:
+        - autopilotOutreach
+        - autopilotBilling
+        - autopilotLeads
+        - cooldownDays
+        - digestFrequency
+
+    UpdateAutopilotSettingsBody:
+      type: object
+      properties:
+        autopilotOutreach:
+          type: boolean
+        autopilotBilling:
+          type: boolean
+        autopilotLeads:
+          type: boolean
+        cooldownDays:
+          type: integer
+          minimum: 1
+          maximum: 90
+        digestFrequency:
+          type: string
+          enum: [daily, weekly, disabled]
+
+    AiLastScanResponse:
+      type: object
+      properties:
+        lastAutoScan:
+          type: ["string", "null"]
+          format: date-time
 
     EmailStatusResponse:
       type: object
@@ -6134,6 +6508,15 @@ components:
           type: integer
         atRiskMembers:
           type: integer
+        atRiskCritical:
+          type: integer
+        atRiskHigh:
+          type: integer
+        revenueAtRisk:
+          type: number
+        retentionRate:
+          type: number
+          description: Percentage of active members not at risk
         failedPayments:
           type: integer
         collectionRate:
@@ -6142,6 +6525,11 @@ components:
           type: number
         rsiBand:
           type: string
+        rsiTrend30d:
+          type: number
+          nullable: true
+        rsiTrendInsufficient:
+          type: boolean
         revenueByMonth:
           type: array
           items:
@@ -6157,6 +6545,9 @@ components:
               - month
               - revenue
               - members
+        revenueTrendSparse:
+          type: boolean
+          description: True when fewer than 3 months of revenue data exist
         attendanceByDay:
           type: array
           items:
@@ -6194,6 +6585,10 @@ components:
         - classesThisWeek
         - openLeads
         - atRiskMembers
+        - atRiskCritical
+        - atRiskHigh
+        - revenueAtRisk
+        - retentionRate
         - failedPayments
         - collectionRate
         - rsiScore
@@ -6308,6 +6703,9 @@ components:
               - membership
               - retail
               - total
+        revenueTrendSparse:
+          type: boolean
+          description: True when fewer than 3 months of revenue data exist
       required:
         - mrr
         - arr
@@ -6798,3 +7196,34 @@ components:
           type: integer
       required:
         - allowed
+
+    UploadUrlRequest:
+      type: object
+      required: [name, size, contentType]
+      properties:
+        name:
+          type: string
+          minLength: 1
+        size:
+          type: integer
+          minimum: 1
+        contentType:
+          type: string
+          minLength: 1
+    UploadUrlResponse:
+      type: object
+      required: [uploadURL, objectPath]
+      properties:
+        uploadURL:
+          type: string
+          format: uri
+        objectPath:
+          type: string
+        metadata:
+          $ref: '#/components/schemas/UploadUrlRequest'
+    ErrorEnvelope:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string

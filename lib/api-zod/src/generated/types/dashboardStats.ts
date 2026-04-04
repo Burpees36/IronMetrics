@@ -24,11 +24,20 @@ export interface DashboardStats {
   classesThisWeek: number;
   openLeads: number;
   atRiskMembers: number;
+  atRiskCritical: number;
+  atRiskHigh: number;
+  revenueAtRisk: number;
+  /** Percentage of active members not at risk */
+  retentionRate: number;
   failedPayments: number;
   collectionRate: number;
   rsiScore: number;
   rsiBand: string;
+  rsiTrend30d?: number | null;
+  rsiTrendInsufficient?: boolean;
   revenueByMonth: DashboardStatsRevenueByMonthItem[];
+  /** True when fewer than 3 months of revenue data exist */
+  revenueTrendSparse?: boolean;
   attendanceByDay: DashboardStatsAttendanceByDayItem[];
   memberStatusBreakdown: DashboardStatsMemberStatusBreakdownItem[];
 }

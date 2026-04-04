@@ -244,8 +244,7 @@ export async function toggleChecklistItem(
  * null if no keywords match.
  */
 const INTERVENTION_KEYWORDS: Record<string, string[]> = {
-  retention: ["retain", "keep", "churn", "at-risk", "save", "loyalty", "re-engage"],
-  onboarding: ["onboard", "new member", "welcome", "intro", "first visit", "nsi", "ramp"],
+  retention: ["retain", "keep", "churn", "at-risk", "save", "loyalty", "re-engage", "onboard", "new member", "welcome", "intro", "first visit", "nsi", "ramp"],
   referral: ["refer", "word of mouth", "bring a friend", "advocate"],
   community: ["event", "social", "community", "gathering", "potluck", "competition"],
   coaching: ["coach", "training", "programming", "skill", "development", "quality"],

@@ -13,6 +13,5 @@ export const GenerateOutreachBodyOutreachType = {
   at_risk: "at_risk",
   win_back: "win_back",
   celebration: "celebration",
-  onboarding: "onboarding",
   billing: "billing",
 } as const;

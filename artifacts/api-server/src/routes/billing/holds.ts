@@ -4,14 +4,14 @@ import { db, subscriptionsTable, membersTable, scheduledHoldsTable, gymsTable } 
 import { getStripeClient } from "../../stripeClient";
 import { requireBillingPermission, requireBillingRead } from "../../middlewares/billingRbac";
 import { billingAuditLogger } from "../../billingAuditLogger";
-import { parseGymId } from "./helpers";
+import { parseGymId, paramStr } from "./helpers";
 
 const router: IRouter = Router();
 
 router.get("/gyms/:gymId/members/:memberId/holds", requireBillingRead(), async (req, res): Promise<void> => {
   const gymId = parseGymId(req.params);
   if (!gymId) { res.status(400).json({ error: "Invalid gym ID" }); return; }
-  const memberId = parseInt(req.params.memberId, 10);
+  const memberId = parseInt(paramStr(req.params.memberId), 10);
   const holds = await db.select().from(scheduledHoldsTable)
     .where(and(eq(scheduledHoldsTable.gymId, gymId), eq(scheduledHoldsTable.memberId, memberId)))
     .orderBy(desc(scheduledHoldsTable.createdAt));
@@ -21,7 +21,7 @@ router.get("/gyms/:gymId/members/:memberId/holds", requireBillingRead(), async (
 router.post("/gyms/:gymId/members/:memberId/holds", requireBillingPermission("billing.create_subscription"), async (req, res): Promise<void> => {
   const gymId = parseGymId(req.params);
   if (!gymId) { res.status(400).json({ error: "Invalid gym ID" }); return; }
-  const memberId = parseInt(req.params.memberId, 10);
+  const memberId = parseInt(paramStr(req.params.memberId), 10);
   const { subscriptionId, startDate, endDate, reason } = req.body;
   if (!subscriptionId || !startDate) { res.status(400).json({ error: "subscriptionId and startDate required" }); return; }
   if (endDate && endDate <= startDate) { res.status(400).json({ error: "endDate must be after startDate" }); return; }
@@ -79,7 +79,7 @@ router.post("/gyms/:gymId/members/:memberId/holds", requireBillingPermission("bi
 router.patch("/gyms/:gymId/holds/:holdId", requireBillingPermission("billing.create_subscription"), async (req, res): Promise<void> => {
   const gymId = parseGymId(req.params);
   if (!gymId) { res.status(400).json({ error: "Invalid gym ID" }); return; }
-  const holdId = parseInt(req.params.holdId, 10);
+  const holdId = parseInt(paramStr(req.params.holdId), 10);
   const { endDate, reason } = req.body;
 
   const [hold] = await db.select().from(scheduledHoldsTable)
@@ -109,7 +109,7 @@ router.patch("/gyms/:gymId/holds/:holdId", requireBillingPermission("billing.cre
 router.post("/gyms/:gymId/holds/:holdId/cancel", requireBillingPermission("billing.create_subscription"), async (req, res): Promise<void> => {
   const gymId = parseGymId(req.params);
   if (!gymId) { res.status(400).json({ error: "Invalid gym ID" }); return; }
-  const holdId = parseInt(req.params.holdId, 10);
+  const holdId = parseInt(paramStr(req.params.holdId), 10);
 
   const [hold] = await db.select().from(scheduledHoldsTable)
     .where(and(eq(scheduledHoldsTable.id, holdId), eq(scheduledHoldsTable.gymId, gymId)));
@@ -149,7 +149,7 @@ router.post("/gyms/:gymId/holds/:holdId/cancel", requireBillingPermission("billi
 router.get("/gyms/:gymId/members/:memberId/checkin-status", requireBillingRead(), async (req, res): Promise<void> => {
   const gymId = parseGymId(req.params);
   if (!gymId) { res.status(400).json({ error: "Invalid gym ID" }); return; }
-  const memberId = parseInt(req.params.memberId, 10);
+  const memberId = parseInt(paramStr(req.params.memberId), 10);
 
   const [member] = await db.select().from(membersTable)
     .where(and(eq(membersTable.id, memberId), eq(membersTable.gymId, gymId)));

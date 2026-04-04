@@ -424,16 +424,53 @@ export function WodifyConnectionCard() {
                       <span className="font-medium text-emerald-500">${(syncStatus.latestSync.metadata!.totalMrr as number).toLocaleString()}/mo</span>
                     )}
                   </div>
-                  <div className="flex items-center gap-2 text-muted-foreground">
+                  <div className="flex items-center gap-2 text-muted-foreground flex-wrap">
                     <span>Last sync: {timeAgo(syncStatus.latestSync.completedAt || syncStatus.latestSync.startedAt)}</span>
                     <span>·</span>
                     <span>{syncStatus.latestSync.created} new, {syncStatus.latestSync.metadata?.updated ?? 0} updated</span>
+                    {syncStatus.latestSync.triggeredBy && (
+                      <>
+                        <span>·</span>
+                        <span className={syncStatus.latestSync.triggeredBy === "auto" ? "text-blue-400" : ""}>
+                          {syncStatus.latestSync.triggeredBy === "auto" ? "Auto sync" : "Manual sync"}
+                        </span>
+                      </>
+                    )}
                   </div>
                   {syncStatus.maskedKey && (
                     <div className="flex items-center gap-1 text-muted-foreground/70">
                       <Key className="h-3 w-3" /> API key: {syncStatus.maskedKey}
                     </div>
                   )}
+                </div>
+              )}
+
+              {syncStatus?.recentSyncs && syncStatus.recentSyncs.length > 1 && (
+                <div className="border border-border/50 rounded-xl overflow-hidden">
+                  <div className="px-3 py-1.5 bg-muted/30 border-b border-border/50">
+                    <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Sync History</span>
+                  </div>
+                  <div className="divide-y divide-border/30">
+                    {syncStatus.recentSyncs.slice(0, 5).map((run) => (
+                      <div key={run.id} className="px-3 py-1.5 flex items-center justify-between text-[11px]">
+                        <div className="flex items-center gap-2">
+                          <span className={`inline-block w-1.5 h-1.5 rounded-full ${
+                            run.status === "completed" ? "bg-emerald-400" :
+                            run.status === "running" ? "bg-blue-400 animate-pulse" :
+                            "bg-red-400"
+                          }`} />
+                          <span className="text-muted-foreground">
+                            {timeAgo(run.completedAt || run.startedAt)}
+                          </span>
+                        </div>
+                        <span className={`font-medium ${
+                          run.triggeredBy === "auto" ? "text-blue-400" : "text-muted-foreground"
+                        }`}>
+                          {run.triggeredBy === "auto" ? "Auto" : "Manual"}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
 

@@ -4,6 +4,11 @@ export function parseGymId(params: any): number | null {
   return isNaN(id) ? null : id;
 }
 
+export function paramStr(value: string | string[] | undefined): string {
+  if (Array.isArray(value)) return value[0] ?? "";
+  return value ?? "";
+}
+
 export function getActor(req: any) {
   return {
     userId: req.user?.id,

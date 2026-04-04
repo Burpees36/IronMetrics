@@ -162,8 +162,14 @@ vi.mock("@workspace/db", () => {
     billingWebhookEventsTable: makeTable("billing_webhook_events"),
     billingAuditLogsTable: makeTable("billing_audit_logs"),
     gymStaffTable: makeTable("gym_staff"),
+    timelineEventsTable: makeTable("timeline_events"),
   };
 });
+
+vi.mock("../services/member-email", () => ({
+  logMemberEmailSent: vi.fn().mockResolvedValue(undefined),
+  sendMemberEmail: vi.fn().mockResolvedValue({ success: true }),
+}));
 
 vi.mock("../billingAuditLogger", () => ({
   billingAuditLogger: {

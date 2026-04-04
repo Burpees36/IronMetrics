@@ -3,6 +3,8 @@ import { eq, and, lt, isNull, inArray } from "drizzle-orm";
 import { billingAuditLogger } from "../billingAuditLogger";
 import { paymentUpdateTokenService } from "./payment-update-token";
 import { buildPaymentFailedEmail, buildGraceExpiredEmail, sendBillingEmail } from "./billing-email";
+import { getStripeClient } from "../stripeClient";
+import { logMemberEmailSent } from "./member-email";
 
 export const BILLING_RECOVERY_CONFIG = {
   GRACE_PERIOD_DAYS: 14,
@@ -159,6 +161,15 @@ export class BillingRecoveryService {
         .set({ lastNotifiedAt: new Date() })
         .where(eq(billingRecoveryTable.id, recoveryId));
       console.log(`[billing-recovery] Notification sent for recovery ${recoveryId}, email=${member.email}`);
+
+      await logMemberEmailSent({
+        memberId,
+        gymId,
+        to: member.email,
+        subject: email.subject,
+        emailType: "payment_failed",
+        timelineTitle: "Payment recovery email sent",
+      });
     } else {
       console.warn(`[billing-recovery] Email send failed for recovery ${recoveryId}: ${result.error}`);
     }
@@ -188,11 +199,13 @@ export class BillingRecoveryService {
       .where(
         and(
           eq(billingRecoveryTable.subscriptionId, subscriptionId),
-          inArray(billingRecoveryTable.status, ["active", "grace_expired"])
+          inArray(billingRecoveryTable.status, ["active", "grace_expired", "auto_suspended"])
         )
       );
 
     if (!recovery) return;
+
+    const wasAutoSuspended = recovery.status === "auto_suspended";
 
     await db
       .update(billingRecoveryTable)
@@ -202,6 +215,31 @@ export class BillingRecoveryService {
         resolvedReason: reason,
       })
       .where(eq(billingRecoveryTable.id, recovery.id));
+
+    if (wasAutoSuspended) {
+      const [sub] = await db.select().from(subscriptionsTable).where(eq(subscriptionsTable.id, recovery.subscriptionId));
+      if (sub?.stripeSubscriptionId) {
+        const stripe = await getStripeClient();
+        await stripe.subscriptions.update(sub.stripeSubscriptionId, {
+          pause_collection: null as any,
+        });
+      }
+
+      await db.update(subscriptionsTable).set({ status: "active" }).where(eq(subscriptionsTable.id, recovery.subscriptionId));
+      await db.update(membersTable).set({ status: "active" }).where(eq(membersTable.id, recovery.memberId));
+
+      await billingAuditLogger.log({
+        gymId: recovery.gymId,
+        memberId: recovery.memberId,
+        action: "recovery.auto_reactivated",
+        entityType: "billing_recovery",
+        entityId: String(recovery.id),
+        source: "system",
+        metadata: { reason, previousStatus: "auto_suspended" },
+      });
+
+      console.log(`[billing-recovery] Auto-reactivated member ${recovery.memberId} after suspension, reason=${reason}`);
+    }
 
     console.log(`[billing-recovery] Resolved recovery ${recovery.id} for subscription ${subscriptionId}, reason=${reason}`);
 
@@ -300,6 +338,17 @@ export class BillingRecoveryService {
             branding,
           });
 
+          if (emailResult.success) {
+            await logMemberEmailSent({
+              memberId: recovery.memberId,
+              gymId: recovery.gymId,
+              to: member.email,
+              subject: email.subject,
+              emailType: "grace_expired",
+              timelineTitle: "Final payment warning sent",
+            });
+          }
+
           await billingAuditLogger.log({
             gymId: recovery.gymId,
             memberId: recovery.memberId,
@@ -325,6 +374,93 @@ export class BillingRecoveryService {
 
     console.log(`[billing-recovery] Grace deadline evaluation complete: ${escalated} escalated, ${errors} errors, ${expiredRecoveries.length} total expired`);
     return { escalated, errors };
+  }
+
+  async evaluateAutoSuspensions(gymId: number): Promise<{
+    suspended: number;
+    errors: number;
+  }> {
+    const [gym] = await db.select().from(gymsTable).where(eq(gymsTable.id, gymId));
+    if (!gym || !gym.autoSuspendEnabled) {
+      return { suspended: 0, errors: 0 };
+    }
+
+    const bufferMs = gym.autoSuspendBufferDays * 24 * 60 * 60 * 1000;
+    const now = new Date();
+
+    const graceExpiredRecoveries = await db
+      .select({
+        id: billingRecoveryTable.id,
+        gymId: billingRecoveryTable.gymId,
+        memberId: billingRecoveryTable.memberId,
+        subscriptionId: billingRecoveryTable.subscriptionId,
+        stripeSubscriptionId: billingRecoveryTable.stripeSubscriptionId,
+        graceDeadline: billingRecoveryTable.graceDeadline,
+        amountDue: billingRecoveryTable.amountDue,
+        updatedAt: billingRecoveryTable.updatedAt,
+      })
+      .from(billingRecoveryTable)
+      .where(
+        and(
+          eq(billingRecoveryTable.gymId, gymId),
+          eq(billingRecoveryTable.status, "grace_expired")
+        )
+      );
+
+    let suspended = 0;
+    let errors = 0;
+
+    for (const recovery of graceExpiredRecoveries) {
+      try {
+        const graceExpiredAt = recovery.graceDeadline || recovery.updatedAt;
+        if (!graceExpiredAt) continue;
+
+        const timeSinceGraceExpired = now.getTime() - graceExpiredAt.getTime();
+        if (timeSinceGraceExpired < bufferMs) continue;
+
+        const [sub] = await db.select().from(subscriptionsTable).where(eq(subscriptionsTable.id, recovery.subscriptionId));
+        if (sub?.stripeSubscriptionId) {
+          const stripe = await getStripeClient();
+          await stripe.subscriptions.update(sub.stripeSubscriptionId, {
+            pause_collection: { behavior: "void" },
+          });
+        }
+
+        await db.update(subscriptionsTable).set({ status: "paused" }).where(eq(subscriptionsTable.id, recovery.subscriptionId));
+        await db.update(membersTable).set({ status: "inactive" }).where(eq(membersTable.id, recovery.memberId));
+
+        await db
+          .update(billingRecoveryTable)
+          .set({ status: "auto_suspended" })
+          .where(eq(billingRecoveryTable.id, recovery.id));
+
+        await billingAuditLogger.log({
+          gymId: recovery.gymId,
+          memberId: recovery.memberId,
+          action: "recovery.auto_suspended",
+          entityType: "billing_recovery",
+          entityId: String(recovery.id),
+          source: "system",
+          metadata: {
+            graceDeadline: recovery.graceDeadline?.toISOString(),
+            bufferDays: gym.autoSuspendBufferDays,
+            amountDue: recovery.amountDue,
+          },
+        });
+
+        console.log(`[billing-recovery] Auto-suspended member ${recovery.memberId} for recovery ${recovery.id} (buffer: ${gym.autoSuspendBufferDays} days)`);
+        suspended++;
+      } catch (err: any) {
+        console.error(`[billing-recovery] Error auto-suspending recovery ${recovery.id}:`, err.message);
+        errors++;
+      }
+    }
+
+    if (suspended > 0) {
+      console.log(`[billing-recovery] Auto-suspension evaluation complete: ${suspended} suspended, ${errors} errors`);
+    }
+
+    return { suspended, errors };
   }
 
   async archiveOldResolvedRecoveries(gymId: number): Promise<number> {
@@ -375,7 +511,7 @@ export class BillingRecoveryService {
       .where(
         and(
           eq(billingRecoveryTable.gymId, gymId),
-          inArray(billingRecoveryTable.status, ["active", "grace_expired"])
+          inArray(billingRecoveryTable.status, ["active", "grace_expired", "auto_suspended"])
         )
       );
 
@@ -393,7 +529,7 @@ export class BillingRecoveryService {
         and(
           eq(billingRecoveryTable.memberId, memberId),
           eq(billingRecoveryTable.gymId, gymId),
-          inArray(billingRecoveryTable.status, ["active", "grace_expired"])
+          inArray(billingRecoveryTable.status, ["active", "grace_expired", "auto_suspended"])
         )
       );
 

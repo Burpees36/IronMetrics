@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
-import { eq, and, count, sql, gte } from "drizzle-orm";
-import { db, membersTable, subscriptionsTable, attendanceTable, leadsTable, classesTable } from "@workspace/db";
+import { eq, and, count, sql, gte, desc, asc } from "drizzle-orm";
+import { db, membersTable, subscriptionsTable, attendanceTable, leadsTable, classesTable, rsiSnapshotsTable, benchmarksTable, billingAuditLogsTable } from "@workspace/db";
 import { computeRSI } from "./computations";
 import { getGymMetrics, getRiskProfiles, getInterventions, computeRevenueForecast } from "./metrics";
 import { computeBlendedMRR, computeBlendedEngagement, isActiveBillableMember } from "../../blendedMetrics";
@@ -13,6 +13,46 @@ function parseGymId(params: any): number | null {
   return isNaN(id) ? null : id;
 }
 
+async function getRsiTrendsFromSnapshots(gymId: number, currentScore: number) {
+  const now = new Date();
+  const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+  const ninetyDaysAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+
+  const allSnapshots = await db.select()
+    .from(rsiSnapshotsTable)
+    .where(eq(rsiSnapshotsTable.gymId, gymId))
+    .orderBy(asc(rsiSnapshotsTable.recordedAt));
+
+  let trend30d: number | null = null;
+  let trend90d: number | null = null;
+  let trendInsufficient = false;
+
+  if (allSnapshots.length < 7) {
+    trendInsufficient = true;
+    return { trend30d, trend90d, trendInsufficient };
+  }
+
+  const snapshot30d = allSnapshots
+    .filter(s => s.recordedAt <= thirtyDaysAgo)
+    .sort((a, b) => b.recordedAt.localeCompare(a.recordedAt))[0];
+
+  const snapshot90d = allSnapshots
+    .filter(s => s.recordedAt <= ninetyDaysAgo)
+    .sort((a, b) => b.recordedAt.localeCompare(a.recordedAt))[0];
+
+  if (snapshot30d) {
+    trend30d = Math.round((currentScore - parseFloat(snapshot30d.score)) * 10) / 10;
+  } else {
+    trendInsufficient = true;
+  }
+
+  if (snapshot90d) {
+    trend90d = Math.round((currentScore - parseFloat(snapshot90d.score)) * 10) / 10;
+  }
+
+  return { trend30d, trend90d, trendInsufficient };
+}
+
 router.get("/gyms/:gymId/intelligence/rsi", async (req, res): Promise<void> => {
   const gymId = parseGymId(req.params);
   if (!gymId) { res.status(400).json({ error: "Invalid gym ID" }); return; }
@@ -21,38 +61,7 @@ router.get("/gyms/:gymId/intelligence/rsi", async (req, res): Promise<void> => {
     const metrics = await getGymMetrics(gymId);
     const rsi = computeRSI(metrics.churnRate, metrics.avgRev, metrics.netGrowth, metrics.avgTenure);
 
-    const now = new Date();
-    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-    const ninetyDaysAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
-
-    const membersJoinedBefore30 = await db.select().from(membersTable).where(and(eq(membersTable.gymId, gymId), sql`${membersTable.joinDate} <= ${thirtyDaysAgo.toISOString().split("T")[0]}`));
-    const membersJoinedBefore90 = await db.select().from(membersTable).where(and(eq(membersTable.gymId, gymId), sql`${membersTable.joinDate} <= ${ninetyDaysAgo.toISOString().split("T")[0]}`));
-
-    let trend30d: number | null = null;
-    let trend90d: number | null = null;
-    let trendInsufficient = false;
-
-    if (membersJoinedBefore30.length >= 5) {
-      const past30Active = membersJoinedBefore30.filter(m => isActiveBillableMember(m.status)).length;
-      const past30Total = membersJoinedBefore30.length;
-      const pastChurn30 = past30Total > 0 ? ((past30Total - past30Active) / past30Total) * 100 : 0;
-      const pastAvgRev30 = past30Active > 0 ? metrics.totalRev / past30Active : metrics.avgRev;
-      const pastRsi30 = computeRSI(pastChurn30, pastAvgRev30, past30Active - (past30Total - past30Active), metrics.avgTenure > 1 ? metrics.avgTenure - 1 : 0);
-      trend30d = Math.round((rsi.score - pastRsi30.score) * 10) / 10;
-    } else {
-      trendInsufficient = true;
-    }
-
-    if (membersJoinedBefore90.length >= 5) {
-      const past90Active = membersJoinedBefore90.filter(m => isActiveBillableMember(m.status)).length;
-      const past90Total = membersJoinedBefore90.length;
-      const pastChurn90 = past90Total > 0 ? ((past90Total - past90Active) / past90Total) * 100 : 0;
-      const pastAvgRev90 = past90Active > 0 ? metrics.totalRev / past90Active : metrics.avgRev;
-      const pastRsi90 = computeRSI(pastChurn90, pastAvgRev90, past90Active - (past90Total - past90Active), metrics.avgTenure > 3 ? metrics.avgTenure - 3 : 0);
-      trend90d = Math.round((rsi.score - pastRsi90.score) * 10) / 10;
-    } else {
-      trendInsufficient = true;
-    }
+    const { trend30d, trend90d, trendInsufficient } = await getRsiTrendsFromSnapshots(gymId, rsi.score);
 
     res.json({
       ...rsi,
@@ -71,6 +80,46 @@ router.get("/gyms/:gymId/intelligence/rsi", async (req, res): Promise<void> => {
   } catch (err) {
     console.error("[intelligence/rsi] Failed to compute RSI:", err);
     res.status(500).json({ error: "Failed to compute retention index. Please try again." });
+  }
+});
+
+router.get("/gyms/:gymId/intelligence/rsi/history", async (req, res): Promise<void> => {
+  const gymId = parseGymId(req.params);
+  if (!gymId) { res.status(400).json({ error: "Invalid gym ID" }); return; }
+
+  try {
+    const rawWindow = (req.query.window as string) || "90d";
+    const window = rawWindow === "30d" || rawWindow === "90d" || rawWindow === "all" ? rawWindow : "90d";
+    let daysBack = 90;
+    if (window === "30d") daysBack = 30;
+    else if (window === "all") daysBack = 3650;
+
+    const cutoff = new Date(Date.now() - daysBack * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+
+    const snapshots = await db.select({
+      date: rsiSnapshotsTable.recordedAt,
+      score: rsiSnapshotsTable.score,
+      band: rsiSnapshotsTable.band,
+    })
+      .from(rsiSnapshotsTable)
+      .where(and(
+        eq(rsiSnapshotsTable.gymId, gymId),
+        sql`${rsiSnapshotsTable.recordedAt} >= ${cutoff}`
+      ))
+      .orderBy(asc(rsiSnapshotsTable.recordedAt));
+
+    res.json({
+      window,
+      dataPoints: snapshots.map(s => ({
+        date: s.date,
+        score: parseFloat(s.score),
+        band: s.band,
+      })),
+      insufficient: snapshots.length < 7,
+    });
+  } catch (err) {
+    console.error("[intelligence/rsi/history] Failed to fetch RSI history:", err);
+    res.status(500).json({ error: "Failed to fetch RSI history." });
   }
 });
 
@@ -202,11 +251,12 @@ router.get("/gyms/:gymId/intelligence/overview", async (req, res): Promise<void>
   try {
     const metrics = await getGymMetrics(gymId);
     const rsi = computeRSI(metrics.churnRate, metrics.avgRev, metrics.netGrowth, metrics.avgTenure);
+    const { trend30d, trend90d, trendInsufficient } = await getRsiTrendsFromSnapshots(gymId, rsi.score);
     const rsiData = {
       ...rsi,
-      trend30d: null as number | null,
-      trend90d: null as number | null,
-      trendInsufficient: true,
+      trend30d,
+      trend90d,
+      trendInsufficient,
       insight: rsi.band === "Strong"
         ? "Your gym is showing strong retention. Keep focus on onboarding quality."
         : rsi.band === "Moderate"
@@ -285,24 +335,40 @@ router.get("/gyms/:gymId/intelligence/morning-briefing", async (req, res): Promi
 
     const items: { icon: string; priority: "critical" | "warning" | "info" | "positive"; message: string; action?: string; link?: string }[] = [];
 
-    if (criticalRisks.length > 0) {
-      const names = criticalRisks.slice(0, 3).map(r => r.memberName.split(" ")[0]).join(", ");
-      items.push({
-        icon: "alert",
-        priority: "critical",
-        message: `${criticalRisks.length} member${criticalRisks.length > 1 ? "s" : ""} at critical churn risk (${names}${criticalRisks.length > 3 ? "..." : ""})`,
-        action: "Review in Risk Radar",
-        link: "/intelligence",
-      });
-    }
+    const oneDayAgoTS = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    const recentAutoSuspensions = await db
+      .select({
+        id: billingAuditLogsTable.id,
+        memberId: billingAuditLogsTable.memberId,
+        createdAt: billingAuditLogsTable.createdAt,
+      })
+      .from(billingAuditLogsTable)
+      .where(
+        and(
+          eq(billingAuditLogsTable.gymId, gymId),
+          eq(billingAuditLogsTable.action, "recovery.auto_suspended"),
+          gte(billingAuditLogsTable.createdAt, oneDayAgoTS)
+        )
+      );
 
-    if (highRisks.length > 0) {
+    if (recentAutoSuspensions.length > 0) {
+      const memberIds = recentAutoSuspensions.map(s => s.memberId).filter(Boolean);
+      const suspendedMembers = memberIds.length > 0
+        ? await db.select({ id: membersTable.id, firstName: membersTable.firstName, lastName: membersTable.lastName }).from(membersTable).where(
+            and(eq(membersTable.gymId, gymId), sql`${membersTable.id} IN (${sql.join(memberIds.map(id => sql`${id}`), sql`, `)})`)
+          )
+        : [];
+      const memberNames = suspendedMembers.map(m => `${m.firstName} ${m.lastName}`);
+      const namesList = memberNames.length <= 3
+        ? memberNames.join(", ")
+        : `${memberNames.slice(0, 3).join(", ")} and ${memberNames.length - 3} more`;
+
       items.push({
-        icon: "warning",
+        icon: "billing",
         priority: "warning",
-        message: `${highRisks.length} member${highRisks.length > 1 ? "s" : ""} at high risk — $${Math.round(revenueAtRisk)}/mo at stake`,
-        action: "View Risk Profiles",
-        link: "/intelligence",
+        message: `${recentAutoSuspensions.length} member${recentAutoSuspensions.length > 1 ? "s were" : " was"} auto-suspended for non-payment: ${namesList}. Review and override if needed.`,
+        action: "Review Members",
+        link: "/members",
       });
     }
 
@@ -379,6 +445,8 @@ router.get("/gyms/:gymId/intelligence/morning-briefing", async (req, res): Promi
         rsiScore: rsi.score,
         rsiBand: rsi.band,
         atRiskMembers: atRiskCount,
+        atRiskCritical: criticalRisks.length,
+        atRiskHigh: highRisks.length,
         revenueAtRisk: Math.round(revenueAtRisk),
         engagementRate,
         staleLeads: staleLeads.length,
@@ -392,6 +460,130 @@ router.get("/gyms/:gymId/intelligence/morning-briefing", async (req, res): Promi
   } catch (err) {
     console.error("[intelligence/morning-briefing] Failed to generate briefing:", err);
     res.status(500).json({ error: "Failed to generate morning briefing. Please try again." });
+  }
+});
+
+router.get("/gyms/:gymId/intelligence/benchmarks", async (req, res): Promise<void> => {
+  const gymId = parseGymId(req.params);
+  if (!gymId) { res.status(400).json({ error: "Invalid gym ID" }); return; }
+
+  try {
+    const metrics = await getGymMetrics(gymId);
+    const rsi = computeRSI(metrics.churnRate, metrics.avgRev, metrics.netGrowth, metrics.avgTenure);
+    const engagement = await computeBlendedEngagement(gymId);
+
+    const activeMemberCount = metrics.active;
+    const sizeSegment = activeMemberCount < 100 ? "small" : activeMemberCount <= 250 ? "medium" : "large";
+    const sizeLabel = sizeSegment === "small" ? "Small (<100 members)" : sizeSegment === "medium" ? "Medium (100-250 members)" : "Large (250+ members)";
+
+    const latestBenchmarks = await db
+      .select()
+      .from(benchmarksTable)
+      .where(eq(benchmarksTable.sizeSegment, sizeSegment))
+      .orderBy(desc(benchmarksTable.computedAt))
+      .limit(5);
+
+    const mostRecentDate = latestBenchmarks.length > 0 ? latestBenchmarks[0].computedAt : null;
+    const currentBenchmarks = mostRecentDate
+      ? latestBenchmarks.filter(b => b.computedAt?.getTime() === mostRecentDate.getTime())
+      : [];
+
+    const sampleCount = currentBenchmarks.length > 0 ? currentBenchmarks[0].sampleCount : 0;
+    const insufficientData = sampleCount < 5;
+
+    const gymValues: Record<string, number> = {
+      rsiScore: rsi.score,
+      churnRate: metrics.churnRate,
+      avgRevPerMember: metrics.avgRev,
+      avgTenure: metrics.avgTenure,
+      engagementRate: engagement.engagementRate,
+    };
+
+    const metricLabels: Record<string, string> = {
+      rsiScore: "RSI Score",
+      churnRate: "Churn Rate",
+      avgRevPerMember: "Avg Revenue/Member",
+      avgTenure: "Avg Tenure (months)",
+      engagementRate: "Engagement Rate",
+    };
+
+    const metricFormats: Record<string, string> = {
+      rsiScore: "score",
+      churnRate: "percent",
+      avgRevPerMember: "currency",
+      avgTenure: "months",
+      engagementRate: "percent",
+    };
+
+    const lowerIsBetter: Record<string, boolean> = {
+      rsiScore: false,
+      churnRate: true,
+      avgRevPerMember: false,
+      avgTenure: false,
+      engagementRate: false,
+    };
+
+    function computePercentileRank(value: number, benchmarkRow: typeof currentBenchmarks[0] | undefined, metric: string): number | null {
+      if (!benchmarkRow || insufficientData) return null;
+      const p25 = parseFloat(benchmarkRow.p25 || "0");
+      const p50 = parseFloat(benchmarkRow.p50 || "0");
+      const p75 = parseFloat(benchmarkRow.p75 || "0");
+      const p90 = parseFloat(benchmarkRow.p90 || "0");
+
+      let rank: number;
+      if (value <= p25) rank = 25 * (value / Math.max(p25, 0.01));
+      else if (value <= p50) rank = 25 + 25 * ((value - p25) / Math.max(p50 - p25, 0.01));
+      else if (value <= p75) rank = 50 + 25 * ((value - p50) / Math.max(p75 - p50, 0.01));
+      else if (value <= p90) rank = 75 + 15 * ((value - p75) / Math.max(p90 - p75, 0.01));
+      else rank = 90 + 10 * Math.min(1, (value - p90) / Math.max(p90 * 0.2, 0.01));
+
+      if (lowerIsBetter[metric]) rank = 100 - rank;
+      return Math.round(Math.max(0, Math.min(100, rank)));
+    }
+
+    function getPercentileLabel(rank: number | null): string | null {
+      if (rank === null) return null;
+      if (rank >= 85) return "Top 15%";
+      if (rank >= 75) return "Top 25%";
+      if (rank >= 50) return "Above Average";
+      if (rank >= 25) return "Below Average";
+      return "Bottom 25%";
+    }
+
+    const comparisons = Object.keys(gymValues).map(metric => {
+      const benchmarkRow = currentBenchmarks.find(b => b.metric === metric);
+      const gymValue = gymValues[metric];
+      const percentileRank = computePercentileRank(gymValue, benchmarkRow, metric);
+      const percentileLabel = getPercentileLabel(percentileRank);
+
+      return {
+        metric,
+        label: metricLabels[metric],
+        format: metricFormats[metric],
+        gymValue,
+        industryMedian: benchmarkRow && !insufficientData ? parseFloat(benchmarkRow.p50 || "0") : null,
+        p25: benchmarkRow && !insufficientData ? parseFloat(benchmarkRow.p25 || "0") : null,
+        p75: benchmarkRow && !insufficientData ? parseFloat(benchmarkRow.p75 || "0") : null,
+        p90: benchmarkRow && !insufficientData ? parseFloat(benchmarkRow.p90 || "0") : null,
+        percentileRank,
+        percentileLabel,
+        lowerIsBetter: lowerIsBetter[metric] ?? false,
+      };
+    });
+
+    res.json({
+      gymId,
+      sizeSegment,
+      sizeLabel,
+      sampleCount,
+      insufficientData,
+      insufficientMessage: insufficientData ? "Not enough data yet — benchmarks require at least 5 gyms in your size category." : null,
+      computedAt: mostRecentDate?.toISOString() ?? null,
+      comparisons,
+    });
+  } catch (err) {
+    console.error("[intelligence/benchmarks] Failed to compute benchmarks:", err);
+    res.status(500).json({ error: "Failed to compute benchmarks. Please try again." });
   }
 });
 

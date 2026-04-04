@@ -24,6 +24,7 @@ import { requireAuth } from "../middlewares/requireAuth";
 import { requireGymAccess } from "../middlewares/requireGymAccess";
 import { requireTierAccess } from "../middlewares/requireTierAccess";
 import healthRouter from "./health";
+import storageRouter from "./storage";
 import authRouter from "./auth";
 import gymsRouter from "./gyms";
 import membersRouter from "./members";
@@ -55,6 +56,7 @@ const router: IRouter = Router();
 
 // --- Tier 1: Public routes (no authentication required) ---
 router.use(healthRouter);
+router.use(storageRouter);
 router.use(authRouter);
 
 // --- Tier 2: Authenticated routes (valid session required) ---

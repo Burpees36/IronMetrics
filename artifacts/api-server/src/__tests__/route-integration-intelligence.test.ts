@@ -6,6 +6,7 @@ vi.mock("drizzle-orm", () => ({
   or: (...conditions: any[]) => ({ _type: "or", conditions }),
   count: () => ({ _type: "count" }),
   desc: () => ({}),
+  asc: () => ({}),
   gte: () => ({}),
   lt: () => ({}),
   sql: Object.assign((() => ({})) as any, { raw: () => ({}) }),
@@ -83,6 +84,10 @@ vi.mock("@workspace/db", () => {
     attendanceTable: makeTable("attendance"),
     aiTasksTable: makeTable("ai_tasks"),
     invoicesTable: makeTable("invoices"),
+    classesTable: makeTable("classes"),
+    rsiSnapshotsTable: makeTable("rsi_snapshots"),
+    benchmarksTable: makeTable("benchmarks"),
+    billingAuditLogsTable: makeTable("billing_audit_logs"),
   };
 });
 

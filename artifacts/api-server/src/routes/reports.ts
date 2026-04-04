@@ -1,19 +1,29 @@
 import { Router, type IRouter } from "express";
-import { eq, and, count, desc, gte, lt, sql } from "drizzle-orm";
-import { db, membersTable, subscriptionsTable, invoicesTable, attendanceTable, leadsTable, classesTable, membershipPlansTable } from "@workspace/db";
+import { eq, and, count, desc, gte, lt, sql, asc } from "drizzle-orm";
+import { db, membersTable, subscriptionsTable, invoicesTable, attendanceTable, leadsTable, classesTable, membershipPlansTable, rsiSnapshotsTable, mrrSnapshotsTable } from "@workspace/db";
 import { getBlendedGymMetrics, computeBlendedMRR, computeBlendedEngagement, activeMemberCondition } from "../blendedMetrics";
+import { getRiskProfiles } from "./intelligence/metrics";
+import { computeRSI } from "./intelligence/computations";
 
 const router: IRouter = Router();
 
-function computeRSI(churnRate: number, avgRevPerMember: number, netGrowth: number, avgTenure: number) {
-  const churnNorm = Math.max(0, Math.min(100, 100 - churnRate * 10));
-  const revNorm = Math.min(100, (avgRevPerMember / 200) * 100);
-  const growthNorm = Math.max(0, Math.min(100, 50 + netGrowth * 5));
-  const tenureNorm = Math.min(100, (avgTenure / 24) * 100);
-  const weights = { churn: 0.35, rev: 0.25, growth: 0.2, tenure: 0.2 };
-  const score = churnNorm * weights.churn + revNorm * weights.rev + growthNorm * weights.growth + tenureNorm * weights.tenure;
-  const band = score >= 70 ? "Strong" : score >= 45 ? "Moderate" : "Fragile";
-  return { score: Math.round(score * 10) / 10, band };
+async function getSnapshotsByMonth(gymId: number): Promise<Record<string, { totalMRR: number; snapshotDate: string }>> {
+  const snapshots = await db.select({
+    snapshotDate: mrrSnapshotsTable.snapshotDate,
+    totalMRR: mrrSnapshotsTable.totalMRR,
+  }).from(mrrSnapshotsTable).where(eq(mrrSnapshotsTable.gymId, gymId)).orderBy(desc(mrrSnapshotsTable.snapshotDate));
+
+  const byMonth: Record<string, { totalMRR: number; snapshotDate: string }> = {};
+  for (const s of snapshots) {
+    const monthKey = s.snapshotDate.slice(0, 7);
+    if (!byMonth[monthKey]) {
+      byMonth[monthKey] = {
+        totalMRR: parseFloat(s.totalMRR),
+        snapshotDate: s.snapshotDate,
+      };
+    }
+  }
+  return byMonth;
 }
 
 function parseGymId(params: any): number | null {
@@ -49,11 +59,14 @@ router.get("/gyms/:gymId/reports/dashboard", async (req, res): Promise<void> => 
   ));
   const churnedThisMonth = Number(churnedThisMonthCount?.count ?? 0);
 
-  const atRiskMembers = await db.select({ count: count() }).from(membersTable).where(
-    and(eq(membersTable.gymId, gymId), activeMemberCondition(membersTable),
-      sql`(${membersTable.riskTier} = 'critical' OR ${membersTable.riskTier} = 'high')`)
-  );
-  const atRiskCount = Number(atRiskMembers[0]?.count ?? 0);
+  const riskProfiles = await getRiskProfiles(gymId);
+  const criticalRiskCount = riskProfiles.filter(r => r.riskTier === "critical").length;
+  const highRiskCount = riskProfiles.filter(r => r.riskTier === "high").length;
+  const atRiskCount = criticalRiskCount + highRiskCount;
+  const revenueAtRisk = riskProfiles.reduce((sum, r) => sum + r.revenueAtRisk, 0);
+  const retentionRate = blended.activeBillableMembers > 0
+    ? Math.round(((blended.activeBillableMembers - atRiskCount) / blended.activeBillableMembers) * 1000) / 10
+    : 100;
 
   const rsiResult = computeRSI(blended.churnRate, blended.avgRevPerMember, blended.netGrowth, blended.avgTenure);
 
@@ -68,6 +81,8 @@ router.get("/gyms/:gymId/reports/dashboard", async (req, res): Promise<void> => 
     invoicesByMonth[monthKey] = (invoicesByMonth[monthKey] ?? 0) + parseFloat(inv.amount || "0");
   }
 
+  const snapshotsByMonth = await getSnapshotsByMonth(gymId);
+
   const months = [];
   const currentMonthKey = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 7);
   for (let i = 11; i >= 0; i--) {
@@ -77,9 +92,15 @@ router.get("/gyms/:gymId/reports/dashboard", async (req, res): Promise<void> => 
       months.push({ month: monthKey, revenue: Math.round(mrrResult.totalMRR) });
     } else {
       const invoiceRev = invoicesByMonth[monthKey] ?? 0;
-      months.push({ month: monthKey, revenue: invoiceRev > 0 ? Math.round(invoiceRev) : 0 });
+      const snapshotRev = snapshotsByMonth[monthKey]?.totalMRR ?? 0;
+      const bestRev = Math.max(invoiceRev, snapshotRev);
+      months.push({ month: monthKey, revenue: bestRev > 0 ? Math.round(bestRev) : 0 });
     }
   }
+
+  const hasSnapshotData = Object.keys(snapshotsByMonth).length > 0;
+  const nonZeroMonths = months.filter(m => m.revenue > 0);
+  const sparseData = hasSnapshotData && nonZeroMonths.length < 3;
 
   const failedSubs = await db.select().from(subscriptionsTable).where(and(eq(subscriptionsTable.gymId, gymId), eq(subscriptionsTable.status, "past_due")));
 
@@ -113,11 +134,32 @@ router.get("/gyms/:gymId/reports/dashboard", async (req, res): Promise<void> => 
     classesThisWeek: Number(classesThisWeek?.count ?? 0),
     openLeads: Number(openLeadCount?.count ?? 0),
     atRiskMembers: atRiskCount,
+    atRiskCritical: criticalRiskCount,
+    atRiskHigh: highRiskCount,
+    revenueAtRisk: Math.round(revenueAtRisk),
+    retentionRate,
     failedPayments: failedSubs.length,
     collectionRate,
     rsiScore: Math.round(rsiResult.score * 10) / 10,
     rsiBand: rsiResult.band,
-    revenueByMonth: months,
+    ...await (async () => {
+      const snapshots = await db.select()
+        .from(rsiSnapshotsTable)
+        .where(eq(rsiSnapshotsTable.gymId, gymId))
+        .orderBy(asc(rsiSnapshotsTable.recordedAt));
+      if (snapshots.length < 7) return { rsiTrend30d: null, rsiTrendInsufficient: true };
+      const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+      const snapshot30d = snapshots
+        .filter(s => s.recordedAt <= thirtyDaysAgo)
+        .sort((a, b) => b.recordedAt.localeCompare(a.recordedAt))[0];
+      if (!snapshot30d) return { rsiTrend30d: null, rsiTrendInsufficient: true };
+      return {
+        rsiTrend30d: Math.round((rsiResult.score - parseFloat(snapshot30d.score)) * 10) / 10,
+        rsiTrendInsufficient: false,
+      };
+    })(),
+    revenueByMonth: sparseData ? nonZeroMonths : months,
+    revenueTrendSparse: sparseData,
     attendanceByDay,
     memberStatusBreakdown: [
       { status: "active", count: blended.activeBillableMembers },
@@ -264,6 +306,8 @@ router.get("/gyms/:gymId/reports/revenue", async (req, res): Promise<void> => {
     invoicesByMonthRev[monthKey] = (invoicesByMonthRev[monthKey] ?? 0) + parseFloat(inv.amount || "0");
   }
 
+  const snapshotsByMonthRev = await getSnapshotsByMonth(gymId);
+
   const byMonth = [];
   const currentMonthKeyRev = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 7);
   for (let i = 11; i >= 0; i--) {
@@ -274,10 +318,16 @@ router.get("/gyms/:gymId/reports/revenue", async (req, res): Promise<void> => {
       byMonth.push({ month: monthKey, membership, retail: 0, total: membership });
     } else {
       const invoiceRev = invoicesByMonthRev[monthKey] ?? 0;
-      const membership = invoiceRev > 0 ? Math.round(invoiceRev) : 0;
+      const snapshotRev = snapshotsByMonthRev[monthKey]?.totalMRR ?? 0;
+      const bestRev = Math.max(invoiceRev, snapshotRev);
+      const membership = bestRev > 0 ? Math.round(bestRev) : 0;
       byMonth.push({ month: monthKey, membership, retail: 0, total: membership });
     }
   }
+
+  const hasSnapshotDataRev = Object.keys(snapshotsByMonthRev).length > 0;
+  const nonZeroMonthsRev = byMonth.filter(m => m.total > 0);
+  const sparseDataRev = hasSnapshotDataRev && nonZeroMonthsRev.length < 3;
 
   res.json({
     mrr,
@@ -289,7 +339,8 @@ router.get("/gyms/:gymId/reports/revenue", async (req, res): Promise<void> => {
     retailRevenue: 0,
     failedRevenue,
     collectionRate,
-    byMonth,
+    byMonth: sparseDataRev ? nonZeroMonthsRev : byMonth,
+    revenueTrendSparse: sparseDataRev,
     revenueSource: blendedMRR.revenueSource,
   });
 });

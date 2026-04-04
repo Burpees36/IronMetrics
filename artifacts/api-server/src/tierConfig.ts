@@ -26,6 +26,7 @@ export const ROUTE_GROUPS = {
   insights: [
     "dashboard",
     "intelligence",
+    "insights",
     "billing",
     "retention",
     "ai",

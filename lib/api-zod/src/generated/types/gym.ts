@@ -36,6 +36,8 @@ export interface Gym {
   /** @nullable */
   fromName?: string | null;
   ownerId?: string;
+  autoSuspendEnabled?: boolean;
+  autoSuspendBufferDays?: number;
   memberCount: number;
   activeCount: number;
   createdAt: Date;

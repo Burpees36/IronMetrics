@@ -11,4 +11,6 @@ export interface UpdateAiTaskBody {
   status?: UpdateAiTaskBodyStatus;
   /** @nullable */
   aiContent?: string | null;
+  /** @nullable */
+  subject?: string | null;
 }

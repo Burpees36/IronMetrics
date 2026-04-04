@@ -1,8 +1,28 @@
-import { pgTable, text, serial, timestamp, integer, boolean, index, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, timestamp, integer, boolean, index, jsonb, numeric, date, uniqueIndex } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { gymsTable } from "./gyms";
 import { membersTable } from "./members";
+
+export const rsiSnapshotsTable = pgTable("rsi_snapshots", {
+  id: serial("id").primaryKey(),
+  gymId: integer("gym_id").notNull().references(() => gymsTable.id),
+  score: numeric("score", { precision: 5, scale: 1 }).notNull(),
+  band: text("band").notNull(),
+  churnNorm: numeric("churn_norm", { precision: 5, scale: 1 }),
+  revNorm: numeric("rev_norm", { precision: 5, scale: 1 }),
+  growthNorm: numeric("growth_norm", { precision: 5, scale: 1 }),
+  tenureNorm: numeric("tenure_norm", { precision: 5, scale: 1 }),
+  recordedAt: date("recorded_at", { mode: "string" }).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  index("idx_rsi_snapshots_gym_date").on(table.gymId, table.recordedAt),
+  uniqueIndex("idx_rsi_snapshots_gym_date_unique").on(table.gymId, table.recordedAt),
+]);
+
+export const insertRsiSnapshotSchema = createInsertSchema(rsiSnapshotsTable).omit({ id: true, createdAt: true });
+export type InsertRsiSnapshot = z.infer<typeof insertRsiSnapshotSchema>;
+export type RsiSnapshot = typeof rsiSnapshotsTable.$inferSelect;
 
 export const retentionSequencesTable = pgTable("retention_sequences", {
   id: serial("id").primaryKey(),

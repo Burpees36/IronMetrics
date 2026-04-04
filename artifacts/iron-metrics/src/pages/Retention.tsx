@@ -7,8 +7,9 @@ import {
   Users, Mail, ClipboardList, Clock, Trash2, Play, Square,
   UserMinus, ArrowLeft, AlertCircle, CheckCircle2, XCircle,
   Zap, Shield, Heart, Sparkles, Settings2, Activity,
-  HelpCircle, X, Info, PauseCircle
+  HelpCircle, X, Info, PauseCircle, UserPlus
 } from "lucide-react";
+import { EnrollMemberDialog } from "@/components/EnrollMemberDialog";
 
 const API_BASE = import.meta.env.VITE_API_URL || "";
 
@@ -76,6 +77,7 @@ const TYPE_ICONS: Record<string, typeof Zap> = {
   check_in: Shield,
   win_back: Zap,
   new_member: Sparkles,
+  onboarding_journey: Users,
   custom: Settings2,
 };
 
@@ -84,6 +86,7 @@ const TYPE_COLORS: Record<string, string> = {
   check_in: "text-blue-500 bg-blue-500/15",
   win_back: "text-amber-500 bg-amber-500/15",
   new_member: "text-emerald-500 bg-emerald-500/15",
+  onboarding_journey: "text-teal-500 bg-teal-500/15",
   custom: "text-violet-500 bg-violet-500/15",
 };
 
@@ -139,8 +142,8 @@ function HowItWorksGuide({ onSeedDefaults, onDismiss, hasSequences }: {
             <p className="text-sm font-medium text-foreground">Set up your sequences</p>
             <p className="text-xs text-muted-foreground mt-0.5">
               {hasSequences
-                ? "You already have sequences created. Each one targets a different situation — members who stopped showing up, those at risk, or new members who are losing momentum. Feel free to change them to best suit your brand and needs."
-                : "Start with our 4 proven templates (\"Miss You\", \"Check-In\", \"Win Back\", \"New Member Support\") or create your own from scratch. Each one targets a different at-risk situation."}
+                ? "You already have sequences created. Each one targets a different situation — members who stopped showing up, those at risk, new members who are losing momentum, or a structured onboarding journey. Feel free to change them to best suit your brand and needs."
+                : "Start with our 5 proven templates (\"Miss You\", \"Check-In\", \"Win Back\", \"New Member Support\", \"Onboarding Journey\") or create your own from scratch. Each one targets a different situation."}
             </p>
           </div>
         </div>
@@ -243,6 +246,7 @@ export function Retention() {
   const [activeTab, setActiveTab] = useState<"sequences" | "enrollments" | "activity">("sequences");
   const [showGuide, setShowGuide] = useState(true);
   const [showCreateForm, setShowCreateForm] = useState(false);
+  const [showEnrollDialog, setShowEnrollDialog] = useState(false);
 
   const loadData = useCallback(async () => {
     if (!activeGymId) return;
@@ -446,7 +450,7 @@ export function Retention() {
                     <RefreshCw className="h-10 w-10 text-muted-foreground/50 mx-auto mb-4" />
                     <h3 className="text-lg font-semibold text-foreground mb-2">No Sequences Yet</h3>
                     <p className="text-sm text-muted-foreground mb-4 max-w-sm mx-auto">
-                      Get started with our 4 proven templates, or create your own custom sequence.
+                      Get started with our 5 proven templates, or create your own custom sequence.
                     </p>
                     <div className="flex items-center justify-center gap-3">
                       <button
@@ -517,9 +521,20 @@ export function Retention() {
 
           {activeTab === "enrollments" && (
             <motion.div key="enrollments" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-2">
-              <TabHint>
-                Members shown here are actively receiving a retention sequence. If someone is on vacation or shouldn't be contacted right now, click the <UserMinus className="inline h-3 w-3" /> icon to remove them. The cooldown period will prevent them from being re-enrolled too quickly.
-              </TabHint>
+              <div className="flex items-center justify-between">
+                <TabHint>
+                  Members shown here are actively receiving a retention sequence. If someone is on vacation or shouldn't be contacted right now, click the <UserMinus className="inline h-3 w-3" /> icon to remove them. The cooldown period will prevent them from being re-enrolled too quickly.
+                </TabHint>
+              </div>
+              {sequences.length > 0 && (
+                <button
+                  onClick={() => setShowEnrollDialog(true)}
+                  className="flex items-center gap-2 px-3 py-2 bg-primary text-primary-foreground hover:bg-primary/90 rounded-lg font-medium text-xs transition-colors shadow-lg shadow-primary/20"
+                >
+                  <UserPlus className="h-3.5 w-3.5" />
+                  Enroll Member
+                </button>
+              )}
               {enrollments.length === 0 ? (
                 <div className="bg-card border border-border rounded-xl p-8 text-center">
                   <Users className="h-8 w-8 text-muted-foreground/50 mx-auto mb-3" />
@@ -614,6 +629,16 @@ export function Retention() {
           )}
         </AnimatePresence>
       </div>
+
+      <EnrollMemberDialog
+        open={showEnrollDialog}
+        onClose={() => setShowEnrollDialog(false)}
+        gymId={activeGymId}
+        sequences={sequences}
+        onEnrolled={() => {
+          loadData();
+        }}
+      />
     </div>
   );
 }
@@ -624,6 +649,7 @@ function getTriggerSummary(trigger: TriggerConfig): string {
     case "no_attendance": return `No attendance for ${trigger.days || 10} days`;
     case "risk_score": return `Risk score >= ${trigger.threshold || 50}`;
     case "new_member_decline": return `New member (<${trigger.joinDays || 90}d) inactive ${trigger.inactiveDays || 7}d`;
+    case "new_member_join": return `New member joined within ${trigger.joinDays || 3} days`;
     default: return trigger.type;
   }
 }
@@ -875,6 +901,7 @@ function SequenceDetail({ sequence, onBack, gymId }: { sequence: Sequence; onBac
   const [triggerConfig, setTriggerConfig] = useState<TriggerConfig>(sequence.triggerConfig as TriggerConfig);
   const [cooldownDays, setCooldownDays] = useState(sequence.cooldownDays);
   const [steps, setSteps] = useState<SequenceStep[]>(sequence.steps || []);
+  const [showEnrollDialog, setShowEnrollDialog] = useState(false);
 
   const Icon = TYPE_ICONS[sequence.type] || Settings2;
   const colorClass = TYPE_COLORS[sequence.type] || TYPE_COLORS.custom;
@@ -931,14 +958,24 @@ function SequenceDetail({ sequence, onBack, gymId }: { sequence: Sequence; onBac
         </div>
         <div className="flex items-center gap-2">
           {!editMode && (
-            <button
-              onClick={handleDelete}
-              disabled={deleting}
-              className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
-              title="Delete sequence"
-            >
-              <Trash2 className="h-4 w-4" />
-            </button>
+            <>
+              <button
+                onClick={() => setShowEnrollDialog(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
+                title="Manually enroll a member into this sequence"
+              >
+                <UserPlus className="h-3.5 w-3.5" />
+                Enroll
+              </button>
+              <button
+                onClick={handleDelete}
+                disabled={deleting}
+                className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                title="Delete sequence"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+            </>
           )}
           <button
             onClick={() => setEditMode(!editMode)}
@@ -1118,6 +1155,18 @@ function SequenceDetail({ sequence, onBack, gymId }: { sequence: Sequence; onBac
           </div>
         </div>
       )}
+
+      <EnrollMemberDialog
+        open={showEnrollDialog}
+        onClose={() => setShowEnrollDialog(false)}
+        gymId={gymId}
+        sequenceId={sequence.id}
+        sequenceName={sequence.name}
+        onEnrolled={() => {
+          toast({ title: "Member enrolled successfully" });
+          onBack();
+        }}
+      />
     </div>
   );
 }

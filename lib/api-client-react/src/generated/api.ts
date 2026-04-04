@@ -20,6 +20,8 @@ import type {
   AdjustBalanceBody,
   AdjustMemberBalance200,
   AiGeneratedContent,
+  AiImpactResponse,
+  AiLastScanResponse,
   AiTask,
   Announcement,
   ApplyDiscountToSubscription200,
@@ -28,6 +30,7 @@ import type {
   Attendance,
   AttendanceReport,
   AuthUser,
+  AutopilotSettings,
   BillingMaintenanceResponse,
   BillingRecovery,
   BillingSummary,
@@ -78,14 +81,17 @@ import type {
   DuplicateProgrammingDayBody,
   EmailCheckResult,
   EmailStatusResponse,
+  ErrorEnvelope,
   GenerateAiTasksResponse,
   GenerateOutreachBody,
   GenerateRecoveryLinkBody,
   GenerateRecoveryLinkResponse,
+  GetAiImpactParams,
   GetCancelledMembersParams,
   GetMemberBalance200,
   GetMemberBillingHistory200,
   GetMemberLinkedBilling200,
+  GetRsiHistoryParams,
   GetStripePublishableKey200,
   GraceEvaluationResponse,
   Gym,
@@ -138,6 +144,7 @@ import type {
   RetentionStabilityIndex,
   RevenueForecast,
   RevenueReport,
+  RsiHistory,
   Sale,
   ScheduledHold,
   SendEmailResponse,
@@ -152,6 +159,7 @@ import type {
   TimelineEvent,
   UnlinkMemberBilling200,
   UpdateAiTaskBody,
+  UpdateAutopilotSettingsBody,
   UpdateClassBody,
   UpdateClassTemplateBody,
   UpdateDiscountCodeBody,
@@ -166,6 +174,8 @@ import type {
   UpdateSubscriptionBody,
   UpdateTaxConfig200,
   UpdateTaxConfigBody,
+  UploadUrlRequest,
+  UploadUrlResponse,
   ValidatePaymentUpdateTokenParams,
   Workout,
   WorkoutResult,
@@ -179,6 +189,272 @@ type AwaitedInput<T> = PromiseLike<T> | T;
 type Awaited<O> = O extends AwaitedInput<infer T> ? T : never;
 
 type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
+
+/**
+ * Returns a presigned GCS URL for direct upload. The client sends JSON
+metadata here, then uploads the file directly to the returned URL.
+
+ * @summary Request a presigned URL for file upload
+ */
+export const getRequestUploadUrlUrl = () => {
+  return `/api/storage/uploads/request-url`;
+};
+
+export const requestUploadUrl = async (
+  uploadUrlRequest: UploadUrlRequest,
+  options?: RequestInit,
+): Promise<UploadUrlResponse> => {
+  return customFetch<UploadUrlResponse>(getRequestUploadUrlUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(uploadUrlRequest),
+  });
+};
+
+export const getRequestUploadUrlMutationOptions = <
+  TError = ErrorType<ErrorEnvelope>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof requestUploadUrl>>,
+    TError,
+    { data: BodyType<UploadUrlRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof requestUploadUrl>>,
+  TError,
+  { data: BodyType<UploadUrlRequest> },
+  TContext
+> => {
+  const mutationKey = ["requestUploadUrl"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof requestUploadUrl>>,
+    { data: BodyType<UploadUrlRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return requestUploadUrl(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RequestUploadUrlMutationResult = NonNullable<
+  Awaited<ReturnType<typeof requestUploadUrl>>
+>;
+export type RequestUploadUrlMutationBody = BodyType<UploadUrlRequest>;
+export type RequestUploadUrlMutationError = ErrorType<ErrorEnvelope>;
+
+/**
+ * @summary Request a presigned URL for file upload
+ */
+export const useRequestUploadUrl = <
+  TError = ErrorType<ErrorEnvelope>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof requestUploadUrl>>,
+    TError,
+    { data: BodyType<UploadUrlRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof requestUploadUrl>>,
+  TError,
+  { data: BodyType<UploadUrlRequest> },
+  TContext
+> => {
+  return useMutation(getRequestUploadUrlMutationOptions(options));
+};
+
+/**
+ * @summary Serve a public asset from PUBLIC_OBJECT_SEARCH_PATHS
+ */
+export const getGetPublicObjectUrl = (filePath: string) => {
+  return `/api/storage/public-objects/${filePath}`;
+};
+
+export const getPublicObject = async (
+  filePath: string,
+  options?: RequestInit,
+): Promise<Blob> => {
+  return customFetch<Blob>(getGetPublicObjectUrl(filePath), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetPublicObjectQueryKey = (filePath: string) => {
+  return [`/api/storage/public-objects/${filePath}`] as const;
+};
+
+export const getGetPublicObjectQueryOptions = <
+  TData = Awaited<ReturnType<typeof getPublicObject>>,
+  TError = ErrorType<ErrorEnvelope>,
+>(
+  filePath: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getPublicObject>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetPublicObjectQueryKey(filePath);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getPublicObject>>> = ({
+    signal,
+  }) => getPublicObject(filePath, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!filePath,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getPublicObject>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetPublicObjectQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getPublicObject>>
+>;
+export type GetPublicObjectQueryError = ErrorType<ErrorEnvelope>;
+
+/**
+ * @summary Serve a public asset from PUBLIC_OBJECT_SEARCH_PATHS
+ */
+
+export function useGetPublicObject<
+  TData = Awaited<ReturnType<typeof getPublicObject>>,
+  TError = ErrorType<ErrorEnvelope>,
+>(
+  filePath: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getPublicObject>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetPublicObjectQueryOptions(filePath, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Serve an object entity from PRIVATE_OBJECT_DIR
+ */
+export const getGetStorageObjectUrl = (objectPath: string) => {
+  return `/api/storage/objects/${objectPath}`;
+};
+
+export const getStorageObject = async (
+  objectPath: string,
+  options?: RequestInit,
+): Promise<Blob> => {
+  return customFetch<Blob>(getGetStorageObjectUrl(objectPath), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetStorageObjectQueryKey = (objectPath: string) => {
+  return [`/api/storage/objects/${objectPath}`] as const;
+};
+
+export const getGetStorageObjectQueryOptions = <
+  TData = Awaited<ReturnType<typeof getStorageObject>>,
+  TError = ErrorType<ErrorEnvelope>,
+>(
+  objectPath: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getStorageObject>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetStorageObjectQueryKey(objectPath);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getStorageObject>>
+  > = ({ signal }) =>
+    getStorageObject(objectPath, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!objectPath,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getStorageObject>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetStorageObjectQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getStorageObject>>
+>;
+export type GetStorageObjectQueryError = ErrorType<ErrorEnvelope>;
+
+/**
+ * @summary Serve an object entity from PRIVATE_OBJECT_DIR
+ */
+
+export function useGetStorageObject<
+  TData = Awaited<ReturnType<typeof getStorageObject>>,
+  TError = ErrorType<ErrorEnvelope>,
+>(
+  objectPath: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getStorageObject>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetStorageObjectQueryOptions(objectPath, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
 
 /**
  * @summary Health check
@@ -9885,6 +10161,118 @@ export function useGetRetentionStabilityIndex<
 }
 
 /**
+ * @summary Get RSI historical data points
+ */
+export const getGetRsiHistoryUrl = (
+  gymId: number,
+  params?: GetRsiHistoryParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/gyms/${gymId}/intelligence/rsi/history?${stringifiedParams}`
+    : `/api/gyms/${gymId}/intelligence/rsi/history`;
+};
+
+export const getRsiHistory = async (
+  gymId: number,
+  params?: GetRsiHistoryParams,
+  options?: RequestInit,
+): Promise<RsiHistory> => {
+  return customFetch<RsiHistory>(getGetRsiHistoryUrl(gymId, params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetRsiHistoryQueryKey = (
+  gymId: number,
+  params?: GetRsiHistoryParams,
+) => {
+  return [
+    `/api/gyms/${gymId}/intelligence/rsi/history`,
+    ...(params ? [params] : []),
+  ] as const;
+};
+
+export const getGetRsiHistoryQueryOptions = <
+  TData = Awaited<ReturnType<typeof getRsiHistory>>,
+  TError = ErrorType<unknown>,
+>(
+  gymId: number,
+  params?: GetRsiHistoryParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getRsiHistory>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetRsiHistoryQueryKey(gymId, params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getRsiHistory>>> = ({
+    signal,
+  }) => getRsiHistory(gymId, params, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!gymId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getRsiHistory>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetRsiHistoryQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getRsiHistory>>
+>;
+export type GetRsiHistoryQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get RSI historical data points
+ */
+
+export function useGetRsiHistory<
+  TData = Awaited<ReturnType<typeof getRsiHistory>>,
+  TError = ErrorType<unknown>,
+>(
+  gymId: number,
+  params?: GetRsiHistoryParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getRsiHistory>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetRsiHistoryQueryOptions(gymId, params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
  * @summary Get member risk radar data
  */
 export const getGetMemberRiskRadarUrl = (gymId: number) => {
@@ -11099,6 +11487,379 @@ export const useSendAiTaskEmail = <
   TContext
 > => {
   return useMutation(getSendAiTaskEmailMutationOptions(options));
+};
+
+/**
+ * @summary Get AI Operator outcome tracking and revenue attribution stats
+ */
+export const getGetAiImpactUrl = (
+  gymId: number,
+  params?: GetAiImpactParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/gyms/${gymId}/ai/impact?${stringifiedParams}`
+    : `/api/gyms/${gymId}/ai/impact`;
+};
+
+export const getAiImpact = async (
+  gymId: number,
+  params?: GetAiImpactParams,
+  options?: RequestInit,
+): Promise<AiImpactResponse> => {
+  return customFetch<AiImpactResponse>(getGetAiImpactUrl(gymId, params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetAiImpactQueryKey = (
+  gymId: number,
+  params?: GetAiImpactParams,
+) => {
+  return [`/api/gyms/${gymId}/ai/impact`, ...(params ? [params] : [])] as const;
+};
+
+export const getGetAiImpactQueryOptions = <
+  TData = Awaited<ReturnType<typeof getAiImpact>>,
+  TError = ErrorType<unknown>,
+>(
+  gymId: number,
+  params?: GetAiImpactParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getAiImpact>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetAiImpactQueryKey(gymId, params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getAiImpact>>> = ({
+    signal,
+  }) => getAiImpact(gymId, params, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!gymId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getAiImpact>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetAiImpactQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getAiImpact>>
+>;
+export type GetAiImpactQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get AI Operator outcome tracking and revenue attribution stats
+ */
+
+export function useGetAiImpact<
+  TData = Awaited<ReturnType<typeof getAiImpact>>,
+  TError = ErrorType<unknown>,
+>(
+  gymId: number,
+  params?: GetAiImpactParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getAiImpact>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetAiImpactQueryOptions(gymId, params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Get the timestamp of the last automated AI task scan
+ */
+export const getGetAiLastScanUrl = (gymId: number) => {
+  return `/api/gyms/${gymId}/ai/last-scan`;
+};
+
+export const getAiLastScan = async (
+  gymId: number,
+  options?: RequestInit,
+): Promise<AiLastScanResponse> => {
+  return customFetch<AiLastScanResponse>(getGetAiLastScanUrl(gymId), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetAiLastScanQueryKey = (gymId: number) => {
+  return [`/api/gyms/${gymId}/ai/last-scan`] as const;
+};
+
+export const getGetAiLastScanQueryOptions = <
+  TData = Awaited<ReturnType<typeof getAiLastScan>>,
+  TError = ErrorType<unknown>,
+>(
+  gymId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getAiLastScan>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetAiLastScanQueryKey(gymId);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getAiLastScan>>> = ({
+    signal,
+  }) => getAiLastScan(gymId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!gymId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getAiLastScan>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetAiLastScanQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getAiLastScan>>
+>;
+export type GetAiLastScanQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get the timestamp of the last automated AI task scan
+ */
+
+export function useGetAiLastScan<
+  TData = Awaited<ReturnType<typeof getAiLastScan>>,
+  TError = ErrorType<unknown>,
+>(
+  gymId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getAiLastScan>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetAiLastScanQueryOptions(gymId, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Get auto-pilot settings for a gym
+ */
+export const getGetAutopilotSettingsUrl = (gymId: number) => {
+  return `/api/gyms/${gymId}/ai/autopilot-settings`;
+};
+
+export const getAutopilotSettings = async (
+  gymId: number,
+  options?: RequestInit,
+): Promise<AutopilotSettings> => {
+  return customFetch<AutopilotSettings>(getGetAutopilotSettingsUrl(gymId), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetAutopilotSettingsQueryKey = (gymId: number) => {
+  return [`/api/gyms/${gymId}/ai/autopilot-settings`] as const;
+};
+
+export const getGetAutopilotSettingsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getAutopilotSettings>>,
+  TError = ErrorType<unknown>,
+>(
+  gymId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getAutopilotSettings>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetAutopilotSettingsQueryKey(gymId);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getAutopilotSettings>>
+  > = ({ signal }) =>
+    getAutopilotSettings(gymId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!gymId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getAutopilotSettings>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetAutopilotSettingsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getAutopilotSettings>>
+>;
+export type GetAutopilotSettingsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get auto-pilot settings for a gym
+ */
+
+export function useGetAutopilotSettings<
+  TData = Awaited<ReturnType<typeof getAutopilotSettings>>,
+  TError = ErrorType<unknown>,
+>(
+  gymId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getAutopilotSettings>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetAutopilotSettingsQueryOptions(gymId, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Update auto-pilot settings for a gym
+ */
+export const getUpdateAutopilotSettingsUrl = (gymId: number) => {
+  return `/api/gyms/${gymId}/ai/autopilot-settings`;
+};
+
+export const updateAutopilotSettings = async (
+  gymId: number,
+  updateAutopilotSettingsBody: UpdateAutopilotSettingsBody,
+  options?: RequestInit,
+): Promise<AutopilotSettings> => {
+  return customFetch<AutopilotSettings>(getUpdateAutopilotSettingsUrl(gymId), {
+    ...options,
+    method: "PUT",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(updateAutopilotSettingsBody),
+  });
+};
+
+export const getUpdateAutopilotSettingsMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateAutopilotSettings>>,
+    TError,
+    { gymId: number; data: BodyType<UpdateAutopilotSettingsBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateAutopilotSettings>>,
+  TError,
+  { gymId: number; data: BodyType<UpdateAutopilotSettingsBody> },
+  TContext
+> => {
+  const mutationKey = ["updateAutopilotSettings"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateAutopilotSettings>>,
+    { gymId: number; data: BodyType<UpdateAutopilotSettingsBody> }
+  > = (props) => {
+    const { gymId, data } = props ?? {};
+
+    return updateAutopilotSettings(gymId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateAutopilotSettingsMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateAutopilotSettings>>
+>;
+export type UpdateAutopilotSettingsMutationBody =
+  BodyType<UpdateAutopilotSettingsBody>;
+export type UpdateAutopilotSettingsMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Update auto-pilot settings for a gym
+ */
+export const useUpdateAutopilotSettings = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateAutopilotSettings>>,
+    TError,
+    { gymId: number; data: BodyType<UpdateAutopilotSettingsBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateAutopilotSettings>>,
+  TError,
+  { gymId: number; data: BodyType<UpdateAutopilotSettingsBody> },
+  TContext
+> => {
+  return useMutation(getUpdateAutopilotSettingsMutationOptions(options));
 };
 
 /**

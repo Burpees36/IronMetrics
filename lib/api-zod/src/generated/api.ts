@@ -8,6 +8,45 @@
 import * as zod from "zod";
 
 /**
+ * Returns a presigned GCS URL for direct upload. The client sends JSON
+metadata here, then uploads the file directly to the returned URL.
+
+ * @summary Request a presigned URL for file upload
+ */
+
+export const RequestUploadUrlBody = zod.object({
+  name: zod.string().min(1),
+  size: zod.number().min(1),
+  contentType: zod.string().min(1),
+});
+
+export const RequestUploadUrlResponse = zod.object({
+  uploadURL: zod.string().url(),
+  objectPath: zod.string(),
+  metadata: zod
+    .object({
+      name: zod.string().min(1),
+      size: zod.number().min(1),
+      contentType: zod.string().min(1),
+    })
+    .optional(),
+});
+
+/**
+ * @summary Serve a public asset from PUBLIC_OBJECT_SEARCH_PATHS
+ */
+export const GetPublicObjectParams = zod.object({
+  filePath: zod.coerce.string(),
+});
+
+/**
+ * @summary Serve an object entity from PRIVATE_OBJECT_DIR
+ */
+export const GetStorageObjectParams = zod.object({
+  objectPath: zod.coerce.string(),
+});
+
+/**
  * @summary Health check
  */
 export const HealthCheckResponse = zod.object({
@@ -47,6 +86,8 @@ export const ListGymsResponseItem = zod.object({
   fromEmail: zod.string().nullish(),
   fromName: zod.string().nullish(),
   ownerId: zod.string().optional(),
+  autoSuspendEnabled: zod.boolean().optional(),
+  autoSuspendBufferDays: zod.number().optional(),
   memberCount: zod.number(),
   activeCount: zod.number(),
   createdAt: zod.date(),
@@ -92,6 +133,8 @@ export const GetGymResponse = zod.object({
   fromEmail: zod.string().nullish(),
   fromName: zod.string().nullish(),
   ownerId: zod.string().optional(),
+  autoSuspendEnabled: zod.boolean().optional(),
+  autoSuspendBufferDays: zod.number().optional(),
   memberCount: zod.number(),
   activeCount: zod.number(),
   createdAt: zod.date(),
@@ -119,6 +162,8 @@ export const UpdateGymBody = zod.object({
   website: zod.string().nullish(),
   fromEmail: zod.string().nullish(),
   fromName: zod.string().nullish(),
+  autoSuspendEnabled: zod.boolean().optional(),
+  autoSuspendBufferDays: zod.number().optional(),
 });
 
 export const UpdateGymResponse = zod.object({
@@ -139,6 +184,8 @@ export const UpdateGymResponse = zod.object({
   fromEmail: zod.string().nullish(),
   fromName: zod.string().nullish(),
   ownerId: zod.string().optional(),
+  autoSuspendEnabled: zod.boolean().optional(),
+  autoSuspendBufferDays: zod.number().optional(),
   memberCount: zod.number(),
   activeCount: zod.number(),
   createdAt: zod.date(),
@@ -343,6 +390,7 @@ export const UpdateMemberBody = zod.object({
   membershipType: zod.string().nullish(),
   waiverSigned: zod.boolean().optional(),
   tags: zod.array(zod.string()).optional(),
+  profileImageUrl: zod.string().nullish(),
 });
 
 export const UpdateMemberResponse = zod.object({
@@ -2867,8 +2915,8 @@ export const GetIntelligenceOverviewResponse = zod.object({
   rsi: zod.object({
     score: zod.number(),
     band: zod.enum(["Strong", "Moderate", "Fragile"]),
-    trend30d: zod.number(),
-    trend90d: zod.number(),
+    trend30d: zod.number().optional(),
+    trend90d: zod.number().optional(),
     components: zod.object({
       churnRate: zod.number(),
       avgRevPerMember: zod.number(),
@@ -2884,6 +2932,7 @@ export const GetIntelligenceOverviewResponse = zod.object({
         contribution: zod.number(),
       }),
     ),
+    trendInsufficient: zod.boolean().optional(),
     insight: zod.string(),
   }),
   topRisks: zod.array(
@@ -2953,8 +3002,8 @@ export const GetRetentionStabilityIndexParams = zod.object({
 export const GetRetentionStabilityIndexResponse = zod.object({
   score: zod.number(),
   band: zod.enum(["Strong", "Moderate", "Fragile"]),
-  trend30d: zod.number(),
-  trend90d: zod.number(),
+  trend30d: zod.number().optional(),
+  trend90d: zod.number().optional(),
   components: zod.object({
     churnRate: zod.number(),
     avgRevPerMember: zod.number(),
@@ -2970,7 +3019,35 @@ export const GetRetentionStabilityIndexResponse = zod.object({
       contribution: zod.number(),
     }),
   ),
+  trendInsufficient: zod.boolean().optional(),
   insight: zod.string(),
+});
+
+/**
+ * @summary Get RSI historical data points
+ */
+export const GetRsiHistoryParams = zod.object({
+  gymId: zod.coerce.number(),
+});
+
+export const getRsiHistoryQueryWindowDefault = `90d`;
+
+export const GetRsiHistoryQueryParams = zod.object({
+  window: zod
+    .enum(["30d", "90d", "all"])
+    .default(getRsiHistoryQueryWindowDefault),
+});
+
+export const GetRsiHistoryResponse = zod.object({
+  window: zod.string(),
+  dataPoints: zod.array(
+    zod.object({
+      date: zod.string(),
+      score: zod.number(),
+      band: zod.string(),
+    }),
+  ),
+  insufficient: zod.boolean(),
 });
 
 /**
@@ -3100,9 +3177,13 @@ export const GetMorningBriefingResponse = zod.object({
     rsiScore: zod.number().optional(),
     rsiBand: zod.string().optional(),
     atRiskMembers: zod.number().optional(),
+    atRiskCritical: zod.number().optional(),
+    atRiskHigh: zod.number().optional(),
     revenueAtRisk: zod.number().optional(),
     engagementRate: zod.number().optional(),
     staleLeads: zod.number().optional(),
+    newLeads: zod.number().optional(),
+    activeLeads: zod.number().optional(),
     failedPayments: zod.number().optional(),
     todayClasses: zod.number().optional(),
     classFillRate: zod.number().optional(),
@@ -3152,13 +3233,7 @@ export const GenerateMemberOutreachParams = zod.object({
 
 export const GenerateMemberOutreachBody = zod.object({
   memberId: zod.number(),
-  outreachType: zod.enum([
-    "at_risk",
-    "win_back",
-    "celebration",
-    "onboarding",
-    "billing",
-  ]),
+  outreachType: zod.enum(["at_risk", "win_back", "celebration", "billing"]),
 });
 
 export const GenerateMemberOutreachResponse = zod.object({
@@ -3208,6 +3283,22 @@ export const ListAiTasksResponseItem = zod.object({
   targetId: zod.number().nullish(),
   targetType: zod.string().nullish(),
   aiContent: zod.string().nullish(),
+  subject: zod.string().nullish(),
+  outcome: zod
+    .union([
+      zod.literal("none"),
+      zod.literal("pending_observation"),
+      zod.literal("won_back"),
+      zod.literal("reactivated"),
+      zod.literal("converted"),
+      zod.literal("no_change"),
+      zod.literal(null),
+    ])
+    .nullish(),
+  outcomeDetectedAt: zod.date().nullish(),
+  revenueImpact: zod.string().nullish(),
+  actionedAt: zod.date().nullish(),
+  autoSent: zod.boolean(),
   createdAt: zod.date(),
 });
 export const ListAiTasksResponse = zod.array(ListAiTasksResponseItem);
@@ -3256,6 +3347,22 @@ export const GenerateAiTasksResponse = zod.object({
       targetId: zod.number().nullish(),
       targetType: zod.string().nullish(),
       aiContent: zod.string().nullish(),
+      subject: zod.string().nullish(),
+      outcome: zod
+        .union([
+          zod.literal("none"),
+          zod.literal("pending_observation"),
+          zod.literal("won_back"),
+          zod.literal("reactivated"),
+          zod.literal("converted"),
+          zod.literal("no_change"),
+          zod.literal(null),
+        ])
+        .nullish(),
+      outcomeDetectedAt: zod.date().nullish(),
+      revenueImpact: zod.string().nullish(),
+      actionedAt: zod.date().nullish(),
+      autoSent: zod.boolean(),
       createdAt: zod.date(),
     }),
   ),
@@ -3274,6 +3381,7 @@ export const UpdateAiTaskBody = zod.object({
     .enum(["pending", "approved", "sent", "completed", "dismissed"])
     .optional(),
   aiContent: zod.string().nullish(),
+  subject: zod.string().nullish(),
 });
 
 export const UpdateAiTaskResponse = zod.object({
@@ -3287,6 +3395,22 @@ export const UpdateAiTaskResponse = zod.object({
   targetId: zod.number().nullish(),
   targetType: zod.string().nullish(),
   aiContent: zod.string().nullish(),
+  subject: zod.string().nullish(),
+  outcome: zod
+    .union([
+      zod.literal("none"),
+      zod.literal("pending_observation"),
+      zod.literal("won_back"),
+      zod.literal("reactivated"),
+      zod.literal("converted"),
+      zod.literal("no_change"),
+      zod.literal(null),
+    ])
+    .nullish(),
+  outcomeDetectedAt: zod.date().nullish(),
+  revenueImpact: zod.string().nullish(),
+  actionedAt: zod.date().nullish(),
+  autoSent: zod.boolean(),
   createdAt: zod.date(),
 });
 
@@ -3303,6 +3427,97 @@ export const SendAiTaskEmailResponse = zod.object({
   messageId: zod.string().nullish(),
   recipientEmail: zod.string(),
   recipientName: zod.string(),
+});
+
+/**
+ * @summary Get AI Operator outcome tracking and revenue attribution stats
+ */
+export const GetAiImpactParams = zod.object({
+  gymId: zod.coerce.number(),
+});
+
+export const GetAiImpactQueryParams = zod.object({
+  startDate: zod.date().optional(),
+  endDate: zod.date().optional(),
+});
+
+export const GetAiImpactResponse = zod.object({
+  totalActioned: zod.number(),
+  outcomeCounts: zod.object({
+    won_back: zod.number(),
+    reactivated: zod.number(),
+    converted: zod.number(),
+    no_change: zod.number(),
+    pending_observation: zod.number(),
+  }),
+  successRate: zod.number(),
+  membersSaved: zod.number(),
+  totalRevenueRetained: zod.number(),
+  totalRevenueRecovered: zod.number(),
+  timeline: zod.array(
+    zod.object({
+      month: zod.string(),
+      won_back: zod.number(),
+      reactivated: zod.number(),
+      converted: zod.number(),
+      no_change: zod.number(),
+    }),
+  ),
+});
+
+/**
+ * @summary Get the timestamp of the last automated AI task scan
+ */
+export const GetAiLastScanParams = zod.object({
+  gymId: zod.coerce.number(),
+});
+
+export const GetAiLastScanResponse = zod.object({
+  lastAutoScan: zod.date().nullish(),
+});
+
+/**
+ * @summary Get auto-pilot settings for a gym
+ */
+export const GetAutopilotSettingsParams = zod.object({
+  gymId: zod.coerce.number(),
+});
+
+export const GetAutopilotSettingsResponse = zod.object({
+  autopilotOutreach: zod.boolean(),
+  autopilotBilling: zod.boolean(),
+  autopilotLeads: zod.boolean(),
+  cooldownDays: zod.number(),
+  digestFrequency: zod.enum(["daily", "weekly", "disabled"]),
+});
+
+/**
+ * @summary Update auto-pilot settings for a gym
+ */
+export const UpdateAutopilotSettingsParams = zod.object({
+  gymId: zod.coerce.number(),
+});
+
+export const updateAutopilotSettingsBodyCooldownDaysMax = 90;
+
+export const UpdateAutopilotSettingsBody = zod.object({
+  autopilotOutreach: zod.boolean().optional(),
+  autopilotBilling: zod.boolean().optional(),
+  autopilotLeads: zod.boolean().optional(),
+  cooldownDays: zod
+    .number()
+    .min(1)
+    .max(updateAutopilotSettingsBodyCooldownDaysMax)
+    .optional(),
+  digestFrequency: zod.enum(["daily", "weekly", "disabled"]).optional(),
+});
+
+export const UpdateAutopilotSettingsResponse = zod.object({
+  autopilotOutreach: zod.boolean(),
+  autopilotBilling: zod.boolean(),
+  autopilotLeads: zod.boolean(),
+  cooldownDays: zod.number(),
+  digestFrequency: zod.enum(["daily", "weekly", "disabled"]),
 });
 
 /**
@@ -3345,10 +3560,18 @@ export const GetDashboardStatsResponse = zod.object({
   classesThisWeek: zod.number(),
   openLeads: zod.number(),
   atRiskMembers: zod.number(),
+  atRiskCritical: zod.number(),
+  atRiskHigh: zod.number(),
+  revenueAtRisk: zod.number(),
+  retentionRate: zod
+    .number()
+    .describe("Percentage of active members not at risk"),
   failedPayments: zod.number(),
   collectionRate: zod.number(),
   rsiScore: zod.number(),
   rsiBand: zod.string(),
+  rsiTrend30d: zod.number().nullish(),
+  rsiTrendInsufficient: zod.boolean().optional(),
   revenueByMonth: zod.array(
     zod.object({
       month: zod.string(),
@@ -3356,6 +3579,10 @@ export const GetDashboardStatsResponse = zod.object({
       members: zod.number(),
     }),
   ),
+  revenueTrendSparse: zod
+    .boolean()
+    .optional()
+    .describe("True when fewer than 3 months of revenue data exist"),
   attendanceByDay: zod.array(
     zod.object({
       date: zod.string(),
@@ -3429,6 +3656,10 @@ export const GetRevenueReportResponse = zod.object({
       total: zod.number(),
     }),
   ),
+  revenueTrendSparse: zod
+    .boolean()
+    .optional()
+    .describe("True when fewer than 3 months of revenue data exist"),
 });
 
 /**

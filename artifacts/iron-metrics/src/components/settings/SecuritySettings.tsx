@@ -20,7 +20,7 @@ export function SecuritySettings() {
           <div className="flex items-center justify-between p-3 rounded-xl border border-border bg-background">
             <div>
               <p className="text-sm font-medium">Display Name</p>
-              <p className="text-sm text-muted-foreground">{user?.username || "—"}</p>
+              <p className="text-sm text-muted-foreground">{user?.email || "—"}</p>
             </div>
           </div>
           <div className="flex items-center justify-between p-3 rounded-xl border border-border bg-background">

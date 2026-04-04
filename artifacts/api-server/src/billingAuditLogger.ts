@@ -9,6 +9,7 @@ export type AuditAction =
   | "subscription.plan_changed"
   | "plan.created"
   | "plan.updated"
+  | "plan.changed"
   | "charge.created"
   | "refund.issued"
   | "payment_method.updated"
@@ -23,7 +24,24 @@ export type AuditAction =
   | "recovery.final_warning_sent"
   | "maintenance.tokens_cleaned"
   | "maintenance.recoveries_archived"
-  | "maintenance.scheduled_run";
+  | "maintenance.scheduled_run"
+  | "discount.created"
+  | "discount.applied"
+  | "discount.removed"
+  | "discount.reactivated"
+  | "discount.deactivated"
+  | "hold.started"
+  | "hold.scheduled"
+  | "hold.updated"
+  | "hold.cancelled"
+  | "hold.auto_activated"
+  | "hold.auto_completed"
+  | "recovery.auto_suspended"
+  | "recovery.auto_reactivated"
+  | "credit.added"
+  | "credit.removed"
+  | "tax.configured"
+  | "tax.disabled";
 
 export type AuditSource = "ui" | "webhook" | "system" | "api";
 
