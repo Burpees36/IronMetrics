@@ -453,6 +453,41 @@ paths:
                 items:
                   $ref: "#/components/schemas/TimelineEvent"
 
+  /gyms/{gymId}/members/{memberId}/send-sms:
+    post:
+      operationId: sendMemberSms
+      tags: [members]
+      summary: Send an SMS text message to a member
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: memberId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - message
+              properties:
+                message:
+                  type: string
+      responses:
+        "200":
+          description: SMS sent successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SendSmsResponse"
+
   # LEADS / CRM
   /gyms/{gymId}/leads:
     get:
@@ -675,6 +710,41 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/LeadActivity"
+
+  /gyms/{gymId}/leads/{leadId}/send-sms:
+    post:
+      operationId: sendLeadSms
+      tags: [leads]
+      summary: Send an SMS text message to a lead
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: leadId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - message
+              properties:
+                message:
+                  type: string
+      responses:
+        "200":
+          description: SMS sent successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SendSmsResponse"
 
   # STAFF
   /gyms/{gymId}/staff:
@@ -3355,6 +3425,74 @@ paths:
               schema:
                 $ref: "#/components/schemas/SendEmailResponse"
 
+  /gyms/{gymId}/ai/tasks/{taskId}/send-sms:
+    post:
+      operationId: sendAiTaskSms
+      tags: [ai-operator]
+      summary: Send the AI task content as a text message to the target member or lead
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: SMS sent successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SendSmsResponse"
+
+  /gyms/{gymId}/sms/test:
+    post:
+      operationId: sendTestSms
+      tags: [gyms]
+      summary: Send a test SMS to verify Twilio configuration
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SendTestSmsBody"
+      responses:
+        "200":
+          description: Test SMS sent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SendSmsResponse"
+
+  /gyms/{gymId}/sms/status:
+    get:
+      operationId: getSmsStatus
+      tags: [gyms]
+      summary: Check if SMS sending is configured for this gym
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: SMS configuration status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SmsStatusResponse"
+
   /gyms/{gymId}/ai/impact:
     get:
       operationId: getAiImpact
@@ -4167,6 +4305,10 @@ components:
           type: array
           items:
             type: string
+        smsEnabled:
+          type: boolean
+        twilioPhoneNumber:
+          type: ["string", "null"]
         memberCount:
           type: integer
         activeCount:
@@ -4251,6 +4393,14 @@ components:
           type: array
           items:
             type: string
+        smsEnabled:
+          type: boolean
+        twilioAccountSid:
+          type: ["string", "null"]
+        twilioAuthToken:
+          type: ["string", "null"]
+        twilioPhoneNumber:
+          type: ["string", "null"]
 
     Member:
       type: object
@@ -6535,6 +6685,9 @@ components:
         actionedAt:
           type: ["string", "null"]
           format: date-time
+        channel:
+          type: string
+          enum: [email, sms, both]
         autoSent:
           type: boolean
         createdAt:
@@ -6686,6 +6839,15 @@ components:
           type: boolean
         autopilotLeads:
           type: boolean
+        channelOutreach:
+          type: string
+          enum: [email, sms, both]
+        channelBilling:
+          type: string
+          enum: [email, sms, both]
+        channelLeads:
+          type: string
+          enum: [email, sms, both]
         cooldownDays:
           type: integer
         digestFrequency:
@@ -6695,6 +6857,9 @@ components:
         - autopilotOutreach
         - autopilotBilling
         - autopilotLeads
+        - channelOutreach
+        - channelBilling
+        - channelLeads
         - cooldownDays
         - digestFrequency
 
@@ -6707,6 +6872,15 @@ components:
           type: boolean
         autopilotLeads:
           type: boolean
+        channelOutreach:
+          type: string
+          enum: [email, sms, both]
+        channelBilling:
+          type: string
+          enum: [email, sms, both]
+        channelLeads:
+          type: string
+          enum: [email, sms, both]
         cooldownDays:
           type: integer
           minimum: 1
@@ -7479,6 +7653,43 @@ components:
           type: string
         metadata:
           $ref: '#/components/schemas/UploadUrlRequest'
+    SendSmsResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        messageSid:
+          type: ["string", "null"]
+        recipientPhone:
+          type: string
+        recipientName:
+          type: string
+      required:
+        - success
+        - recipientPhone
+        - recipientName
+
+    SendTestSmsBody:
+      type: object
+      properties:
+        to:
+          type: string
+      required:
+        - to
+
+    SmsStatusResponse:
+      type: object
+      properties:
+        configured:
+          type: boolean
+        smsEnabled:
+          type: boolean
+        twilioPhoneNumber:
+          type: ["string", "null"]
+      required:
+        - configured
+        - smsEnabled
+
     ErrorEnvelope:
       type: object
       required: [error]

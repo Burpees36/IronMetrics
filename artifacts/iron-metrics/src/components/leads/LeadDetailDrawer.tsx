@@ -3,7 +3,8 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useListLeadActivities, useCreateLeadActivity, useUpdateLead, getListLeadActivitiesQueryKey, getListLeadsQueryKey } from "@workspace/api-client-react";
+import { useListLeadActivities, useCreateLeadActivity, useUpdateLead, useSendLeadSms, getListLeadActivitiesQueryKey, getListLeadsQueryKey } from "@workspace/api-client-react";
+import { Textarea } from "@/components/ui/textarea";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { motion, AnimatePresence } from "framer-motion";
@@ -80,6 +81,8 @@ export function LeadDetailDrawer({ lead, gymId, open, onClose, onMoveStage, onCo
   const [showFollowUp, setShowFollowUp] = useState(false);
   const [contactNote, setContactNote] = useState("");
   const [showContactLog, setShowContactLog] = useState(false);
+  const [smsOpen, setSmsOpen] = useState(false);
+  const [smsMessage, setSmsMessage] = useState("");
 
   const { data: activities } = useListLeadActivities(gymId, lead?.id, {
     query: { enabled: !!lead?.id }
@@ -99,6 +102,7 @@ export function LeadDetailDrawer({ lead, gymId, open, onClose, onMoveStage, onCo
 
   const updateLeadMutation = useUpdateLead();
   const createActivityMutation = useCreateLeadActivity();
+  const sendSmsMutation = useSendLeadSms();
 
   const isStale = lead ? computeStale(lead) : false;
   const overdue = lead ? isFollowUpOverdue(lead) : false;
@@ -152,6 +156,25 @@ export function LeadDetailDrawer({ lead, gymId, open, onClose, onMoveStage, onCo
         },
         onError: () => {
           toast({ title: "Error", description: "Failed to log contact." });
+        },
+      }
+    );
+  };
+
+  const handleSendSms = () => {
+    if (!lead || !smsMessage.trim()) return;
+    sendSmsMutation.mutate(
+      { gymId, leadId: lead.id, data: { message: smsMessage.trim() } },
+      {
+        onSuccess: (data) => {
+          toast({ title: "Text Sent", description: `Text sent to ${(data as any).recipientName} (${(data as any).recipientPhone}).` });
+          setSmsOpen(false);
+          setSmsMessage("");
+          queryClient.invalidateQueries({ queryKey: getListLeadActivitiesQueryKey(gymId, lead.id) });
+        },
+        onError: (err: unknown) => {
+          const error = err as { response?: { data?: { error?: string } } };
+          toast({ title: "Failed to Send", description: error?.response?.data?.error || "Could not send text.", variant: "destructive" });
         },
       }
     );
@@ -300,6 +323,15 @@ export function LeadDetailDrawer({ lead, gymId, open, onClose, onMoveStage, onCo
                 <CalendarClock className="h-3.5 w-3.5 text-muted-foreground" />
                 Schedule Follow-up
               </button>
+              {lead.phone && (
+                <button
+                  onClick={() => { setSmsOpen(true); setSmsMessage(""); }}
+                  className="flex items-center gap-2 px-3 py-2 rounded-lg border border-emerald-500/20 bg-emerald-500/5 text-xs font-medium text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10 transition-colors"
+                >
+                  <MessageSquare className="h-3.5 w-3.5" />
+                  Send Text
+                </button>
+              )}
               {lead.stage !== "converted" && lead.stage !== "lost" && (
                 <>
                   <button
@@ -386,6 +418,40 @@ export function LeadDetailDrawer({ lead, gymId, open, onClose, onMoveStage, onCo
                     <button onClick={handleScheduleFollowUp} disabled={updateLeadMutation.isPending} className="px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-md font-medium hover:bg-primary/90 disabled:opacity-50 transition-colors">
                       {updateLeadMutation.isPending ? "Saving..." : "Save"}
                     </button>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          <AnimatePresence>
+            {smsOpen && (
+              <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
+                <div className="space-y-2 p-3 rounded-lg border border-emerald-500/20 bg-emerald-500/5">
+                  <div className="flex items-center gap-2">
+                    <MessageSquare className="h-3.5 w-3.5 text-emerald-600" />
+                    <h4 className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">Send Text to {lead.firstName}</h4>
+                  </div>
+                  <Textarea
+                    value={smsMessage}
+                    onChange={(e) => setSmsMessage(e.target.value)}
+                    placeholder="Type your message..."
+                    className="text-sm min-h-[80px]"
+                    maxLength={1600}
+                  />
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] text-muted-foreground">{smsMessage.length}/1600</span>
+                    <div className="flex gap-2">
+                      <button onClick={() => setSmsOpen(false)} className="px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors">Cancel</button>
+                      <button
+                        onClick={handleSendSms}
+                        disabled={!smsMessage.trim() || sendSmsMutation.isPending}
+                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-emerald-600 text-white rounded-md font-medium hover:bg-emerald-700 disabled:opacity-50 transition-colors"
+                      >
+                        <Send className="h-3 w-3" />
+                        {sendSmsMutation.isPending ? "Sending..." : "Send"}
+                      </button>
+                    </div>
                   </div>
                 </div>
               </motion.div>

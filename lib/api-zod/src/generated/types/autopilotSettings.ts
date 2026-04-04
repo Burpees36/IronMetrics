@@ -5,12 +5,18 @@
  * Iron Metrics Gym Management Platform API
  * OpenAPI spec version: 0.1.0
  */
+import type { AutopilotSettingsChannelBilling } from "./autopilotSettingsChannelBilling";
+import type { AutopilotSettingsChannelLeads } from "./autopilotSettingsChannelLeads";
+import type { AutopilotSettingsChannelOutreach } from "./autopilotSettingsChannelOutreach";
 import type { AutopilotSettingsDigestFrequency } from "./autopilotSettingsDigestFrequency";
 
 export interface AutopilotSettings {
   autopilotOutreach: boolean;
   autopilotBilling: boolean;
   autopilotLeads: boolean;
+  channelOutreach: AutopilotSettingsChannelOutreach;
+  channelBilling: AutopilotSettingsChannelBilling;
+  channelLeads: AutopilotSettingsChannelLeads;
   cooldownDays: number;
   digestFrequency: AutopilotSettingsDigestFrequency;
 }

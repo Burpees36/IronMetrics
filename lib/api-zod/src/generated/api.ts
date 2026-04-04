@@ -91,6 +91,8 @@ export const ListGymsResponseItem = zod.object({
   communicationStyleTone: zod.string().optional(),
   communicationStyleRules: zod.array(zod.string()).optional(),
   communicationStyleSamples: zod.array(zod.string()).optional(),
+  smsEnabled: zod.boolean().optional(),
+  twilioPhoneNumber: zod.string().nullish(),
   memberCount: zod.number(),
   activeCount: zod.number(),
   createdAt: zod.date(),
@@ -141,6 +143,8 @@ export const GetGymResponse = zod.object({
   communicationStyleTone: zod.string().optional(),
   communicationStyleRules: zod.array(zod.string()).optional(),
   communicationStyleSamples: zod.array(zod.string()).optional(),
+  smsEnabled: zod.boolean().optional(),
+  twilioPhoneNumber: zod.string().nullish(),
   memberCount: zod.number(),
   activeCount: zod.number(),
   createdAt: zod.date(),
@@ -173,6 +177,10 @@ export const UpdateGymBody = zod.object({
   communicationStyleTone: zod.string().optional(),
   communicationStyleRules: zod.array(zod.string()).optional(),
   communicationStyleSamples: zod.array(zod.string()).optional(),
+  smsEnabled: zod.boolean().optional(),
+  twilioAccountSid: zod.string().nullish(),
+  twilioAuthToken: zod.string().nullish(),
+  twilioPhoneNumber: zod.string().nullish(),
 });
 
 export const UpdateGymResponse = zod.object({
@@ -198,6 +206,8 @@ export const UpdateGymResponse = zod.object({
   communicationStyleTone: zod.string().optional(),
   communicationStyleRules: zod.array(zod.string()).optional(),
   communicationStyleSamples: zod.array(zod.string()).optional(),
+  smsEnabled: zod.boolean().optional(),
+  twilioPhoneNumber: zod.string().nullish(),
   memberCount: zod.number(),
   activeCount: zod.number(),
   createdAt: zod.date(),
@@ -489,6 +499,25 @@ export const GetMemberTimelineResponse = zod.array(
 );
 
 /**
+ * @summary Send an SMS text message to a member
+ */
+export const SendMemberSmsParams = zod.object({
+  gymId: zod.coerce.number(),
+  memberId: zod.coerce.number(),
+});
+
+export const SendMemberSmsBody = zod.object({
+  message: zod.string(),
+});
+
+export const SendMemberSmsResponse = zod.object({
+  success: zod.boolean(),
+  messageSid: zod.string().nullish(),
+  recipientPhone: zod.string(),
+  recipientName: zod.string(),
+});
+
+/**
  * @summary List leads
  */
 export const ListLeadsParams = zod.object({
@@ -739,6 +768,25 @@ export const CreateLeadActivityResponseItem = zod.object({
 export const CreateLeadActivityResponse = zod.array(
   CreateLeadActivityResponseItem,
 );
+
+/**
+ * @summary Send an SMS text message to a lead
+ */
+export const SendLeadSmsParams = zod.object({
+  gymId: zod.coerce.number(),
+  leadId: zod.coerce.number(),
+});
+
+export const SendLeadSmsBody = zod.object({
+  message: zod.string(),
+});
+
+export const SendLeadSmsResponse = zod.object({
+  success: zod.boolean(),
+  messageSid: zod.string().nullish(),
+  recipientPhone: zod.string(),
+  recipientName: zod.string(),
+});
 
 /**
  * @summary List gym staff
@@ -3403,6 +3451,7 @@ export const ListAiTasksResponseItem = zod.object({
   outcomeDetectedAt: zod.date().nullish(),
   revenueImpact: zod.string().nullish(),
   actionedAt: zod.date().nullish(),
+  channel: zod.enum(["email", "sms", "both"]).optional(),
   autoSent: zod.boolean(),
   createdAt: zod.date(),
 });
@@ -3467,6 +3516,7 @@ export const GenerateAiTasksResponse = zod.object({
       outcomeDetectedAt: zod.date().nullish(),
       revenueImpact: zod.string().nullish(),
       actionedAt: zod.date().nullish(),
+      channel: zod.enum(["email", "sms", "both"]).optional(),
       autoSent: zod.boolean(),
       createdAt: zod.date(),
     }),
@@ -3515,6 +3565,7 @@ export const UpdateAiTaskResponse = zod.object({
   outcomeDetectedAt: zod.date().nullish(),
   revenueImpact: zod.string().nullish(),
   actionedAt: zod.date().nullish(),
+  channel: zod.enum(["email", "sms", "both"]).optional(),
   autoSent: zod.boolean(),
   createdAt: zod.date(),
 });
@@ -3532,6 +3583,52 @@ export const SendAiTaskEmailResponse = zod.object({
   messageId: zod.string().nullish(),
   recipientEmail: zod.string(),
   recipientName: zod.string(),
+});
+
+/**
+ * @summary Send the AI task content as a text message to the target member or lead
+ */
+export const SendAiTaskSmsParams = zod.object({
+  gymId: zod.coerce.number(),
+  taskId: zod.coerce.number(),
+});
+
+export const SendAiTaskSmsResponse = zod.object({
+  success: zod.boolean(),
+  messageSid: zod.string().nullish(),
+  recipientPhone: zod.string(),
+  recipientName: zod.string(),
+});
+
+/**
+ * @summary Send a test SMS to verify Twilio configuration
+ */
+export const SendTestSmsParams = zod.object({
+  gymId: zod.coerce.number(),
+});
+
+export const SendTestSmsBody = zod.object({
+  to: zod.string(),
+});
+
+export const SendTestSmsResponse = zod.object({
+  success: zod.boolean(),
+  messageSid: zod.string().nullish(),
+  recipientPhone: zod.string(),
+  recipientName: zod.string(),
+});
+
+/**
+ * @summary Check if SMS sending is configured for this gym
+ */
+export const GetSmsStatusParams = zod.object({
+  gymId: zod.coerce.number(),
+});
+
+export const GetSmsStatusResponse = zod.object({
+  configured: zod.boolean(),
+  smsEnabled: zod.boolean(),
+  twilioPhoneNumber: zod.string().nullish(),
 });
 
 /**
@@ -3592,6 +3689,9 @@ export const GetAutopilotSettingsResponse = zod.object({
   autopilotOutreach: zod.boolean(),
   autopilotBilling: zod.boolean(),
   autopilotLeads: zod.boolean(),
+  channelOutreach: zod.enum(["email", "sms", "both"]),
+  channelBilling: zod.enum(["email", "sms", "both"]),
+  channelLeads: zod.enum(["email", "sms", "both"]),
   cooldownDays: zod.number(),
   digestFrequency: zod.enum(["daily", "weekly", "disabled"]),
 });
@@ -3609,6 +3709,9 @@ export const UpdateAutopilotSettingsBody = zod.object({
   autopilotOutreach: zod.boolean().optional(),
   autopilotBilling: zod.boolean().optional(),
   autopilotLeads: zod.boolean().optional(),
+  channelOutreach: zod.enum(["email", "sms", "both"]).optional(),
+  channelBilling: zod.enum(["email", "sms", "both"]).optional(),
+  channelLeads: zod.enum(["email", "sms", "both"]).optional(),
   cooldownDays: zod
     .number()
     .min(1)
@@ -3621,6 +3724,9 @@ export const UpdateAutopilotSettingsResponse = zod.object({
   autopilotOutreach: zod.boolean(),
   autopilotBilling: zod.boolean(),
   autopilotLeads: zod.boolean(),
+  channelOutreach: zod.enum(["email", "sms", "both"]),
+  channelBilling: zod.enum(["email", "sms", "both"]),
+  channelLeads: zod.enum(["email", "sms", "both"]),
   cooldownDays: zod.number(),
   digestFrequency: zod.enum(["daily", "weekly", "disabled"]),
 });

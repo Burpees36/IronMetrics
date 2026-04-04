@@ -57,6 +57,9 @@ export interface Gym {
   communicationStyleTone?: string;
   communicationStyleRules?: string[];
   communicationStyleSamples?: string[];
+  smsEnabled?: boolean;
+  /** @nullable */
+  twilioPhoneNumber?: string | null;
   memberCount: number;
   activeCount: number;
   createdAt: string;
@@ -111,6 +114,13 @@ export interface UpdateGymBody {
   communicationStyleTone?: string;
   communicationStyleRules?: string[];
   communicationStyleSamples?: string[];
+  smsEnabled?: boolean;
+  /** @nullable */
+  twilioAccountSid?: string | null;
+  /** @nullable */
+  twilioAuthToken?: string | null;
+  /** @nullable */
+  twilioPhoneNumber?: string | null;
 }
 
 export type MemberStatus = (typeof MemberStatus)[keyof typeof MemberStatus];
@@ -1640,6 +1650,14 @@ export const AiTaskOutcome = {
   no_change: "no_change",
 } as const;
 
+export type AiTaskChannel = (typeof AiTaskChannel)[keyof typeof AiTaskChannel];
+
+export const AiTaskChannel = {
+  email: "email",
+  sms: "sms",
+  both: "both",
+} as const;
+
 export interface AiTask {
   id: number;
   gymId: number;
@@ -1664,6 +1682,7 @@ export interface AiTask {
   revenueImpact?: string | null;
   /** @nullable */
   actionedAt?: string | null;
+  channel?: AiTaskChannel;
   autoSent: boolean;
   createdAt: string;
 }
@@ -1748,6 +1767,33 @@ export interface AiImpactResponse {
   timeline: AiImpactResponseTimelineItem[];
 }
 
+export type AutopilotSettingsChannelOutreach =
+  (typeof AutopilotSettingsChannelOutreach)[keyof typeof AutopilotSettingsChannelOutreach];
+
+export const AutopilotSettingsChannelOutreach = {
+  email: "email",
+  sms: "sms",
+  both: "both",
+} as const;
+
+export type AutopilotSettingsChannelBilling =
+  (typeof AutopilotSettingsChannelBilling)[keyof typeof AutopilotSettingsChannelBilling];
+
+export const AutopilotSettingsChannelBilling = {
+  email: "email",
+  sms: "sms",
+  both: "both",
+} as const;
+
+export type AutopilotSettingsChannelLeads =
+  (typeof AutopilotSettingsChannelLeads)[keyof typeof AutopilotSettingsChannelLeads];
+
+export const AutopilotSettingsChannelLeads = {
+  email: "email",
+  sms: "sms",
+  both: "both",
+} as const;
+
 export type AutopilotSettingsDigestFrequency =
   (typeof AutopilotSettingsDigestFrequency)[keyof typeof AutopilotSettingsDigestFrequency];
 
@@ -1761,9 +1807,39 @@ export interface AutopilotSettings {
   autopilotOutreach: boolean;
   autopilotBilling: boolean;
   autopilotLeads: boolean;
+  channelOutreach: AutopilotSettingsChannelOutreach;
+  channelBilling: AutopilotSettingsChannelBilling;
+  channelLeads: AutopilotSettingsChannelLeads;
   cooldownDays: number;
   digestFrequency: AutopilotSettingsDigestFrequency;
 }
+
+export type UpdateAutopilotSettingsBodyChannelOutreach =
+  (typeof UpdateAutopilotSettingsBodyChannelOutreach)[keyof typeof UpdateAutopilotSettingsBodyChannelOutreach];
+
+export const UpdateAutopilotSettingsBodyChannelOutreach = {
+  email: "email",
+  sms: "sms",
+  both: "both",
+} as const;
+
+export type UpdateAutopilotSettingsBodyChannelBilling =
+  (typeof UpdateAutopilotSettingsBodyChannelBilling)[keyof typeof UpdateAutopilotSettingsBodyChannelBilling];
+
+export const UpdateAutopilotSettingsBodyChannelBilling = {
+  email: "email",
+  sms: "sms",
+  both: "both",
+} as const;
+
+export type UpdateAutopilotSettingsBodyChannelLeads =
+  (typeof UpdateAutopilotSettingsBodyChannelLeads)[keyof typeof UpdateAutopilotSettingsBodyChannelLeads];
+
+export const UpdateAutopilotSettingsBodyChannelLeads = {
+  email: "email",
+  sms: "sms",
+  both: "both",
+} as const;
 
 export type UpdateAutopilotSettingsBodyDigestFrequency =
   (typeof UpdateAutopilotSettingsBodyDigestFrequency)[keyof typeof UpdateAutopilotSettingsBodyDigestFrequency];
@@ -1778,6 +1854,9 @@ export interface UpdateAutopilotSettingsBody {
   autopilotOutreach?: boolean;
   autopilotBilling?: boolean;
   autopilotLeads?: boolean;
+  channelOutreach?: UpdateAutopilotSettingsBodyChannelOutreach;
+  channelBilling?: UpdateAutopilotSettingsBodyChannelBilling;
+  channelLeads?: UpdateAutopilotSettingsBodyChannelLeads;
   /**
    * @minimum 1
    * @maximum 90
@@ -2232,6 +2311,25 @@ export interface UploadUrlResponse {
   metadata?: UploadUrlRequest;
 }
 
+export interface SendSmsResponse {
+  success: boolean;
+  /** @nullable */
+  messageSid?: string | null;
+  recipientPhone: string;
+  recipientName: string;
+}
+
+export interface SendTestSmsBody {
+  to: string;
+}
+
+export interface SmsStatusResponse {
+  configured: boolean;
+  smsEnabled: boolean;
+  /** @nullable */
+  twilioPhoneNumber?: string | null;
+}
+
 export interface ErrorEnvelope {
   error: string;
 }
@@ -2248,6 +2346,10 @@ export type CheckMemberEmailParams = {
   excludeMemberId?: number;
 };
 
+export type SendMemberSmsBody = {
+  message: string;
+};
+
 export type ListLeadsParams = {
   stage?: string;
   search?: string;
@@ -2261,6 +2363,10 @@ export type ConvertLeadToMemberBody = {
 export type CreateLeadActivityBody = {
   type: string;
   description: string;
+};
+
+export type SendLeadSmsBody = {
+  message: string;
 };
 
 export type ListClassesParams = {

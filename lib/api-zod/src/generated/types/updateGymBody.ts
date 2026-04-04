@@ -38,4 +38,11 @@ export interface UpdateGymBody {
   communicationStyleTone?: string;
   communicationStyleRules?: string[];
   communicationStyleSamples?: string[];
+  smsEnabled?: boolean;
+  /** @nullable */
+  twilioAccountSid?: string | null;
+  /** @nullable */
+  twilioAuthToken?: string | null;
+  /** @nullable */
+  twilioPhoneNumber?: string | null;
 }

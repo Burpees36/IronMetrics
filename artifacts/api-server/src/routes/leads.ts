@@ -1,8 +1,9 @@
 import { Router, type IRouter } from "express";
 import { eq, and, ilike, or, desc, sql, count } from "drizzle-orm";
-import { db, leadsTable, leadActivitiesTable, membersTable, timelineEventsTable } from "@workspace/db";
+import { db, leadsTable, leadActivitiesTable, membersTable, timelineEventsTable, gymsTable } from "@workspace/db";
 import { CreateLeadBody, UpdateLeadBody } from "@workspace/api-zod";
 import { enrollLeadInSequence, pauseLeadSequences } from "../services/lead-sequence-engine";
+import { sendLeadSms } from "../services/member-sms";
 
 const router: IRouter = Router();
 
@@ -315,5 +316,54 @@ function computeStale(lead: any): boolean {
 
   return false;
 }
+
+router.post("/gyms/:gymId/leads/:leadId/send-sms", async (req, res): Promise<void> => {
+  const gymId = parseGymId(req.params);
+  const leadId = parseLeadId(req.params);
+  if (!gymId || !leadId) { res.status(400).json({ error: "Invalid gym or lead ID" }); return; }
+
+  const { message } = req.body as { message?: string };
+  if (!message || typeof message !== "string" || message.trim().length === 0) {
+    res.status(400).json({ error: "Message is required" }); return;
+  }
+
+  try {
+    const [lead] = await db.select().from(leadsTable).where(and(eq(leadsTable.id, leadId), eq(leadsTable.gymId, gymId)));
+    if (!lead) { res.status(404).json({ error: "Lead not found" }); return; }
+    if (!lead.phone) { res.status(400).json({ error: "Lead has no phone number on file" }); return; }
+
+    const [gym] = await db.select().from(gymsTable).where(eq(gymsTable.id, gymId));
+    if (!gym) { res.status(404).json({ error: "Gym not found" }); return; }
+    if (!gym.smsEnabled) { res.status(400).json({ error: "SMS is not enabled for this gym" }); return; }
+
+    const result = await sendLeadSms({
+      leadId,
+      gymId,
+      to: lead.phone,
+      body: message.trim(),
+      smsType: "manual",
+      gymConfig: {
+        smsEnabled: gym.smsEnabled ?? false,
+        twilioAccountSid: gym.twilioAccountSid,
+        twilioAuthToken: gym.twilioAuthToken,
+        twilioPhoneNumber: gym.twilioPhoneNumber,
+      },
+    });
+
+    if (!result.success) {
+      res.status(500).json({ error: result.error || "Failed to send SMS" }); return;
+    }
+
+    res.json({
+      success: true,
+      recipientName: `${lead.firstName} ${lead.lastName}`,
+      recipientPhone: lead.phone,
+      messageSid: result.messageSid,
+    });
+  } catch (err) {
+    console.error("Error sending lead SMS:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
 
 export default router;

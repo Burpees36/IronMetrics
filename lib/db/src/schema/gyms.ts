@@ -38,6 +38,10 @@ export const gymsTable = pgTable("gyms", {
   communicationStyleRules: text("communication_style_rules").array().notNull().default([]),
   communicationStyleSamples: text("communication_style_samples").array().notNull().default([]),
   wodifyApiKey: text("wodify_api_key"),
+  smsEnabled: boolean("sms_enabled").notNull().default(false),
+  twilioAccountSid: text("twilio_account_sid"),
+  twilioAuthToken: text("twilio_auth_token"),
+  twilioPhoneNumber: text("twilio_phone_number"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

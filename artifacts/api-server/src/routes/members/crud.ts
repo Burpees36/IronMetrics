@@ -1,8 +1,9 @@
 import { Router, type IRouter } from "express";
 import { eq, and, ilike, or, count, desc, ne, sql, inArray } from "drizzle-orm";
-import { db, membersTable, memberNotesTable, timelineEventsTable, subscriptionsTable, attendanceTable, membershipPlansTable } from "@workspace/db";
+import { db, membersTable, memberNotesTable, timelineEventsTable, subscriptionsTable, attendanceTable, membershipPlansTable, gymsTable } from "@workspace/db";
 import { stripeService } from "../../stripeService";
 import { getStripeClient } from "../../stripeClient";
+import { sendMemberSms } from "../../services/member-sms";
 import { CreateMemberBody, UpdateMemberBody } from "@workspace/api-zod";
 import { parseGymId, parseMemberId, EMAIL_REGEX } from "./helpers";
 
@@ -355,6 +356,56 @@ router.patch("/gyms/:gymId/members/:memberId", async (req, res): Promise<void> =
     ...member,
     riskScore: member.riskScore ? parseFloat(member.riskScore) : null,
   });
+});
+
+router.post("/gyms/:gymId/members/:memberId/send-sms", async (req, res): Promise<void> => {
+  const gymId = parseGymId(req.params);
+  const memberId = parseMemberId(req.params);
+  if (!gymId || !memberId) { res.status(400).json({ error: "Invalid gym or member ID" }); return; }
+
+  const { message } = req.body as { message?: string };
+  if (!message || typeof message !== "string" || message.trim().length === 0) {
+    res.status(400).json({ error: "Message is required" }); return;
+  }
+
+  try {
+    const [member] = await db.select().from(membersTable).where(and(eq(membersTable.id, memberId), eq(membersTable.gymId, gymId)));
+    if (!member) { res.status(404).json({ error: "Member not found" }); return; }
+    if (!member.phone) { res.status(400).json({ error: "Member has no phone number on file" }); return; }
+
+    const [gym] = await db.select().from(gymsTable).where(eq(gymsTable.id, gymId));
+    if (!gym) { res.status(404).json({ error: "Gym not found" }); return; }
+    if (!gym.smsEnabled) { res.status(400).json({ error: "SMS is not enabled for this gym" }); return; }
+
+    const result = await sendMemberSms({
+      memberId,
+      gymId,
+      to: member.phone,
+      body: message.trim(),
+      smsType: "manual",
+      timelineTitle: "Text Message Sent",
+      gymConfig: {
+        smsEnabled: gym.smsEnabled ?? false,
+        twilioAccountSid: gym.twilioAccountSid,
+        twilioAuthToken: gym.twilioAuthToken,
+        twilioPhoneNumber: gym.twilioPhoneNumber,
+      },
+    });
+
+    if (!result.success) {
+      res.status(500).json({ error: result.error || "Failed to send SMS" }); return;
+    }
+
+    res.json({
+      success: true,
+      recipientName: `${member.firstName} ${member.lastName}`,
+      recipientPhone: member.phone,
+      messageSid: result.messageSid,
+    });
+  } catch (err) {
+    console.error("Error sending member SMS:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
 });
 
 export default router;

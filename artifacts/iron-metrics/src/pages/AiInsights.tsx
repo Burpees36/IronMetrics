@@ -9,6 +9,7 @@ import {
   useGetDashboardStats,
   getListAiTasksQueryKey,
   useSendAiTaskEmail,
+  useSendAiTaskSms,
   useGetAiEmailStatus,
   useGetAiLastScan,
   useGetAiImpact,
@@ -31,7 +32,7 @@ import {
 } from "@/components/ui/dialog";
 import {
   BrainCircuit, Sparkles, Send, CheckCircle2, Clock, Loader2,
-  FileText, X, Filter, Users, CreditCard,
+  FileText, X, Filter, Users, CreditCard, MessageSquare,
   Target, Megaphone, BarChart3, Edit2, RefreshCw,
   History, Mail, MailCheck, AlertCircle, Info, TrendingUp, TrendingDown, DollarSign,
   UserCheck, Eye, ArrowUpRight, ArrowDownRight, ArrowRight,
@@ -228,25 +229,45 @@ function SmartActionsModal({ gymId, open, onOpenChange }: { gymId: number; open:
               </h3>
               <div className="space-y-3">
                 {([
-                  { key: "autopilotOutreach", label: "Outreach", desc: "At-risk member re-engagement", icon: Send, color: "bg-blue-500/10 text-blue-500" },
-                  { key: "autopilotBilling", label: "Billing", desc: "Failed payment follow-ups", icon: CreditCard, color: "bg-amber-500/10 text-amber-500" },
-                  { key: "autopilotLeads", label: "Leads", desc: "Stale lead follow-ups", icon: Target, color: "bg-cyan-500/10 text-cyan-500" },
+                  { key: "autopilotOutreach", channelKey: "channelOutreach", label: "Outreach", desc: "At-risk member re-engagement", icon: Send, color: "bg-blue-500/10 text-blue-500" },
+                  { key: "autopilotBilling", channelKey: "channelBilling", label: "Billing", desc: "Failed payment follow-ups", icon: CreditCard, color: "bg-amber-500/10 text-amber-500" },
+                  { key: "autopilotLeads", channelKey: "channelLeads", label: "Leads", desc: "Stale lead follow-ups", icon: Target, color: "bg-cyan-500/10 text-cyan-500" },
                 ] as const).map((cat) => (
-                  <div key={cat.key} className="flex items-center justify-between p-3 rounded-lg bg-secondary/50 border border-border">
-                    <div className="flex items-center gap-3">
-                      <div className={`h-8 w-8 rounded-full flex items-center justify-center ${cat.color}`}>
-                        <cat.icon className="h-4 w-4" />
+                  <div key={cat.key} className="p-3 rounded-lg bg-secondary/50 border border-border space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className={`h-8 w-8 rounded-full flex items-center justify-center ${cat.color}`}>
+                          <cat.icon className="h-4 w-4" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-foreground">{cat.label}</p>
+                          <p className="text-xs text-muted-foreground">{cat.desc}</p>
+                        </div>
                       </div>
-                      <div>
-                        <p className="text-sm font-medium text-foreground">{cat.label}</p>
-                        <p className="text-xs text-muted-foreground">{cat.desc}</p>
-                      </div>
+                      <ToggleSwitch
+                        checked={(settings as Record<string, unknown>)[cat.key] as boolean}
+                        onChange={(v) => handleToggle(cat.key, v)}
+                        disabled={updateSettings.isPending}
+                      />
                     </div>
-                    <ToggleSwitch
-                      checked={(settings as Record<string, unknown>)[cat.key] as boolean}
-                      onChange={(v) => handleToggle(cat.key, v)}
-                      disabled={updateSettings.isPending}
-                    />
+                    {(settings as Record<string, unknown>)[cat.key] && (
+                      <div className="flex gap-1.5 ml-11">
+                        {(["email", "sms", "both"] as const).map((ch) => (
+                          <button
+                            key={ch}
+                            onClick={() => handleToggle(cat.channelKey, ch as any)}
+                            disabled={updateSettings.isPending}
+                            className={`px-2.5 py-1 rounded-md text-xs font-medium transition-all border ${
+                              (settings as Record<string, unknown>)[cat.channelKey] === ch
+                                ? "bg-primary text-primary-foreground border-primary shadow-sm"
+                                : "bg-muted/50 text-muted-foreground border-border hover:border-primary/40"
+                            }`}
+                          >
+                            {ch === "email" ? "Email" : ch === "sms" ? "SMS" : "Both"}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -258,7 +279,7 @@ function SmartActionsModal({ gymId, open, onOpenChange }: { gymId: number; open:
                 Cooldown Period
               </h3>
               <p className="text-xs text-muted-foreground">
-                Minimum days between auto-emails to the same person.
+                Minimum days between auto-messages to the same person.
               </p>
               <div className="flex items-center gap-3">
                 <input
@@ -308,7 +329,7 @@ function SmartActionsModal({ gymId, open, onOpenChange }: { gymId: number; open:
                 <div>
                   <p className="font-medium text-foreground">Safety guardrails active</p>
                   <p className="mt-0.5">
-                    Smart Actions only sends to contacts with valid email addresses and respects a {settings.cooldownDays}-day cooldown per person.
+                    Smart Actions only sends to contacts with valid email or phone and respects a {settings.cooldownDays}-day cooldown per person across all channels.
                   </p>
                 </div>
               </div>
@@ -968,7 +989,7 @@ export function AiInsights() {
       onSuccess: (data: Record<string, unknown>, variables: Record<string, unknown>) => {
         queryClient.setQueryData(queryKey, (old: Array<Record<string, unknown>> | undefined) => {
           if (!old) return old;
-          return old.map((t) => t.id === variables.taskId ? { ...t, status: 'sent', updatedAt: new Date().toISOString() } : t);
+          return old.map((t) => t.id === variables.taskId ? { ...t, status: 'sent', channel: 'email', updatedAt: new Date().toISOString() } : t);
         });
         queryClient.invalidateQueries({ queryKey });
         toast({ title: "Email Sent", description: `Email sent to ${data.recipientName} (${data.recipientEmail}).` });
@@ -977,6 +998,25 @@ export function AiInsights() {
       onError: (err: unknown) => {
         const error = err as { response?: { data?: { error?: string } } };
         toast({ title: "Failed to Send", description: error?.response?.data?.error || "Could not send email. Please try again.", variant: "destructive" });
+        setSendingTaskId(null);
+      },
+    }
+  });
+
+  const sendSms = useSendAiTaskSms({
+    mutation: {
+      onSuccess: (data: Record<string, unknown>, variables: Record<string, unknown>) => {
+        queryClient.setQueryData(queryKey, (old: Array<Record<string, unknown>> | undefined) => {
+          if (!old) return old;
+          return old.map((t) => t.id === variables.taskId ? { ...t, status: 'sent', channel: 'sms', updatedAt: new Date().toISOString() } : t);
+        });
+        queryClient.invalidateQueries({ queryKey });
+        toast({ title: "Text Sent", description: `Text sent to ${data.recipientName} (${data.recipientPhone}).` });
+        setSendingTaskId(null);
+      },
+      onError: (err: unknown) => {
+        const error = err as { response?: { data?: { error?: string } } };
+        toast({ title: "Failed to Send", description: error?.response?.data?.error || "Could not send text. Please try again.", variant: "destructive" });
         setSendingTaskId(null);
       },
     }
@@ -1105,6 +1145,11 @@ export function AiInsights() {
   function handleSendEmail(task: Record<string, unknown>) {
     setSendingTaskId(task.id as number);
     sendEmail.mutate({ gymId: activeGymId as number, taskId: task.id as number });
+  }
+
+  function handleSendSms(task: Record<string, unknown>) {
+    setSendingTaskId(task.id as number);
+    sendSms.mutate({ gymId: activeGymId as number, taskId: task.id as number });
   }
 
   function handleDismiss(task: Record<string, unknown>) {
@@ -1785,14 +1830,24 @@ export function AiInsights() {
                           Edit
                         </button>
                         {canEmail && isPro && (
-                          <button
-                            onClick={() => emailReady ? handleSendEmail(task) : undefined}
-                            disabled={!emailReady || isSending || sendEmail.isPending}
-                            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors min-h-[36px] disabled:opacity-50 disabled:cursor-not-allowed ${emailReady ? "text-blue-600 hover:text-blue-500 border border-blue-200 hover:border-blue-300" : "text-muted-foreground border border-border"}`}
-                          >
-                            {isSending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Mail className="h-3.5 w-3.5" />}
-                            Send
-                          </button>
+                          <>
+                            <button
+                              onClick={() => emailReady ? handleSendEmail(task) : undefined}
+                              disabled={!emailReady || isSending || sendEmail.isPending}
+                              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors min-h-[36px] disabled:opacity-50 disabled:cursor-not-allowed ${emailReady ? "text-blue-600 hover:text-blue-500 border border-blue-200 hover:border-blue-300" : "text-muted-foreground border border-border"}`}
+                            >
+                              {isSending && sendingTaskId === (task.id as number) && !sendSms.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Mail className="h-3.5 w-3.5" />}
+                              Email
+                            </button>
+                            <button
+                              onClick={() => handleSendSms(task)}
+                              disabled={isSending || sendSms.isPending}
+                              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors min-h-[36px] disabled:opacity-50 disabled:cursor-not-allowed text-emerald-600 hover:text-emerald-500 border border-emerald-200 hover:border-emerald-300"
+                            >
+                              {isSending && sendingTaskId === (task.id as number) && sendSms.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <MessageSquare className="h-3.5 w-3.5" />}
+                              Text
+                            </button>
+                          </>
                         )}
                         <button
                           onClick={() => handleApprove(task)}

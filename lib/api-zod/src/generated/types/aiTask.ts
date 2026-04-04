@@ -5,6 +5,7 @@
  * Iron Metrics Gym Management Platform API
  * OpenAPI spec version: 0.1.0
  */
+import type { AiTaskChannel } from "./aiTaskChannel";
 import type { AiTaskOutcome } from "./aiTaskOutcome";
 import type { AiTaskPriority } from "./aiTaskPriority";
 import type { AiTaskStatus } from "./aiTaskStatus";
@@ -33,6 +34,7 @@ export interface AiTask {
   revenueImpact?: string | null;
   /** @nullable */
   actionedAt?: Date | null;
+  channel?: AiTaskChannel;
   autoSent: boolean;
   createdAt: Date;
 }

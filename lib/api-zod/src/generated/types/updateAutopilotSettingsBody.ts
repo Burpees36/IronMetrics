@@ -5,12 +5,18 @@
  * Iron Metrics Gym Management Platform API
  * OpenAPI spec version: 0.1.0
  */
+import type { UpdateAutopilotSettingsBodyChannelBilling } from "./updateAutopilotSettingsBodyChannelBilling";
+import type { UpdateAutopilotSettingsBodyChannelLeads } from "./updateAutopilotSettingsBodyChannelLeads";
+import type { UpdateAutopilotSettingsBodyChannelOutreach } from "./updateAutopilotSettingsBodyChannelOutreach";
 import type { UpdateAutopilotSettingsBodyDigestFrequency } from "./updateAutopilotSettingsBodyDigestFrequency";
 
 export interface UpdateAutopilotSettingsBody {
   autopilotOutreach?: boolean;
   autopilotBilling?: boolean;
   autopilotLeads?: boolean;
+  channelOutreach?: UpdateAutopilotSettingsBodyChannelOutreach;
+  channelBilling?: UpdateAutopilotSettingsBodyChannelBilling;
+  channelLeads?: UpdateAutopilotSettingsBodyChannelLeads;
   /**
    * @minimum 1
    * @maximum 90

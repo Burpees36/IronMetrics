@@ -41,6 +41,9 @@ export interface Gym {
   communicationStyleTone?: string;
   communicationStyleRules?: string[];
   communicationStyleSamples?: string[];
+  smsEnabled?: boolean;
+  /** @nullable */
+  twilioPhoneNumber?: string | null;
   memberCount: number;
   activeCount: number;
   createdAt: Date;

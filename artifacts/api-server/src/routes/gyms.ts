@@ -1,9 +1,10 @@
 import { Router, type IRouter } from "express";
 import { eq, and, count } from "drizzle-orm";
 import { db, gymsTable, gymStaffTable, membersTable } from "@workspace/db";
-import { CreateGymBody, UpdateGymBody, GetGymParams } from "@workspace/api-zod";
+import { CreateGymBody, UpdateGymBody, GetGymParams, SendTestSmsBody } from "@workspace/api-zod";
 import { activeMemberCondition } from "../blendedMetrics";
 import { applyOwnerVoice, type CommunicationStyle } from "../services/ai-task-generation";
+import { getSmsService } from "../services/sms-service";
 
 const router: IRouter = Router();
 
@@ -239,6 +240,65 @@ router.post("/gyms/:gymId/preview-voice", async (req, res): Promise<void> => {
   res.json({
     original: { subject: sampleSubject, content: sampleContent },
     styled: { subject: result.subject, content: result.content },
+  });
+});
+
+router.get("/gyms/:gymId/sms/status", async (req, res): Promise<void> => {
+  const raw = Array.isArray(req.params.gymId) ? req.params.gymId[0] : req.params.gymId;
+  const gymId = parseInt(raw, 10);
+  if (isNaN(gymId)) { res.status(400).json({ error: "Invalid gym ID" }); return; }
+
+  const [gym] = await db.select().from(gymsTable).where(eq(gymsTable.id, gymId));
+  if (!gym) { res.status(404).json({ error: "Gym not found" }); return; }
+
+  const smsService = getSmsService(gym);
+  res.json({
+    configured: smsService.isConfigured(),
+    smsEnabled: gym.smsEnabled,
+    twilioPhoneNumber: gym.twilioPhoneNumber,
+  });
+});
+
+router.post("/gyms/:gymId/sms/test", async (req, res): Promise<void> => {
+  const raw = Array.isArray(req.params.gymId) ? req.params.gymId[0] : req.params.gymId;
+  const gymId = parseInt(raw, 10);
+  if (isNaN(gymId)) { res.status(400).json({ error: "Invalid gym ID" }); return; }
+
+  const [gym] = await db.select().from(gymsTable).where(eq(gymsTable.id, gymId));
+  if (!gym) { res.status(404).json({ error: "Gym not found" }); return; }
+
+  const [staffEntry] = await db.select().from(gymStaffTable).where(
+    and(eq(gymStaffTable.gymId, gymId), eq(gymStaffTable.userId, req.user!.id), eq(gymStaffTable.isActive, true))
+  );
+  if (!staffEntry || !["gym_owner", "admin"].includes(staffEntry.role)) {
+    res.status(403).json({ error: "Only owners and admins can test SMS" });
+    return;
+  }
+
+  const parsed = SendTestSmsBody.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+
+  const smsService = getSmsService(gym);
+  if (!smsService.isConfigured()) {
+    res.status(503).json({ error: "SMS not configured. Set up Twilio credentials and enable SMS first." });
+    return;
+  }
+
+  const result = await smsService.sendSms({
+    to: parsed.data.to,
+    body: `Test message from ${gym.name} via Iron Metrics. Your SMS setup is working!`,
+  });
+
+  if (!result.success) {
+    res.status(500).json({ error: result.error || "Failed to send test SMS" });
+    return;
+  }
+
+  res.json({
+    success: true,
+    messageSid: result.messageSid,
+    recipientPhone: parsed.data.to,
+    recipientName: "Test",
   });
 });
 

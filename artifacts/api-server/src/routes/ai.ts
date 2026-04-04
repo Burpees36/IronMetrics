@@ -2,10 +2,12 @@ import { Router, type IRouter, type Request, type Response, type NextFunction } 
 import { eq, desc, and, sql, gte, lte } from "drizzle-orm";
 import { db, aiTasksTable, aiGeneratedContentTable, membersTable, leadsTable, gymsTable, gymStaffTable, subscriptionsTable, aiOperatorSettingsTable } from "@workspace/db";
 import { sendMemberEmail, logMemberEmailSent } from "../services/member-email";
+import { sendMemberSms, sendLeadSms } from "../services/member-sms";
 import { CreateAiTaskBody, GenerateMemberOutreachBody, UpdateAiTaskBody, UpdateAutopilotSettingsBody } from "@workspace/api-zod";
 import { generateAiTasks } from "../services/ai-task-generation";
 import { assembleMemberContext, buildMemberPersonalizationMeta } from "../services/personalization-context";
 import { getEmailService } from "../services/email-service";
+import { getSmsService } from "../services/sms-service";
 import { activeMemberCondition } from "../blendedMetrics";
 import { getLastAiScanTimestamp } from "../schedulers/ai-task-scheduler";
 
@@ -346,6 +348,91 @@ router.post("/gyms/:gymId/ai/tasks/:taskId/send-email", async (req, res): Promis
     await db.update(aiTasksTable).set(leadEmailUpdateData).where(eq(aiTasksTable.id, taskId));
     res.json({ success: true, messageId: result.messageId, recipientEmail, recipientName });
   }
+});
+
+router.post("/gyms/:gymId/ai/tasks/:taskId/send-sms", async (req, res): Promise<void> => {
+  const gymId = parseGymId(req.params);
+  if (!gymId) { res.status(400).json({ error: "Invalid gym ID" }); return; }
+
+  const access = await verifyGymAccess(gymId, req.user!.id);
+  if (!access.allowed) { res.status(access.gym ? 403 : 404).json({ error: access.gym ? "You do not have access to this gym" : "Gym not found" }); return; }
+
+  const taskId = parseInt(req.params.taskId, 10);
+  if (isNaN(taskId)) { res.status(400).json({ error: "Invalid task ID" }); return; }
+
+  const [task] = await db.select().from(aiTasksTable).where(and(eq(aiTasksTable.id, taskId), eq(aiTasksTable.gymId, gymId)));
+  if (!task) { res.status(404).json({ error: "Task not found" }); return; }
+
+  if (task.status === "sent") { res.status(409).json({ error: "Message has already been sent for this task" }); return; }
+  if (task.status === "dismissed") { res.status(400).json({ error: "Cannot send message for a dismissed task" }); return; }
+  if (!task.targetId || !task.targetType) { res.status(400).json({ error: "Task has no target recipient" }); return; }
+
+  const gym = access.gym;
+  const smsService = getSmsService(gym);
+  if (!smsService.isConfigured()) {
+    res.status(503).json({ error: "SMS not configured. Set up Twilio in Settings to enable text messaging." });
+    return;
+  }
+
+  let recipientPhone: string | null = null;
+  let recipientName = "";
+
+  if (task.targetType === "member") {
+    const [member] = await db.select().from(membersTable).where(and(eq(membersTable.id, task.targetId), eq(membersTable.gymId, gymId)));
+    if (!member) { res.status(404).json({ error: "Member not found" }); return; }
+    recipientPhone = member.phone;
+    recipientName = `${member.firstName} ${member.lastName}`;
+  } else if (task.targetType === "lead") {
+    const [lead] = await db.select().from(leadsTable).where(and(eq(leadsTable.id, task.targetId), eq(leadsTable.gymId, gymId)));
+    if (!lead) { res.status(404).json({ error: "Lead not found" }); return; }
+    recipientPhone = lead.phone;
+    recipientName = `${lead.firstName} ${lead.lastName}`;
+  }
+
+  if (!recipientPhone) { res.status(400).json({ error: "Recipient has no phone number" }); return; }
+
+  const firstName = recipientName.split(" ")[0];
+  const smsTemplates: Record<string, string> = {
+    outreach: `Hey ${firstName}! We miss you at the gym. Want to set up a quick catch-up this week? No pressure - just want to make sure you're doing well. Reply or call us anytime!`,
+    leads: `Hi ${firstName}! Thanks for your interest in our gym. We'd love to set up a free No Sweat Intro for you - 20 min, zero pressure. What day works best?`,
+    billing: `Hi ${firstName}, quick heads-up - looks like there's a small issue with your payment on file. Super easy to fix! Give us a call or stop by and we'll sort it out in 2 min.`,
+  };
+  const smsBody = smsTemplates[task.type] || `Hi ${firstName}, this is a message from your gym. Give us a call when you get a chance!`;
+
+  let smsResult;
+  if (task.targetType === "member") {
+    smsResult = await sendMemberSms({
+      memberId: task.targetId,
+      gymId,
+      to: recipientPhone,
+      body: smsBody,
+      smsType: task.type,
+      timelineTitle: "AI Operator text sent",
+      gymConfig: gym,
+    });
+  } else {
+    smsResult = await sendLeadSms({
+      leadId: task.targetId,
+      gymId,
+      to: recipientPhone,
+      body: smsBody,
+      smsType: task.type,
+      gymConfig: gym,
+    });
+  }
+
+  if (!smsResult.success) {
+    res.status(500).json({ error: smsResult.error || "Failed to send SMS" });
+    return;
+  }
+
+  const smsUpdateData: Record<string, any> = { status: "sent", channel: "sms", updatedAt: new Date() };
+  if (!task.actionedAt) {
+    smsUpdateData.actionedAt = new Date();
+    smsUpdateData.outcome = "pending_observation";
+  }
+  await db.update(aiTasksTable).set(smsUpdateData).where(eq(aiTasksTable.id, taskId));
+  res.json({ success: true, messageSid: smsResult.messageSid, recipientPhone, recipientName });
 });
 
 router.post("/gyms/:gymId/ai/generate-tasks", async (req, res): Promise<void> => {

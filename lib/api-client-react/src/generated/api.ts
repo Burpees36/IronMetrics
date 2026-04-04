@@ -152,8 +152,13 @@ import type {
   Sale,
   ScheduledHold,
   SendEmailResponse,
+  SendLeadSmsBody,
+  SendMemberSmsBody,
   SendRecoveryLinkResponse,
+  SendSmsResponse,
+  SendTestSmsBody,
   SetDefaultPaymentMethod200,
+  SmsStatusResponse,
   StaffMember,
   StripeInvoice,
   SubmitLeadCapture201,
@@ -1690,6 +1695,94 @@ export function useGetMemberTimeline<
 }
 
 /**
+ * @summary Send an SMS text message to a member
+ */
+export const getSendMemberSmsUrl = (gymId: number, memberId: number) => {
+  return `/api/gyms/${gymId}/members/${memberId}/send-sms`;
+};
+
+export const sendMemberSms = async (
+  gymId: number,
+  memberId: number,
+  sendMemberSmsBody: SendMemberSmsBody,
+  options?: RequestInit,
+): Promise<SendSmsResponse> => {
+  return customFetch<SendSmsResponse>(getSendMemberSmsUrl(gymId, memberId), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(sendMemberSmsBody),
+  });
+};
+
+export const getSendMemberSmsMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof sendMemberSms>>,
+    TError,
+    { gymId: number; memberId: number; data: BodyType<SendMemberSmsBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof sendMemberSms>>,
+  TError,
+  { gymId: number; memberId: number; data: BodyType<SendMemberSmsBody> },
+  TContext
+> => {
+  const mutationKey = ["sendMemberSms"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof sendMemberSms>>,
+    { gymId: number; memberId: number; data: BodyType<SendMemberSmsBody> }
+  > = (props) => {
+    const { gymId, memberId, data } = props ?? {};
+
+    return sendMemberSms(gymId, memberId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SendMemberSmsMutationResult = NonNullable<
+  Awaited<ReturnType<typeof sendMemberSms>>
+>;
+export type SendMemberSmsMutationBody = BodyType<SendMemberSmsBody>;
+export type SendMemberSmsMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Send an SMS text message to a member
+ */
+export const useSendMemberSms = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof sendMemberSms>>,
+    TError,
+    { gymId: number; memberId: number; data: BodyType<SendMemberSmsBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof sendMemberSms>>,
+  TError,
+  { gymId: number; memberId: number; data: BodyType<SendMemberSmsBody> },
+  TContext
+> => {
+  return useMutation(getSendMemberSmsMutationOptions(options));
+};
+
+/**
  * @summary List leads
  */
 export const getListLeadsUrl = (gymId: number, params?: ListLeadsParams) => {
@@ -2408,6 +2501,94 @@ export const useCreateLeadActivity = <
   TContext
 > => {
   return useMutation(getCreateLeadActivityMutationOptions(options));
+};
+
+/**
+ * @summary Send an SMS text message to a lead
+ */
+export const getSendLeadSmsUrl = (gymId: number, leadId: number) => {
+  return `/api/gyms/${gymId}/leads/${leadId}/send-sms`;
+};
+
+export const sendLeadSms = async (
+  gymId: number,
+  leadId: number,
+  sendLeadSmsBody: SendLeadSmsBody,
+  options?: RequestInit,
+): Promise<SendSmsResponse> => {
+  return customFetch<SendSmsResponse>(getSendLeadSmsUrl(gymId, leadId), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(sendLeadSmsBody),
+  });
+};
+
+export const getSendLeadSmsMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof sendLeadSms>>,
+    TError,
+    { gymId: number; leadId: number; data: BodyType<SendLeadSmsBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof sendLeadSms>>,
+  TError,
+  { gymId: number; leadId: number; data: BodyType<SendLeadSmsBody> },
+  TContext
+> => {
+  const mutationKey = ["sendLeadSms"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof sendLeadSms>>,
+    { gymId: number; leadId: number; data: BodyType<SendLeadSmsBody> }
+  > = (props) => {
+    const { gymId, leadId, data } = props ?? {};
+
+    return sendLeadSms(gymId, leadId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SendLeadSmsMutationResult = NonNullable<
+  Awaited<ReturnType<typeof sendLeadSms>>
+>;
+export type SendLeadSmsMutationBody = BodyType<SendLeadSmsBody>;
+export type SendLeadSmsMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Send an SMS text message to a lead
+ */
+export const useSendLeadSms = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof sendLeadSms>>,
+    TError,
+    { gymId: number; leadId: number; data: BodyType<SendLeadSmsBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof sendLeadSms>>,
+  TError,
+  { gymId: number; leadId: number; data: BodyType<SendLeadSmsBody> },
+  TContext
+> => {
+  return useMutation(getSendLeadSmsMutationOptions(options));
 };
 
 /**
@@ -11943,6 +12124,265 @@ export const useSendAiTaskEmail = <
 > => {
   return useMutation(getSendAiTaskEmailMutationOptions(options));
 };
+
+/**
+ * @summary Send the AI task content as a text message to the target member or lead
+ */
+export const getSendAiTaskSmsUrl = (gymId: number, taskId: number) => {
+  return `/api/gyms/${gymId}/ai/tasks/${taskId}/send-sms`;
+};
+
+export const sendAiTaskSms = async (
+  gymId: number,
+  taskId: number,
+  options?: RequestInit,
+): Promise<SendSmsResponse> => {
+  return customFetch<SendSmsResponse>(getSendAiTaskSmsUrl(gymId, taskId), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getSendAiTaskSmsMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof sendAiTaskSms>>,
+    TError,
+    { gymId: number; taskId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof sendAiTaskSms>>,
+  TError,
+  { gymId: number; taskId: number },
+  TContext
+> => {
+  const mutationKey = ["sendAiTaskSms"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof sendAiTaskSms>>,
+    { gymId: number; taskId: number }
+  > = (props) => {
+    const { gymId, taskId } = props ?? {};
+
+    return sendAiTaskSms(gymId, taskId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SendAiTaskSmsMutationResult = NonNullable<
+  Awaited<ReturnType<typeof sendAiTaskSms>>
+>;
+
+export type SendAiTaskSmsMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Send the AI task content as a text message to the target member or lead
+ */
+export const useSendAiTaskSms = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof sendAiTaskSms>>,
+    TError,
+    { gymId: number; taskId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof sendAiTaskSms>>,
+  TError,
+  { gymId: number; taskId: number },
+  TContext
+> => {
+  return useMutation(getSendAiTaskSmsMutationOptions(options));
+};
+
+/**
+ * @summary Send a test SMS to verify Twilio configuration
+ */
+export const getSendTestSmsUrl = (gymId: number) => {
+  return `/api/gyms/${gymId}/sms/test`;
+};
+
+export const sendTestSms = async (
+  gymId: number,
+  sendTestSmsBody: SendTestSmsBody,
+  options?: RequestInit,
+): Promise<SendSmsResponse> => {
+  return customFetch<SendSmsResponse>(getSendTestSmsUrl(gymId), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(sendTestSmsBody),
+  });
+};
+
+export const getSendTestSmsMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof sendTestSms>>,
+    TError,
+    { gymId: number; data: BodyType<SendTestSmsBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof sendTestSms>>,
+  TError,
+  { gymId: number; data: BodyType<SendTestSmsBody> },
+  TContext
+> => {
+  const mutationKey = ["sendTestSms"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof sendTestSms>>,
+    { gymId: number; data: BodyType<SendTestSmsBody> }
+  > = (props) => {
+    const { gymId, data } = props ?? {};
+
+    return sendTestSms(gymId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SendTestSmsMutationResult = NonNullable<
+  Awaited<ReturnType<typeof sendTestSms>>
+>;
+export type SendTestSmsMutationBody = BodyType<SendTestSmsBody>;
+export type SendTestSmsMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Send a test SMS to verify Twilio configuration
+ */
+export const useSendTestSms = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof sendTestSms>>,
+    TError,
+    { gymId: number; data: BodyType<SendTestSmsBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof sendTestSms>>,
+  TError,
+  { gymId: number; data: BodyType<SendTestSmsBody> },
+  TContext
+> => {
+  return useMutation(getSendTestSmsMutationOptions(options));
+};
+
+/**
+ * @summary Check if SMS sending is configured for this gym
+ */
+export const getGetSmsStatusUrl = (gymId: number) => {
+  return `/api/gyms/${gymId}/sms/status`;
+};
+
+export const getSmsStatus = async (
+  gymId: number,
+  options?: RequestInit,
+): Promise<SmsStatusResponse> => {
+  return customFetch<SmsStatusResponse>(getGetSmsStatusUrl(gymId), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetSmsStatusQueryKey = (gymId: number) => {
+  return [`/api/gyms/${gymId}/sms/status`] as const;
+};
+
+export const getGetSmsStatusQueryOptions = <
+  TData = Awaited<ReturnType<typeof getSmsStatus>>,
+  TError = ErrorType<unknown>,
+>(
+  gymId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getSmsStatus>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetSmsStatusQueryKey(gymId);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getSmsStatus>>> = ({
+    signal,
+  }) => getSmsStatus(gymId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!gymId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getSmsStatus>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetSmsStatusQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getSmsStatus>>
+>;
+export type GetSmsStatusQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Check if SMS sending is configured for this gym
+ */
+
+export function useGetSmsStatus<
+  TData = Awaited<ReturnType<typeof getSmsStatus>>,
+  TError = ErrorType<unknown>,
+>(
+  gymId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getSmsStatus>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetSmsStatusQueryOptions(gymId, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
 
 /**
  * @summary Get AI Operator outcome tracking and revenue attribution stats

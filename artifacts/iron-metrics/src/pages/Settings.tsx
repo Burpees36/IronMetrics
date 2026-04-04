@@ -7,6 +7,7 @@ import { Building2, Users, Mail, CreditCard, Shield, Palette, Puzzle, AlertTrian
 import { GeneralSettings } from "@/components/settings/GeneralSettings";
 import { StaffSettings } from "@/components/settings/StaffSettings";
 import { EmailSettings } from "@/components/settings/EmailSettings";
+import { SmsSettings } from "@/components/settings/SmsSettings";
 import { BillingSettings } from "@/components/settings/BillingSettings";
 import { PlatformBillingSettings } from "@/components/settings/PlatformBillingSettings";
 import { SecuritySettings } from "@/components/settings/SecuritySettings";
@@ -21,6 +22,7 @@ const SECTIONS = [
   { id: "staff", label: "Staff & Access", icon: Users },
   { id: "programming", label: "Programming", icon: Dumbbell },
   { id: "email", label: "Email & Notifications", icon: Mail },
+  { id: "sms", label: "SMS / Text Messaging", icon: MessageSquare },
   { id: "platform-billing", label: "Platform Subscription", icon: CreditCard },
   { id: "billing", label: "Member Billing", icon: CreditCard },
   { id: "security", label: "Security", icon: Shield },
@@ -111,6 +113,7 @@ export function Settings() {
             {activeSection === "staff" && <StaffSettings gymId={activeGymId} />}
             {activeSection === "programming" && <ProgrammingSettings gymId={activeGymId} />}
             {activeSection === "email" && <EmailSettings gymId={activeGymId} />}
+            {activeSection === "sms" && <SmsSettings gymId={activeGymId} />}
             {activeSection === "platform-billing" && <PlatformBillingSettings />}
             {activeSection === "billing" && <BillingSettings />}
             {activeSection === "security" && <SecuritySettings />}
