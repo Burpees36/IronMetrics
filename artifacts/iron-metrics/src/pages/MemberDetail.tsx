@@ -155,7 +155,8 @@ export function MemberDetail() {
         },
         onError: (err: unknown) => {
           const apiErr = err as ApiError | undefined;
-          const msg = apiErr?.data?.error || apiErr?.message || "Check-in failed";
+          const errData = apiErr?.data as { error?: string } | null | undefined;
+          const msg = errData?.error || apiErr?.message || "Check-in failed";
           toast({ title: "Check-in failed", description: msg, variant: "destructive" });
         },
       }

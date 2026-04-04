@@ -245,12 +245,12 @@ function SmartActionsModal({ gymId, open, onOpenChange }: { gymId: number; open:
                         </div>
                       </div>
                       <ToggleSwitch
-                        checked={(settings as Record<string, unknown>)[cat.key] as boolean}
+                        checked={(settings as unknown as Record<string, unknown>)[cat.key] as boolean}
                         onChange={(v) => handleToggle(cat.key, v)}
                         disabled={updateSettings.isPending}
                       />
                     </div>
-                    {(settings as Record<string, unknown>)[cat.key] && (
+                    {(settings as unknown as Record<string, unknown>)[cat.key] ? (
                       <div className="flex gap-1.5 ml-11">
                         {(["email", "sms", "both"] as const).map((ch) => (
                           <button
@@ -258,7 +258,7 @@ function SmartActionsModal({ gymId, open, onOpenChange }: { gymId: number; open:
                             onClick={() => handleToggle(cat.channelKey, ch as any)}
                             disabled={updateSettings.isPending}
                             className={`px-2.5 py-1 rounded-md text-xs font-medium transition-all border ${
-                              (settings as Record<string, unknown>)[cat.channelKey] === ch
+                              (settings as unknown as Record<string, unknown>)[cat.channelKey] === ch
                                 ? "bg-primary text-primary-foreground border-primary shadow-sm"
                                 : "bg-muted/50 text-muted-foreground border-border hover:border-primary/40"
                             }`}
@@ -267,7 +267,7 @@ function SmartActionsModal({ gymId, open, onOpenChange }: { gymId: number; open:
                           </button>
                         ))}
                       </div>
-                    )}
+                    ) : null}
                   </div>
                 ))}
               </div>
@@ -940,8 +940,8 @@ export function AiInsights() {
   const generateBrief = useGenerateOwnerBrief({
     mutation: {
       onMutate: () => setIsGeneratingBrief(true),
-      onSuccess: (data: Record<string, unknown>) => {
-        setBriefContent(data.content as string);
+      onSuccess: (data) => {
+        setBriefContent((data as unknown as Record<string, unknown>).content as string);
         setBriefOpen(true);
         toast({ title: "Owner Brief Generated", description: "Your weekly brief is ready to review." });
       },
@@ -986,13 +986,15 @@ export function AiInsights() {
 
   const sendEmail = useSendAiTaskEmail({
     mutation: {
-      onSuccess: (data: Record<string, unknown>, variables: Record<string, unknown>) => {
+      onSuccess: (data, variables) => {
+        const d = data as unknown as Record<string, unknown>;
+        const v = variables as unknown as Record<string, unknown>;
         queryClient.setQueryData(queryKey, (old: Array<Record<string, unknown>> | undefined) => {
           if (!old) return old;
-          return old.map((t) => t.id === variables.taskId ? { ...t, status: 'sent', channel: 'email', updatedAt: new Date().toISOString() } : t);
+          return old.map((t) => t.id === v.taskId ? { ...t, status: 'sent', channel: 'email', updatedAt: new Date().toISOString() } : t);
         });
         queryClient.invalidateQueries({ queryKey });
-        toast({ title: "Email Sent", description: `Email sent to ${data.recipientName} (${data.recipientEmail}).` });
+        toast({ title: "Email Sent", description: `Email sent to ${d.recipientName} (${d.recipientEmail}).` });
         setSendingTaskId(null);
       },
       onError: (err: unknown) => {
@@ -1005,13 +1007,15 @@ export function AiInsights() {
 
   const sendSms = useSendAiTaskSms({
     mutation: {
-      onSuccess: (data: Record<string, unknown>, variables: Record<string, unknown>) => {
+      onSuccess: (data, variables) => {
+        const d = data as unknown as Record<string, unknown>;
+        const v = variables as unknown as Record<string, unknown>;
         queryClient.setQueryData(queryKey, (old: Array<Record<string, unknown>> | undefined) => {
           if (!old) return old;
-          return old.map((t) => t.id === variables.taskId ? { ...t, status: 'sent', channel: 'sms', updatedAt: new Date().toISOString() } : t);
+          return old.map((t) => t.id === v.taskId ? { ...t, status: 'sent', channel: 'sms', updatedAt: new Date().toISOString() } : t);
         });
         queryClient.invalidateQueries({ queryKey });
-        toast({ title: "Text Sent", description: `Text sent to ${data.recipientName} (${data.recipientPhone}).` });
+        toast({ title: "Text Sent", description: `Text sent to ${d.recipientName} (${d.recipientPhone}).` });
         setSendingTaskId(null);
       },
       onError: (err: unknown) => {
@@ -1024,9 +1028,9 @@ export function AiInsights() {
 
   const generateTasksMutation = useGenerateAiTasks({
     mutation: {
-      onSuccess: (data: Record<string, unknown>) => {
+      onSuccess: (data) => {
         queryClient.invalidateQueries({ queryKey });
-        const created = data.created as number;
+        const created = (data as unknown as Record<string, unknown>).created as number;
         toast({ title: "Tasks Generated", description: `${created} new task${created !== 1 ? 's' : ''} created from gym data.` });
       },
       onError: () => {
@@ -1037,12 +1041,12 @@ export function AiInsights() {
 
   const pendingTasks = useMemo(() => {
     if (!tasks) return [];
-    return (tasks as Array<Record<string, unknown>>).filter((t) => t.status === 'pending');
+    return (tasks as unknown as Array<Record<string, unknown>>).filter((t) => t.status === 'pending');
   }, [tasks]);
 
   const historyTasks = useMemo(() => {
     if (!tasks) return [];
-    return (tasks as Array<Record<string, unknown>>).filter((t) => ['sent', 'completed', 'dismissed', 'approved'].includes(t.status as string));
+    return (tasks as unknown as Array<Record<string, unknown>>).filter((t) => ['sent', 'completed', 'dismissed', 'approved'].includes(t.status as string));
   }, [tasks]);
 
   const filteredPendingTasks = useMemo(() => {
@@ -1781,7 +1785,7 @@ export function AiInsights() {
 
                       <p className="text-xs text-muted-foreground mb-2">{task.description as string}</p>
 
-                      {task.personalizationMeta && (() => {
+                      {task.personalizationMeta ? (() => {
                         try {
                           const meta = JSON.parse(task.personalizationMeta as string);
                           if (meta.dataPoints && meta.dataPoints.length > 0) {
@@ -1802,16 +1806,16 @@ export function AiInsights() {
                         } catch {
                           return null;
                         }
-                      })()}
+                      })() : null}
 
-                      {task.aiContent && (
+                      {task.aiContent ? (
                         <div className="mb-2 p-3 rounded-lg bg-secondary border border-border text-xs font-mono text-foreground/80 relative whitespace-pre-wrap max-h-32 overflow-y-auto">
                           <div className="absolute -top-3 left-3 bg-background px-2 text-[10px] text-primary uppercase font-bold flex items-center gap-1">
                             <Sparkles className="h-3 w-3" /> Draft
                           </div>
                           {task.aiContent as string}
                         </div>
-                      )}
+                      ) : null}
 
                       <div className="flex flex-wrap justify-end gap-2 pt-1">
                         <button
@@ -1891,12 +1895,12 @@ export function AiInsights() {
                           <div className="min-w-0">
                             <h4 className="font-semibold text-foreground text-sm flex items-center gap-2">
                               {task.title as string}
-                              {task.autoSent && (
+                              {task.autoSent ? (
                                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-primary/10 text-primary border border-primary/20">
                                   <Zap className="h-3 w-3" />
                                   Auto
                                 </span>
-                              )}
+                              ) : null}
                             </h4>
                             <p className="text-[10px] text-muted-foreground flex items-center gap-1 mt-0.5">
                               <Clock className="h-3 w-3" /> {task.updatedAt ? new Date(task.updatedAt as string).toLocaleDateString() : task.createdAt ? new Date(task.createdAt as string).toLocaleDateString() : 'Unknown'}
@@ -1912,7 +1916,7 @@ export function AiInsights() {
                             {task.status === 'dismissed' && <X className="h-3 w-3" />}
                             {statusCfg.label}
                           </span>
-                          {task.outcome && task.outcome !== "none" && OUTCOME_CONFIG[task.outcome as string] && (() => {
+                          {task.outcome && task.outcome !== "none" && OUTCOME_CONFIG[task.outcome as string] ? (() => {
                             const outcomeCfg = OUTCOME_CONFIG[task.outcome as string];
                             const OutcomeIcon = outcomeCfg.icon;
                             return (
@@ -1921,18 +1925,18 @@ export function AiInsights() {
                                 {outcomeCfg.label}
                               </span>
                             );
-                          })()}
+                          })() : null}
                         </div>
                       </div>
 
                       <p className="text-xs text-muted-foreground mb-2">{task.description as string}</p>
 
-                      {task.revenueImpact && parseFloat(task.revenueImpact as string) > 0 && (
+                      {task.revenueImpact && parseFloat(task.revenueImpact as string) > 0 ? (
                         <div className="flex items-center gap-1.5 mb-2 text-xs text-emerald-600">
                           <DollarSign className="h-3 w-3" />
                           <span className="font-medium">${parseFloat(task.revenueImpact as string).toFixed(2)}/mo</span>
                         </div>
-                      )}
+                      ) : null}
                     </div>
                   );
                 })}
