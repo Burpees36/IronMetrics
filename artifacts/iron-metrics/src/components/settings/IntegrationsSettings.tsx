@@ -29,12 +29,7 @@ export function IntegrationsSettings({ gymId, onNavigateToSection }: Props) {
   const { data: gym } = useGetGym(gymId as number, { query: { enabled: !!gymId } });
 
   const gymData = gym as Record<string, unknown> | undefined;
-  const smsEnabled = !!gymData?.smsEnabled;
-  const hasTwilioCreds = !!(gymData?.twilioAccountSid && gymData?.twilioAuthToken && gymData?.twilioPhoneNumber);
-  const smsConfigured = smsEnabled && hasTwilioCreds;
-
-  const smsStatus = smsConfigured ? "connected" : hasTwilioCreds ? "available" : "available";
-  const smsStatusText = smsConfigured ? "Connected" : hasTwilioCreds ? "Disabled" : "Not Configured";
+  const smsConfigured = !!(gymData?.twilioAccountSid && gymData?.twilioAuthToken && gymData?.twilioPhoneNumber);
 
   return (
     <div className="space-y-6">
@@ -90,7 +85,7 @@ export function IntegrationsSettings({ gymId, onNavigateToSection }: Props) {
               </div>
               <Badge variant="outline" className={smsConfigured ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" : "bg-muted text-muted-foreground border-border"}>
                 {smsConfigured ? <CheckCircle2 className="h-3 w-3 mr-1" /> : <Circle className="h-3 w-3 mr-1" />}
-                {smsStatusText}
+                {smsConfigured ? "Connected" : "Not Configured"}
               </Badge>
             </div>
             <button
