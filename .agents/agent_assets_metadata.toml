@@ -24,3 +24,9 @@ id = "siN-OmL2tDxpUZ3L_eCvO"
 uri = "file://docs/ai-product-roadmap.md"
 type = "text"
 title = "AI & Intelligence Product Roadmap"
+
+[[outputs]]
+id = "zDU8hrJpqY9ymb3sr8hjz"
+uri = "file://docs/member-app-roadmap.md"
+type = "text"
+title = "Member Mobile App Roadmap"
