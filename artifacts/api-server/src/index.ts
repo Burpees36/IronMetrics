@@ -8,6 +8,7 @@ import { startRsiSnapshotScheduler } from "./schedulers/rsi-snapshots";
 import { startBenchmarkScheduler } from "./schedulers/benchmark-scheduler";
 import { startAutopilotDigestScheduler } from "./schedulers/autopilot-digest-scheduler";
 import { startAutoPublishScheduler } from "./schedulers/auto-publish-scheduler";
+import { startLeadSequenceScheduler } from "./schedulers/lead-sequence-scheduler";
 import { runOnboardingMigrationCleanup } from "./migrations/onboarding-cleanup";
 
 const rawPort = process.env["PORT"];
@@ -43,4 +44,5 @@ app.listen(port, () => {
   startBenchmarkScheduler();
   startAutopilotDigestScheduler();
   startAutoPublishScheduler();
+  startLeadSequenceScheduler();
 });

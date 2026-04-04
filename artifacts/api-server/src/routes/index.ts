@@ -48,6 +48,7 @@ import knowledgeRouter from "./knowledge";
 import onboardingRouter from "./onboarding";
 import leadCaptureConfigRouter from "./lead-capture-config";
 import retentionRouter from "./retention";
+import leadSequencesRouter from "./lead-sequences";
 import platformBillingRouter from "./platform-billing";
 import adminRouter from "./admin";
 import wodifyRouter from "./integrations/wodify";
@@ -112,6 +113,7 @@ router.use(communicationsRouter);
 // Growth-tier access gates — must come before the routers that handle those paths
 router.use("/gyms/:gymId/members", requireTierAccess("members"));
 router.use("/gyms/:gymId/leads", requireTierAccess("leads"));
+router.use("/gyms/:gymId/lead-sequences", requireTierAccess("leads"));
 router.use("/gyms/:gymId/classes", requireTierAccess("schedule"));
 router.use("/gyms/:gymId/attendance", requireTierAccess("attendance"));
 router.use("/gyms/:gymId/workouts", requireTierAccess("workouts"));
@@ -124,6 +126,7 @@ router.use("/gyms/:gymId/class-templates", requireTierAccess("class-templates"))
 // Growth-tier routers
 router.use(membersRouter);
 router.use(leadsRouter);
+router.use(leadSequencesRouter);
 router.use(staffRouter);
 router.use(classesRouter);
 router.use(classTemplatesRouter);

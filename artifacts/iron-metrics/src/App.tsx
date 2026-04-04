@@ -27,6 +27,7 @@ import { Onboarding } from "@/pages/Onboarding";
 import { UpdatePayment } from "@/pages/UpdatePayment";
 import { LeadCapture } from "@/pages/LeadCapture";
 import { Retention } from "@/pages/Retention";
+import { LeadSequences } from "@/pages/LeadSequences";
 import { PlanSelection } from "@/pages/PlanSelection";
 import { TierGate } from "@/components/TierGate";
 
@@ -102,6 +103,7 @@ function Router() {
       <Route path="/members" component={() => <ProtectedRoute component={() => <TierGate routeGroup="members" feature="Member Management" requiredTier="growth"><Members /></TierGate>} />} />
       <Route path="/schedule" component={() => <ProtectedRoute component={() => <TierGate routeGroup="schedule" feature="Scheduling" requiredTier="growth"><Schedule /></TierGate>} />} />
       <Route path="/leads" component={() => <ProtectedRoute component={() => <TierGate routeGroup="leads" feature="Leads Pipeline" requiredTier="growth"><Leads /></TierGate>} />} />
+      <Route path="/lead-sequences" component={() => <ProtectedRoute component={() => <TierGate routeGroup="leads" feature="Lead Sequences" requiredTier="growth"><LeadSequences /></TierGate>} />} />
       <Route path="/retention" component={() => <ProtectedRoute component={Retention} />} />
       <Route path="/billing" component={() => <ProtectedRoute component={Billing} />} />
       <Route path="/workouts" component={() => <ProtectedRoute component={() => <TierGate routeGroup="workouts" feature="Workouts & Programming" requiredTier="growth"><Workouts /></TierGate>} />} />

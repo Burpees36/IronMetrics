@@ -10,7 +10,7 @@ I prefer concise and direct communication. When making changes, please prioritiz
 
 ## System Architecture
 
-Iron Metrics is built as a pnpm workspace monorepo using TypeScript, designed for scalability and maintainability.
+Iron Metrics is built as a pnpm workspace monorepo using TypeScript, designed for scalability and maintainability, leveraging Node.js 24, TypeScript 5.9, and pnpm.
 
 **Monorepo Structure:**
 - `artifacts/api-server/`: Express 5 API server.
@@ -18,8 +18,6 @@ Iron Metrics is built as a pnpm workspace monorepo using TypeScript, designed fo
 - `lib/`: Shared libraries (OpenAPI spec, generated API clients, Drizzle ORM schema, Replit Auth hooks).
 
 **Technology Stack:**
-- **Node.js:** 24, with pnpm.
-- **TypeScript:** 5.9.
 - **API:** Express 5.
 - **Frontend:** React, Vite, TailwindCSS v4, shadcn/ui.
 - **Database:** PostgreSQL with Drizzle ORM.
@@ -43,6 +41,7 @@ A premium SaaS theme with light/dark mode, 2xl rounded corners, and a glass-pane
     - **AI Task Queue:** Manages AI-generated content (outreach, owner briefs) with approval/dismissal and email sending. Features autonomous daily scheduling, personalization using member/lead context, outcome tracking, and revenue attribution.
     - **Auto-Pilot Mode:** Allows owners to enable per-category auto-send for AI-generated tasks with safety guardrails (valid email, cooldowns) and a configurable digest.
 - **Retention Automations:** Automated retention sequences with built-in templates (Miss You, Check-In, Win Back, Onboarding Journey). Scheduler engine evaluates triggers, advances steps, and handles re-engagement.
+- **Lead Nurture Sequences:** Automated multi-step lead nurture flows triggered by pipeline stage changes (new, contacted, scheduled). Features a sequence builder UI, execution engine with 15-minute scheduler, 3 default templates (New Lead Welcome, Post-Intro Follow-up, Stale Lead Re-engagement), enrollment tracking, and performance metrics dashboard. Schema: `lead_sequences`, `lead_sequence_steps`, `lead_sequence_enrollments`, `lead_sequence_events`. Routes: `/api/gyms/:gymId/lead-sequences/*`. Frontend: `/lead-sequences` page accessible from Leads page header.
 - **Intelligence Hub:** KPI dashboards, RSI scores, risk radar, and intervention recommendations. Includes "Action-First Command" dashboard, RSI historical tracking, member engagement rate, and industry benchmarking.
 - **Blended Metrics:** Service (`blendedMetrics.ts`) combines subscription data with Wodify-imported member data for accurate MRR, active members, ARM, and engagement rate calculations.
 - **MRR Snapshots:** `mrr_snapshots` table stores daily MRR snapshots for historical reporting and trend analysis, prioritizing actual data over estimates.

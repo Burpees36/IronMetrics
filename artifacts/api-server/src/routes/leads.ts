@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { eq, and, ilike, or, desc, sql, count } from "drizzle-orm";
 import { db, leadsTable, leadActivitiesTable, membersTable, timelineEventsTable } from "@workspace/db";
 import { CreateLeadBody, UpdateLeadBody } from "@workspace/api-zod";
+import { enrollLeadInSequence, pauseLeadSequences } from "../services/lead-sequence-engine";
 
 const router: IRouter = Router();
 
@@ -60,6 +61,12 @@ router.post("/gyms/:gymId/leads", async (req, res): Promise<void> => {
   const [lead] = await db.insert(leadsTable).values({ ...parsed.data, gymId }).returning();
 
   await logActivity(lead.id, gymId, "created", `Lead created: ${lead.firstName} ${lead.lastName}`);
+
+  try {
+    await enrollLeadInSequence(lead.id, gymId, lead.stage);
+  } catch (err: any) {
+    console.error("[leads] Auto-enroll error:", err.message);
+  }
 
   res.status(201).json(lead);
 });
@@ -175,6 +182,15 @@ router.patch("/gyms/:gymId/leads/:leadId", async (req, res): Promise<void> => {
 
   if (parsed.data.stage && parsed.data.stage !== existing.stage) {
     await logActivity(leadId, gymId, "stage_changed", `Stage changed from ${existing.stage} to ${parsed.data.stage}`, JSON.stringify({ from: existing.stage, to: parsed.data.stage }));
+
+    try {
+      await pauseLeadSequences(leadId, gymId, `stage_changed_to_${parsed.data.stage}`);
+      if (parsed.data.stage !== "converted" && parsed.data.stage !== "lost") {
+        await enrollLeadInSequence(leadId, gymId, parsed.data.stage);
+      }
+    } catch (err: any) {
+      console.error("[leads] Sequence stage-change handling error:", err.message);
+    }
   }
 
   if (parsed.data.nextFollowUpDate !== undefined) {
@@ -217,6 +233,11 @@ router.post("/gyms/:gymId/leads/:leadId/activities", async (req, res): Promise<v
 
   if (type === "contact_logged") {
     await db.update(leadsTable).set({ lastContactDate: new Date() }).where(eq(leadsTable.id, leadId));
+    try {
+      await pauseLeadSequences(leadId, gymId, "manual_contact");
+    } catch (err: any) {
+      console.error("[leads] Pause sequence on contact error:", err.message);
+    }
   }
 
   const activities = await db

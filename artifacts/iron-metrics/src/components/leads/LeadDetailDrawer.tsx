@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -10,9 +10,28 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   X, Phone, Mail, Calendar, Clock, AlertTriangle, ArrowRight,
   UserCheck, MessageSquare, CalendarClock, PlusCircle, Edit3,
-  History, ChevronRight, Send
+  History, ChevronRight, Send, Zap, Timer
 } from "lucide-react";
 import { STAGE_CONFIG, PIPELINE_STAGES, SOURCE_OPTIONS, computeStale, timeInStage, formatRelativeDate, isFollowUpOverdue } from "./lead-utils";
+
+const API_BASE = import.meta.env.VITE_API_URL || "";
+
+function apiFetchLocal(url: string, opts?: RequestInit) {
+  return fetch(`${API_BASE}${url}`, { credentials: "include", ...opts });
+}
+
+interface SequenceEnrollmentStatus {
+  id: number;
+  sequenceId: number;
+  status: string;
+  currentStepIndex: number;
+  nextActionAt: string | null;
+  enrolledAt: string;
+  completedAt: string | null;
+  exitReason: string | null;
+  sequenceName: string;
+  sequenceType: string;
+}
 
 interface LeadDetailDrawerProps {
   lead: any;
@@ -65,6 +84,18 @@ export function LeadDetailDrawer({ lead, gymId, open, onClose, onMoveStage, onCo
   const { data: activities } = useListLeadActivities(gymId, lead?.id, {
     query: { enabled: !!lead?.id }
   });
+
+  const [sequenceEnrollments, setSequenceEnrollments] = useState<SequenceEnrollmentStatus[]>([]);
+
+  useEffect(() => {
+    if (!lead?.id || !gymId || !open) return;
+    apiFetchLocal(`/api/gyms/${gymId}/lead-sequences/lead/${lead.id}/status`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data?.enrollments) setSequenceEnrollments(data.enrollments);
+      })
+      .catch(() => {});
+  }, [lead?.id, gymId, open]);
 
   const updateLeadMutation = useUpdateLead();
   const createActivityMutation = useCreateLeadActivity();
@@ -200,6 +231,55 @@ export function LeadDetailDrawer({ lead, gymId, open, onClose, onMoveStage, onCo
               {lead.followUpNote && (
                 <p className="text-xs text-muted-foreground mt-1.5 pl-6">{lead.followUpNote}</p>
               )}
+            </div>
+          )}
+
+          {sequenceEnrollments.length > 0 && (
+            <div className="space-y-2">
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                <Zap className="h-3 w-3" />
+                Active Sequences
+              </h3>
+              {sequenceEnrollments.map((e) => (
+                <div
+                  key={e.id}
+                  className={`rounded-lg border p-3 ${
+                    e.status === "active" ? "border-violet-500/30 bg-violet-500/5" :
+                    e.status === "paused" ? "border-amber-500/30 bg-amber-500/5" :
+                    e.status === "completed" ? "border-emerald-500/30 bg-emerald-500/5" :
+                    "border-border bg-muted/20"
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-sm">
+                      <Zap className={`h-3.5 w-3.5 ${
+                        e.status === "active" ? "text-violet-500" :
+                        e.status === "paused" ? "text-amber-500" :
+                        e.status === "completed" ? "text-emerald-500" :
+                        "text-muted-foreground"
+                      }`} />
+                      <span className="font-medium text-foreground text-xs">{e.sequenceName}</span>
+                    </div>
+                    <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                      e.status === "active" ? "bg-violet-500/15 text-violet-600" :
+                      e.status === "paused" ? "bg-amber-500/15 text-amber-600" :
+                      e.status === "completed" ? "bg-emerald-500/15 text-emerald-600" :
+                      "bg-muted text-muted-foreground"
+                    }`}>
+                      {e.status}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-3 mt-1.5 text-[10px] text-muted-foreground">
+                    <span>Step {e.currentStepIndex + 1}</span>
+                    {e.nextActionAt && e.status === "active" && (
+                      <span className="flex items-center gap-1">
+                        <Timer className="h-2.5 w-2.5" />
+                        Next: {new Date(e.nextActionAt).toLocaleDateString()}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ))}
             </div>
           )}
 

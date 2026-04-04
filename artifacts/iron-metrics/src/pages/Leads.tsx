@@ -3,8 +3,9 @@ import { useGym } from "@/store/GymContext";
 import { useListLeads, useUpdateLead, getListLeadsQueryKey, getGetLeadInsightsQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
+import { useLocation } from "wouter";
 import { motion } from "framer-motion";
-import { Loader2, Search, Plus, Target, BarChart3, AlertTriangle, CalendarClock, Globe } from "lucide-react";
+import { Loader2, Search, Plus, Target, BarChart3, AlertTriangle, CalendarClock, Globe, Zap } from "lucide-react";
 import { PipelineBoard } from "@/components/leads/PipelineBoard";
 import { LeadDetailDrawer } from "@/components/leads/LeadDetailDrawer";
 import { SummaryStrip } from "@/components/leads/SummaryStrip";
@@ -29,6 +30,7 @@ export function Leads() {
   const [addOpen, setAddOpen] = useState(false);
   const [showInsights, setShowInsights] = useState(false);
   const [showCaptureSettings, setShowCaptureSettings] = useState(false);
+  const [, navigate] = useLocation();
 
   const { data: leads, isLoading } = useListLeads(activeGymId as number, { search: search || undefined }, {
     query: { enabled: !!activeGymId, queryKey: getListLeadsQueryKey(activeGymId as number, { search: search || undefined }) }
@@ -161,6 +163,13 @@ export function Leads() {
               className="w-full bg-card border border-border rounded-lg pl-9 pr-3 py-2 text-sm text-foreground focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all"
             />
           </div>
+          <button
+            onClick={() => navigate("/lead-sequences")}
+            className="hidden sm:flex items-center gap-2 px-3 py-2 rounded-lg border border-border bg-card text-sm font-medium text-muted-foreground hover:text-violet-600 dark:hover:text-violet-400 hover:border-violet-500/30 transition-all"
+          >
+            <Zap className="h-4 w-4" />
+            <span>Sequences</span>
+          </button>
           <button
             onClick={() => setShowCaptureSettings(true)}
             className="hidden sm:flex items-center gap-2 px-3 py-2 rounded-lg border border-border bg-card text-sm font-medium text-muted-foreground hover:text-emerald-600 dark:hover:text-emerald-400 hover:border-emerald-500/30 transition-all"

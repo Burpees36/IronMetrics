@@ -27,3 +27,4 @@ export * from "./retention";
 export * from "./sync";
 export * from "./benchmarks";
 export * from "./mrr-snapshots";
+export * from "./lead-sequences";
