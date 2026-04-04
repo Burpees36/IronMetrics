@@ -4,7 +4,7 @@ import { useAuth } from "@workspace/replit-auth-web";
 import { 
   Dumbbell, LayoutDashboard, BrainCircuit, Users, CalendarDays, 
   Target, CreditCard, Activity, LogOut, Menu, BookOpen,
-  Settings, Sun, Moon, RefreshCw, Lock
+  Settings, Sun, Moon, RefreshCw, Lock, Wallet
 } from "lucide-react";
 import { useGym } from "@/store/GymContext";
 import { useTheme } from "@/store/ThemeContext";
@@ -31,6 +31,7 @@ const NAV_ITEMS = [
   { name: "Schedule", href: "/schedule", icon: CalendarDays, routeGroup: "schedule", requiredTier: "growth" },
   { name: "Leads", href: "/leads", icon: Target, routeGroup: "leads", requiredTier: "growth" },
   { name: "Billing", href: "/billing", icon: CreditCard, routeGroup: "billing" },
+  { name: "Finances", href: "/finances", icon: Wallet, routeGroup: "billing" },
   { name: "Workouts", href: "/workouts", icon: Activity, routeGroup: "workouts", requiredTier: "growth" },
   { name: "Retention", href: "/retention", icon: RefreshCw, routeGroup: "retention" },
   { name: "Resources", href: "/resources", icon: BookOpen, routeGroup: "resources" },

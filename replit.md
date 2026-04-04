@@ -28,7 +28,7 @@ Iron Metrics is built as a pnpm workspace monorepo using TypeScript, designed fo
 **UI/UX Design:**
 A premium SaaS theme with light/dark mode, 2xl rounded corners, and a glass-panel effect. The primary accent color is emerald green, with violet for the Pro tier and amber/yellow for warnings. The theme context (`ThemeProvider`) persists to `localStorage` and respects `prefers-color-scheme`.
 
-**Key Features & Implementations:**
+**Core Features & Technical Implementations:**
 
 - **Subscription Tiers & Feature Gating:** Three tiers (Insights, Growth, Pro) with beta access. Backend uses `requireTierAccess` middleware, frontend uses `useGymTier` hook and `TierGate` component.
 - **Multi-tenancy:** `gyms` table provides isolated workspaces with `requireGymAccess` middleware.
@@ -43,6 +43,7 @@ A premium SaaS theme with light/dark mode, 2xl rounded corners, and a glass-pane
 - **SMS / Text Messaging:** Twilio-based SMS sending via REST API (no SDK). Gym-level Twilio config (Account SID, Auth Token, Phone Number) stored in gyms table with `smsEnabled` toggle. Settings UI in `SmsSettings.tsx`. Manual SMS from member profiles and lead cards via compose dialogs. Auto-pilot supports per-category channel preferences (email/sms/both) with cross-channel cooldown. Timeline/activity logging for sent texts. API routes: `POST /gyms/:gymId/members/:memberId/send-sms`, `POST /gyms/:gymId/leads/:leadId/send-sms`, `POST /gyms/:gymId/ai/tasks/:taskId/send-sms`. Services: `sms-service.ts`, `member-sms.ts`.
 - **Retention Automations:** Automated retention sequences with built-in templates (Miss You, Check-In, Win Back, Onboarding Journey). Scheduler engine evaluates triggers, advances steps, and handles re-engagement.
 - **Lead Nurture Sequences:** Automated multi-step lead nurture flows triggered by pipeline stage changes (new, contacted, scheduled). Features a sequence builder UI, execution engine with 15-minute scheduler, 3 default templates (New Lead Welcome, Post-Intro Follow-up, Stale Lead Re-engagement), enrollment tracking, and performance metrics dashboard. Schema: `lead_sequences`, `lead_sequence_steps`, `lead_sequence_enrollments`, `lead_sequence_events`. Routes: `/api/gyms/:gymId/lead-sequences/*`. Frontend: `/lead-sequences` page accessible from Leads page header.
+- **Financial Intelligence & Owner Pay:** Expense tracking (recurring/one-time with frequency normalization), payroll ratio monitoring, owner take-home calculation (remainder/percentage/fixed methods), monthly trend charts, and rule-based financial insights. Includes a financial summary card on the main dashboard. Routes use billing RBAC (`requireBillingPermission`/`requireBillingRead`) and cross-tenant category validation. Settings use local form state with explicit save.
 - **Intelligence Hub:** KPI dashboards, RSI scores, risk radar, and intervention recommendations. Includes "Action-First Command" dashboard, RSI historical tracking, member engagement rate, and industry benchmarking.
 - **Blended Metrics:** Service (`blendedMetrics.ts`) combines subscription data with Wodify-imported member data for accurate MRR, active members, ARM, and engagement rate calculations.
 - **MRR Snapshots:** `mrr_snapshots` table stores daily MRR snapshots for historical reporting and trend analysis, prioritizing actual data over estimates.

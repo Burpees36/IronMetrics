@@ -52,6 +52,7 @@ import leadSequencesRouter from "./lead-sequences";
 import platformBillingRouter from "./platform-billing";
 import adminRouter from "./admin";
 import wodifyRouter from "./integrations/wodify";
+import financesRouter from "./finances";
 
 const router: IRouter = Router();
 
@@ -82,6 +83,7 @@ router.use(wodifyRouter);
 
 // Insights-tier access gates — block zero-subscription gyms from paid features.
 // These must come before the corresponding routers.
+router.use("/gyms/:gymId/finances", requireTierAccess("billing"));
 router.use("/gyms/:gymId/billing", requireTierAccess("billing"));
 router.use("/gyms/:gymId/plans", requireTierAccess("billing"));
 router.use("/gyms/:gymId/subscriptions", requireTierAccess("billing"));
@@ -98,6 +100,7 @@ router.use("/gyms/:gymId/announcements", requireTierAccess("communications"));
 router.use("/gyms/:gymId/stripe", requireTierAccess("billing"));
 
 // Insights-tier routers
+router.use(financesRouter);
 router.use(billingRouter);
 router.use(billingRecoveryRouter);
 router.use(retailRouter);

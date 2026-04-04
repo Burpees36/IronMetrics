@@ -6,7 +6,8 @@ import {
   Users, TrendingUp, AlertTriangle, ArrowUpRight, ArrowDownRight,
   Loader2, BrainCircuit, Rocket, Sun, CreditCard, UserCheck,
   ChevronRight, Sparkles, ChevronDown, UserPlus, Clock, ShieldCheck,
-  Zap, CheckCircle2, Mail, MessageSquare, ArrowRight, BarChart3
+  Zap, CheckCircle2, Mail, MessageSquare, ArrowRight, BarChart3,
+  Wallet, PiggyBank
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { AreaChart, Area, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
@@ -344,6 +345,65 @@ function BenchmarkHighlightsCard({ gymId }: { gymId: number }) {
   );
 }
 
+function FinancialSummaryCard({ gymId }: { gymId: number }) {
+  const BASE_URL = import.meta.env.BASE_URL || "/";
+  const FINANCE_API = `${BASE_URL}api`.replace(/\/+/g, "/");
+  const { data } = useQuery({
+    queryKey: ["finances-dashboard-summary", gymId],
+    queryFn: async () => {
+      const res = await fetch(`${FINANCE_API}/gyms/${gymId}/finances/summary`, { credentials: "include" });
+      if (!res.ok) return null;
+      return res.json();
+    },
+    enabled: !!gymId,
+    staleTime: 60000,
+  });
+
+  if (!data || (data.revenue === 0 && data.totalExpenses === 0)) return null;
+
+  const profitColor = data.netProfit >= 0
+    ? "text-emerald-600 dark:text-emerald-400"
+    : "text-destructive";
+
+  return (
+    <Card className="shadow-sm">
+      <div className="p-4 border-b border-border flex items-center justify-between">
+        <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+          <Wallet className="w-4 h-4 text-primary" />
+          Financial Snapshot
+        </h3>
+        <Link href="/finances">
+          <Button variant="ghost" size="sm" className="h-6 text-xs text-muted-foreground">Details</Button>
+        </Link>
+      </div>
+      <div className="p-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <span className="text-sm text-muted-foreground">Expenses</span>
+          <span className="text-sm font-medium text-foreground">${data.totalExpenses.toLocaleString()}/mo</span>
+        </div>
+        <div className="flex items-center justify-between">
+          <span className="text-sm text-muted-foreground">Payroll ({data.payrollPercent}%)</span>
+          <span className="text-sm font-medium text-foreground">${data.payrollAmount.toLocaleString()}/mo</span>
+        </div>
+        <div className="h-px bg-border" />
+        <div className="flex items-center justify-between">
+          <span className="text-sm text-muted-foreground">Net Profit</span>
+          <span className={cn("text-sm font-semibold", profitColor)}>
+            ${Math.abs(data.netProfit).toLocaleString()}/mo
+          </span>
+        </div>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-1.5">
+            <PiggyBank className="w-3.5 h-3.5 text-primary" />
+            <span className="text-sm font-medium text-primary">Owner Take-Home</span>
+          </div>
+          <span className="text-sm font-bold text-primary">${data.ownerTakeHome.toLocaleString()}/mo</span>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
 export function Dashboard() {
   const { activeGymId } = useGym();
   const { data: stats, isLoading: statsLoading } = useGetDashboardStats(activeGymId as number, {
@@ -641,6 +701,7 @@ export function Dashboard() {
           </Card>
 
           <BenchmarkHighlightsCard gymId={activeGymId} />
+          <FinancialSummaryCard gymId={activeGymId} />
 
           <Card className="shadow-sm">
             <div className="p-4 border-b border-border">

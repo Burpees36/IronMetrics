@@ -28,6 +28,7 @@ import { UpdatePayment } from "@/pages/UpdatePayment";
 import { LeadCapture } from "@/pages/LeadCapture";
 import { Retention } from "@/pages/Retention";
 import { LeadSequences } from "@/pages/LeadSequences";
+import { Finances } from "@/pages/Finances";
 import { PlanSelection } from "@/pages/PlanSelection";
 import { TierGate } from "@/components/TierGate";
 
@@ -106,6 +107,7 @@ function Router() {
       <Route path="/lead-sequences" component={() => <ProtectedRoute component={() => <TierGate routeGroup="leads" feature="Lead Sequences" requiredTier="growth"><LeadSequences /></TierGate>} />} />
       <Route path="/retention" component={() => <ProtectedRoute component={Retention} />} />
       <Route path="/billing" component={() => <ProtectedRoute component={Billing} />} />
+      <Route path="/finances" component={() => <ProtectedRoute component={Finances} />} />
       <Route path="/workouts" component={() => <ProtectedRoute component={() => <TierGate routeGroup="workouts" feature="Workouts & Programming" requiredTier="growth"><Workouts /></TierGate>} />} />
       <Route path="/resources" component={() => <ProtectedRoute component={Resources} />} />
       <Route path="/settings" component={() => <ProtectedRoute component={Settings} />} />
