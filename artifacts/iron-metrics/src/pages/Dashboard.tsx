@@ -252,11 +252,11 @@ function buildActionItems(
 
     let impact = "";
     if (item.priority === "critical" && item.icon === "alert") {
-      impact = snapshot.revenueAtRisk ? `$${(snapshot.revenueAtRisk / 100).toFixed(0)} at risk` : "At risk";
+      impact = snapshot.revenueAtRisk ? `$${Math.round(snapshot.revenueAtRisk).toLocaleString()} at risk` : "At risk";
     } else if (item.icon === "billing") {
       impact = snapshot.failedPayments ? `${snapshot.failedPayments} overdue` : "Billing";
     } else if (item.icon === "leads" || item.icon === "clock") {
-      impact = snapshot.staleLeads ? `${snapshot.staleLeads} stale` : "Leads";
+      impact = snapshot.staleLeads ? `${snapshot.staleLeads} stale` : snapshot.newLeads ? `${snapshot.newLeads} new` : "Leads";
     } else if (item.priority === "positive") {
       impact = "Good news";
     } else {
@@ -266,11 +266,11 @@ function buildActionItems(
     return {
       id: `action-${idx}`,
       category,
-      title: item.action || item.message.slice(0, 50),
+      title: item.action || item.message.slice(0, 60),
       description: item.message,
       impact,
       icon: Icon,
-      actionLabel: item.action || "View",
+      actionLabel: item.action || "View details",
       actionLink: item.link || null,
     };
   });
@@ -315,16 +315,24 @@ function BenchmarkHighlightsCard({ gymId }: { gymId: number }) {
             h.percentileRank >= 25 ? "bg-yellow-500/15 text-yellow-600 dark:text-yellow-400 border-yellow-500/20" :
             "bg-destructive/15 text-destructive border-destructive/20";
 
-          const verb = h.lowerIsBetter
-            ? (h.percentileRank >= 50 ? "better than" : "worse than")
-            : (h.percentileRank >= 50 ? "better than" : "behind");
-
           return (
-            <div key={h.metric} className="flex items-center justify-between gap-3">
-              <span className="text-sm text-muted-foreground truncate">{h.label}</span>
-              <Badge variant="outline" className={cn("text-[11px] font-medium whitespace-nowrap", badgeColor)}>
-                {verb} {h.percentileRank}% of gyms
-              </Badge>
+            <div key={h.metric} className="space-y-1">
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-sm text-muted-foreground truncate">{h.label}</span>
+                <Badge variant="outline" className={cn("text-[11px] font-medium whitespace-nowrap", badgeColor)}>
+                  {h.percentileLabel || (h.percentileRank != null ? `${h.percentileRank}th percentile` : "N/A")}
+                </Badge>
+              </div>
+              {h.insight?.conversational && (
+                <p className="text-[10px] text-muted-foreground leading-relaxed">{h.insight.conversational}</p>
+              )}
+              {h.insight?.ctaLabel && h.insight?.ctaRoute && h.percentileRank != null && h.percentileRank < 50 && (
+                <Link href={h.insight.ctaRoute}>
+                  <span className="text-[10px] font-medium text-primary hover:text-primary/80 flex items-center gap-1 cursor-pointer">
+                    {h.insight.ctaLabel} <ArrowRight className="w-3 h-3" />
+                  </span>
+                </Link>
+              )}
             </div>
           );
         })}
@@ -373,6 +381,7 @@ export function Dashboard() {
 
   const snapshot = briefing?.snapshot;
   const briefingItems = briefing?.items || [];
+  const briefingSummary = briefing?.summary || null;
   const actionItems = buildActionItems(briefingItems, snapshot || {});
 
   const criticalItems = actionItems.filter(i => i.category === "critical");
@@ -399,14 +408,16 @@ export function Dashboard() {
             {getGreeting()}, Boss.
           </h1>
           <p className="text-lg text-muted-foreground max-w-2xl leading-relaxed">
-            {criticalCount > 0 ? (
+            {briefingSummary ? (
+              <span>{briefingSummary}</span>
+            ) : criticalCount > 0 ? (
               <>
                 <strong className="text-destructive font-semibold">{criticalCount} {criticalCount === 1 ? "thing" : "things"}</strong> need your attention today.
               </>
             ) : (
               <span>Everything is looking smooth today.</span>
             )}
-            {mrrChange && (
+            {mrrChange && !briefingSummary && (
               <>
                 {" "}Revenue is {stats.mrrGrowth >= 0 ? "up" : "down"}{" "}
                 <strong className={cn("font-semibold", stats.mrrGrowth >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-destructive")}>

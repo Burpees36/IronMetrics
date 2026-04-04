@@ -327,8 +327,17 @@ function formatBenchmarkValue(value: number, format: string): string {
   return value.toFixed(1);
 }
 
-function BenchmarkBar({ comparison }: { comparison: { gymValue: number; industryMedian: number | null; p25: number; p75: number; percentileRank: number | null; percentileLabel: string | null; label: string; format: string; lowerIsBetter?: boolean } }) {
-  const { gymValue, industryMedian, p25, p75, percentileRank, percentileLabel, label, format } = comparison;
+interface BenchmarkInsight {
+  conversational: string;
+  recommendation: string;
+  ctaLabel: string;
+  ctaRoute: string;
+}
+
+function BenchmarkBar({ comparison }: { comparison: { gymValue: number; industryMedian: number | null; p25: number; p75: number; percentileRank: number | null; percentileLabel: string | null; label: string; format: string; lowerIsBetter?: boolean; insight?: BenchmarkInsight } }) {
+  const [, setLocation] = useLocation();
+  const [showInsight, setShowInsight] = useState(false);
+  const { gymValue, industryMedian, p25, p75, percentileRank, percentileLabel, label, format, insight } = comparison;
 
   const hasData = industryMedian !== null;
   const allValues = hasData ? [p25, industryMedian, p75, gymValue] : [gymValue];
@@ -403,6 +412,41 @@ function BenchmarkBar({ comparison }: { comparison: { gymValue: number; industry
         <div className="flex justify-between text-[10px] text-muted-foreground mt-1">
           <span>P25: {formatBenchmarkValue(p25, format)}</span>
           <span>P75: {formatBenchmarkValue(p75, format)}</span>
+        </div>
+      )}
+
+      {insight && (
+        <div className="mt-3 border-t border-border pt-3">
+          <p className="text-[11px] text-muted-foreground leading-relaxed">{insight.conversational}</p>
+          <button
+            onClick={() => setShowInsight(!showInsight)}
+            className="mt-1.5 text-[10px] font-medium text-primary hover:text-primary/80 transition-colors flex items-center gap-1"
+          >
+            {showInsight ? "Hide advice" : "What should I do?"}
+            {showInsight ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+          </button>
+          <AnimatePresence>
+            {showInsight && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: "auto", opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.15 }}
+                className="overflow-hidden"
+              >
+                <div className="mt-2 p-2.5 rounded-lg bg-primary/5 border border-primary/10">
+                  <p className="text-[11px] text-foreground leading-relaxed mb-2">{insight.recommendation}</p>
+                  <button
+                    onClick={() => setLocation(insight.ctaRoute)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-primary-foreground rounded-md text-[10px] font-semibold hover:bg-primary/90 transition-colors shadow-sm"
+                  >
+                    {insight.ctaLabel}
+                    <ArrowRight className="h-3 w-3" />
+                  </button>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       )}
     </motion.div>
@@ -621,38 +665,179 @@ function InterventionCard({
   );
 }
 
-function RsiGauge({ rsi }: { rsi: { score: number; band: string; insight: string; trend30d?: number | null } }) {
+interface RSIComponentInsight {
+  metric: string;
+  value: number;
+  normalized: number;
+  weight: number;
+  contribution: number;
+  explanation: string;
+  lever: string;
+  ctaLabel: string;
+  ctaRoute: string;
+}
+
+function RsiGauge({ rsi }: { rsi: { score: number; band: string; insight: string; trend30d?: number | null; componentInsights?: RSIComponentInsight[] } }) {
+  const [, setLocation] = useLocation();
+  const [showBreakdown, setShowBreakdown] = useState(false);
   const bandColor = rsi.band === "Strong" || rsi.band === "Excellent" ? "text-emerald-500" :
     rsi.band === "Moderate" ? "text-yellow-500" : "text-destructive";
   const bandBg = rsi.band === "Strong" || rsi.band === "Excellent" ? "bg-emerald-50" :
     rsi.band === "Moderate" ? "bg-yellow-50" : "bg-red-50";
 
   return (
-    <div className="bg-card border border-border rounded-xl p-5 text-center">
-      <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Retention Stability Index</h3>
-      <div className="relative inline-block">
-        <svg className="w-32 h-32 transform -rotate-90" viewBox="0 0 128 128">
-          <circle cx="64" cy="64" r="52" stroke="currentColor" strokeWidth="6" fill="transparent" className="text-muted" />
-          <circle cx="64" cy="64" r="52" stroke="currentColor" strokeWidth="8" fill="transparent"
-            strokeDasharray={`${(rsi.score / 100) * 327} 327`}
-            className={bandColor}
-            strokeLinecap="round"
-          />
-        </svg>
-        <div className="absolute inset-0 flex items-center justify-center flex-col">
-          <span className="text-3xl font-bold text-foreground">{Math.round(rsi.score)}</span>
-          <span className={`text-[10px] font-bold mt-0.5 px-2 py-0.5 rounded-full ${bandBg} ${bandColor}`}>{rsi.band}</span>
+    <div className="bg-card border border-border rounded-xl p-5">
+      <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3 text-center">Retention Stability Index</h3>
+      <div className="text-center">
+        <div className="relative inline-block">
+          <svg className="w-32 h-32 transform -rotate-90" viewBox="0 0 128 128">
+            <circle cx="64" cy="64" r="52" stroke="currentColor" strokeWidth="6" fill="transparent" className="text-muted" />
+            <circle cx="64" cy="64" r="52" stroke="currentColor" strokeWidth="8" fill="transparent"
+              strokeDasharray={`${(rsi.score / 100) * 327} 327`}
+              className={bandColor}
+              strokeLinecap="round"
+            />
+          </svg>
+          <div className="absolute inset-0 flex items-center justify-center flex-col">
+            <span className="text-3xl font-bold text-foreground">{Math.round(rsi.score)}</span>
+            <span className={`text-[10px] font-bold mt-0.5 px-2 py-0.5 rounded-full ${bandBg} ${bandColor}`}>{rsi.band}</span>
+          </div>
         </div>
+        {rsi.trend30d != null && (
+          <div className="mt-2 flex items-center justify-center gap-1">
+            {rsi.trend30d >= 0 ? <TrendingUp className="h-3 w-3 text-emerald-500" /> : <TrendingDown className="h-3 w-3 text-destructive" />}
+            <span className={`text-xs font-medium ${rsi.trend30d >= 0 ? "text-emerald-600" : "text-destructive"}`}>
+              {rsi.trend30d >= 0 ? "+" : ""}{rsi.trend30d} pts (30d)
+            </span>
+          </div>
+        )}
       </div>
-      {rsi.trend30d != null && (
-        <div className="mt-2 flex items-center justify-center gap-1">
-          {rsi.trend30d >= 0 ? <TrendingUp className="h-3 w-3 text-emerald-500" /> : <TrendingDown className="h-3 w-3 text-destructive" />}
-          <span className={`text-xs font-medium ${rsi.trend30d >= 0 ? "text-emerald-600" : "text-destructive"}`}>
-            {rsi.trend30d >= 0 ? "+" : ""}{rsi.trend30d} pts (30d)
-          </span>
+      <p className="mt-3 text-[11px] text-muted-foreground leading-relaxed text-center">{rsi.insight}</p>
+
+      {rsi.componentInsights && rsi.componentInsights.length > 0 && (
+        <div className="mt-3">
+          <button
+            onClick={() => setShowBreakdown(!showBreakdown)}
+            className="w-full flex items-center justify-center gap-1.5 text-xs font-medium text-primary hover:text-primary/80 transition-colors py-1"
+          >
+            {showBreakdown ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+            {showBreakdown ? "Hide" : "What's driving this score?"}
+          </button>
+          <AnimatePresence>
+            {showBreakdown && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: "auto", opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.2 }}
+                className="overflow-hidden"
+              >
+                <div className="mt-2 space-y-3">
+                  {rsi.componentInsights.map((ci) => {
+                    const barColor = ci.normalized >= 70 ? "bg-emerald-500" : ci.normalized >= 45 ? "bg-yellow-500" : "bg-red-500";
+                    return (
+                      <div key={ci.metric} className="p-3 rounded-lg bg-secondary/50 border border-border">
+                        <div className="flex items-center justify-between mb-1.5">
+                          <span className="text-xs font-semibold text-foreground">{ci.metric}</span>
+                          <span className="text-[10px] font-mono text-muted-foreground">{ci.weight}% weight</span>
+                        </div>
+                        <div className="w-full h-1.5 bg-muted rounded-full mb-2">
+                          <div className={`h-full rounded-full ${barColor}`} style={{ width: `${ci.normalized}%` }} />
+                        </div>
+                        <p className="text-[11px] text-muted-foreground leading-relaxed mb-1">{ci.explanation}</p>
+                        <p className="text-[11px] text-foreground font-medium leading-relaxed mb-2">{ci.lever}</p>
+                        <button
+                          onClick={() => setLocation(ci.ctaRoute)}
+                          className="flex items-center gap-1.5 text-[10px] font-semibold text-primary hover:text-primary/80 transition-colors"
+                        >
+                          {ci.ctaLabel}
+                          <ArrowRight className="h-3 w-3" />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       )}
-      <p className="mt-2 text-[11px] text-muted-foreground leading-relaxed">{rsi.insight}</p>
+    </div>
+  );
+}
+
+interface ForecastInsight {
+  headline: string;
+  currentPace: string;
+  leadScenario: string | null;
+  churnScenario: string | null;
+  ctaLabel: string;
+  ctaRoute: string;
+}
+
+function RevenueForecastCard({ forecast }: { forecast: { currentMrr: number; expectedMrr3m: number; expectedMrr6m: number; insight?: ForecastInsight } | null }) {
+  const [, setLocation] = useLocation();
+  const [expanded, setExpanded] = useState(false);
+
+  if (!forecast || !forecast.insight) return null;
+  const { insight } = forecast;
+
+  return (
+    <div className="bg-card border border-border rounded-xl overflow-hidden">
+      <div className="p-4">
+        <h3 className="text-xs font-semibold text-foreground flex items-center gap-2 mb-2">
+          <DollarSign className="h-3.5 w-3.5 text-emerald-500" />
+          Revenue Outlook
+        </h3>
+        <p className="text-[11px] text-muted-foreground leading-relaxed mb-2">{insight.headline}</p>
+        <p className="text-[11px] text-foreground leading-relaxed font-medium">{insight.currentPace}</p>
+
+        <button
+          onClick={() => setExpanded(!expanded)}
+          className="mt-2 text-[10px] font-medium text-primary hover:text-primary/80 transition-colors flex items-center gap-1"
+        >
+          {expanded ? "Hide scenarios" : "What if I..."}
+          {expanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+        </button>
+
+        <AnimatePresence>
+          {expanded && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.15 }}
+              className="overflow-hidden"
+            >
+              <div className="mt-2 space-y-2">
+                {insight.leadScenario && (
+                  <div className="p-2.5 rounded-lg bg-emerald-50 border border-emerald-200">
+                    <div className="flex items-start gap-2">
+                      <Target className="h-3.5 w-3.5 text-emerald-600 mt-0.5 shrink-0" />
+                      <p className="text-[11px] text-emerald-800 leading-relaxed">{insight.leadScenario}</p>
+                    </div>
+                  </div>
+                )}
+                {insight.churnScenario && (
+                  <div className="p-2.5 rounded-lg bg-blue-50 border border-blue-200">
+                    <div className="flex items-start gap-2">
+                      <Users className="h-3.5 w-3.5 text-blue-600 mt-0.5 shrink-0" />
+                      <p className="text-[11px] text-blue-800 leading-relaxed">{insight.churnScenario}</p>
+                    </div>
+                  </div>
+                )}
+                <button
+                  onClick={() => setLocation(insight.ctaRoute)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-primary-foreground rounded-md text-[10px] font-semibold hover:bg-primary/90 transition-colors shadow-sm"
+                >
+                  {insight.ctaLabel}
+                  <ArrowRight className="h-3 w-3" />
+                </button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
     </div>
   );
 }
@@ -1011,7 +1196,7 @@ export function AiInsights() {
     );
   }
 
-  const { rsi, topRisks } = intel;
+  const { rsi, topRisks, revenueForecast } = intel;
   const atRiskMembers = stats?.atRiskMembers ?? 0;
 
   return (
@@ -1208,6 +1393,8 @@ export function AiInsights() {
               color="text-emerald-600"
             />
           </div>
+
+          <RevenueForecastCard forecast={revenueForecast} />
 
           <div className="bg-card border border-border rounded-xl overflow-hidden">
             <div className="p-3 border-b border-border flex items-center justify-between">

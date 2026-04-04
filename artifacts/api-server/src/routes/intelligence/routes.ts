@@ -4,6 +4,14 @@ import { db, membersTable, subscriptionsTable, attendanceTable, leadsTable, clas
 import { computeRSI } from "./computations";
 import { getGymMetrics, getRiskProfiles, getInterventions, computeRevenueForecast } from "./metrics";
 import { computeBlendedMRR, computeBlendedEngagement, isActiveBillableMember } from "../../blendedMetrics";
+import {
+  generateRSIComponentInsight,
+  generateRSIOverallInsight,
+  generateRevenueForecastInsight,
+  generateBenchmarkInsight,
+  generateConversationalBriefingItem,
+  generateConversationalSummary,
+} from "./insights-copy-engine";
 
 const router: IRouter = Router();
 
@@ -63,6 +71,12 @@ router.get("/gyms/:gymId/intelligence/rsi", async (req, res): Promise<void> => {
 
     const { trend30d, trend90d, trendInsufficient } = await getRsiTrendsFromSnapshots(gymId, rsi.score);
 
+    const rsiOverallInsight = generateRSIOverallInsight(rsi);
+    const rsiComponentInsights = rsi.breakdown.map((item) => ({
+      ...item,
+      ...generateRSIComponentInsight(item, rsi.components),
+    }));
+
     res.json({
       ...rsi,
       trend30d,
@@ -71,11 +85,8 @@ router.get("/gyms/:gymId/intelligence/rsi", async (req, res): Promise<void> => {
       revenueSource: metrics.revenueSource,
       attendanceSource: metrics.attendanceSource,
       hasSubscriptionData: metrics.hasSubscriptionData,
-      insight: rsi.band === "Strong"
-        ? "Your gym is showing strong retention. Keep focus on onboarding quality."
-        : rsi.band === "Moderate"
-        ? "Some retention pressure building. Review at-risk members and recent cancellation patterns."
-        : "Retention is fragile. Prioritize outreach to at-risk members and review billing failures immediately.",
+      insight: rsiOverallInsight,
+      componentInsights: rsiComponentInsights,
     });
   } catch (err) {
     console.error("[intelligence/rsi] Failed to compute RSI:", err);
@@ -252,16 +263,19 @@ router.get("/gyms/:gymId/intelligence/overview", async (req, res): Promise<void>
     const metrics = await getGymMetrics(gymId);
     const rsi = computeRSI(metrics.churnRate, metrics.avgRev, metrics.netGrowth, metrics.avgTenure);
     const { trend30d, trend90d, trendInsufficient } = await getRsiTrendsFromSnapshots(gymId, rsi.score);
+    const rsiOverallInsight = generateRSIOverallInsight(rsi);
+    const rsiComponentInsights = rsi.breakdown.map((item) => ({
+      ...item,
+      ...generateRSIComponentInsight(item, rsi.components),
+    }));
+
     const rsiData = {
       ...rsi,
       trend30d,
       trend90d,
       trendInsufficient,
-      insight: rsi.band === "Strong"
-        ? "Your gym is showing strong retention. Keep focus on onboarding quality."
-        : rsi.band === "Moderate"
-        ? "Some retention pressure building. Review at-risk members and recent cancellation patterns."
-        : "Retention is fragile. Prioritize outreach to at-risk members and review billing failures immediately.",
+      insight: rsiOverallInsight,
+      componentInsights: rsiComponentInsights,
     };
 
     const risks = await getRiskProfiles(gymId);
@@ -274,12 +288,18 @@ router.get("/gyms/:gymId/intelligence/overview", async (req, res): Promise<void>
     const churnRate = total > 0 ? Math.round(Number(cancelledCount?.count ?? 0) / total * 1000) / 10 : 0;
     const forecast = await computeRevenueForecast(gymId, currentMrr, churnRate, metrics.active);
 
+    const openLeads = await db.select({ count: count() }).from(leadsTable).where(
+      and(eq(leadsTable.gymId, gymId), sql`${leadsTable.stage} NOT IN ('converted', 'lost')`)
+    );
+    const openLeadCount = Number(openLeads[0]?.count ?? 0);
+    const forecastInsight = generateRevenueForecastInsight(forecast, openLeadCount, churnRate, metrics.active);
+
     res.json({
       gymId,
       rsi: rsiData,
       topRisks: risks.slice(0, 5),
       topInterventions: interventions.slice(0, 3),
-      revenueForecast: forecast,
+      revenueForecast: { ...forecast, insight: forecastInsight },
       generatedAt: new Date().toISOString(),
     });
   } catch (err) {
@@ -351,6 +371,8 @@ router.get("/gyms/:gymId/intelligence/morning-briefing", async (req, res): Promi
         )
       );
 
+    const avgRevPerMember = metrics.active > 0 ? metrics.totalRev / metrics.active : 0;
+
     if (recentAutoSuspensions.length > 0) {
       const memberIds = recentAutoSuspensions.map(s => s.memberId).filter(Boolean);
       const suspendedMembers = memberIds.length > 0
@@ -359,78 +381,136 @@ router.get("/gyms/:gymId/intelligence/morning-briefing", async (req, res): Promi
           )
         : [];
       const memberNames = suspendedMembers.map(m => `${m.firstName} ${m.lastName}`);
-      const namesList = memberNames.length <= 3
-        ? memberNames.join(", ")
-        : `${memberNames.slice(0, 3).join(", ")} and ${memberNames.length - 3} more`;
-
+      const conversational = generateConversationalBriefingItem("auto_suspended", {
+        count: recentAutoSuspensions.length,
+        names: memberNames,
+      });
       items.push({
         icon: "billing",
         priority: "warning",
-        message: `${recentAutoSuspensions.length} member${recentAutoSuspensions.length > 1 ? "s were" : " was"} auto-suspended for non-payment: ${namesList}. Review and override if needed.`,
-        action: "Review Members",
-        link: "/members",
+        message: conversational.message,
+        action: conversational.action,
+        link: conversational.link,
       });
     }
 
     if (failedSubs.length > 0) {
       const failedRev = failedSubs.reduce((sum, s) => sum + parseFloat(s.amount || "0"), 0);
+      const conversational = generateConversationalBriefingItem("failed_payments", {
+        count: failedSubs.length,
+        amount: failedRev,
+      });
       items.push({
         icon: "billing",
         priority: "critical",
-        message: `${failedSubs.length} failed payment${failedSubs.length > 1 ? "s" : ""} totaling $${Math.round(failedRev)}/mo need recovery`,
-        action: "Go to Billing",
-        link: "/billing",
+        message: conversational.message,
+        action: conversational.action,
+        link: conversational.link,
+      });
+    }
+
+    if (atRiskCount > 0) {
+      const conversational = generateConversationalBriefingItem("at_risk_critical", {
+        count: atRiskCount,
+        amount: revenueAtRisk,
+      });
+      items.push({
+        icon: "alert",
+        priority: criticalRisks.length > 0 ? "critical" : "warning",
+        message: conversational.message,
+        action: conversational.action,
+        link: conversational.link,
       });
     }
 
     if (staleLeads.length > 0) {
+      const conversational = generateConversationalBriefingItem("stale_leads", {
+        count: staleLeads.length,
+        avgRevPerMember,
+      });
       items.push({
         icon: "leads",
         priority: "warning",
-        message: `${staleLeads.length} lead${staleLeads.length > 1 ? "s" : ""} went stale — follow up before they go cold`,
-        action: "Open Pipeline",
-        link: "/leads",
+        message: conversational.message,
+        action: conversational.action,
+        link: conversational.link,
       });
     }
 
     if (todayClasses.length > 0) {
+      const conversational = generateConversationalBriefingItem("class_schedule", {
+        classCount: todayClasses.length,
+        classFillRate,
+        enrolled: totalEnrolled,
+        capacity: totalCapacity,
+      });
       items.push({
         icon: "schedule",
         priority: classFillRate >= 80 ? "positive" : "info",
-        message: `${todayClasses.length} class${todayClasses.length > 1 ? "es" : ""} today at ${classFillRate}% capacity (${totalEnrolled}/${totalCapacity} spots filled)`,
-        action: "View Schedule",
-        link: "/schedule",
+        message: conversational.message,
+        action: conversational.action,
+        link: conversational.link,
       });
     }
 
     if (activeLeads.length > 0 && staleLeads.length === 0) {
+      const conversational = generateConversationalBriefingItem("active_leads", {
+        count: activeLeads.length,
+      });
       items.push({
         icon: "leads",
         priority: "info",
-        message: `${activeLeads.length} active lead${activeLeads.length > 1 ? "s" : ""} in your pipeline`,
-        link: "/leads",
+        message: conversational.message,
+        action: conversational.action,
+        link: conversational.link,
       });
     }
 
     if (rsi.band === "Strong") {
+      const conversational = generateConversationalBriefingItem("rsi_strong", {
+        rsiScore: rsi.score,
+        rsiBand: rsi.band,
+      });
       items.push({
         icon: "positive",
         priority: "positive",
-        message: `RSI is ${rsi.score.toFixed(1)} (Strong) — your business is in great shape. Invest in your systems and don't get complacent.`,
+        message: conversational.message,
+        action: conversational.action,
+        link: conversational.link,
       });
     }
 
     if (newLeadsToday.length > 0) {
+      const conversational = generateConversationalBriefingItem("new_leads", {
+        count: newLeadsToday.length,
+      });
       items.push({
         icon: "leads",
         priority: "positive",
-        message: `${newLeadsToday.length} new lead${newLeadsToday.length > 1 ? "s" : ""} in the last 24 hours`,
-        action: "View Leads",
-        link: "/leads",
+        message: conversational.message,
+        action: conversational.action,
+        link: conversational.link,
       });
     }
 
-    const summary = buildBriefingSummary(atRiskCount, staleLeads.length, failedSubs.length, metrics.totalRev, rsi, todayClasses.length, classFillRate);
+    const briefingSnapshot = {
+      activeMembers: metrics.active,
+      mrr: Math.round(metrics.totalRev),
+      rsiScore: rsi.score,
+      rsiBand: rsi.band,
+      atRiskMembers: atRiskCount,
+      atRiskCritical: criticalRisks.length,
+      atRiskHigh: highRisks.length,
+      revenueAtRisk: Math.round(revenueAtRisk),
+      engagementRate,
+      staleLeads: staleLeads.length,
+      newLeads: newLeadsToday.length,
+      activeLeads: activeLeads.length,
+      failedPayments: failedSubs.length,
+      todayClasses: todayClasses.length,
+      classFillRate,
+    };
+    const summary = generateConversationalSummary(briefingSnapshot);
 
     res.json({
       date: todayStr,
@@ -555,19 +635,31 @@ router.get("/gyms/:gymId/intelligence/benchmarks", async (req, res): Promise<voi
       const gymValue = gymValues[metric];
       const percentileRank = computePercentileRank(gymValue, benchmarkRow, metric);
       const percentileLabel = getPercentileLabel(percentileRank);
+      const industryMedian = benchmarkRow && !insufficientData ? parseFloat(benchmarkRow.p50 || "0") : null;
+
+      const insight = generateBenchmarkInsight({
+        metric,
+        gymValue,
+        industryMedian,
+        percentileRank,
+        label: metricLabels[metric],
+        format: metricFormats[metric],
+        lowerIsBetter: lowerIsBetter[metric],
+      });
 
       return {
         metric,
         label: metricLabels[metric],
         format: metricFormats[metric],
         gymValue,
-        industryMedian: benchmarkRow && !insufficientData ? parseFloat(benchmarkRow.p50 || "0") : null,
+        industryMedian,
         p25: benchmarkRow && !insufficientData ? parseFloat(benchmarkRow.p25 || "0") : null,
         p75: benchmarkRow && !insufficientData ? parseFloat(benchmarkRow.p75 || "0") : null,
         p90: benchmarkRow && !insufficientData ? parseFloat(benchmarkRow.p90 || "0") : null,
         percentileRank,
         percentileLabel,
         lowerIsBetter: lowerIsBetter[metric] ?? false,
+        insight,
       };
     });
 
