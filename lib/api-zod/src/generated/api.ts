@@ -4297,3 +4297,249 @@ export const GetCheckinStatusResponse = zod.object({
   warning: zod.string().optional(),
   holdId: zod.number().optional(),
 });
+
+/**
+ * @summary List appointment types for a gym
+ */
+export const ListAppointmentTypesParams = zod.object({
+  gymId: zod.coerce.number(),
+});
+
+export const ListAppointmentTypesResponseItem = zod.object({
+  id: zod.number(),
+  gymId: zod.number(),
+  name: zod.string(),
+  description: zod.string().nullish(),
+  durationMinutes: zod.number(),
+  color: zod.string(),
+  isFree: zod.boolean(),
+  price: zod.number().nullish(),
+  isActive: zod.boolean(),
+  createdAt: zod.date(),
+});
+export const ListAppointmentTypesResponse = zod.array(
+  ListAppointmentTypesResponseItem,
+);
+
+/**
+ * @summary Create an appointment type
+ */
+export const CreateAppointmentTypeParams = zod.object({
+  gymId: zod.coerce.number(),
+});
+
+export const CreateAppointmentTypeBody = zod.object({
+  name: zod.string(),
+  description: zod.string().nullish(),
+  durationMinutes: zod.number().optional(),
+  color: zod.string().optional(),
+  isFree: zod.boolean().optional(),
+  price: zod.number().nullish(),
+});
+
+/**
+ * @summary Update an appointment type
+ */
+export const UpdateAppointmentTypeParams = zod.object({
+  gymId: zod.coerce.number(),
+  typeId: zod.coerce.number(),
+});
+
+export const UpdateAppointmentTypeBody = zod.object({
+  name: zod.string().optional(),
+  description: zod.string().nullish(),
+  durationMinutes: zod.number().optional(),
+  color: zod.string().optional(),
+  isFree: zod.boolean().optional(),
+  price: zod.number().nullish(),
+  isActive: zod.boolean().optional(),
+});
+
+export const UpdateAppointmentTypeResponse = zod.object({
+  id: zod.number(),
+  gymId: zod.number(),
+  name: zod.string(),
+  description: zod.string().nullish(),
+  durationMinutes: zod.number(),
+  color: zod.string(),
+  isFree: zod.boolean(),
+  price: zod.number().nullish(),
+  isActive: zod.boolean(),
+  createdAt: zod.date(),
+});
+
+/**
+ * @summary Delete an appointment type
+ */
+export const DeleteAppointmentTypeParams = zod.object({
+  gymId: zod.coerce.number(),
+  typeId: zod.coerce.number(),
+});
+
+/**
+ * @summary List coach availability slots
+ */
+export const ListCoachAvailabilityParams = zod.object({
+  gymId: zod.coerce.number(),
+});
+
+export const ListCoachAvailabilityQueryParams = zod.object({
+  coachId: zod.coerce.number().optional(),
+});
+
+export const ListCoachAvailabilityResponseItem = zod.object({
+  id: zod.number(),
+  gymId: zod.number(),
+  coachId: zod.number(),
+  dayOfWeek: zod.number(),
+  startTime: zod.string(),
+  endTime: zod.string(),
+  isActive: zod.boolean(),
+  createdAt: zod.date(),
+});
+export const ListCoachAvailabilityResponse = zod.array(
+  ListCoachAvailabilityResponseItem,
+);
+
+/**
+ * @summary Create a coach availability slot
+ */
+export const CreateCoachAvailabilityParams = zod.object({
+  gymId: zod.coerce.number(),
+});
+
+export const CreateCoachAvailabilityBody = zod.object({
+  coachId: zod.number(),
+  dayOfWeek: zod.number(),
+  startTime: zod.string(),
+  endTime: zod.string(),
+});
+
+/**
+ * @summary Delete a coach availability slot
+ */
+export const DeleteCoachAvailabilityParams = zod.object({
+  gymId: zod.coerce.number(),
+  slotId: zod.coerce.number(),
+});
+
+/**
+ * @summary List appointments
+ */
+export const ListAppointmentsParams = zod.object({
+  gymId: zod.coerce.number(),
+});
+
+export const ListAppointmentsQueryParams = zod.object({
+  startDate: zod.coerce.string().optional(),
+  endDate: zod.coerce.string().optional(),
+  coachId: zod.coerce.number().optional(),
+  memberId: zod.coerce.number().optional(),
+  status: zod.coerce.string().optional(),
+});
+
+export const ListAppointmentsResponseItem = zod.object({
+  id: zod.number(),
+  gymId: zod.number(),
+  appointmentTypeId: zod.number(),
+  coachId: zod.number(),
+  coachName: zod.string().nullish(),
+  memberId: zod.number().nullish(),
+  memberName: zod.string().nullish(),
+  leadId: zod.number().nullish(),
+  leadName: zod.string().nullish(),
+  startTime: zod.date(),
+  endTime: zod.date(),
+  status: zod.enum(["scheduled", "completed", "cancelled", "no_show"]),
+  notes: zod.string().nullish(),
+  reminderSent24h: zod.boolean().optional(),
+  reminderSent1h: zod.boolean().optional(),
+  createdAt: zod.date(),
+});
+export const ListAppointmentsResponse = zod.array(ListAppointmentsResponseItem);
+
+/**
+ * @summary Book an appointment
+ */
+export const CreateAppointmentParams = zod.object({
+  gymId: zod.coerce.number(),
+});
+
+export const CreateAppointmentBody = zod.object({
+  appointmentTypeId: zod.number(),
+  coachId: zod.number().nullish(),
+  memberId: zod.number().nullish(),
+  leadId: zod.number().nullish(),
+  startTime: zod.date(),
+  notes: zod.string().nullish(),
+});
+
+/**
+ * @summary Get appointment details
+ */
+export const GetAppointmentParams = zod.object({
+  gymId: zod.coerce.number(),
+  appointmentId: zod.coerce.number(),
+});
+
+export const GetAppointmentResponse = zod.object({
+  id: zod.number(),
+  gymId: zod.number(),
+  appointmentTypeId: zod.number(),
+  coachId: zod.number(),
+  coachName: zod.string().nullish(),
+  memberId: zod.number().nullish(),
+  memberName: zod.string().nullish(),
+  leadId: zod.number().nullish(),
+  leadName: zod.string().nullish(),
+  startTime: zod.date(),
+  endTime: zod.date(),
+  status: zod.enum(["scheduled", "completed", "cancelled", "no_show"]),
+  notes: zod.string().nullish(),
+  reminderSent24h: zod.boolean().optional(),
+  reminderSent1h: zod.boolean().optional(),
+  createdAt: zod.date(),
+});
+
+/**
+ * @summary Update an appointment
+ */
+export const UpdateAppointmentParams = zod.object({
+  gymId: zod.coerce.number(),
+  appointmentId: zod.coerce.number(),
+});
+
+export const UpdateAppointmentBody = zod.object({
+  status: zod
+    .enum(["scheduled", "completed", "cancelled", "no_show"])
+    .optional(),
+  notes: zod.string().nullish(),
+  startTime: zod.date().optional(),
+});
+
+export const UpdateAppointmentResponse = zod.object({
+  id: zod.number(),
+  gymId: zod.number(),
+  appointmentTypeId: zod.number(),
+  coachId: zod.number(),
+  coachName: zod.string().nullish(),
+  memberId: zod.number().nullish(),
+  memberName: zod.string().nullish(),
+  leadId: zod.number().nullish(),
+  leadName: zod.string().nullish(),
+  startTime: zod.date(),
+  endTime: zod.date(),
+  status: zod.enum(["scheduled", "completed", "cancelled", "no_show"]),
+  notes: zod.string().nullish(),
+  reminderSent24h: zod.boolean().optional(),
+  reminderSent1h: zod.boolean().optional(),
+  createdAt: zod.date(),
+});
+
+/**
+ * @summary Delete an appointment
+ */
+export const DeleteAppointmentParams = zod.object({
+  gymId: zod.coerce.number(),
+  appointmentId: zod.coerce.number(),
+});

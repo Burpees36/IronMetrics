@@ -53,6 +53,7 @@ import platformBillingRouter from "./platform-billing";
 import adminRouter from "./admin";
 import wodifyRouter from "./integrations/wodify";
 import financesRouter from "./finances";
+import appointmentsRouter from "./appointments";
 
 const router: IRouter = Router();
 
@@ -118,6 +119,9 @@ router.use("/gyms/:gymId/members", requireTierAccess("members"));
 router.use("/gyms/:gymId/leads", requireTierAccess("leads"));
 router.use("/gyms/:gymId/lead-sequences", requireTierAccess("leads"));
 router.use("/gyms/:gymId/classes", requireTierAccess("schedule"));
+router.use("/gyms/:gymId/appointment-types", requireTierAccess("schedule"));
+router.use("/gyms/:gymId/coach-availability", requireTierAccess("schedule"));
+router.use("/gyms/:gymId/appointments", requireTierAccess("schedule"));
 router.use("/gyms/:gymId/attendance", requireTierAccess("attendance"));
 router.use("/gyms/:gymId/workouts", requireTierAccess("workouts"));
 router.use("/gyms/:gymId/programming", requireTierAccess("programming"));
@@ -134,6 +138,7 @@ router.use(staffRouter);
 router.use(classesRouter);
 router.use(classTemplatesRouter);
 router.use(attendanceRouter);
+router.use(appointmentsRouter);
 router.use(workoutsRouter);
 router.use(programmingRouter);
 

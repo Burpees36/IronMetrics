@@ -41,6 +41,8 @@ tags:
     description: AI operator tools
   - name: reporting
     description: Reports and dashboards
+  - name: appointments
+    description: Personal training and appointment scheduling
   - name: Storage
     description: Object storage upload and serving endpoints.
 
@@ -4225,6 +4227,300 @@ paths:
               schema:
                 $ref: "#/components/schemas/CheckinStatus"
 
+  /gyms/{gymId}/appointment-types:
+    get:
+      operationId: listAppointmentTypes
+      tags: [appointments]
+      summary: List appointment types for a gym
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of appointment types
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AppointmentType"
+    post:
+      operationId: createAppointmentType
+      tags: [appointments]
+      summary: Create an appointment type
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateAppointmentTypeBody"
+      responses:
+        "201":
+          description: Created appointment type
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AppointmentType"
+
+  /gyms/{gymId}/appointment-types/{typeId}:
+    patch:
+      operationId: updateAppointmentType
+      tags: [appointments]
+      summary: Update an appointment type
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: typeId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateAppointmentTypeBody"
+      responses:
+        "200":
+          description: Updated appointment type
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AppointmentType"
+    delete:
+      operationId: deleteAppointmentType
+      tags: [appointments]
+      summary: Delete an appointment type
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: typeId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /gyms/{gymId}/coach-availability:
+    get:
+      operationId: listCoachAvailability
+      tags: [appointments]
+      summary: List coach availability slots
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: coachId
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of availability slots
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CoachAvailabilitySlot"
+    post:
+      operationId: createCoachAvailability
+      tags: [appointments]
+      summary: Create a coach availability slot
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCoachAvailabilityBody"
+      responses:
+        "201":
+          description: Created availability slot
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CoachAvailabilitySlot"
+
+  /gyms/{gymId}/coach-availability/{slotId}:
+    delete:
+      operationId: deleteCoachAvailability
+      tags: [appointments]
+      summary: Delete a coach availability slot
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: slotId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /gyms/{gymId}/appointments:
+    get:
+      operationId: listAppointments
+      tags: [appointments]
+      summary: List appointments
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: startDate
+          in: query
+          schema:
+            type: string
+        - name: endDate
+          in: query
+          schema:
+            type: string
+        - name: coachId
+          in: query
+          schema:
+            type: integer
+        - name: memberId
+          in: query
+          schema:
+            type: integer
+        - name: status
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of appointments
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Appointment"
+    post:
+      operationId: createAppointment
+      tags: [appointments]
+      summary: Book an appointment
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateAppointmentBody"
+      responses:
+        "201":
+          description: Created appointment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Appointment"
+
+  /gyms/{gymId}/appointments/{appointmentId}:
+    get:
+      operationId: getAppointment
+      tags: [appointments]
+      summary: Get appointment details
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: appointmentId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Appointment details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Appointment"
+    patch:
+      operationId: updateAppointment
+      tags: [appointments]
+      summary: Update an appointment
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: appointmentId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateAppointmentBody"
+      responses:
+        "200":
+          description: Updated appointment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Appointment"
+    delete:
+      operationId: deleteAppointment
+      tags: [appointments]
+      summary: Delete an appointment
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: appointmentId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
 components:
   schemas:
     HealthStatus:
@@ -7689,6 +7985,204 @@ components:
       required:
         - configured
         - smsEnabled
+
+    AppointmentType:
+      type: object
+      properties:
+        id:
+          type: integer
+        gymId:
+          type: integer
+        name:
+          type: string
+        description:
+          type: ["string", "null"]
+        durationMinutes:
+          type: integer
+        color:
+          type: string
+        isFree:
+          type: boolean
+        price:
+          type: ["integer", "null"]
+        isActive:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - gymId
+        - name
+        - durationMinutes
+        - color
+        - isFree
+        - isActive
+        - createdAt
+
+    CreateAppointmentTypeBody:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: ["string", "null"]
+        durationMinutes:
+          type: integer
+        color:
+          type: string
+        isFree:
+          type: boolean
+        price:
+          type: ["integer", "null"]
+      required:
+        - name
+
+    UpdateAppointmentTypeBody:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: ["string", "null"]
+        durationMinutes:
+          type: integer
+        color:
+          type: string
+        isFree:
+          type: boolean
+        price:
+          type: ["integer", "null"]
+        isActive:
+          type: boolean
+
+    CoachAvailabilitySlot:
+      type: object
+      properties:
+        id:
+          type: integer
+        gymId:
+          type: integer
+        coachId:
+          type: integer
+        dayOfWeek:
+          type: integer
+        startTime:
+          type: string
+        endTime:
+          type: string
+        isActive:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - gymId
+        - coachId
+        - dayOfWeek
+        - startTime
+        - endTime
+        - isActive
+        - createdAt
+
+    CreateCoachAvailabilityBody:
+      type: object
+      properties:
+        coachId:
+          type: integer
+        dayOfWeek:
+          type: integer
+        startTime:
+          type: string
+        endTime:
+          type: string
+      required:
+        - coachId
+        - dayOfWeek
+        - startTime
+        - endTime
+
+    Appointment:
+      type: object
+      properties:
+        id:
+          type: integer
+        gymId:
+          type: integer
+        appointmentTypeId:
+          type: integer
+        coachId:
+          type: integer
+        coachName:
+          type: ["string", "null"]
+        memberId:
+          type: ["integer", "null"]
+        memberName:
+          type: ["string", "null"]
+        leadId:
+          type: ["integer", "null"]
+        leadName:
+          type: ["string", "null"]
+        startTime:
+          type: string
+          format: date-time
+        endTime:
+          type: string
+          format: date-time
+        status:
+          type: string
+          enum: [scheduled, completed, cancelled, no_show]
+        notes:
+          type: ["string", "null"]
+        reminderSent24h:
+          type: boolean
+        reminderSent1h:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - gymId
+        - appointmentTypeId
+        - coachId
+        - startTime
+        - endTime
+        - status
+        - createdAt
+
+    CreateAppointmentBody:
+      type: object
+      properties:
+        appointmentTypeId:
+          type: integer
+        coachId:
+          type: ["integer", "null"]
+        memberId:
+          type: ["integer", "null"]
+        leadId:
+          type: ["integer", "null"]
+        startTime:
+          type: string
+          format: date-time
+        notes:
+          type: ["string", "null"]
+      required:
+        - appointmentTypeId
+        - startTime
+
+    UpdateAppointmentBody:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [scheduled, completed, cancelled, no_show]
+        notes:
+          type: ["string", "null"]
+        startTime:
+          type: string
+          format: date-time
 
     ErrorEnvelope:
       type: object

@@ -2330,6 +2330,127 @@ export interface SmsStatusResponse {
   twilioPhoneNumber?: string | null;
 }
 
+export interface AppointmentType {
+  id: number;
+  gymId: number;
+  name: string;
+  /** @nullable */
+  description?: string | null;
+  durationMinutes: number;
+  color: string;
+  isFree: boolean;
+  /** @nullable */
+  price?: number | null;
+  isActive: boolean;
+  createdAt: string;
+}
+
+export interface CreateAppointmentTypeBody {
+  name: string;
+  /** @nullable */
+  description?: string | null;
+  durationMinutes?: number;
+  color?: string;
+  isFree?: boolean;
+  /** @nullable */
+  price?: number | null;
+}
+
+export interface UpdateAppointmentTypeBody {
+  name?: string;
+  /** @nullable */
+  description?: string | null;
+  durationMinutes?: number;
+  color?: string;
+  isFree?: boolean;
+  /** @nullable */
+  price?: number | null;
+  isActive?: boolean;
+}
+
+export interface CoachAvailabilitySlot {
+  id: number;
+  gymId: number;
+  coachId: number;
+  dayOfWeek: number;
+  startTime: string;
+  endTime: string;
+  isActive: boolean;
+  createdAt: string;
+}
+
+export interface CreateCoachAvailabilityBody {
+  coachId: number;
+  dayOfWeek: number;
+  startTime: string;
+  endTime: string;
+}
+
+export type AppointmentStatus =
+  (typeof AppointmentStatus)[keyof typeof AppointmentStatus];
+
+export const AppointmentStatus = {
+  scheduled: "scheduled",
+  completed: "completed",
+  cancelled: "cancelled",
+  no_show: "no_show",
+} as const;
+
+export interface Appointment {
+  id: number;
+  gymId: number;
+  appointmentTypeId: number;
+  coachId: number;
+  /** @nullable */
+  coachName?: string | null;
+  /** @nullable */
+  memberId?: number | null;
+  /** @nullable */
+  memberName?: string | null;
+  /** @nullable */
+  leadId?: number | null;
+  /** @nullable */
+  leadName?: string | null;
+  startTime: string;
+  endTime: string;
+  status: AppointmentStatus;
+  /** @nullable */
+  notes?: string | null;
+  reminderSent24h?: boolean;
+  reminderSent1h?: boolean;
+  createdAt: string;
+}
+
+export interface CreateAppointmentBody {
+  appointmentTypeId: number;
+  /** @nullable */
+  coachId?: number | null;
+  /** @nullable */
+  memberId?: number | null;
+  /** @nullable */
+  leadId?: number | null;
+  startTime: string;
+  /** @nullable */
+  notes?: string | null;
+}
+
+export type UpdateAppointmentBodyStatus =
+  (typeof UpdateAppointmentBodyStatus)[keyof typeof UpdateAppointmentBodyStatus];
+
+export const UpdateAppointmentBodyStatus = {
+  scheduled: "scheduled",
+  completed: "completed",
+  cancelled: "cancelled",
+  no_show: "no_show",
+} as const;
+
+export interface UpdateAppointmentBody {
+  status?: UpdateAppointmentBodyStatus;
+  /** @nullable */
+  notes?: string | null;
+  startTime?: string;
+}
+
 export interface ErrorEnvelope {
   error: string;
 }
@@ -2604,4 +2725,16 @@ export type DisableTax200 = {
 export type UpdateHoldBody = {
   endDate?: string;
   reason?: string;
+};
+
+export type ListCoachAvailabilityParams = {
+  coachId?: number;
+};
+
+export type ListAppointmentsParams = {
+  startDate?: string;
+  endDate?: string;
+  coachId?: number;
+  memberId?: number;
+  status?: string;
 };

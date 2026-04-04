@@ -1,9 +1,10 @@
 import { useState, useEffect } from "react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useListLeadActivities, useCreateLeadActivity, useUpdateLead, useSendLeadSms, getListLeadActivitiesQueryKey, getListLeadsQueryKey } from "@workspace/api-client-react";
+import { useListLeadActivities, useCreateLeadActivity, useUpdateLead, useSendLeadSms, getListLeadActivitiesQueryKey, getListLeadsQueryKey, useListAppointmentTypes, useListStaff, useCreateAppointment, getListAppointmentsQueryKey } from "@workspace/api-client-react";
 import { Textarea } from "@/components/ui/textarea";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
@@ -83,9 +84,20 @@ export function LeadDetailDrawer({ lead, gymId, open, onClose, onMoveStage, onCo
   const [showContactLog, setShowContactLog] = useState(false);
   const [smsOpen, setSmsOpen] = useState(false);
   const [smsMessage, setSmsMessage] = useState("");
+  const [nsiOpen, setNsiOpen] = useState(false);
+  const [nsiTypeId, setNsiTypeId] = useState("");
+  const [nsiCoachId, setNsiCoachId] = useState("");
+  const [nsiDate, setNsiDate] = useState("");
+  const [nsiTime, setNsiTime] = useState("10:00");
 
   const { data: activities } = useListLeadActivities(gymId, lead?.id, {
     query: { enabled: !!lead?.id }
+  });
+  const { data: appointmentTypes } = useListAppointmentTypes(gymId, {
+    query: { enabled: !!gymId && nsiOpen }
+  });
+  const { data: staff } = useListStaff(gymId, {
+    query: { enabled: !!gymId && nsiOpen }
   });
 
   const [sequenceEnrollments, setSequenceEnrollments] = useState<SequenceEnrollmentStatus[]>([]);
@@ -103,6 +115,7 @@ export function LeadDetailDrawer({ lead, gymId, open, onClose, onMoveStage, onCo
   const updateLeadMutation = useUpdateLead();
   const createActivityMutation = useCreateLeadActivity();
   const sendSmsMutation = useSendLeadSms();
+  const createAppointmentMutation = useCreateAppointment();
 
   const isStale = lead ? computeStale(lead) : false;
   const overdue = lead ? isFollowUpOverdue(lead) : false;
@@ -180,9 +193,50 @@ export function LeadDetailDrawer({ lead, gymId, open, onClose, onMoveStage, onCo
     );
   };
 
+  const handleBookNsi = () => {
+    if (!lead || !nsiTypeId || !nsiDate || !nsiTime) return;
+    const startTime = `${nsiDate}T${nsiTime}:00`;
+    const selectedType = (appointmentTypes as any[])?.find((t: any) => String(t.id) === nsiTypeId);
+    const duration = selectedType?.durationMinutes || 30;
+    const endDate = new Date(startTime);
+    endDate.setMinutes(endDate.getMinutes() + duration);
+    const endTime = endDate.toISOString().slice(0, 19);
+
+    createAppointmentMutation.mutate(
+      {
+        gymId,
+        data: {
+          appointmentTypeId: parseInt(nsiTypeId),
+          coachId: nsiCoachId && nsiCoachId !== "none" ? parseInt(nsiCoachId) : undefined,
+          leadId: lead.id,
+          startTime,
+          endTime,
+          notes: `NSI for ${lead.firstName} ${lead.lastName}`,
+        } as any,
+      },
+      {
+        onSuccess: () => {
+          toast({ title: "Appointment booked", description: "No Sweat Intro scheduled successfully." });
+          setNsiOpen(false);
+          setNsiTypeId("");
+          setNsiCoachId("");
+          setNsiDate("");
+          setNsiTime("10:00");
+          queryClient.invalidateQueries({ queryKey: getListAppointmentsQueryKey(gymId) });
+          queryClient.invalidateQueries({ queryKey: getListLeadsQueryKey(gymId) });
+          onInvalidate();
+        },
+        onError: () => {
+          toast({ title: "Error", description: "Failed to book appointment." });
+        },
+      }
+    );
+  };
+
   if (!lead) return null;
 
   return (
+    <>
     <Sheet open={open} onOpenChange={(v) => !v && onClose()}>
       <SheetContent className="w-full sm:max-w-md bg-background dark:bg-[hsl(220,20%,8%)] border-border p-0 overflow-y-auto">
         <div className="p-6 border-b border-border">
@@ -334,6 +388,13 @@ export function LeadDetailDrawer({ lead, gymId, open, onClose, onMoveStage, onCo
               )}
               {lead.stage !== "converted" && lead.stage !== "lost" && (
                 <>
+                  <button
+                    onClick={() => setNsiOpen(true)}
+                    className="flex items-center gap-2 px-3 py-2 rounded-lg border border-primary/20 bg-primary/5 text-xs font-medium text-primary hover:bg-primary/10 transition-colors col-span-2"
+                  >
+                    <Calendar className="h-3.5 w-3.5" />
+                    Book No Sweat Intro
+                  </button>
                   <button
                     onClick={() => onConvert(lead)}
                     className="flex items-center gap-2 px-3 py-2 rounded-lg border border-emerald-500/20 bg-emerald-500/5 text-xs font-medium text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10 transition-colors"
@@ -519,5 +580,62 @@ export function LeadDetailDrawer({ lead, gymId, open, onClose, onMoveStage, onCo
         </div>
       </SheetContent>
     </Sheet>
+
+    <Dialog open={nsiOpen} onOpenChange={setNsiOpen}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Book No Sweat Intro</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4 py-2">
+          <div className="text-sm text-muted-foreground">
+            Schedule a No Sweat Intro for <span className="font-medium text-foreground">{lead.firstName} {lead.lastName}</span>
+          </div>
+          <div className="space-y-2">
+            <Label>Appointment Type</Label>
+            <Select value={nsiTypeId} onValueChange={setNsiTypeId}>
+              <SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger>
+              <SelectContent>
+                {(appointmentTypes as any[])?.map((t: any) => (
+                  <SelectItem key={t.id} value={String(t.id)}>{t.name} ({t.durationMinutes} min)</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label>Coach (optional)</Label>
+            <Select value={nsiCoachId} onValueChange={setNsiCoachId}>
+              <SelectTrigger><SelectValue placeholder="Any coach" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">Any coach</SelectItem>
+                {(staff as any[])?.map((s: any) => (
+                  <SelectItem key={s.id} value={String(s.id)}>{s.displayName}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-2">
+              <Label>Date</Label>
+              <Input type="date" value={nsiDate} onChange={(e) => setNsiDate(e.target.value)} min={new Date().toISOString().split("T")[0]} />
+            </div>
+            <div className="space-y-2">
+              <Label>Time</Label>
+              <Input type="time" value={nsiTime} onChange={(e) => setNsiTime(e.target.value)} />
+            </div>
+          </div>
+        </div>
+        <DialogFooter>
+          <button onClick={() => setNsiOpen(false)} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors">Cancel</button>
+          <button
+            onClick={handleBookNsi}
+            disabled={!nsiTypeId || !nsiDate || !nsiTime || createAppointmentMutation.isPending}
+            className="px-4 py-2 text-sm bg-primary text-primary-foreground rounded-lg font-medium hover:bg-primary/90 disabled:opacity-50 transition-colors"
+          >
+            {createAppointmentMutation.isPending ? "Booking..." : "Book Appointment"}
+          </button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }

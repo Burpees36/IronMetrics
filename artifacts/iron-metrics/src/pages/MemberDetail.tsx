@@ -12,6 +12,7 @@ import {
   getListPaymentMethodsQueryKey, getGetMemberLinkedBillingQueryKey,
   useListMembers, useListClasses, useCheckInToClass,
   useSendMemberSms,
+  useListAppointments,
 } from "@workspace/api-client-react";
 import type { GymClass } from "@workspace/api-client-react";
 import type { ApiError } from "@workspace/api-client-react/custom-fetch";
@@ -42,7 +43,7 @@ export function MemberDetail() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const [activeTab, setActiveTab] = useState<"overview" | "notes" | "timeline" | "billing">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "notes" | "timeline" | "billing" | "appointments">("overview");
   const [editOpen, setEditOpen] = useState(false);
   const [statusAction, setStatusAction] = useState<"hold" | "cancelled" | "active" | null>(null);
   const [noteContent, setNoteContent] = useState("");
@@ -84,6 +85,10 @@ export function MemberDetail() {
 
   const updateMutation = useUpdateMember();
   const addNoteMutation = useAddMemberNote();
+
+  const { data: memberAppointments } = useListAppointments(activeGymId as number, { memberId: memberId }, {
+    query: { enabled: !!activeGymId && !!memberId && activeTab === "appointments" },
+  });
 
   const billingEnabled = !!activeGymId && !!memberId && activeTab === "billing";
   const { data: billingHistory } = useGetMemberBillingHistory(activeGymId as number, memberId, {
@@ -534,6 +539,7 @@ export function MemberDetail() {
     { key: "billing" as const, label: "Billing", icon: CreditCard },
     { key: "notes" as const, label: "Notes", icon: StickyNote },
     { key: "timeline" as const, label: "Timeline", icon: Clock },
+    { key: "appointments" as const, label: "Appointments", icon: Calendar },
   ];
 
   const billingData = billingHistory as any;
@@ -1257,6 +1263,49 @@ export function MemberDetail() {
             </div>
           </div>
         </div>
+      )}
+
+      {activeTab === "appointments" && (
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
+          <div className="bg-card border border-border rounded-2xl p-6 shadow-sm">
+            <h3 className="text-lg font-semibold text-foreground flex items-center gap-2 mb-4">
+              <Calendar className="h-5 w-5 text-primary" /> Appointment History
+            </h3>
+            {!memberAppointments || memberAppointments.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-6">No appointments found for this member.</p>
+            ) : (
+              <div className="space-y-3">
+                {memberAppointments.map((appt: any) => {
+                  const start = new Date(appt.startTime);
+                  const end = new Date(appt.endTime);
+                  const statusColors: Record<string, string> = {
+                    scheduled: "bg-sky-500/10 text-sky-500 border-sky-500/20",
+                    completed: "bg-green-500/10 text-green-500 border-green-500/20",
+                    cancelled: "bg-zinc-500/10 text-zinc-500 border-zinc-500/20",
+                    no_show: "bg-red-500/10 text-red-500 border-red-500/20",
+                  };
+                  return (
+                    <div key={appt.id} className="flex items-center justify-between p-3 rounded-xl border border-border bg-muted/20">
+                      <div className="flex flex-col gap-0.5">
+                        <span className="text-sm font-medium text-foreground">
+                          {start.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                          {" · "}
+                          {start.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })} – {end.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          {appt.coachName || "No coach"}{appt.notes ? ` · ${appt.notes}` : ""}
+                        </span>
+                      </div>
+                      <span className={`text-xs font-medium px-2 py-0.5 rounded-full border ${statusColors[appt.status] || statusColors.scheduled}`}>
+                        {appt.status === "no_show" ? "No Show" : appt.status.charAt(0).toUpperCase() + appt.status.slice(1)}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </motion.div>
       )}
 
       <MemberDialogs

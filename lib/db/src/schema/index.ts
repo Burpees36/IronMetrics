@@ -29,3 +29,4 @@ export * from "./benchmarks";
 export * from "./mrr-snapshots";
 export * from "./lead-sequences";
 export * from "./finances";
+export * from "./appointments";
