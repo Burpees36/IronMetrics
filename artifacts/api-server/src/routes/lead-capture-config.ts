@@ -49,7 +49,7 @@ router.put("/gyms/:gymId/lead-capture-config", async (req, res): Promise<void> =
   try {
     const gymId = Number(req.params.gymId);
     const gymRole = (req as any).gymRole;
-    if (!["owner", "admin"].includes(gymRole)) {
+    if (!["owner", "gym_owner", "admin"].includes(gymRole)) {
       res.status(403).json({ error: "Only owners and admins can manage lead capture settings" });
       return;
     }

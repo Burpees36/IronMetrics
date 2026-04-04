@@ -290,7 +290,7 @@ router.post("/gyms/:gymId/retention/sequences/seed-defaults", async (req, res): 
   try {
     const gymId = Number(req.params.gymId);
     const gymRole = (req as any).gymRole;
-    if (!["owner", "admin"].includes(gymRole)) {
+    if (!["owner", "gym_owner", "admin"].includes(gymRole)) {
       res.status(403).json({ error: "Only owners and admins can manage retention sequences" });
       return;
     }
@@ -371,7 +371,7 @@ router.post("/gyms/:gymId/retention/sequences", async (req, res): Promise<void> 
   try {
     const gymId = Number(req.params.gymId);
     const gymRole = (req as any).gymRole;
-    if (!["owner", "admin"].includes(gymRole)) {
+    if (!["owner", "gym_owner", "admin"].includes(gymRole)) {
       res.status(403).json({ error: "Only owners and admins can create sequences" });
       return;
     }
@@ -413,7 +413,7 @@ router.put("/gyms/:gymId/retention/sequences/:sequenceId", async (req, res): Pro
     const gymId = Number(req.params.gymId);
     const sequenceId = Number(req.params.sequenceId);
     const gymRole = (req as any).gymRole;
-    if (!["owner", "admin"].includes(gymRole)) {
+    if (!["owner", "gym_owner", "admin"].includes(gymRole)) {
       res.status(403).json({ error: "Only owners and admins can edit sequences" });
       return;
     }
@@ -457,7 +457,7 @@ router.delete("/gyms/:gymId/retention/sequences/:sequenceId", async (req, res): 
     const gymId = Number(req.params.gymId);
     const sequenceId = Number(req.params.sequenceId);
     const gymRole = (req as any).gymRole;
-    if (!["owner", "admin"].includes(gymRole)) {
+    if (!["owner", "gym_owner", "admin"].includes(gymRole)) {
       res.status(403).json({ error: "Only owners and admins can delete sequences" });
       return;
     }
@@ -589,7 +589,7 @@ router.post("/gyms/:gymId/retention/enroll", async (req, res): Promise<void> => 
   try {
     const gymId = Number(req.params.gymId);
     const gymRole = (req as any).gymRole;
-    if (!["owner", "admin", "coach"].includes(gymRole)) {
+    if (!["owner", "gym_owner", "admin", "coach"].includes(gymRole)) {
       res.status(403).json({ error: "Insufficient permissions" });
       return;
     }

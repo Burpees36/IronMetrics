@@ -24,7 +24,7 @@ import {
 import { TIER_DEFINITIONS, type SubscriptionTier } from "../tierConfig";
 
 function requireGymOwner(req: Request, res: Response, next: NextFunction): void {
-  if (req.gymRole !== "owner") {
+  if (req.gymRole !== "owner" && req.gymRole !== "gym_owner") {
     res.status(403).json({
       error: "owner_required",
       message: "Only the gym owner can manage the platform subscription.",

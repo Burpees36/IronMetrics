@@ -169,12 +169,15 @@ export function LeadSequences() {
       if (res.ok) {
         toast({ title: "Default sequences created" });
         loadSequences();
+      } else if (res.status === 400) {
+        toast({ title: "Already loaded", description: "All default sequences have already been created." });
+      } else if (res.status === 403) {
+        toast({ title: "Permission denied", description: "Only gym owners and admins can load default sequences.", variant: "destructive" });
       } else {
-        const data = await res.json();
-        toast({ title: "Info", description: data.error, variant: "destructive" });
+        toast({ title: "Something went wrong", description: "Could not create default sequences. Please try again.", variant: "destructive" });
       }
     } catch {
-      toast({ title: "Error", description: "Failed to create defaults", variant: "destructive" });
+      toast({ title: "Connection error", description: "Could not reach the server. Please check your connection.", variant: "destructive" });
     }
   };
 
