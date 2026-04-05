@@ -73,49 +73,49 @@ export function HoldsManager({ memberId, subscriptionId, onHoldChange }: Props) 
   const pastHolds = (holds as any[]).filter(h => h.status === "completed" || h.status === "cancelled");
 
   const statusColors: Record<string, string> = {
-    scheduled: "bg-blue-500/20 text-blue-400",
-    active: "bg-amber-500/20 text-amber-400",
-    completed: "bg-green-500/20 text-green-400",
-    cancelled: "bg-white/10 text-white/40",
+    scheduled: "bg-blue-500/10 text-blue-600 border border-blue-500/20",
+    active: "bg-amber-500/10 text-amber-600 border border-amber-500/20",
+    completed: "bg-emerald-500/10 text-emerald-600 border border-emerald-500/20",
+    cancelled: "bg-muted text-muted-foreground border border-border",
   };
 
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <h4 className="text-sm font-medium text-white/70 flex items-center gap-2">
-          <PauseCircle className="w-4 h-4" /> Membership Holds
+        <h4 className="text-sm font-medium text-foreground flex items-center gap-2">
+          <PauseCircle className="w-4 h-4 text-primary" /> Membership Holds
         </h4>
-        <button onClick={() => setCreateOpen(true)} className="text-xs text-amber-400 hover:text-amber-300 flex items-center gap-1">
+        <button onClick={() => setCreateOpen(true)} className="text-xs text-primary hover:text-primary/80 flex items-center gap-1">
           <CalendarClock className="w-3 h-3" /> Schedule Hold
         </button>
       </div>
 
       {isLoading ? (
-        <div className="flex justify-center py-4"><Loader2 className="w-4 h-4 animate-spin text-white/30" /></div>
+        <div className="flex justify-center py-4"><Loader2 className="w-4 h-4 animate-spin text-muted-foreground" /></div>
       ) : activeHolds.length === 0 && pastHolds.length === 0 ? (
-        <div className="text-xs text-white/30 text-center py-3">No holds on this membership</div>
+        <div className="text-xs text-muted-foreground text-center py-3">No holds on this membership</div>
       ) : (
         <div className="space-y-2">
           {activeHolds.map((hold: any) => (
-            <div key={hold.id} className="p-3 rounded-lg bg-white/5 border border-white/10">
+            <div key={hold.id} className="p-3 rounded-lg bg-muted/20 border border-border">
               <div className="flex items-center justify-between mb-1">
                 <span className={`text-xs px-2 py-0.5 rounded-full ${statusColors[hold.status]}`}>{hold.status}</span>
-                <button onClick={() => handleCancel(hold.id)} className="text-xs text-red-400 hover:text-red-300 flex items-center gap-1">
+                <button onClick={() => handleCancel(hold.id)} className="text-xs text-destructive hover:text-destructive/80 flex items-center gap-1">
                   <X className="w-3 h-3" /> Cancel
                 </button>
               </div>
-              <div className="text-xs text-white/60 mt-1">
+              <div className="text-xs text-muted-foreground mt-1">
                 {hold.startDate}{hold.endDate ? ` → ${hold.endDate}` : " — indefinite"}
               </div>
-              {hold.reason && <div className="text-xs text-white/40 mt-1 italic">{hold.reason}</div>}
+              {hold.reason && <div className="text-xs text-muted-foreground/70 mt-1 italic">{hold.reason}</div>}
             </div>
           ))}
           {pastHolds.length > 0 && (
             <details className="text-xs">
-              <summary className="text-white/30 cursor-pointer hover:text-white/50">Past holds ({pastHolds.length})</summary>
+              <summary className="text-muted-foreground cursor-pointer hover:text-foreground">Past holds ({pastHolds.length})</summary>
               <div className="space-y-1 mt-1">
                 {pastHolds.map((hold: any) => (
-                  <div key={hold.id} className="p-2 rounded bg-white/[0.03] text-white/40">
+                  <div key={hold.id} className="p-2 rounded bg-muted/10 text-muted-foreground">
                     <span className={`text-xs px-1.5 py-0.5 rounded-full ${statusColors[hold.status]}`}>{hold.status}</span>
                     <span className="ml-2">{hold.startDate}{hold.endDate ? ` → ${hold.endDate}` : ""}</span>
                   </div>
@@ -127,32 +127,32 @@ export function HoldsManager({ memberId, subscriptionId, onHoldChange }: Props) 
       )}
 
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-        <DialogContent className="sm:max-w-md bg-[hsl(220,20%,12%)] border-white/10 text-white">
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <CalendarClock className="w-5 h-5 text-amber-400" /> Schedule Hold
+              <CalendarClock className="w-5 h-5 text-primary" /> Schedule Hold
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div>
-              <Label className="text-white/70">Start Date</Label>
+              <Label>Start Date</Label>
               <Input type="date" value={form.startDate} onChange={e => setForm(f => ({ ...f, startDate: e.target.value }))}
-                className="bg-white/5 border-white/10 text-white mt-1" />
+                className="mt-1" />
             </div>
             <div>
-              <Label className="text-white/70">End Date (optional)</Label>
+              <Label>End Date (optional)</Label>
               <Input type="date" value={form.endDate} onChange={e => setForm(f => ({ ...f, endDate: e.target.value }))}
-                className="bg-white/5 border-white/10 text-white mt-1" min={form.startDate} />
-              <div className="text-xs text-white/40 mt-1">Leave blank for indefinite hold</div>
+                className="mt-1" min={form.startDate} />
+              <div className="text-xs text-muted-foreground mt-1">Leave blank for indefinite hold</div>
             </div>
             <div>
-              <Label className="text-white/70">Reason (optional)</Label>
+              <Label>Reason (optional)</Label>
               <Textarea value={form.reason} onChange={e => setForm(f => ({ ...f, reason: e.target.value }))}
-                placeholder="Vacation, injury, etc." className="bg-white/5 border-white/10 text-white mt-1 min-h-[60px]" />
+                placeholder="Vacation, injury, etc." className="mt-1 min-h-[60px]" />
             </div>
           </div>
           <DialogFooter>
-            <button onClick={() => setCreateOpen(false)} className="px-4 py-2 text-sm text-white/60 hover:text-white">Cancel</button>
+            <button onClick={() => setCreateOpen(false)} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors">Cancel</button>
             <button onClick={handleCreate} disabled={!form.startDate || createMutation.isPending}
               className="px-4 py-2 text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 flex items-center gap-2">
               {createMutation.isPending && <Loader2 className="w-4 h-4 animate-spin" />}

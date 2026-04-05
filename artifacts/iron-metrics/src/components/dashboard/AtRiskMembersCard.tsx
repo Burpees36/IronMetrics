@@ -66,7 +66,7 @@ export function AtRiskMembersCard({ gymId }: { gymId: number }) {
             )}
           </div>
         </div>
-        <Link href="/intelligence">
+        <Link href="/members?filter=at-risk">
           <span className="text-[11px] font-medium text-primary hover:text-primary/80 flex items-center gap-0.5">
             Risk Radar
             <ChevronRight className="h-3 w-3" />
@@ -118,7 +118,7 @@ export function AtRiskMembersCard({ gymId }: { gymId: number }) {
               );
             })}
             {totalCount > 5 && (
-              <Link href="/intelligence">
+              <Link href="/members?filter=at-risk">
                 <div className="px-4 py-2.5 text-center hover:bg-muted/20 transition-colors cursor-pointer">
                   <span className="text-[11px] font-medium text-primary">
                     View all {totalCount} at-risk members →

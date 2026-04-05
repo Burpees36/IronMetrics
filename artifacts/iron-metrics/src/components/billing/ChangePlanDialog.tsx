@@ -74,7 +74,7 @@ export function ChangePlanDialog({ open, onClose, subscription }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={() => onClose()}>
-      <DialogContent className="sm:max-w-md bg-[hsl(220,20%,12%)] border-white/10 text-white max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <ArrowUpDown className="w-5 h-5 text-primary" />
@@ -82,21 +82,21 @@ export function ChangePlanDialog({ open, onClose, subscription }: Props) {
           </DialogTitle>
         </DialogHeader>
         <div className="space-y-4 py-2">
-          <div className="p-3 rounded-lg bg-white/5 border border-white/10">
-            <div className="text-xs text-white/50 mb-1">Current Plan</div>
-            <div className="font-medium">{subscription.planName}</div>
+          <div className="p-3 rounded-lg bg-muted/20 border border-border">
+            <div className="text-xs text-muted-foreground mb-1">Current Plan</div>
+            <div className="font-medium text-foreground">{subscription.planName}</div>
             <div className="text-primary text-sm">{formatPrice(subscription.amount)}</div>
           </div>
 
           <div>
-            <Label className="text-white/70">New Plan</Label>
+            <Label>New Plan</Label>
             <Select value={selectedPlanId} onValueChange={setSelectedPlanId}>
-              <SelectTrigger className="bg-white/5 border-white/10 text-white mt-1">
+              <SelectTrigger className="mt-1">
                 <SelectValue placeholder="Select a plan" />
               </SelectTrigger>
-              <SelectContent className="bg-[hsl(220,20%,15%)] border-white/10">
+              <SelectContent>
                 {eligiblePlans.map((p: any) => (
-                  <SelectItem key={p.id} value={String(p.id)} className="text-white focus:bg-white/10 focus:text-white">
+                  <SelectItem key={p.id} value={String(p.id)}>
                     {p.name} — {formatPrice(p.price, p.billingInterval)}
                   </SelectItem>
                 ))}
@@ -107,23 +107,23 @@ export function ChangePlanDialog({ open, onClose, subscription }: Props) {
           {selectedPlan && (
             <div className="flex items-center gap-2 text-sm">
               {isUpgrade ? (
-                <><ArrowUp className="w-4 h-4 text-green-400" /><span className="text-green-400">Upgrade</span></>
+                <><ArrowUp className="w-4 h-4 text-emerald-600" /><span className="text-emerald-600">Upgrade</span></>
               ) : (
-                <><ArrowDown className="w-4 h-4 text-blue-400" /><span className="text-blue-400">Downgrade</span></>
+                <><ArrowDown className="w-4 h-4 text-blue-600" /><span className="text-blue-600">Downgrade</span></>
               )}
-              <span className="text-white/50">to {formatPrice(selectedPlan.price, selectedPlan.billingInterval)}</span>
+              <span className="text-muted-foreground">to {formatPrice(selectedPlan.price, selectedPlan.billingInterval)}</span>
             </div>
           )}
 
           <div>
-            <Label className="text-white/70">When to apply</Label>
+            <Label>When to apply</Label>
             <Select value={timing} onValueChange={(v) => setTiming(v as any)}>
-              <SelectTrigger className="bg-white/5 border-white/10 text-white mt-1">
+              <SelectTrigger className="mt-1">
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent className="bg-[hsl(220,20%,15%)] border-white/10">
-                <SelectItem value="immediate" className="text-white focus:bg-white/10 focus:text-white">Immediately (with proration)</SelectItem>
-                <SelectItem value="next_cycle" className="text-white focus:bg-white/10 focus:text-white">Next billing cycle</SelectItem>
+              <SelectContent>
+                <SelectItem value="immediate">Immediately (with proration)</SelectItem>
+                <SelectItem value="next_cycle">Next billing cycle</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -133,27 +133,27 @@ export function ChangePlanDialog({ open, onClose, subscription }: Props) {
               <div className="text-xs text-primary mb-2 font-medium">Proration Preview</div>
               {preview.immediateCharge > 0 && (
                 <div className="flex justify-between text-sm">
-                  <span className="text-white/70">Charge now</span>
-                  <span className="text-white">${preview.immediateCharge.toFixed(2)}</span>
+                  <span className="text-muted-foreground">Charge now</span>
+                  <span className="text-foreground">${preview.immediateCharge.toFixed(2)}</span>
                 </div>
               )}
               {preview.credit > 0 && (
                 <div className="flex justify-between text-sm">
-                  <span className="text-white/70">Credit applied</span>
-                  <span className="text-green-400">-${preview.credit.toFixed(2)}</span>
+                  <span className="text-muted-foreground">Credit applied</span>
+                  <span className="text-emerald-600">-${preview.credit.toFixed(2)}</span>
                 </div>
               )}
               {preview.prorationAmount !== null && (
-                <div className="flex justify-between text-sm mt-1 pt-1 border-t border-white/10">
-                  <span className="text-white/70">Net amount</span>
-                  <span className="font-medium text-white">${preview.prorationAmount.toFixed(2)}</span>
+                <div className="flex justify-between text-sm mt-1 pt-1 border-t border-border">
+                  <span className="text-muted-foreground">Net amount</span>
+                  <span className="font-medium text-foreground">${preview.prorationAmount.toFixed(2)}</span>
                 </div>
               )}
             </div>
           )}
         </div>
         <DialogFooter>
-          <button onClick={onClose} className="px-4 py-2 text-sm text-white/60 hover:text-white">Cancel</button>
+          <button onClick={onClose} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors">Cancel</button>
           <button
             onClick={handleConfirm}
             disabled={!selectedPlanId || changeMutation.isPending}

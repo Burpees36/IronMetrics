@@ -107,6 +107,7 @@ export function Members() {
 
   const [tempStatusFilter, setTempStatusFilter] = useState<string[]>([]);
   const [tempRiskFilter, setTempRiskFilter] = useState<string[]>([]);
+  const [riskFilter, setRiskFilter] = useState<string[]>([]);
 
   const filterParams: Record<string, string> = {};
   if (search) filterParams.search = search;
@@ -250,12 +251,18 @@ export function Members() {
 
   const openFilter = () => {
     setTempStatusFilter([...statusFilter]);
-    setTempRiskFilter([]);
+    setTempRiskFilter([...riskFilter]);
     setFilterOpen(true);
   };
 
   const applyFilters = () => {
     setStatusFilter(tempStatusFilter);
+    setRiskFilter(tempRiskFilter);
+    if (tempRiskFilter.length > 0) {
+      setRiskViewActive(true);
+    } else if (riskViewActive && tempRiskFilter.length === 0) {
+      setRiskViewActive(false);
+    }
     setFilterOpen(false);
   };
 
@@ -263,7 +270,10 @@ export function Members() {
     setTempStatusFilter([]);
     setTempRiskFilter([]);
     setStatusFilter([]);
+    setRiskFilter([]);
+    setRiskViewActive(false);
     setFilterOpen(false);
+    navigate("/members");
   };
 
   const toggleTempStatus = (val: string) => {
@@ -299,10 +309,11 @@ export function Members() {
   const displayMembers = React.useMemo(() => {
     const members = data?.members ?? [];
     if (!riskViewActive) return members;
+    const tiers = riskFilter.length > 0 ? riskFilter : ["critical", "high", "moderate"];
     return members
-      .filter((m: any) => m.riskTier === "critical" || m.riskTier === "high" || m.riskTier === "moderate")
+      .filter((m: any) => tiers.includes(m.riskTier))
       .sort((a: any, b: any) => (b.riskScore ?? 0) - (a.riskScore ?? 0));
-  }, [data?.members, riskViewActive]);
+  }, [data?.members, riskViewActive, riskFilter]);
 
   const RowActions = ({ member }: { member: MemberFromList }) => (
     <DropdownMenu>
@@ -387,7 +398,7 @@ export function Members() {
             <p className="text-xs text-muted-foreground">Showing members with elevated churn risk — sorted by risk score.</p>
           </div>
           <button
-            onClick={() => { setRiskViewActive(false); setStatusFilter([]); navigate("/members"); }}
+            onClick={() => { setRiskViewActive(false); setStatusFilter([]); setRiskFilter([]); navigate("/members"); }}
             className="p-1.5 hover:bg-destructive/10 rounded-lg transition-colors"
             aria-label="Clear at-risk filter"
           >
