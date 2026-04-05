@@ -173,54 +173,134 @@ router.post("/gyms/:gymId/ai/generate-brief", async (req, res): Promise<void> =>
   if (!access.allowed) { res.status(access.gym ? 403 : 404).json({ error: access.gym ? "You do not have access to this gym" : "Gym not found" }); return; }
 
   const { count } = await import("drizzle-orm");
-  const { eq, and, sql } = await import("drizzle-orm");
-  const { subscriptionsTable, leadsTable } = await import("@workspace/db");
+  const { classesTable, billingAuditLogsTable } = await import("@workspace/db");
+  const { getGymMetrics, getRiskProfiles } = await import("./intelligence/metrics");
+  const { computeRSI } = await import("./intelligence/computations");
+  const { computeBlendedEngagement } = await import("../blendedMetrics");
+
+  const metrics = await getGymMetrics(gymId);
+  const rsiResult = computeRSI(metrics.churnRate, metrics.avgRev, metrics.netGrowth, metrics.avgTenure);
+  const rsi = rsiResult.score;
+  const rsiBand = rsiResult.band;
+  const risks = await getRiskProfiles(gymId);
+  const criticalRisks = risks.filter(r => r.riskTier === "critical");
+  const highRisks = risks.filter(r => r.riskTier === "high");
+  const atRisk = criticalRisks.length + highRisks.length;
+  const revenueAtRisk = risks.reduce((sum, r) => sum + r.revenueAtRisk, 0);
+
+  const blendedEngagement = await computeBlendedEngagement(gymId);
+
+  const allLeads = await db.select().from(leadsTable).where(eq(leadsTable.gymId, gymId));
+  const activeLeads = allLeads.filter(l => l.stage !== "converted" && l.stage !== "lost");
+  const staleLeads = allLeads.filter(l => {
+    if (l.stage === "converted" || l.stage === "lost") return false;
+    const now = new Date();
+    const lastContact = l.lastContactDate ? new Date(l.lastContactDate) : new Date(l.createdAt);
+    const hours = (now.getTime() - lastContact.getTime()) / (1000 * 60 * 60);
+    if (l.stage === "new" && hours > 24) return true;
+    if (l.stage === "contacted" && hours > 72) return true;
+    return false;
+  });
+
+  const failedSubs = await db.select().from(subscriptionsTable).where(and(eq(subscriptionsTable.gymId, gymId), eq(subscriptionsTable.status, "past_due")));
+  const failedRev = failedSubs.reduce((sum, s) => sum + parseFloat(s.amount || "0"), 0);
 
   const [activeCount] = await db.select({ count: count() }).from(membersTable).where(and(eq(membersTable.gymId, gymId), activeMemberCondition(membersTable)));
   const [cancelledCount] = await db.select({ count: count() }).from(membersTable).where(and(eq(membersTable.gymId, gymId), eq(membersTable.status, "cancelled")));
   const [holdCount] = await db.select({ count: count() }).from(membersTable).where(and(eq(membersTable.gymId, gymId), eq(membersTable.status, "hold")));
-  const [leadCount] = await db.select({ count: count() }).from(leadsTable).where(eq(leadsTable.gymId, gymId));
-  const subs = await db.select().from(subscriptionsTable).where(and(eq(subscriptionsTable.gymId, gymId), eq(subscriptionsTable.status, "active")));
-  const mrr = subs.reduce((sum, s) => sum + parseFloat(s.amount), 0);
-  const failedSubs = await db.select().from(subscriptionsTable).where(and(eq(subscriptionsTable.gymId, gymId), eq(subscriptionsTable.status, "past_due")));
-  const atRiskMembers = await db.select({ count: count() }).from(membersTable).where(
-    and(eq(membersTable.gymId, gymId), activeMemberCondition(membersTable),
-      sql`(${membersTable.riskTier} = 'critical' OR ${membersTable.riskTier} = 'high')`)
+
+  const now = new Date();
+  const todayStr = now.toISOString().split("T")[0];
+  const allClasses = await db.select().from(classesTable).where(eq(classesTable.gymId, gymId));
+  const todayClasses = allClasses.filter(c => new Date(c.startTime).toISOString().split("T")[0] === todayStr);
+  const totalCapacity = todayClasses.reduce((sum, c) => sum + (c.capacity || 0), 0);
+  const totalEnrolled = todayClasses.reduce((sum, c) => sum + (c.enrolled || 0), 0);
+  const classFillRate = totalCapacity > 0 ? Math.round((totalEnrolled / totalCapacity) * 100) : 0;
+
+  const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+  const recentSuspensions = await db.select({ id: billingAuditLogsTable.id }).from(billingAuditLogsTable).where(
+    and(eq(billingAuditLogsTable.gymId, gymId), eq(billingAuditLogsTable.action, "recovery.auto_suspended"), gte(billingAuditLogsTable.createdAt, oneDayAgo))
   );
 
   const active = Number(activeCount?.count ?? 0);
-  const atRisk = Number(atRiskMembers[0]?.count ?? 0);
-  const leads = Number(leadCount?.count ?? 0);
+  const cancelled = Number(cancelledCount?.count ?? 0);
+  const onHold = Number(holdCount?.count ?? 0);
+  const mrr = metrics.totalRev;
 
-  const briefContent = `## Weekly Owner Brief
+  const rsiLabel = rsiBand;
+  const engagementPct = blendedEngagement.engagementRate;
 
-### Current Snapshot
-- **${active} active members** (${Number(cancelledCount?.count ?? 0)} cancelled, ${Number(holdCount?.count ?? 0)} on hold)
-- **MRR: $${mrr.toLocaleString()}** from ${subs.length} subscriptions
-- **${leads} leads** in pipeline
-- **${atRisk} at-risk members** flagged for intervention
+  const urgentItems: string[] = [];
+  const thisWeekItems: string[] = [];
+  const strategicItems: string[] = [];
 
-### Biggest Risks
-- ${atRisk} member${atRisk !== 1 ? 's' : ''} showing elevated churn risk signals
-- ${failedSubs.length} subscription${failedSubs.length !== 1 ? 's' : ''} with payment issues
-- Members on hold may represent potential churn if not re-engaged
+  if (criticalRisks.length > 0) {
+    urgentItems.push(`Reach out to ${criticalRisks.length} critical-risk member${criticalRisks.length !== 1 ? "s" : ""} — $${Math.round(criticalRisks.reduce((s, r) => s + r.revenueAtRisk, 0))}/mo at stake`);
+  }
+  if (failedSubs.length > 0) {
+    urgentItems.push(`Follow up on ${failedSubs.length} failed payment${failedSubs.length !== 1 ? "s" : ""} ($${Math.round(failedRev)}/mo in recovery)`);
+  }
+  if (recentSuspensions.length > 0) {
+    urgentItems.push(`${recentSuspensions.length} member${recentSuspensions.length !== 1 ? "s were" : " was"} auto-suspended in the last 24 hours — review for manual recovery`);
+  }
+  if (highRisks.length > 0) {
+    thisWeekItems.push(`Check in with ${highRisks.length} high-risk member${highRisks.length !== 1 ? "s" : ""} before they drift further`);
+  }
+  if (staleLeads.length > 0) {
+    thisWeekItems.push(`Re-engage ${staleLeads.length} stale lead${staleLeads.length !== 1 ? "s" : ""} — warm leads cool fast`);
+  }
+  if (onHold > 0) {
+    thisWeekItems.push(`${onHold} member${onHold !== 1 ? "s" : ""} on hold — consider a personal check-in to bring them back`);
+  }
+  if (classFillRate < 60 && todayClasses.length > 0) {
+    strategicItems.push(`Class fill rate is ${classFillRate}% today — consider adjusting schedule or promoting low-fill classes`);
+  }
+  if (engagementPct < 50) {
+    strategicItems.push(`Member engagement is at ${Math.round(engagementPct)}% — explore community events or challenges to boost participation`);
+  }
+  if (rsi < 60) {
+    strategicItems.push(`Retention Stability Index is ${Math.round(rsi)} (${rsiLabel}) — focus on reducing churn signals`);
+  }
 
-### What To Do Next
-1. **Urgent**: Review and contact ${atRisk} at-risk member${atRisk !== 1 ? 's' : ''} this week
-2. **This Week**: Follow up on ${failedSubs.length} failed payment${failedSubs.length !== 1 ? 's' : ''}
-3. **This Week**: Engage ${leads} open lead${leads !== 1 ? 's' : ''} in pipeline
-4. **Strategic**: Review member engagement patterns and class capacity
+  let briefContent = `## Owner Brief — ${now.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })}
 
-*Based on current gym data*`;
+### Your Gym at a Glance
+| Metric | Value |
+|--------|-------|
+| Active Members | ${active} |
+| MRR | $${Math.round(mrr).toLocaleString()} |
+| Retention Stability (RSI) | ${Math.round(rsi)} — ${rsiLabel} |
+| Member Engagement | ${Math.round(engagementPct)}% |
+| At-Risk Members | ${atRisk} ($${Math.round(revenueAtRisk)}/mo at stake) |
+| Active Leads | ${activeLeads.length} (${staleLeads.length} stale) |
+| Failed Payments | ${failedSubs.length} ($${Math.round(failedRev)}/mo) |
+| Today's Classes | ${todayClasses.length} at ${classFillRate}% fill rate |
+| Cancelled | ${cancelled} | On Hold | ${onHold} |
+`;
+
+  if (urgentItems.length > 0) {
+    briefContent += `\n### 🔴 Urgent — Act Today\n${urgentItems.map((item, i) => `${i + 1}. ${item}`).join("\n")}\n`;
+  }
+  if (thisWeekItems.length > 0) {
+    briefContent += `\n### 🟡 This Week\n${thisWeekItems.map((item, i) => `${i + 1}. ${item}`).join("\n")}\n`;
+  }
+  if (strategicItems.length > 0) {
+    briefContent += `\n### 🔵 Strategic\n${strategicItems.map((item, i) => `${i + 1}. ${item}`).join("\n")}\n`;
+  }
+  if (urgentItems.length === 0 && thisWeekItems.length === 0) {
+    briefContent += `\n### ✅ Looking Good\nNo urgent items right now. Keep engaging your community and monitoring trends.\n`;
+  }
+
+  briefContent += `\n*Generated from live gym data — ${now.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}*`;
 
   const [content] = await db.insert(aiGeneratedContentTable).values({
     gymId,
     type: "owner_brief",
     content: briefContent,
-    subject: "Weekly Owner Brief",
-    confidence: "0.90",
+    subject: `Owner Brief — ${now.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`,
+    confidence: "0.95",
     isAiGenerated: true,
-    contextSummary: `Weekly overview: ${active} active members, $${mrr} MRR, ${atRisk} at-risk`,
+    contextSummary: `Brief: ${active} active, $${Math.round(mrr)} MRR, RSI ${Math.round(rsi)}, ${atRisk} at-risk, ${failedSubs.length} failed payments`,
   }).returning();
 
   res.json({
@@ -562,13 +642,20 @@ router.get("/gyms/:gymId/ai/autopilot-settings", async (req, res): Promise<void>
     [settings] = await db.insert(aiOperatorSettingsTable).values({ gymId }).returning();
   }
 
-  res.json({
+  const settingsResponse = {
     autopilotOutreach: settings.autopilotOutreach,
     autopilotBilling: settings.autopilotBilling,
     autopilotLeads: settings.autopilotLeads,
+    channelOutreach: settings.channelOutreach,
+    channelBilling: settings.channelBilling,
+    channelLeads: settings.channelLeads,
     cooldownDays: settings.cooldownDays,
+    cooldownOutreach: settings.cooldownOutreach,
+    cooldownBilling: settings.cooldownBilling,
+    cooldownLeads: settings.cooldownLeads,
     digestFrequency: settings.digestFrequency,
-  });
+  };
+  res.json(settingsResponse);
 });
 
 router.put("/gyms/:gymId/ai/autopilot-settings", async (req, res): Promise<void> => {
@@ -578,15 +665,45 @@ router.put("/gyms/:gymId/ai/autopilot-settings", async (req, res): Promise<void>
   const access = await verifyGymAccess(gymId, req.user!.id);
   if (!access.allowed) { res.status(access.gym ? 403 : 404).json({ error: access.gym ? "You do not have access to this gym" : "Gym not found" }); return; }
 
-  const parsed = UpdateAutopilotSettingsBody.safeParse(req.body);
-  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+  const body = req.body as Record<string, unknown>;
 
-  const updateData: Record<string, any> = {};
-  if (parsed.data.autopilotOutreach !== undefined) updateData.autopilotOutreach = parsed.data.autopilotOutreach;
-  if (parsed.data.autopilotBilling !== undefined) updateData.autopilotBilling = parsed.data.autopilotBilling;
-  if (parsed.data.autopilotLeads !== undefined) updateData.autopilotLeads = parsed.data.autopilotLeads;
-  if (parsed.data.cooldownDays !== undefined) updateData.cooldownDays = parsed.data.cooldownDays;
-  if (parsed.data.digestFrequency !== undefined) updateData.digestFrequency = parsed.data.digestFrequency;
+  const booleanKeys = ["autopilotOutreach", "autopilotBilling", "autopilotLeads"];
+  const channelKeys = ["channelOutreach", "channelBilling", "channelLeads"];
+  const cooldownKeys = ["cooldownDays", "cooldownOutreach", "cooldownBilling", "cooldownLeads"];
+  const validChannels = ["email", "sms", "both"];
+  const validDigest = ["daily", "weekly", "off"];
+
+  const updateData: Record<string, unknown> = {};
+  const errors: string[] = [];
+
+  for (const key of booleanKeys) {
+    if (body[key] !== undefined) {
+      if (typeof body[key] !== "boolean") { errors.push(`${key} must be a boolean`); continue; }
+      updateData[key] = body[key];
+    }
+  }
+  for (const key of channelKeys) {
+    if (body[key] !== undefined) {
+      if (!validChannels.includes(body[key] as string)) { errors.push(`${key} must be one of: ${validChannels.join(", ")}`); continue; }
+      updateData[key] = body[key];
+    }
+  }
+  for (const key of cooldownKeys) {
+    if (body[key] !== undefined) {
+      const val = Number(body[key]);
+      if (!Number.isFinite(val) || val < 1 || val > 90) { errors.push(`${key} must be an integer between 1 and 90`); continue; }
+      updateData[key] = Math.round(val);
+    }
+  }
+  if (body.digestFrequency !== undefined) {
+    if (!validDigest.includes(body.digestFrequency as string)) { errors.push(`digestFrequency must be one of: ${validDigest.join(", ")}`); }
+    else updateData.digestFrequency = body.digestFrequency;
+  }
+
+  if (errors.length > 0) {
+    res.status(400).json({ error: "Validation failed", details: errors });
+    return;
+  }
 
   if (Object.keys(updateData).length === 0) {
     res.status(400).json({ error: "At least one setting must be provided" });
@@ -606,7 +723,13 @@ router.put("/gyms/:gymId/ai/autopilot-settings", async (req, res): Promise<void>
     autopilotOutreach: settings.autopilotOutreach,
     autopilotBilling: settings.autopilotBilling,
     autopilotLeads: settings.autopilotLeads,
+    channelOutreach: settings.channelOutreach,
+    channelBilling: settings.channelBilling,
+    channelLeads: settings.channelLeads,
     cooldownDays: settings.cooldownDays,
+    cooldownOutreach: settings.cooldownOutreach,
+    cooldownBilling: settings.cooldownBilling,
+    cooldownLeads: settings.cooldownLeads,
     digestFrequency: settings.digestFrequency,
   });
 });

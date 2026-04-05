@@ -1,14 +1,14 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useGym } from "@/store/GymContext";
 import { useListMembers, useUpdateMember, useAddMemberNote, getListMembersQueryKey } from "@workspace/api-client-react";
 import type { ApiError } from "@workspace/api-client-react/custom-fetch";
 import { useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
-import { Loader2, Search, Plus, Filter, MoreHorizontal, UserCircle, Upload, FileSpreadsheet } from "lucide-react";
+import { Loader2, Search, Plus, Filter, MoreHorizontal, UserCircle, Upload, FileSpreadsheet, ShieldAlert, X as XIcon } from "lucide-react";
 import { ImportMembersDialog } from "@/components/members/ImportMembersDialog";
 import { SyncStatusBanner } from "@/components/members/SyncStatusBanner";
 import { AddMemberWizard } from "@/components/members/AddMemberWizard";
-import { Link, useLocation } from "wouter";
+import { Link, useLocation, useSearch } from "wouter";
 import { useIsMobile } from "@/hooks/useMobile";
 import { useToast } from "@/hooks/use-toast";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
@@ -73,6 +73,17 @@ export function Members() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [, navigate] = useLocation();
+  const searchString = useSearch();
+  const urlParams = new URLSearchParams(searchString);
+  const urlFilter = urlParams.get("filter");
+  const [riskViewActive, setRiskViewActive] = useState(urlFilter === "at-risk");
+
+  useEffect(() => {
+    if (urlFilter === "at-risk") {
+      setRiskViewActive(true);
+      setStatusFilter(["active"]);
+    }
+  }, [urlFilter]);
 
   const [addOpen, setAddOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
@@ -285,6 +296,14 @@ export function Members() {
     return actions;
   };
 
+  const displayMembers = React.useMemo(() => {
+    const members = data?.members ?? [];
+    if (!riskViewActive) return members;
+    return members
+      .filter((m: any) => m.riskTier === "critical" || m.riskTier === "high" || m.riskTier === "moderate")
+      .sort((a: any, b: any) => (b.riskScore ?? 0) - (a.riskScore ?? 0));
+  }, [data?.members, riskViewActive]);
+
   const RowActions = ({ member }: { member: MemberFromList }) => (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -360,6 +379,23 @@ export function Members() {
 
       <SyncStatusBanner key={syncRefreshKey} onImport={() => setImportOpen(true)} memberCount={data?.total ?? 0} />
 
+      {riskViewActive && (
+        <div className="flex items-center gap-3 px-4 py-3 bg-destructive/5 border border-destructive/20 rounded-xl">
+          <ShieldAlert className="h-5 w-5 text-destructive shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-foreground">At-Risk Members</p>
+            <p className="text-xs text-muted-foreground">Showing members with elevated churn risk — sorted by risk score.</p>
+          </div>
+          <button
+            onClick={() => { setRiskViewActive(false); setStatusFilter([]); navigate("/members"); }}
+            className="p-1.5 hover:bg-destructive/10 rounded-lg transition-colors"
+            aria-label="Clear at-risk filter"
+          >
+            <XIcon className="h-4 w-4 text-muted-foreground" />
+          </button>
+        </div>
+      )}
+
       <div className="flex-1 bg-card border border-border rounded-2xl shadow-sm overflow-hidden flex flex-col">
         {isLoading && !data ? (
           <div className="flex-1 flex items-center justify-center">
@@ -367,7 +403,7 @@ export function Members() {
           </div>
         ) : isMobile ? (
           <div className="flex-1 overflow-y-auto custom-scrollbar divide-y divide-border">
-            {data?.members.map((member: any, i: number) => (
+            {displayMembers.map((member: any, i: number) => (
               <motion.div
                 key={member.id}
                 initial={{ opacity: 0, y: 10 }}
@@ -421,7 +457,7 @@ export function Members() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {data?.members.map((member: any, i: number) => (
+                {displayMembers.map((member: any, i: number) => (
                   <motion.tr
                     key={member.id}
                     initial={{ opacity: 0, y: 10 }}
@@ -481,7 +517,7 @@ export function Members() {
         )}
         {data && (
           <div className="p-3 md:p-4 border-t border-border bg-muted/10 text-xs text-muted-foreground flex justify-between items-center shrink-0">
-            <span>Showing {data.members.length} of {data.total} members</span>
+            <span>Showing {displayMembers.length}{riskViewActive ? " at-risk" : ""} of {data.total} members</span>
           </div>
         )}
       </div>

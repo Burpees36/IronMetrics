@@ -17,6 +17,12 @@ const TYPE_TO_CHANNEL_KEY: Record<string, "channelOutreach" | "channelBilling" |
   leads: "channelLeads",
 };
 
+const TYPE_TO_COOLDOWN_KEY: Record<string, "cooldownOutreach" | "cooldownBilling" | "cooldownLeads"> = {
+  outreach: "cooldownOutreach",
+  billing: "cooldownBilling",
+  leads: "cooldownLeads",
+};
+
 async function isWithinCooldown(
   gymId: number,
   targetId: number,
@@ -106,16 +112,18 @@ export async function processAutopilotTasks(
       continue;
     }
 
+    const cooldownKey = TYPE_TO_COOLDOWN_KEY[task.type];
+    const cooldownDays = cooldownKey ? (settings[cooldownKey] ?? settings.cooldownDays) : settings.cooldownDays;
     const inCooldown = await isWithinCooldown(
       gymId,
       task.targetId,
       task.targetType,
-      settings.cooldownDays
+      cooldownDays
     );
     if (inCooldown) {
       skippedCount++;
       console.log(
-        `[autopilot] Skipping task ${task.id} — target ${task.targetType}:${task.targetId} within ${settings.cooldownDays}-day cooldown`
+        `[autopilot] Skipping task ${task.id} — target ${task.targetType}:${task.targetId} within ${cooldownDays}-day cooldown`
       );
       continue;
     }

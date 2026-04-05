@@ -155,10 +155,59 @@ function ToggleSwitch({ checked, onChange, disabled }: { checked: boolean; onCha
   );
 }
 
+const SMART_ACTION_CATEGORIES = [
+  {
+    key: "autopilotOutreach",
+    channelKey: "channelOutreach",
+    cooldownKey: "cooldownOutreach",
+    label: "Member Re-engagement",
+    subtitle: "Win back members showing signs of leaving",
+    icon: Send,
+    color: "bg-blue-500/10 text-blue-600",
+    borderActive: "border-blue-300",
+    explanation: "When a member stops attending or shows risk signals (missed classes, declining visits), Iron Metrics detects it and sends a personalized message using their name, favorite class, and recent activity.",
+    timing: "Sent after a member misses their typical attendance pattern — usually 7–14 days of inactivity.",
+    defaultCooldown: 14,
+    cooldownLabel: "days between re-engagement messages",
+    exampleMessage: `"Hey Sarah — we noticed you haven't been to the 6am WOD in a couple weeks. Coach Mike was asking about you! We've got a great partner workout Thursday if you're looking for a reason to get back in. 💪"`,
+  },
+  {
+    key: "autopilotBilling",
+    channelKey: "channelBilling",
+    cooldownKey: "cooldownBilling",
+    label: "Failed Payment Recovery",
+    subtitle: "Friendly follow-ups when payments don't go through",
+    icon: CreditCard,
+    color: "bg-amber-500/10 text-amber-600",
+    borderActive: "border-amber-300",
+    explanation: "When a member's payment fails (expired card, insufficient funds), Iron Metrics sends a helpful, non-threatening message to update their info — before it becomes an awkward conversation.",
+    timing: "Sent after the first failed payment attempt, with a follow-up if not resolved.",
+    defaultCooldown: 1,
+    cooldownLabel: "days between payment reminders",
+    exampleMessage: `"Hi Jake — heads up, your payment for this month didn't go through. It's usually just an expired card. You can update it in your account or swing by the front desk. No worries at all! 🙏"`,
+  },
+  {
+    key: "autopilotLeads",
+    channelKey: "channelLeads",
+    cooldownKey: "cooldownLeads",
+    label: "Lead Follow-up",
+    subtitle: "Keep warm leads from going cold",
+    icon: Target,
+    color: "bg-cyan-500/10 text-cyan-600",
+    borderActive: "border-cyan-300",
+    explanation: "When someone fills out your lead form or reaches out but hasn't booked a No Sweat Intro, Iron Metrics follows up with a friendly nudge tailored to their interest and source.",
+    timing: "Sent when a lead goes stale — typically 24–72 hours after initial contact with no booking.",
+    defaultCooldown: 3,
+    cooldownLabel: "days between lead follow-ups",
+    exampleMessage: `"Hey Taylor — thanks for reaching out about CrossFit! I know taking the first step can feel like a lot. Our No Sweat Intro is just a casual 15-min chat — zero pressure. Want to grab a time this week?"`,
+  },
+] as const;
+
 function SmartActionsModal({ gymId, open, onOpenChange }: { gymId: number; open: boolean; onOpenChange: (v: boolean) => void }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const settingsQueryKey = getGetAutopilotSettingsQueryKey(gymId);
+  const [expandedCard, setExpandedCard] = useState<string | null>(null);
 
   const { data: settings, isLoading } = useGetAutopilotSettings(gymId, {
     query: { enabled: !!gymId },
@@ -177,7 +226,6 @@ function SmartActionsModal({ gymId, open, onOpenChange }: { gymId: number; open:
       },
       onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: settingsQueryKey });
-        toast({ title: "Smart Actions Updated", description: "Settings saved successfully." });
       },
       onError: (_err: unknown, _vars: unknown, context: unknown) => {
         const ctx = context as { previous?: unknown } | undefined;
@@ -189,148 +237,192 @@ function SmartActionsModal({ gymId, open, onOpenChange }: { gymId: number; open:
     },
   });
 
-  const handleToggle = (key: string, value: boolean) => {
-    updateSettings.mutate({ gymId, data: { [key]: value } as Record<string, unknown> });
+  const handleUpdate = (updates: Record<string, unknown>) => {
+    updateSettings.mutate({ gymId, data: updates as Record<string, unknown> });
   };
 
-  const handleCooldown = (days: number) => {
-    updateSettings.mutate({ gymId, data: { cooldownDays: days } as Record<string, unknown> });
-  };
-
-  const handleDigestFrequency = (freq: string) => {
-    updateSettings.mutate({ gymId, data: { digestFrequency: freq } as Record<string, unknown> });
-  };
-
+  const s = settings as unknown as Record<string, unknown> | undefined;
   const anyEnabled = settings?.autopilotOutreach || settings?.autopilotBilling || settings?.autopilotLeads;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Zap className="h-5 w-5 text-primary" />
+          <DialogTitle className="flex items-center gap-2 text-lg">
+            <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
+              <Zap className="h-4 w-4 text-primary" />
+            </div>
             Smart Actions
           </DialogTitle>
-          <DialogDescription>
-            Enable Smart Actions to let the AI send emails automatically. You'll stay informed through digest summaries.
+          <DialogDescription className="text-sm leading-relaxed">
+            Smart Actions monitors your gym data and automatically sends personalized messages to members and leads at the right time. Every message is crafted using real data — attendance patterns, billing status, and lead activity. You control what gets sent and when.
           </DialogDescription>
         </DialogHeader>
 
         {isLoading ? (
-          <div className="flex justify-center py-8">
+          <div className="flex justify-center py-12">
             <Loader2 className="h-6 w-6 animate-spin text-primary" />
           </div>
         ) : settings ? (
-          <div className="space-y-6">
-            <div className="space-y-4">
-              <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
-                <ShieldCheck className="h-4 w-4 text-primary" />
-                Auto-Send Categories
-              </h3>
-              <div className="space-y-3">
-                {([
-                  { key: "autopilotOutreach", channelKey: "channelOutreach", label: "Outreach", desc: "At-risk member re-engagement", icon: Send, color: "bg-blue-500/10 text-blue-500" },
-                  { key: "autopilotBilling", channelKey: "channelBilling", label: "Billing", desc: "Failed payment follow-ups", icon: CreditCard, color: "bg-amber-500/10 text-amber-500" },
-                  { key: "autopilotLeads", channelKey: "channelLeads", label: "Leads", desc: "Stale lead follow-ups", icon: Target, color: "bg-cyan-500/10 text-cyan-500" },
-                ] as const).map((cat) => (
-                  <div key={cat.key} className="p-3 rounded-lg bg-secondary/50 border border-border space-y-2">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className={`h-8 w-8 rounded-full flex items-center justify-center ${cat.color}`}>
-                          <cat.icon className="h-4 w-4" />
-                        </div>
-                        <div>
-                          <p className="text-sm font-medium text-foreground">{cat.label}</p>
-                          <p className="text-xs text-muted-foreground">{cat.desc}</p>
-                        </div>
-                      </div>
-                      <ToggleSwitch
-                        checked={(settings as unknown as Record<string, unknown>)[cat.key] as boolean}
-                        onChange={(v) => handleToggle(cat.key, v)}
-                        disabled={updateSettings.isPending}
-                      />
-                    </div>
-                    {(settings as unknown as Record<string, unknown>)[cat.key] ? (
-                      <div className="flex gap-1.5 ml-11">
-                        {(["email", "sms", "both"] as const).map((ch) => (
-                          <button
-                            key={ch}
-                            onClick={() => handleToggle(cat.channelKey, ch as any)}
+          <div className="space-y-4 mt-2">
+            <div className="flex items-start gap-2.5 p-3 rounded-lg bg-secondary/50 border border-border">
+              <ShieldCheck className="h-4 w-4 text-primary shrink-0 mt-0.5" />
+              <div className="text-xs text-muted-foreground leading-relaxed">
+                <span className="font-medium text-foreground">How it works:</span> Iron Metrics scans your data daily, drafts personalized messages, and (when enabled) sends them automatically. Every auto-sent message appears in your task history so you can review what went out. Messages are never sent to people without valid contact info.
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              {SMART_ACTION_CATEGORIES.map((cat) => {
+                const isEnabled = !!(s && s[cat.key]);
+                const isExpanded = expandedCard === cat.key;
+                const currentChannel = s ? (s[cat.channelKey] as string) : "email";
+                const currentCooldown = s ? (s[cat.cooldownKey] as number) : cat.defaultCooldown;
+
+                return (
+                  <div key={cat.key} className={`rounded-xl border transition-all ${isEnabled ? `bg-card ${cat.borderActive} shadow-sm` : "bg-secondary/30 border-border"}`}>
+                    <div className="p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <button
+                          className="flex items-start gap-3 text-left flex-1 min-w-0"
+                          onClick={() => setExpandedCard(isExpanded ? null : cat.key)}
+                        >
+                          <div className={`h-9 w-9 rounded-lg flex items-center justify-center shrink-0 ${cat.color}`}>
+                            <cat.icon className="h-4.5 w-4.5" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-sm font-semibold text-foreground">{cat.label}</p>
+                            <p className="text-xs text-muted-foreground mt-0.5">{cat.subtitle}</p>
+                          </div>
+                        </button>
+                        <div className="flex items-center gap-2 shrink-0 pt-0.5">
+                          <span className={`text-[10px] font-semibold uppercase tracking-wider ${isEnabled ? "text-primary" : "text-muted-foreground"}`}>
+                            {isEnabled ? "On" : "Off"}
+                          </span>
+                          <ToggleSwitch
+                            checked={isEnabled}
+                            onChange={(v) => handleUpdate({ [cat.key]: v })}
                             disabled={updateSettings.isPending}
-                            className={`px-2.5 py-1 rounded-md text-xs font-medium transition-all border ${
-                              (settings as unknown as Record<string, unknown>)[cat.channelKey] === ch
-                                ? "bg-primary text-primary-foreground border-primary shadow-sm"
-                                : "bg-muted/50 text-muted-foreground border-border hover:border-primary/40"
-                            }`}
-                          >
-                            {ch === "email" ? "Email" : ch === "sms" ? "SMS" : "Both"}
-                          </button>
-                        ))}
+                          />
+                        </div>
                       </div>
-                    ) : null}
+
+                      <AnimatePresence>
+                        {(isExpanded || isEnabled) && (
+                          <motion.div
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: "auto", opacity: 1 }}
+                            exit={{ height: 0, opacity: 0 }}
+                            className="overflow-hidden"
+                          >
+                            <div className="mt-3 space-y-3 pl-12">
+                              {isExpanded && (
+                                <>
+                                  <p className="text-xs text-muted-foreground leading-relaxed">{cat.explanation}</p>
+                                  <div className="flex items-start gap-2 text-xs">
+                                    <Clock className="h-3.5 w-3.5 text-primary shrink-0 mt-0.5" />
+                                    <span className="text-muted-foreground"><span className="font-medium text-foreground">Timing:</span> {cat.timing}</span>
+                                  </div>
+                                  <div className="p-3 rounded-lg bg-muted/50 border border-border">
+                                    <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1.5 flex items-center gap-1">
+                                      <MessageSquare className="h-3 w-3" /> Example message
+                                    </p>
+                                    <p className="text-xs text-foreground/80 italic leading-relaxed">{cat.exampleMessage}</p>
+                                  </div>
+                                </>
+                              )}
+                              {isEnabled && (
+                                <div className="space-y-3">
+                                  <div>
+                                    <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1.5">Send via</p>
+                                    <div className="flex gap-1.5">
+                                      {(["email", "sms", "both"] as const).map((ch) => (
+                                        <button
+                                          key={ch}
+                                          onClick={() => handleUpdate({ [cat.channelKey]: ch })}
+                                          disabled={updateSettings.isPending}
+                                          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all border ${
+                                            currentChannel === ch
+                                              ? "bg-primary text-primary-foreground border-primary shadow-sm"
+                                              : "bg-background text-muted-foreground border-border hover:border-primary/40"
+                                          }`}
+                                        >
+                                          {ch === "email" ? "📧 Email" : ch === "sms" ? "💬 SMS" : "📧💬 Both"}
+                                        </button>
+                                      ))}
+                                    </div>
+                                  </div>
+                                  <div>
+                                    <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1.5">
+                                      Wait at least
+                                    </p>
+                                    <div className="flex items-center gap-2">
+                                      <input
+                                        type="range"
+                                        min={1}
+                                        max={cat.key === "autopilotBilling" ? 14 : 60}
+                                        value={currentCooldown}
+                                        onChange={(e) => handleUpdate({ [cat.cooldownKey]: parseInt(e.target.value, 10) })}
+                                        disabled={updateSettings.isPending}
+                                        className="flex-1 accent-primary h-1"
+                                      />
+                                      <span className="text-xs font-mono font-semibold text-foreground w-20 text-right">
+                                        {currentCooldown} day{currentCooldown !== 1 ? "s" : ""}
+                                      </span>
+                                    </div>
+                                    <p className="text-[10px] text-muted-foreground mt-0.5">{cat.cooldownLabel}</p>
+                                  </div>
+                                </div>
+                              )}
+                              {!isExpanded && (
+                                <button
+                                  onClick={() => setExpandedCard(cat.key)}
+                                  className="text-[10px] text-primary hover:text-primary/80 font-medium flex items-center gap-1"
+                                >
+                                  Learn more <ChevronDown className="h-3 w-3" />
+                                </button>
+                              )}
+                            </div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
                   </div>
-                ))}
-              </div>
+                );
+              })}
             </div>
 
-            <div className="space-y-3">
-              <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
-                <Clock className="h-4 w-4 text-primary" />
-                Cooldown Period
+            <div className="border-t border-border pt-4 space-y-3">
+              <h3 className="text-xs font-semibold text-foreground flex items-center gap-2">
+                <CalendarDays className="h-3.5 w-3.5 text-primary" />
+                Action Digest
               </h3>
               <p className="text-xs text-muted-foreground">
-                Minimum days between auto-messages to the same person.
-              </p>
-              <div className="flex items-center gap-3">
-                <input
-                  type="range"
-                  min={1}
-                  max={90}
-                  value={settings.cooldownDays}
-                  onChange={(e) => handleCooldown(parseInt(e.target.value, 10))}
-                  disabled={updateSettings.isPending}
-                  className="flex-1 accent-primary"
-                />
-                <span className="text-sm font-mono font-medium text-foreground w-16 text-right">
-                  {settings.cooldownDays} day{settings.cooldownDays !== 1 ? "s" : ""}
-                </span>
-              </div>
-            </div>
-
-            <div className="space-y-3">
-              <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
-                <CalendarDays className="h-4 w-4 text-primary" />
-                Digest Frequency
-              </h3>
-              <p className="text-xs text-muted-foreground">
-                How often you receive a summary of automated actions.
+                Get a summary of all automated actions sent on your behalf.
               </p>
               <div className="flex gap-2">
                 {(["daily", "weekly", "disabled"] as const).map((freq) => (
                   <button
                     key={freq}
-                    onClick={() => handleDigestFrequency(freq)}
+                    onClick={() => handleUpdate({ digestFrequency: freq })}
                     disabled={updateSettings.isPending}
-                    className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-all border ${
+                    className={`flex-1 px-3 py-2 rounded-lg text-xs font-medium transition-all border ${
                       settings.digestFrequency === freq
                         ? "bg-primary text-primary-foreground border-primary shadow-sm"
-                        : "bg-muted/50 text-muted-foreground border-border hover:border-primary/40 hover:text-foreground"
+                        : "bg-background text-muted-foreground border-border hover:border-primary/40 hover:text-foreground"
                     }`}
                   >
-                    {freq.charAt(0).toUpperCase() + freq.slice(1)}
+                    {freq === "daily" ? "📬 Daily" : freq === "weekly" ? "📅 Weekly" : "Off"}
                   </button>
                 ))}
               </div>
             </div>
 
             {anyEnabled && (
-              <div className="flex items-start gap-2 p-3 rounded-lg bg-primary/5 border border-primary/20 text-xs text-muted-foreground">
-                <Info className="h-4 w-4 text-primary shrink-0 mt-0.5" />
-                <div>
-                  <p className="font-medium text-foreground">Safety guardrails active</p>
-                  <p className="mt-0.5">
-                    Smart Actions only sends to contacts with valid email or phone and respects a {settings.cooldownDays}-day cooldown per person across all channels.
-                  </p>
+              <div className="flex items-start gap-2.5 p-3 rounded-lg bg-emerald-500/5 border border-emerald-500/20 text-xs text-muted-foreground">
+                <ShieldCheck className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />
+                <div className="leading-relaxed">
+                  <span className="font-medium text-foreground">Your guardrails are active.</span> Every auto-sent message appears in your task history. Messages only go to people with valid contact info, and each person is protected by the cooldown timers you set above.
                 </div>
               </div>
             )}
@@ -1452,7 +1544,7 @@ export function AiInsights() {
                 Risk Radar
               </h3>
               <button
-                onClick={() => setLocation("/retention")}
+                onClick={() => setLocation("/members?filter=at-risk")}
                 className="text-[10px] text-primary hover:text-primary/80 font-medium flex items-center gap-1"
               >
                 View all <ExternalLink className="h-3 w-3" />
