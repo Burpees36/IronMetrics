@@ -32,6 +32,12 @@ import { Finances } from "@/pages/Finances";
 import { PlanSelection } from "@/pages/PlanSelection";
 import { TierGate } from "@/components/TierGate";
 
+function RedirectTo({ to }: { to: string }) {
+  const [, setLoc] = useLocation();
+  React.useEffect(() => setLoc(to), [to, setLoc]);
+  return null;
+}
+
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -98,8 +104,8 @@ function Router() {
       </Route>
       <Route path="/dashboard" component={() => <ProtectedRoute component={Dashboard} />} />
       <Route path="/ai-insights" component={() => <ProtectedRoute component={AiInsights} />} />
-      <Route path="/intelligence">{() => { const [, setLoc] = useLocation(); React.useEffect(() => setLoc("/ai-insights"), []); return null; }}</Route>
-      <Route path="/ai-operator">{() => { const [, setLoc] = useLocation(); React.useEffect(() => setLoc("/ai-insights"), []); return null; }}</Route>
+      <Route path="/intelligence" component={() => <RedirectTo to="/ai-insights" />} />
+      <Route path="/ai-operator" component={() => <RedirectTo to="/ai-insights" />} />
       <Route path="/members/:memberId" component={() => <ProtectedRoute component={() => <TierGate routeGroup="members" feature="Member Management" requiredTier="growth"><MemberDetail /></TierGate>} />} />
       <Route path="/members" component={() => <ProtectedRoute component={() => <TierGate routeGroup="members" feature="Member Management" requiredTier="growth"><Members /></TierGate>} />} />
       <Route path="/schedule" component={() => <ProtectedRoute component={() => <TierGate routeGroup="schedule" feature="Scheduling" requiredTier="growth"><Schedule /></TierGate>} />} />
