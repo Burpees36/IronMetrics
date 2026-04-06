@@ -193,60 +193,60 @@ router.post(
         .where(eq(programmingPreferencesTable.gymId, gymId));
 
       const effectivePrefs = loadPrefs(prefs);
-      const generatedDays = await generateWeek(gymId, startDate, effectivePrefs);
+      const { generatedDays, skippedDates } = await generateWeek(gymId, startDate, effectivePrefs);
+
+      if (generatedDays.length === 0) {
+        res.status(200).json({ days: [], generated: 0, skipped: skippedDates.length });
+        return;
+      }
 
       const userId = req.user?.id || null;
       const results = [];
 
       for (const generated of generatedDays) {
-        const dayDate = (typeof generated.date === "string" && DATE_RE.test(generated.date)) ? generated.date : null;
-        if (!dayDate) continue;
+        try {
+          const dayDate = (typeof generated.date === "string" && DATE_RE.test(generated.date)) ? generated.date : null;
+          if (!dayDate) continue;
 
-        const [existing] = await db
-          .select()
-          .from(programmingDaysTable)
-          .where(
-            and(
-              eq(programmingDaysTable.gymId, gymId),
-              eq(programmingDaysTable.date, dayDate)
-            )
-          );
+          if (!Array.isArray(generated.sections) || generated.sections.length === 0) continue;
 
-        if (existing) continue;
+          const [day] = await db
+            .insert(programmingDaysTable)
+            .values({
+              gymId,
+              date: dayDate,
+              title: (typeof generated.title === "string" && generated.title) ? generated.title : `Workout – ${dayDate}`,
+              status: "draft",
+              publicNotes: generated.publicNotes || null,
+              coachNotes: generated.coachNotes || null,
+              track: "default",
+              createdBy: userId,
+              updatedBy: userId,
+            })
+            .returning();
 
-        const [day] = await db
-          .insert(programmingDaysTable)
-          .values({
-            gymId,
-            date: dayDate,
-            title: (typeof generated.title === "string" && generated.title) ? generated.title : `Workout – ${dayDate}`,
-            status: "draft",
-            publicNotes: generated.publicNotes || null,
-            coachNotes: generated.coachNotes || null,
-            track: "default",
-            createdBy: userId,
-            updatedBy: userId,
-          })
-          .returning();
+          const validSections: GeneratedSection[] = Array.isArray(generated.sections) ? generated.sections : [];
+          if (validSections.length > 0) {
+            await db.insert(programmingSectionsTable).values(buildSectionValues(day.id, validSections));
+          }
 
-        const validSections: GeneratedSection[] = Array.isArray(generated.sections) ? generated.sections : [];
-        if (validSections.length > 0) {
-          await db.insert(programmingSectionsTable).values(buildSectionValues(day.id, validSections));
+          const sections = await db
+            .select()
+            .from(programmingSectionsTable)
+            .where(eq(programmingSectionsTable.dayId, day.id));
+
+          results.push({ ...day, sections });
+        } catch (dayError) {
+          console.error(`Failed to save generated day ${generated.date}:`, dayError instanceof Error ? dayError.message : dayError);
         }
-
-        const sections = await db
-          .select()
-          .from(programmingSectionsTable)
-          .where(eq(programmingSectionsTable.dayId, day.id));
-
-        results.push({ ...day, sections });
       }
 
-      res.status(201).json({ days: results, generated: results.length, skipped: generatedDays.length - results.length });
+      res.status(201).json({ days: results, generated: results.length, skipped: skippedDates.length });
     } catch (error: unknown) {
       const msg = error instanceof Error ? error.message : "Unknown error";
       console.error("AI week generation error:", msg);
-      res.status(500).json({ error: "Failed to generate week programming. Please try again." });
+      const isUserFacing = msg.includes("truncated") || msg.includes("invalid JSON") || msg.includes("valid sections") || msg.includes("'days' array");
+      res.status(500).json({ error: isUserFacing ? msg : "Failed to generate week programming. Please try again." });
     }
   }
 );

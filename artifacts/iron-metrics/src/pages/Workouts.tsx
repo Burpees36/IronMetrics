@@ -363,10 +363,17 @@ export function Workouts() {
         const resultData = result as { generated?: number; skipped?: number };
         const generated = resultData?.generated ?? 0;
         const skipped = resultData?.skipped ?? 0;
-        toast({
-          title: "Week Generated",
-          description: `${generated} days of programming created as drafts.${skipped > 0 ? ` ${skipped} days skipped (already exist).` : ""} Review and edit before publishing.`,
-        });
+        if (generated === 0 && skipped > 0) {
+          toast({
+            title: "No Days Generated",
+            description: `All ${skipped} days already have programming. Delete existing days first to regenerate.`,
+          });
+        } else {
+          toast({
+            title: "Week Generated",
+            description: `${generated} days created${skipped > 0 ? `, ${skipped} days skipped (already exist)` : ""}. Review and edit before publishing.`,
+          });
+        }
       } catch (error: unknown) {
         const err = error as { data?: { error?: string }; message?: string };
         toast({
