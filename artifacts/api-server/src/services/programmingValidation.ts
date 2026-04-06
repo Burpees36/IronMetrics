@@ -183,27 +183,6 @@ function normalizeMovement(movement: string): string {
   return movement.toLowerCase().trim().replace(/\s+/g, " ");
 }
 
-function getAllMovements(days: GeneratedDay[]): string[] {
-  const movements: string[] = [];
-  for (const day of days) {
-    for (const section of day.sections) {
-      if (Array.isArray(section.movements)) {
-        for (const m of section.movements) {
-          movements.push(normalizeMovement(m));
-        }
-      }
-      if (section.instructions) {
-        const instrLower = section.instructions.toLowerCase();
-        movements.push(...extractMovementsFromText(instrLower));
-      }
-    }
-  }
-  return movements;
-}
-
-function extractMovementsFromText(text: string): string[] {
-  return [];
-}
 
 function countMovements(days: GeneratedDay[]): Record<string, number> {
   const counts: Record<string, number> = {};
@@ -517,6 +496,14 @@ function parseMinutes(timeStr: string | null): number | null {
   return parseInt(match[1]);
 }
 
+function parseDomainRange(domain: string): { min: number; max: number } | null {
+  const rangeMatch = domain.match(/(\d+)\s*[-–]\s*(\d+)/);
+  if (rangeMatch) return { min: parseInt(rangeMatch[1]), max: parseInt(rangeMatch[2]) };
+  const single = parseMinutes(domain);
+  if (single) return { min: single, max: single };
+  return null;
+}
+
 function checkTimeBudget(days: GeneratedDay[], timeDomains: Record<string, string>): Violation[] {
   const violations: Violation[] = [];
 
@@ -526,34 +513,36 @@ function checkTimeBudget(days: GeneratedDay[], timeDomains: Record<string, strin
 
     for (const section of day.sections) {
       const domain = timeDomains[section.sectionType];
-      if (domain) {
-        const rangeMatch = domain.match(/(\d+)\s*[-–]\s*(\d+)/);
-        if (rangeMatch) {
-          totalMin += parseInt(rangeMatch[1]);
-          totalMax += parseInt(rangeMatch[2]);
-        } else {
-          const single = parseMinutes(domain);
-          if (single) {
-            totalMin += single;
-            totalMax += single;
-          }
-        }
+      const domainRange = domain ? parseDomainRange(domain) : null;
+
+      if (domainRange) {
+        totalMin += domainRange.min;
+        totalMax += domainRange.max;
       }
 
       const sectionDuration = parseMinutes(section.duration);
-      if (sectionDuration && domain) {
-        const rangeMatch = domain.match(/(\d+)\s*[-–]\s*(\d+)/);
-        if (rangeMatch) {
-          const max = parseInt(rangeMatch[2]);
-          if (sectionDuration > max * 1.5) {
-            violations.push({
-              type: "time_budget",
-              severity: "error",
-              message: `${day.date} / ${section.title}: Duration ${section.duration} exceeds time domain ${domain} for ${section.sectionType}.`,
-              details: { day: day.date, section: section.title, duration: section.duration, domain },
-            });
-          }
+      const sectionTimeCap = parseMinutes(section.timeCap);
+
+      const effectiveTime = sectionTimeCap || sectionDuration;
+
+      if (effectiveTime && domainRange) {
+        if (effectiveTime > domainRange.max * 1.5) {
+          violations.push({
+            type: "time_budget",
+            severity: "error",
+            message: `${day.date} / ${section.title}: Time ${effectiveTime} min exceeds domain ${domain} for ${section.sectionType}.`,
+            details: { day: day.date, section: section.title, time: effectiveTime, domain },
+          });
         }
+      }
+
+      if (sectionTimeCap && sectionDuration && sectionTimeCap < sectionDuration) {
+        violations.push({
+          type: "time_budget",
+          severity: "error",
+          message: `${day.date} / ${section.title}: Time cap (${section.timeCap}) is less than stated duration (${section.duration}).`,
+          details: { day: day.date, section: section.title, timeCap: section.timeCap, duration: section.duration },
+        });
       }
     }
 
@@ -561,7 +550,7 @@ function checkTimeBudget(days: GeneratedDay[], timeDomains: Record<string, strin
       violations.push({
         type: "time_budget",
         severity: "error",
-        message: `${day.date}: Estimated total time ${totalMin}-${totalMax} min may exceed typical class length.`,
+        message: `${day.date}: Estimated total time ${totalMin}-${totalMax} min exceeds typical class length.`,
         details: { day: day.date, minTime: totalMin, maxTime: totalMax },
       });
     }
