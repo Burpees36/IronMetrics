@@ -286,6 +286,7 @@ export async function generateDay(
 
   let bestDay: GeneratedDay | null = null;
   let bestErrorCount = Infinity;
+  let bestValidation: ValidationResult | null = null;
   let lastValidation: ValidationResult | null = null;
 
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
@@ -302,6 +303,7 @@ export async function generateDay(
     if (errorCount < bestErrorCount) {
       bestDay = generated;
       bestErrorCount = errorCount;
+      bestValidation = validation;
     }
 
     if (validation.valid) {
@@ -312,7 +314,7 @@ export async function generateDay(
     console.log(`[programmingAI] generateDay ${date}: attempt ${attempt + 1} had ${errorCount} error(s), ${validation.violations.length} total violations`);
 
     if (attempt === MAX_RETRIES) {
-      const bestErrors = lastValidation!.violations.filter(v => v.severity === "error");
+      const bestErrors = bestValidation!.violations.filter(v => v.severity === "error");
       console.warn(`[programmingAI] generateDay ${date}: exhausted ${MAX_RETRIES + 1} attempts with ${bestErrorCount} remaining error(s)`);
       throw new ProgrammingValidationError(
         `AI generation for ${date} failed validation after ${MAX_RETRIES + 1} attempts with ${bestErrorCount} unresolved error(s).`,
@@ -493,6 +495,7 @@ export async function generateWeek(
 
   let bestDays: GeneratedDay[] = [];
   let bestErrorCount = Infinity;
+  let bestValidation: ValidationResult | null = null;
   let lastValidation: ValidationResult | null = null;
 
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
@@ -509,6 +512,7 @@ export async function generateWeek(
     if (errorCount < bestErrorCount) {
       bestDays = generatedDays;
       bestErrorCount = errorCount;
+      bestValidation = validation;
     }
 
     if (validation.valid) {
@@ -519,7 +523,7 @@ export async function generateWeek(
     console.log(`[programmingAI] generateWeek: attempt ${attempt + 1} had ${errorCount} error(s), ${validation.violations.length} total violations`);
 
     if (attempt === MAX_RETRIES) {
-      const bestErrors = lastValidation!.violations.filter(v => v.severity === "error");
+      const bestErrors = bestValidation!.violations.filter(v => v.severity === "error");
       console.warn(`[programmingAI] generateWeek: exhausted ${MAX_RETRIES + 1} attempts with ${bestErrorCount} remaining error(s)`);
       throw new ProgrammingValidationError(
         `AI week generation failed validation after ${MAX_RETRIES + 1} attempts with ${bestErrorCount} unresolved error(s).`,
