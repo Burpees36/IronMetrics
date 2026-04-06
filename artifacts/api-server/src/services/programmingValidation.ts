@@ -38,7 +38,7 @@ export interface ValidationPreferences {
 }
 
 export interface Violation {
-  type: "banned_movement" | "equipment" | "frequency" | "structure" | "time_budget" | "coaching_quality" | "constraint";
+  type: "banned_movement" | "equipment" | "frequency" | "structure" | "time_budget" | "coaching_quality" | "constraint" | "generation";
   severity: "error" | "warning";
   message: string;
   details?: Record<string, unknown>;

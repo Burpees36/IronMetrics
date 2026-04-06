@@ -87,8 +87,8 @@ These tests exercise the full `generateDay` function — including prompt constr
 **File:** `artifacts/api-server/src/scripts/stress-test-programming.ts`
 **Run:** `cd artifacts/api-server && npx tsx src/scripts/stress-test-programming.ts`
 **Run single test:** `cd artifacts/api-server && npx tsx src/scripts/stress-test-programming.ts 8` (runs test #8 only)
-**Auth:** Bypasses HTTP auth by calling `buildSystemPrompt` + OpenAI directly. Validates output with same `validateGeneratedWeek` pipeline used in production.
-**Safety:** Fails if fewer days generated than expected (AI call failures produce error violations, not false passes).
+**Pipeline:** Calls `generateDay` directly (the actual production pipeline), exercising prompt construction, AI generation, validation, retry/correction flow, and `ProgrammingValidationError` throwing. Uses gymId=0 (no DB history) to bypass HTTP auth while preserving pipeline behavior.
+**Safety:** Fails if fewer days generated than expected (AI call failures and exhausted retries produce error violations, not false passes).
 
 | # | Name | Category | Description | Days |
 |---|------|----------|-------------|------|
@@ -326,4 +326,4 @@ When `generateWeek` retries, it regenerates ALL days, not just the ones with vio
 | `artifacts/api-server/src/services/programmingValidation.ts` | **NEW** — Full validation module: banned movements, equipment compliance, frequency counting, structure compliance, time budget, coaching quality. |
 | `artifacts/api-server/src/__tests__/programming-ai-stress-test.test.ts` | **NEW** — 34 tests (22 unit + 12 scenario) covering all validators and full pipeline. |
 | `artifacts/api-server/src/__tests__/programming-ai-integration.test.ts` | **NEW** — 7 integration tests exercising `generateDay` with mocked OpenAI: validates retry/correction flow, `ProgrammingValidationError` throwing, and correction prompt injection. |
-| `artifacts/api-server/src/scripts/stress-test-programming.ts` | **NEW** — 12-scenario live stress test script. Bypasses HTTP auth by calling `buildSystemPrompt` + OpenAI directly. Fails on incomplete generation. |
+| `artifacts/api-server/src/scripts/stress-test-programming.ts` | **NEW** — 12-scenario live stress test script. Calls `generateDay` directly (full pipeline with retry/correction). Fails on incomplete generation. |

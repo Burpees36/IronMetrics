@@ -3,8 +3,9 @@ import {
   type ValidationPreferences,
   type ValidationResult,
   type Violation,
+  ProgrammingValidationError,
 } from "../services/programmingValidation";
-import { buildSystemPrompt } from "../services/programmingAI";
+import { generateDay } from "../services/programmingAI";
 
 interface GeneratedSection {
   sectionType: string;
@@ -47,6 +48,7 @@ interface TestResult {
   warningCount: number;
   violations: Violation[];
   generatedDayCount: number;
+  pipelineRetried: boolean;
 }
 
 function buildTestConfigs(): TestConfig[] {
@@ -198,18 +200,11 @@ function buildTestConfigs(): TestConfig[] {
   ];
 }
 
-async function generateDaysViaAI(config: TestConfig): Promise<GeneratedDay[]> {
-  const { openai } = await import("@workspace/integrations-openai-ai-server");
+const STRESS_TEST_GYM_ID = 0;
 
-  const systemPrompt = buildSystemPrompt({
-    methodology: config.prefs.methodology,
-    structureTemplate: config.prefs.structureTemplate,
-    equipment: config.prefs.equipment,
-    constraints: config.prefs.constraints || "",
-    defaultTimeDomains: config.prefs.defaultTimeDomains,
-  }, "");
-
+async function generateDaysViaPipeline(config: TestConfig): Promise<{ days: GeneratedDay[]; pipelineRetried: boolean }> {
   const days: GeneratedDay[] = [];
+  let pipelineRetried = false;
   const baseDate = new Date("2026-04-13");
 
   for (let i = 0; i < config.dayCount; i++) {
@@ -219,48 +214,40 @@ async function generateDaysViaAI(config: TestConfig): Promise<GeneratedDay[]> {
     const dayName = d.toLocaleDateString("en-US", { weekday: "long" });
 
     try {
-      const response = await openai.chat.completions.create({
-        model: "gpt-4o",
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: `Generate programming for ${dayName}, ${dateStr}. Return JSON with date, title, publicNotes, coachNotes, and sections array.` },
-        ],
-        response_format: { type: "json_object" },
-        max_tokens: 3000,
-        temperature: 0.7,
-      });
+      const generated = await generateDay(STRESS_TEST_GYM_ID, dateStr, {
+        methodology: config.prefs.methodology,
+        structureTemplate: config.prefs.structureTemplate,
+        equipment: config.prefs.equipment,
+        constraints: config.prefs.constraints || "",
+        defaultTimeDomains: config.prefs.defaultTimeDomains,
+      }, dayName);
 
-      const content = response.choices[0]?.message?.content;
-      if (content) {
-        const parsed = JSON.parse(content);
-        days.push({
-          date: parsed.date || dateStr,
-          title: parsed.title || `Workout – ${dateStr}`,
-          publicNotes: parsed.publicNotes || "",
-          coachNotes: parsed.coachNotes || "",
-          sections: Array.isArray(parsed.sections) ? parsed.sections : [],
-        });
-      }
+      days.push(generated as GeneratedDay);
     } catch (err) {
-      console.error(`  Day ${dateStr} failed:`, err instanceof Error ? err.message : err);
+      if (err instanceof ProgrammingValidationError) {
+        pipelineRetried = true;
+        console.error(`  Day ${dateStr}: pipeline exhausted retries — ${err.violations.length} unresolved violations`);
+      } else {
+        console.error(`  Day ${dateStr} failed:`, err instanceof Error ? err.message : err);
+      }
     }
   }
 
-  return days;
+  return { days, pipelineRetried };
 }
 
 async function runTest(config: TestConfig): Promise<TestResult> {
   console.log(`\nTest ${config.id}: ${config.name} (${config.category})`);
 
-  const days = await generateDaysViaAI(config);
-  console.log(`  Generated ${days.length}/${config.dayCount} days`);
+  const { days, pipelineRetried } = await generateDaysViaPipeline(config);
+  console.log(`  Generated ${days.length}/${config.dayCount} days (pipeline retried: ${pipelineRetried})`);
 
   if (days.length === 0) {
     return {
       id: config.id, name: config.name, category: config.category,
       passed: false, errorCount: 1, warningCount: 0,
-      violations: [{ type: "generation", severity: "error", message: "No days generated — AI call failed completely." }],
-      generatedDayCount: 0,
+      violations: [{ type: "generation", severity: "error", message: "No days generated — all AI calls failed or exhausted retries." }],
+      generatedDayCount: 0, pipelineRetried,
     };
   }
 
@@ -268,7 +255,7 @@ async function runTest(config: TestConfig): Promise<TestResult> {
     const missingViolation: Violation = {
       type: "generation",
       severity: "error",
-      message: `Only ${days.length}/${config.dayCount} days generated — ${config.dayCount - days.length} day(s) failed.`,
+      message: `Only ${days.length}/${config.dayCount} days generated — ${config.dayCount - days.length} day(s) failed pipeline validation.`,
     };
     const validation = validateGeneratedWeek(days, config.prefs);
     const customViolations = config.customChecks ? config.customChecks(days) : [];
@@ -278,7 +265,7 @@ async function runTest(config: TestConfig): Promise<TestResult> {
     return {
       id: config.id, name: config.name, category: config.category,
       passed: false, errorCount: errors.length, warningCount: allViolations.length - errors.length,
-      violations: allViolations, generatedDayCount: days.length,
+      violations: allViolations, generatedDayCount: days.length, pipelineRetried,
     };
   }
 
@@ -296,7 +283,7 @@ async function runTest(config: TestConfig): Promise<TestResult> {
     id: config.id, name: config.name, category: config.category,
     passed: errors.length === 0,
     errorCount: errors.length, warningCount: allViolations.length - errors.length,
-    violations: allViolations, generatedDayCount: days.length,
+    violations: allViolations, generatedDayCount: days.length, pipelineRetried,
   };
 }
 
@@ -305,7 +292,7 @@ async function main() {
   const testFilter = process.argv[2] ? parseInt(process.argv[2]) : null;
   const toRun = testFilter ? configs.filter(c => c.id === testFilter) : configs;
 
-  console.log(`Running ${toRun.length} stress test(s) directly via AI (bypassing HTTP auth)...\n`);
+  console.log(`Running ${toRun.length} stress test(s) through generateDay pipeline (includes retry/correction flow)...\n`);
 
   const results: TestResult[] = [];
   for (const config of toRun) {
@@ -317,16 +304,18 @@ async function main() {
         id: config.id, name: config.name, category: config.category,
         passed: false, errorCount: 1, warningCount: 0,
         violations: [{ type: "generation", severity: "error", message: `Crashed: ${err instanceof Error ? err.message : String(err)}` }],
-        generatedDayCount: 0,
+        generatedDayCount: 0, pipelineRetried: false,
       });
     }
   }
 
   const passed = results.filter(r => r.passed).length;
+  const retriedCount = results.filter(r => r.pipelineRetried).length;
   console.log(`\n${"=".repeat(60)}`);
-  console.log(`RESULTS: ${passed}/${results.length} passed`);
+  console.log(`RESULTS: ${passed}/${results.length} passed (${retriedCount} triggered pipeline retries)`);
   for (const r of results) {
-    console.log(`  ${r.passed ? "PASS" : "FAIL"} — Test ${r.id}: ${r.name} (${r.errorCount} errors, ${r.warningCount} warnings)`);
+    const retryFlag = r.pipelineRetried ? " [RETRIED]" : "";
+    console.log(`  ${r.passed ? "PASS" : "FAIL"} — Test ${r.id}: ${r.name} (${r.errorCount} errors, ${r.warningCount} warnings)${retryFlag}`);
   }
 
   const fs = await import("fs");
