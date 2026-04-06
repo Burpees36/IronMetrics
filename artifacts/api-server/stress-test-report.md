@@ -24,7 +24,7 @@ Generated: 2026-04-06
 | `artifacts/api-server/src/routes/programming/generate.ts` | Route handler |
 | `artifacts/api-server/src/routes/programming/preferences.ts` | Settings API |
 | `lib/db/src/schema/programming.ts` | DB schema |
-| `artifacts/api-server/src/__tests__/programming-ai-stress-test.test.ts` | **NEW** — 16 unit tests |
+| `artifacts/api-server/src/__tests__/programming-ai-stress-test.test.ts` | **NEW** — 20 unit tests |
 | `artifacts/api-server/src/scripts/stress-test-programming.ts` | **NEW** — 12-scenario live stress test script |
 
 ### Where Rules Are Enforced (Post-Fix)
@@ -220,6 +220,12 @@ After initial implementation, an architectural code review identified three corr
 
 3. **Best-of-retries fixed** — The retry loop previously returned the last attempt regardless of quality. Now it tracks `bestErrorCount` across all attempts and returns the attempt with the fewest error-severity violations.
 
+4. **Unresolved violations are now terminal** — If all retry attempts still have error-severity violations, both `generateDay` and `generateWeek` throw a `ProgrammingValidationError` instead of silently returning invalid output. Route handlers return HTTP 422 with violation details so the frontend can display actionable feedback.
+
+5. **Coaching quality and time budget upgraded to errors** — Missing/inadequate intended stimulus, scaling notes, time caps on conditioning, and excessive time budgets are now error-severity violations that trigger retries and block generation when unresolved.
+
+6. **Exact frequency enforcement** — `parseFrequencyRules` now distinguishes "EXACTLY N" from "max N". `checkFrequencyRules` enforces `count !== N` for exact rules (flags both too-few and too-many), not just `count > max`.
+
 ---
 
 ## 5. Known Limitations & Risks
@@ -270,5 +276,5 @@ When `generateWeek` retries, it regenerates ALL days, not just the ones with vio
 |------|--------|
 | `artifacts/api-server/src/services/programmingAI.ts` | Rewrote `buildSystemPrompt` with methodology-specific rules, hard equipment/structure constraints, banned movement injection. Added validation-retry loop to `generateDay` and `generateWeek`. |
 | `artifacts/api-server/src/services/programmingValidation.ts` | **NEW** — Full validation module: banned movements, equipment compliance, frequency counting, structure compliance, time budget, coaching quality. |
-| `artifacts/api-server/src/__tests__/programming-ai-stress-test.test.ts` | **NEW** — 16 unit tests for validation module covering all validators. |
+| `artifacts/api-server/src/__tests__/programming-ai-stress-test.test.ts` | **NEW** — 20 unit tests for validation module covering all validators. |
 | `artifacts/api-server/src/scripts/stress-test-programming.ts` | **NEW** — 12-scenario live stress test script with automated report generation. |

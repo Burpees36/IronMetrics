@@ -4,6 +4,7 @@ import { db, programmingPreferencesTable, programmingDaysTable, programmingSecti
 import { requireProgrammingWrite } from "../../middlewares/programmingRbac";
 import { parseGymId } from "./helpers";
 import { generateDay, generateWeek } from "../../services/programmingAI";
+import { ProgrammingValidationError } from "../../services/programmingValidation";
 
 const router: IRouter = Router();
 
@@ -163,6 +164,14 @@ router.post(
 
       res.status(201).json({ ...day, sections });
     } catch (error: unknown) {
+      if (error instanceof ProgrammingValidationError) {
+        console.error("AI generation validation error:", error.message, error.violations);
+        res.status(422).json({
+          error: "AI-generated programming failed validation after multiple attempts.",
+          violations: error.violations,
+        });
+        return;
+      }
       const msg = error instanceof Error ? error.message : "Unknown error";
       console.error("AI generation error:", msg);
       res.status(500).json({ error: "Failed to generate programming. Please try again." });
@@ -243,6 +252,14 @@ router.post(
 
       res.status(201).json({ days: results, generated: results.length, skipped: skippedDates.length });
     } catch (error: unknown) {
+      if (error instanceof ProgrammingValidationError) {
+        console.error("AI week generation validation error:", error.message, error.violations);
+        res.status(422).json({
+          error: "AI-generated programming failed validation after multiple attempts.",
+          violations: error.violations,
+        });
+        return;
+      }
       const msg = error instanceof Error ? error.message : "Unknown error";
       console.error("AI week generation error:", msg);
       const isUserFacing = msg.includes("truncated") || msg.includes("invalid JSON") || msg.includes("valid sections") || msg.includes("'days' array");

@@ -308,5 +308,74 @@ describe("Validation Module — Unit Tests", () => {
       expect(freqViolations.length).toBeGreaterThan(0);
       expect(freqViolations[0].message).toContain("back squat");
     });
+
+    it("enforces EXACTLY N frequency constraints", () => {
+      const days = [
+        makeDay("2026-04-07", [makeSection({ movements: ["Thruster", "Pull-ups"] })]),
+        makeDay("2026-04-08", [makeSection({ movements: ["Deadlift", "Box Jump"] })]),
+      ];
+      const prefs: ValidationPreferences = {
+        methodology: "crossfit",
+        structureTemplate: ["conditioning"],
+        equipment: [],
+        constraints: "Pull-ups must appear EXACTLY 2 times this week. Thruster must appear EXACTLY 1 time this week.",
+        defaultTimeDomains: {},
+      };
+
+      const result = validateGeneratedWeek(days, prefs);
+      const freqViolations = result.violations.filter(v => v.type === "frequency");
+      const pullUpViolation = freqViolations.find(v => v.message.includes("pull-ups"));
+      expect(pullUpViolation).toBeDefined();
+      expect(pullUpViolation!.message).toContain("expected exactly 2");
+    });
+
+    it("passes exact frequency when count matches", () => {
+      const days = [
+        makeDay("2026-04-07", [makeSection({ movements: ["Pull-ups", "Thruster"] })]),
+        makeDay("2026-04-08", [makeSection({ movements: ["Pull-ups", "Deadlift"] })]),
+      ];
+      const prefs: ValidationPreferences = {
+        methodology: "crossfit",
+        structureTemplate: ["conditioning"],
+        equipment: [],
+        constraints: "Pull-ups must appear EXACTLY 2 times this week.",
+        defaultTimeDomains: {},
+      };
+
+      const result = validateGeneratedWeek(days, prefs);
+      const freqViolations = result.violations.filter(v => v.type === "frequency" && v.message.includes("pull-ups"));
+      expect(freqViolations.length).toBe(0);
+    });
+  });
+
+  describe("coaching quality checks are errors (block generation)", () => {
+    it("coaching quality violations mark result as invalid", () => {
+      const day = makeDay("2026-04-07", [
+        makeSection({ intendedStimulus: "", scalingNotes: "", timeCap: null, duration: null }),
+      ]);
+      const prefs: ValidationPreferences = {
+        methodology: "crossfit",
+        structureTemplate: ["conditioning"],
+        equipment: [],
+        constraints: null,
+        defaultTimeDomains: {},
+      };
+
+      const result = validateGeneratedDay(day, prefs);
+      expect(result.valid).toBe(false);
+      const errors = result.violations.filter(v => v.severity === "error" && v.type === "coaching_quality");
+      expect(errors.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe("ProgrammingValidationError export", () => {
+    it("is importable and throwable with violations", async () => {
+      const { ProgrammingValidationError } = await import("../services/programmingValidation");
+      const err = new ProgrammingValidationError("test", [
+        { type: "equipment", severity: "error", message: "test violation" },
+      ]);
+      expect(err.name).toBe("ProgrammingValidationError");
+      expect(err.violations.length).toBe(1);
+    });
   });
 });

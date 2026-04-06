@@ -1,3 +1,12 @@
+export class ProgrammingValidationError extends Error {
+  violations: Violation[];
+  constructor(message: string, violations: Violation[]) {
+    super(message);
+    this.name = "ProgrammingValidationError";
+    this.violations = violations;
+  }
+}
+
 interface GeneratedSection {
   sectionType: string;
   title: string;
@@ -254,14 +263,20 @@ export function parseBannedMovements(constraints: string | null): string[] {
   return [...new Set(banned)];
 }
 
-export function parseFrequencyRules(constraints: string | null): Array<{ movement: string; max: number }> {
+export interface FrequencyRule {
+  movement: string;
+  max: number;
+  exact?: boolean;
+}
+
+export function parseFrequencyRules(constraints: string | null): FrequencyRule[] {
   if (!constraints) return [];
-  const rules: Array<{ movement: string; max: number }> = [];
+  const rules: FrequencyRule[] = [];
 
   const exactPattern = /(\w[\w\s-]+?)\s+(?:must\s+)?appear\s+(?:EXACTLY|exactly)\s+(\d+)\s+time/gi;
   let match;
   while ((match = exactPattern.exec(constraints)) !== null) {
-    rules.push({ movement: normalizeMovement(match[1]), max: parseInt(match[2]) });
+    rules.push({ movement: normalizeMovement(match[1]), max: parseInt(match[2]), exact: true });
   }
 
   const maxPattern = /(?:max(?:imum)?|no\s+more\s+than|at\s+most)\s+(\d+)\s+(?:appearances?|times?|exposures?)/gi;
@@ -321,7 +336,7 @@ function checkBannedMovements(days: GeneratedDay[], banned: string[]): Violation
   return violations;
 }
 
-function checkFrequencyRules(days: GeneratedDay[], rules: Array<{ movement: string; max: number }>): Violation[] {
+function checkFrequencyRules(days: GeneratedDay[], rules: FrequencyRule[]): Violation[] {
   if (rules.length === 0) return [];
   const counts = countMovements(days);
   const violations: Violation[] = [];
@@ -343,7 +358,17 @@ function checkFrequencyRules(days: GeneratedDay[], rules: Array<{ movement: stri
         mov.includes(rule.movement) || rule.movement.includes(mov)
       );
       const totalCount = matchingMovements.reduce((sum, [, c]) => sum + c, 0);
-      if (totalCount > rule.max) {
+
+      if (rule.exact) {
+        if (totalCount !== rule.max) {
+          violations.push({
+            type: "frequency",
+            severity: "error",
+            message: `Movement pattern "${rule.movement}" appears ${totalCount} times, expected exactly ${rule.max}.`,
+            details: { movement: rule.movement, count: totalCount, expected: rule.max, exact: true },
+          });
+        }
+      } else if (totalCount > rule.max) {
         violations.push({
           type: "frequency",
           severity: "error",
@@ -523,7 +548,7 @@ function checkTimeBudget(days: GeneratedDay[], timeDomains: Record<string, strin
           if (sectionDuration > max * 1.5) {
             violations.push({
               type: "time_budget",
-              severity: "warning",
+              severity: "error",
               message: `${day.date} / ${section.title}: Duration ${section.duration} exceeds time domain ${domain} for ${section.sectionType}.`,
               details: { day: day.date, section: section.title, duration: section.duration, domain },
             });
@@ -535,7 +560,7 @@ function checkTimeBudget(days: GeneratedDay[], timeDomains: Record<string, strin
     if (totalMax > 0 && totalMax > 90) {
       violations.push({
         type: "time_budget",
-        severity: "warning",
+        severity: "error",
         message: `${day.date}: Estimated total time ${totalMin}-${totalMax} min may exceed typical class length.`,
         details: { day: day.date, minTime: totalMin, maxTime: totalMax },
       });
@@ -553,7 +578,7 @@ function checkCoachingQuality(days: GeneratedDay[]): Violation[] {
       if (!section.intendedStimulus || section.intendedStimulus.trim().length < 10) {
         violations.push({
           type: "coaching_quality",
-          severity: "warning",
+          severity: "error",
           message: `${day.date} / ${section.title}: Missing or inadequate intended stimulus.`,
           details: { day: day.date, section: section.title, field: "intendedStimulus" },
         });
@@ -561,7 +586,7 @@ function checkCoachingQuality(days: GeneratedDay[]): Violation[] {
       if (!section.scalingNotes || section.scalingNotes.trim().length < 10) {
         violations.push({
           type: "coaching_quality",
-          severity: "warning",
+          severity: "error",
           message: `${day.date} / ${section.title}: Missing or inadequate scaling notes.`,
           details: { day: day.date, section: section.title, field: "scalingNotes" },
         });
@@ -571,7 +596,7 @@ function checkCoachingQuality(days: GeneratedDay[]): Violation[] {
       if (isCondWod && !section.timeCap && !section.duration) {
         violations.push({
           type: "coaching_quality",
-          severity: "warning",
+          severity: "error",
           message: `${day.date} / ${section.title}: Conditioning/WOD section missing both time cap and duration.`,
           details: { day: day.date, section: section.title },
         });
@@ -581,7 +606,7 @@ function checkCoachingQuality(days: GeneratedDay[]): Violation[] {
         if (section.sectionType !== "cooldown" && section.sectionType !== "custom") {
           violations.push({
             type: "coaching_quality",
-            severity: "warning",
+            severity: "error",
             message: `${day.date} / ${section.title}: Section has no movements listed.`,
             details: { day: day.date, section: section.title },
           });
