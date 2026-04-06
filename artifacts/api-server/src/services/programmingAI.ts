@@ -143,7 +143,7 @@ function buildMethodologyRules(methodology: string): string {
   }
 }
 
-function buildSystemPrompt(prefs: GenerationPreferences, history: string): string {
+export function buildSystemPrompt(prefs: GenerationPreferences, history: string): string {
   const bannedMovements = parseBannedMovements(prefs.constraints);
 
   const equipmentSection = prefs.equipment.length > 0

@@ -70,6 +70,8 @@ Generated: 2026-04-06
 **File:** `artifacts/api-server/src/scripts/stress-test-programming.ts`
 **Run:** `cd artifacts/api-server && npx tsx src/scripts/stress-test-programming.ts`
 **Run single test:** `cd artifacts/api-server && npx tsx src/scripts/stress-test-programming.ts 8` (runs test #8 only)
+**Auth:** Bypasses HTTP auth by calling `buildSystemPrompt` + OpenAI directly. Validates output with same `validateGeneratedWeek` pipeline used in production.
+**Safety:** Fails if fewer days generated than expected (AI call failures produce error violations, not false passes).
 
 | # | Name | Category | Description | Days |
 |---|------|----------|-------------|------|
