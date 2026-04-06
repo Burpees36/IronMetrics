@@ -207,7 +207,7 @@ async function generateDaysViaAI(config: TestConfig): Promise<GeneratedDay[]> {
     equipment: config.prefs.equipment,
     constraints: config.prefs.constraints || "",
     defaultTimeDomains: config.prefs.defaultTimeDomains,
-  }, []);
+  }, "");
 
   const days: GeneratedDay[] = [];
   const baseDate = new Date("2026-04-13");
