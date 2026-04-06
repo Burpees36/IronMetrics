@@ -168,7 +168,6 @@ export async function generateWeek(
   startDate: string,
   prefs: GenerationPreferences
 ): Promise<GeneratedDay[]> {
-  const days: GeneratedDay[] = [];
   const start = new Date(startDate + "T00:00:00");
   const dayNames = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 
@@ -176,8 +175,6 @@ export async function generateWeek(
   const mondayOffset = (dayOfWeek === 0 ? -6 : 1 - dayOfWeek);
   const monday = new Date(start);
   monday.setDate(start.getDate() + mondayOffset);
-
-  const history = await getRecentProgrammingHistory(gymId);
 
   const weekDates: { date: string; dayName: string }[] = [];
   for (let i = 0; i < 7; i++) {
@@ -189,16 +186,55 @@ export async function generateWeek(
     });
   }
 
+  const existingDays = await db
+    .select()
+    .from(programmingDaysTable)
+    .where(
+      and(
+        eq(programmingDaysTable.gymId, gymId),
+        gte(programmingDaysTable.date, weekDates[0].date),
+        lte(programmingDaysTable.date, weekDates[6].date)
+      )
+    );
+
+  const existingDates = new Set(existingDays.map(d => d.date));
+  const missingDates = weekDates.filter(wd => !existingDates.has(wd.date));
+
+  if (missingDates.length === 0) {
+    return [];
+  }
+
+  let existingContext = "";
+  if (existingDays.length > 0) {
+    const summaries: string[] = [];
+    for (const day of existingDays) {
+      const sections = await db
+        .select()
+        .from(programmingSectionsTable)
+        .where(eq(programmingSectionsTable.dayId, day.id))
+        .orderBy(asc(programmingSectionsTable.orderIndex));
+      const movements = sections.flatMap(s => s.movements || []);
+      summaries.push(`${day.date} (${dayNames[weekDates.findIndex(wd => wd.date === day.date)] || ""}): ${day.title} — Movements: ${movements.join(", ") || "none listed"}`);
+    }
+    existingContext = `\n\nALREADY PROGRAMMED (do NOT generate these days — they exist, ensure variety against their movements):
+${summaries.join("\n")}`;
+  }
+
+  const history = await getRecentProgrammingHistory(gymId);
+
+  const tokensPerDay = 3000;
+  const maxTokens = Math.max(4096, missingDates.length * tokensPerDay);
+
   const response = await openai.chat.completions.create({
     model: "gpt-5.2",
-    max_completion_tokens: 8192,
+    max_completion_tokens: maxTokens,
     messages: [
       { role: "system", content: buildSystemPrompt(prefs, history) },
       {
         role: "user",
-        content: `Generate a complete week of workouts for Monday through Sunday (${weekDates[0].date} to ${weekDates[6].date}).
+        content: `Generate workouts for the following ${missingDates.length} day(s) only. Do NOT generate days that already exist.
 
-Return a JSON object with a "days" array containing 7 day objects. Each day should follow this structure:
+Return a JSON object with a "days" array containing exactly ${missingDates.length} day object(s). Each day should follow this structure:
 {
   "days": [
     {
@@ -225,8 +261,9 @@ Return a JSON object with a "days" array containing 7 day objects. Each day shou
   ]
 }
 
-Days and dates:
-${weekDates.map(d => `- ${d.dayName}: ${d.date}`).join("\n")}
+Days to generate:
+${missingDates.map(d => `- ${d.dayName}: ${d.date}`).join("\n")}
+${existingContext}
 
 Follow the structure template for each day: ${prefs.structureTemplate.join(" -> ")}
 
@@ -245,11 +282,23 @@ Ensure intelligent periodization across the entire week:
   const content = response.choices[0]?.message?.content;
   if (!content) throw new Error("No response from AI");
 
-  const parsed = JSON.parse(content) as { days: GeneratedDay[] };
-
-  for (let i = 0; i < parsed.days.length; i++) {
-    parsed.days[i].date = weekDates[i].date;
+  let parsed: { days: GeneratedDay[] };
+  try {
+    parsed = JSON.parse(content) as { days: GeneratedDay[] };
+  } catch (parseErr) {
+    console.error("[programmingAI] Failed to parse week JSON response:", content?.slice(0, 500));
+    throw new Error("AI returned an invalid response. Please try again.");
   }
 
-  return parsed.days;
+  if (!Array.isArray(parsed.days) || parsed.days.length === 0) {
+    throw new Error("AI returned no workout days. Please try again.");
+  }
+
+  for (let i = 0; i < parsed.days.length; i++) {
+    if (missingDates[i]) {
+      parsed.days[i].date = missingDates[i].date;
+    }
+  }
+
+  return parsed.days.filter(d => !existingDates.has(d.date));
 }
