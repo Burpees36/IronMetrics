@@ -38,10 +38,22 @@ export interface ValidationPreferences {
 }
 
 export interface Violation {
-  type: "banned_movement" | "equipment" | "frequency" | "structure" | "time_budget" | "coaching_quality" | "constraint" | "generation";
+  type: "banned_movement" | "equipment" | "frequency" | "structure" | "time_budget" | "coaching_quality" | "constraint" | "generation" | "pattern_balance";
   severity: "error" | "warning";
   message: string;
   details?: Record<string, unknown>;
+}
+
+export type MovementPattern = "push" | "pull" | "squat" | "hinge" | "carry" | "core" | "monostructural";
+
+export interface PatternDistribution {
+  push: number;
+  pull: number;
+  squat: number;
+  hinge: number;
+  carry: number;
+  core: number;
+  monostructural: number;
 }
 
 export interface ValidationResult {
@@ -51,6 +63,7 @@ export interface ValidationResult {
   structureMatch: boolean;
   equipmentCompliant: boolean;
   coachingComplete: boolean;
+  patternDistribution?: PatternDistribution;
 }
 
 const EQUIPMENT_MOVEMENT_MAP: Record<string, string[]> = {
@@ -179,8 +192,362 @@ const BODYWEIGHT_MOVEMENTS = new Set([
   "mobility", "stretching", "foam rolling",
 ]);
 
+const MOVEMENT_ALIASES: Record<string, string> = {
+  "c&j": "clean and jerk",
+  "cnj": "clean and jerk",
+  "cj": "clean and jerk",
+  "t2b": "toes-to-bar",
+  "ttb": "toes-to-bar",
+  "k2e": "knees-to-elbow",
+  "kte": "knees-to-elbow",
+  "c2b": "chest-to-bar pull-up",
+  "ctb": "chest-to-bar pull-up",
+  "hspu": "handstand push-up",
+  "hsp": "handstand push-up",
+  "mu": "muscle-up",
+  "rmu": "ring muscle-up",
+  "bmu": "bar muscle-up",
+  "du": "double under",
+  "dus": "double unders",
+  "su": "single under",
+  "sus": "single unders",
+  "s2oh": "shoulder to overhead",
+  "s2o": "shoulder to overhead",
+  "g2oh": "ground to overhead",
+  "g2o": "ground to overhead",
+  "gto": "ground to overhead",
+  "ghd": "ghd sit-up",
+  "kb": "kettlebell swing",
+  "kbs": "kettlebell swing",
+  "db": "dumbbell",
+  "bb": "barbell",
+  "dl": "deadlift",
+  "bs": "back squat",
+  "fs": "front squat",
+  "ohs": "overhead squat",
+  "pp": "push press",
+  "pj": "push jerk",
+  "sj": "split jerk",
+  "sp": "strict press",
+  "bp": "bench press",
+  "pc": "power clean",
+  "hc": "hang clean",
+  "hpc": "hang power clean",
+  "sqcl": "squat clean",
+  "sc": "squat clean",
+  "ps": "power snatch",
+  "hs": "hang snatch",
+  "hps": "hang power snatch",
+  "sqsn": "squat snatch",
+  "ms": "muscle snatch",
+  "rdl": "romanian deadlift",
+  "sdl": "sumo deadlift",
+  "sdhp": "sumo deadlift high pull",
+  "tgu": "turkish get-up",
+  "wb": "wall ball",
+  "wbs": "wall ball shots",
+  "mbc": "medicine ball clean",
+  "bj": "box jump",
+  "bjo": "box jump over",
+  "bsu": "box step-up",
+  "rc": "rope climb",
+  "lrc": "legless rope climb",
+  "pu": "push-up",
+  "pus": "push-ups",
+  "hr pu": "hand release push-up",
+  "hrpu": "hand release push-up",
+  "cal row": "calorie row",
+  "cal bike": "calorie bike",
+  "cal ski": "calorie ski",
+  "abmat": "sit-up",
+  "abmat sit-up": "sit-up",
+  "abmat sit-ups": "sit-ups",
+  "ghr": "ghd hip extension",
+  "emom": "emom",
+  "amrap": "amrap",
+  "rft": "rft",
+  "hsk": "handstand walk",
+  "hsw": "handstand walk",
+  "fc": "farmer carry",
+  "oh carry": "overhead carry",
+  "oh walk": "overhead carry",
+  "devil's press": "devil press",
+  "devils press": "devil press",
+  "man makers": "man maker",
+  "burpee bjo": "burpee box jump over",
+  "burpee pullup": "burpee pull-up",
+  "burpee pull up": "burpee pull-up",
+  "ring mu": "ring muscle-up",
+  "bar mu": "bar muscle-up",
+  "strict pu": "strict pull-up",
+  "kipping pu": "kipping pull-up",
+  "ctb pull-up": "chest-to-bar pull-up",
+  "ctb pull-ups": "chest-to-bar pull-ups",
+  "hang pwr clean": "hang power clean",
+  "hang pwr snatch": "hang power snatch",
+  "pwr clean": "power clean",
+  "pwr snatch": "power snatch",
+};
+
+const MOVEMENT_PATTERN_MAP: Record<string, MovementPattern> = {
+  "strict press": "push",
+  "push press": "push",
+  "push jerk": "push",
+  "split jerk": "push",
+  "overhead press": "push",
+  "shoulder press": "push",
+  "shoulder to overhead": "push",
+  "bench press": "push",
+  "incline bench press": "push",
+  "decline bench press": "push",
+  "dumbbell press": "push",
+  "dumbbell bench press": "push",
+  "dumbbell floor press": "push",
+  "push-up": "push",
+  "push-ups": "push",
+  "ring push-up": "push",
+  "handstand push-up": "push",
+  "handstand push-ups": "push",
+  "hspu": "push",
+  "parallette push-up": "push",
+  "parallette handstand push-up": "push",
+  "kettlebell press": "push",
+  "ring dip": "push",
+  "ring dips": "push",
+  "strict ring dip": "push",
+  "kipping ring dip": "push",
+  "dip": "push",
+  "dips": "push",
+  "tricep pushdown": "push",
+  "banded push-up": "push",
+  "seated press": "push",
+  "pin press": "push",
+
+  "pull-up": "pull",
+  "pull-ups": "pull",
+  "chin-up": "pull",
+  "chin-ups": "pull",
+  "chest-to-bar pull-up": "pull",
+  "chest-to-bar pull-ups": "pull",
+  "kipping pull-up": "pull",
+  "strict pull-up": "pull",
+  "ring row": "pull",
+  "ring rows": "pull",
+  "barbell row": "pull",
+  "pendlay row": "pull",
+  "dumbbell row": "pull",
+  "cable row": "pull",
+  "lat pulldown": "pull",
+  "face pull": "pull",
+  "band pull-apart": "pull",
+  "barbell curl": "pull",
+  "dumbbell curl": "pull",
+  "rope climb": "pull",
+  "rope climbs": "pull",
+  "legless rope climb": "pull",
+  "ring muscle-up": "pull",
+  "ring muscle-ups": "pull",
+  "bar muscle-up": "pull",
+  "bar muscle-ups": "pull",
+  "muscle-up": "pull",
+  "banded pull-up": "pull",
+  "toes-to-bar": "pull",
+  "knees-to-elbow": "pull",
+  "hanging knee raise": "pull",
+  "sled pull": "pull",
+  "sled drag": "pull",
+  "rack pull": "pull",
+  "sumo deadlift high pull": "pull",
+  "kettlebell row": "pull",
+  "trap bar shrug": "pull",
+
+  "back squat": "squat",
+  "front squat": "squat",
+  "overhead squat": "squat",
+  "air squat": "squat",
+  "air squats": "squat",
+  "goblet squat": "squat",
+  "pistol": "squat",
+  "pistols": "squat",
+  "pistol squat": "squat",
+  "pistol squats": "squat",
+  "squat clean": "squat",
+  "squat snatch": "squat",
+  "dumbbell overhead squat": "squat",
+  "banded squat": "squat",
+  "box squat": "squat",
+  "pin squat": "squat",
+  "sandbag squat": "squat",
+  "thruster": "squat",
+  "cluster": "squat",
+  "dumbbell thruster": "squat",
+  "kettlebell thruster": "squat",
+  "wall ball": "squat",
+  "wall ball shots": "squat",
+  "wall ball clean": "squat",
+
+  "deadlift": "hinge",
+  "sumo deadlift": "hinge",
+  "romanian deadlift": "hinge",
+  "clean": "hinge",
+  "power clean": "hinge",
+  "hang clean": "hinge",
+  "hang power clean": "hinge",
+  "clean and jerk": "hinge",
+  "snatch": "hinge",
+  "power snatch": "hinge",
+  "hang snatch": "hinge",
+  "hang power snatch": "hinge",
+  "muscle snatch": "hinge",
+  "kettlebell swing": "hinge",
+  "dumbbell swing": "hinge",
+  "kettlebell snatch": "hinge",
+  "kettlebell clean": "hinge",
+  "kettlebell deadlift": "hinge",
+  "dumbbell snatch": "hinge",
+  "dumbbell clean": "hinge",
+  "dumbbell deadlift": "hinge",
+  "hip thrust": "hinge",
+  "good morning": "hinge",
+  "ghd hip extension": "hinge",
+  "ghd back extension": "hinge",
+  "ghd raise": "hinge",
+  "kettlebell windmill": "hinge",
+  "cable pull-through": "hinge",
+  "trap bar deadlift": "hinge",
+  "banded deadlift": "hinge",
+  "ground to overhead": "hinge",
+  "sandbag clean": "hinge",
+  "sandbag over shoulder": "hinge",
+  "sandbag ground to overhead": "hinge",
+  "plate ground to overhead": "hinge",
+  "medicine ball clean": "hinge",
+  "devil press": "hinge",
+  "man maker": "hinge",
+  "turkish get-up": "hinge",
+
+  "farmer carry": "carry",
+  "dumbbell farmer carry": "carry",
+  "kettlebell farmer carry": "carry",
+  "sandbag carry": "carry",
+  "overhead carry": "carry",
+  "trap bar carry": "carry",
+  "sled push": "carry",
+  "prowler push": "carry",
+  "bear crawl": "carry",
+  "plate hold": "carry",
+
+  "sit-up": "core",
+  "sit-ups": "core",
+  "v-up": "core",
+  "v-ups": "core",
+  "ghd sit-up": "core",
+  "ghd sit-ups": "core",
+  "med ball sit-up": "core",
+  "l-sit": "core",
+  "l-sit hold": "core",
+  "parallette l-sit": "core",
+  "hollow hold": "core",
+  "hollow rock": "core",
+  "hollow rocks": "core",
+  "superman": "core",
+  "superman hold": "core",
+  "plank": "core",
+  "plank hold": "core",
+  "side plank": "core",
+  "tuck-up": "core",
+  "tuck-ups": "core",
+  "leg raise": "core",
+  "mountain climber": "core",
+  "mountain climbers": "core",
+  "plate pinch": "core",
+
+  "row": "monostructural",
+  "rowing": "monostructural",
+  "calorie row": "monostructural",
+  "assault bike": "monostructural",
+  "air bike": "monostructural",
+  "calorie bike": "monostructural",
+  "echo bike": "monostructural",
+  "ski erg": "monostructural",
+  "calorie ski": "monostructural",
+  "single under": "monostructural",
+  "single unders": "monostructural",
+  "double under": "monostructural",
+  "double unders": "monostructural",
+  "triple under": "monostructural",
+  "triple unders": "monostructural",
+  "crossover": "monostructural",
+  "sprint": "monostructural",
+  "run": "monostructural",
+  "running": "monostructural",
+  "jog": "monostructural",
+  "jogging": "monostructural",
+  "shuttle run": "monostructural",
+  "400m run": "monostructural",
+  "800m run": "monostructural",
+  "200m run": "monostructural",
+  "100m run": "monostructural",
+  "1 mile run": "monostructural",
+  "1-mile run": "monostructural",
+  "broad jump": "monostructural",
+  "broad jumps": "monostructural",
+  "lateral shuffle": "monostructural",
+  "box jump": "monostructural",
+  "box jumps": "monostructural",
+  "box jump over": "monostructural",
+  "box step-up": "monostructural",
+  "box step-ups": "monostructural",
+  "seated box jump": "monostructural",
+  "depth jump": "monostructural",
+  "burpee": "monostructural",
+  "burpees": "monostructural",
+  "duck walk": "monostructural",
+  "crab walk": "monostructural",
+  "inch worm": "monostructural",
+  "inchworm": "monostructural",
+  "step-up": "monostructural",
+
+  "lunge": "squat",
+  "lunges": "squat",
+  "walking lunge": "squat",
+  "walking lunges": "squat",
+  "barbell lunge": "squat",
+  "dumbbell lunge": "squat",
+  "dumbbell step-up": "squat",
+  "medicine ball slam": "hinge",
+  "ball slam": "hinge",
+  "ring support hold": "push",
+  "ring swing": "pull",
+  "scale": "core",
+  "scales": "core",
+  "handstand walk": "push",
+  "handstand hold": "push",
+  "cable fly": "push",
+  "parallette pass-through": "core",
+};
+
+const TOKEN_ALIASES: Record<string, string> = {
+  "db": "dumbbell",
+  "kb": "kettlebell",
+  "bb": "barbell",
+};
+
+export function resolveAlias(normalized: string): string {
+  if (MOVEMENT_ALIASES[normalized]) return MOVEMENT_ALIASES[normalized];
+
+  const parts = normalized.split(" ");
+  if (parts.length >= 2 && TOKEN_ALIASES[parts[0]]) {
+    const expanded = [TOKEN_ALIASES[parts[0]], ...parts.slice(1)].join(" ");
+    return MOVEMENT_ALIASES[expanded] || expanded;
+  }
+
+  return normalized;
+}
+
 function normalizeMovement(movement: string): string {
-  return movement.toLowerCase().trim().replace(/\s+/g, " ");
+  const basic = movement.toLowerCase().trim().replace(/\s+/g, " ");
+  return resolveAlias(basic);
 }
 
 
@@ -239,7 +606,7 @@ export function parseBannedMovements(constraints: string | null): string[] {
     }
   }
 
-  return [...new Set(banned)];
+  return [...new Set(banned.map(b => resolveAlias(b)))];
 }
 
 export interface FrequencyRule {
@@ -559,6 +926,53 @@ function checkTimeBudget(days: GeneratedDay[], timeDomains: Record<string, strin
   return violations;
 }
 
+export function categorizeMovements(days: GeneratedDay[]): PatternDistribution {
+  const dist: PatternDistribution = { push: 0, pull: 0, squat: 0, hinge: 0, carry: 0, core: 0, monostructural: 0 };
+  for (const day of days) {
+    for (const section of day.sections) {
+      if (!Array.isArray(section.movements)) continue;
+      for (const m of section.movements) {
+        const norm = normalizeMovement(m);
+        const pattern = MOVEMENT_PATTERN_MAP[norm];
+        if (pattern) {
+          dist[pattern]++;
+        }
+      }
+    }
+  }
+  return dist;
+}
+
+function checkPatternBalanceFromDist(dist: PatternDistribution): Violation[] {
+  const violations: Violation[] = [];
+  const total = dist.push + dist.pull + dist.squat + dist.hinge + dist.carry + dist.core + dist.monostructural;
+
+  if (total < 6) return violations;
+
+  const patterns: MovementPattern[] = ["push", "pull", "squat", "hinge", "carry", "core", "monostructural"];
+  for (const p of patterns) {
+    const pct = (dist[p] / total) * 100;
+    if (pct < 15 && p !== "carry") {
+      violations.push({
+        type: "pattern_balance",
+        severity: "warning",
+        message: `Movement pattern "${p}" is underrepresented at ${pct.toFixed(1)}% (${dist[p]}/${total}). Consider adding more ${p} movements.`,
+        details: { pattern: p, count: dist[p], total, percentage: pct },
+      });
+    }
+    if (pct > 40) {
+      violations.push({
+        type: "pattern_balance",
+        severity: "warning",
+        message: `Movement pattern "${p}" is overrepresented at ${pct.toFixed(1)}% (${dist[p]}/${total}). Consider diversifying movement selection.`,
+        details: { pattern: p, count: dist[p], total, percentage: pct },
+      });
+    }
+  }
+
+  return violations;
+}
+
 function checkCoachingQuality(days: GeneratedDay[]): Violation[] {
   const violations: Violation[] = [];
 
@@ -628,6 +1042,9 @@ export function validateGeneratedWeek(days: GeneratedDay[], prefs: ValidationPre
 
   violations.push(...checkCoachingQuality(days));
 
+  const patternDistribution = categorizeMovements(days);
+  violations.push(...checkPatternBalanceFromDist(patternDistribution));
+
   const movementCounts = countMovements(days);
   const hasErrors = violations.some(v => v.severity === "error");
   const structureMatch = !violations.some(v => v.type === "structure" && v.severity === "error");
@@ -641,6 +1058,7 @@ export function validateGeneratedWeek(days: GeneratedDay[], prefs: ValidationPre
     structureMatch,
     equipmentCompliant,
     coachingComplete,
+    patternDistribution,
   };
 }
 
