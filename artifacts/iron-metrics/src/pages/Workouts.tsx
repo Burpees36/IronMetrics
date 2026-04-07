@@ -241,6 +241,7 @@ export function Workouts() {
   const [panelOpen, setPanelOpen] = useState(false);
   const [editData, setEditData] = useState<ProgrammingDayData | null>(null);
   const [deleteConfirmDay, setDeleteConfirmDay] = useState<ProgrammingDayWithSections | null>(null);
+  const [overwriteConfirm, setOverwriteConfirm] = useState<{ date: string } | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
   const dateStr = toDateString(selectedDate);
@@ -328,13 +329,7 @@ export function Workouts() {
       } catch (error: unknown) {
         const err = error as { status?: number; data?: { error?: string }; message?: string };
         if (err.status === 409 && !overwrite) {
-          const confirmed = window.confirm(
-            "Programming already exists for this date. Do you want to replace it with a new AI-generated workout?"
-          );
-          if (confirmed) {
-            await handleGenerateDay(targetDate, true);
-            return;
-          }
+          setOverwriteConfirm({ date: targetDate || dateStr });
           setIsGenerating(false);
           return;
         }
@@ -923,6 +918,33 @@ export function Workouts() {
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               {deleteDayMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={!!overwriteConfirm}
+        onOpenChange={(open) => !open && setOverwriteConfirm(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Replace Existing Programming?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Programming already exists for this date. Do you want to replace it with a new AI-generated workout?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (overwriteConfirm) {
+                  handleGenerateDay(overwriteConfirm.date, true);
+                  setOverwriteConfirm(null);
+                }
+              }}
+            >
+              Replace
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

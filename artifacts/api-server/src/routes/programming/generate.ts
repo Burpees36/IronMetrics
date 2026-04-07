@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, and, lte } from "drizzle-orm";
+import { eq, and, lte, ne } from "drizzle-orm";
 import { db, programmingPreferencesTable, programmingDaysTable, programmingSectionsTable } from "@workspace/db";
 import { requireProgrammingWrite } from "../../middlewares/programmingRbac";
 import { parseGymId } from "./helpers";
@@ -114,7 +114,8 @@ router.post(
         .where(
           and(
             eq(programmingDaysTable.gymId, gymId),
-            eq(programmingDaysTable.date, date)
+            eq(programmingDaysTable.date, date),
+            ne(programmingDaysTable.status, "archived")
           )
         );
 

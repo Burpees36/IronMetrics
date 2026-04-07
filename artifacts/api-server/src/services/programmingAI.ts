@@ -1,6 +1,6 @@
 import { openai } from "@workspace/integrations-openai-ai-server";
 import { db, programmingDaysTable, programmingSectionsTable } from "@workspace/db";
-import { eq, and, gte, lte, desc, asc } from "drizzle-orm";
+import { eq, and, gte, lte, desc, asc, ne } from "drizzle-orm";
 import {
   validateGeneratedDay,
   validateGeneratedWeek,
@@ -525,7 +525,8 @@ export async function generateWeek(
       and(
         eq(programmingDaysTable.gymId, gymId),
         gte(programmingDaysTable.date, weekDates[0].date),
-        lte(programmingDaysTable.date, weekDates[6].date)
+        lte(programmingDaysTable.date, weekDates[6].date),
+        ne(programmingDaysTable.status, "archived")
       )
     );
 
