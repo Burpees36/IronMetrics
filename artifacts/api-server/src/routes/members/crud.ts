@@ -16,6 +16,8 @@ router.get("/gyms/:gymId/members", async (req, res): Promise<void> => {
   const status = req.query.status as string | undefined;
   const search = req.query.search as string | undefined;
   const idsParam = req.query.ids as string | undefined;
+  const planIdParam = req.query.planId as string | undefined;
+  const planId = planIdParam ? parseInt(planIdParam, 10) : null;
   const limit = Math.min(parseInt(req.query.limit as string) || 50, 200);
   const offset = parseInt(req.query.offset as string) || 0;
 
@@ -35,6 +37,18 @@ router.get("/gyms/:gymId/members", async (req, res): Promise<void> => {
         ilike(membersTable.email, `%${search}%`)
       )!
     );
+  }
+
+  if (planId && !isNaN(planId)) {
+    const memberIdsWithPlan = db
+      .select({ memberId: subscriptionsTable.memberId })
+      .from(subscriptionsTable)
+      .where(and(
+        eq(subscriptionsTable.gymId, gymId),
+        eq(subscriptionsTable.planId, planId),
+        inArray(subscriptionsTable.status, ["active", "past_due", "on_hold", "paused", "cancel_at_period_end"])
+      ));
+    conditions.push(inArray(membersTable.id, memberIdsWithPlan));
   }
 
   const where = conditions.length === 1 ? conditions[0] : and(...conditions);

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useGym } from "@/store/GymContext";
-import { useListMembers, useUpdateMember, useAddMemberNote, getListMembersQueryKey } from "@workspace/api-client-react";
+import { useListMembers, useUpdateMember, useAddMemberNote, getListMembersQueryKey, useListMembershipPlans } from "@workspace/api-client-react";
 import type { ApiError } from "@workspace/api-client-react/custom-fetch";
 import { useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
@@ -15,6 +15,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogAction, AlertDialogCancel } from "@/components/ui/alert-dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -127,6 +128,12 @@ export function Members() {
   const [tempStatusFilter, setTempStatusFilter] = useState<string[]>([]);
   const [tempRiskFilter, setTempRiskFilter] = useState<string[]>([]);
   const [riskFilter, setRiskFilter] = useState<string[]>([]);
+  const [planFilter, setPlanFilter] = useState<string>("");
+  const [tempPlanFilter, setTempPlanFilter] = useState<string>("");
+
+  const { data: plans } = useListMembershipPlans(activeGymId as number, {
+    query: { enabled: !!activeGymId }
+  });
 
   const PAGE_SIZE = 50;
   const [currentPage, setCurrentPage] = useState(1);
@@ -135,6 +142,7 @@ export function Members() {
   if (search) filterParams.search = search;
   if (idsFilter) filterParams.ids = idsFilter;
   if (statusFilter.length === 1) filterParams.status = statusFilter[0];
+  if (planFilter) filterParams.planId = parseInt(planFilter, 10);
   if (riskViewActive) {
     filterParams.limit = 200;
     filterParams.offset = 0;
@@ -148,7 +156,7 @@ export function Members() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [search, statusFilter]);
+  }, [search, statusFilter, planFilter]);
 
   const { data, isLoading } = useListMembers(activeGymId as number, filterParams as any, {
     query: { enabled: !!activeGymId, placeholderData: (prev: any) => prev } as any
@@ -291,12 +299,14 @@ export function Members() {
   const openFilter = () => {
     setTempStatusFilter([...statusFilter]);
     setTempRiskFilter([...riskFilter]);
+    setTempPlanFilter(planFilter);
     setFilterOpen(true);
   };
 
   const applyFilters = () => {
     setStatusFilter(tempStatusFilter);
     setRiskFilter(tempRiskFilter);
+    setPlanFilter(tempPlanFilter);
     if (tempRiskFilter.length > 0) {
       setRiskViewActive(true);
     } else if (riskViewActive && tempRiskFilter.length === 0) {
@@ -308,8 +318,10 @@ export function Members() {
   const clearFilters = () => {
     setTempStatusFilter([]);
     setTempRiskFilter([]);
+    setTempPlanFilter("");
     setStatusFilter([]);
     setRiskFilter([]);
+    setPlanFilter("");
     setRiskViewActive(false);
     setIdsFilter(null);
     setIdsSource(null);
@@ -394,11 +406,11 @@ export function Members() {
           <div className="flex items-center gap-2 md:gap-3">
             <button
               onClick={openFilter}
-              className={`p-2.5 bg-card border border-border rounded-xl hover:bg-muted transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center ${statusFilter.length > 0 ? 'border-primary text-primary' : ''}`}
+              className={`p-2.5 bg-card border border-border rounded-xl hover:bg-muted transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center ${(statusFilter.length > 0 || planFilter) ? 'border-primary text-primary' : ''}`}
               aria-label="Filter members"
             >
               <Filter className="h-5 w-5 text-muted-foreground" />
-              {statusFilter.length > 0 && <span className="ml-1 text-xs font-medium text-primary">{statusFilter.length}</span>}
+              {(statusFilter.length > 0 || planFilter) && <span className="ml-1 text-xs font-medium text-primary">{statusFilter.length + (planFilter ? 1 : 0)}</span>}
             </button>
             <button
               onClick={() => setImportOpen(true)}
@@ -561,7 +573,7 @@ export function Members() {
               </motion.div>
             ))}
             {displayMembers.length === 0 && data && (
-              <EmptyMemberState hasSearch={!!search || statusFilter.length > 0 || riskViewActive || !!idsFilter} onImport={() => setImportOpen(true)} onAdd={() => setAddOpen(true)} />
+              <EmptyMemberState hasSearch={!!search || statusFilter.length > 0 || !!planFilter || riskViewActive || !!idsFilter} onImport={() => setImportOpen(true)} onAdd={() => setAddOpen(true)} />
             )}
           </div>
         ) : (
@@ -705,7 +717,7 @@ export function Members() {
                 {displayMembers.length === 0 && data && (
                   <tr>
                     <td colSpan={idsFilter || riskViewActive ? 6 : 5}>
-                      <EmptyMemberState hasSearch={!!search || statusFilter.length > 0 || riskViewActive || !!idsFilter} onImport={() => setImportOpen(true)} onAdd={() => setAddOpen(true)} />
+                      <EmptyMemberState hasSearch={!!search || statusFilter.length > 0 || !!planFilter || riskViewActive || !!idsFilter} onImport={() => setImportOpen(true)} onAdd={() => setAddOpen(true)} />
                     </td>
                   </tr>
                 )}
@@ -917,6 +929,22 @@ export function Members() {
                 ))}
               </div>
             </div>
+            {plans && plans.length > 0 && (
+              <div>
+                <h3 className="text-sm font-semibold text-foreground mb-3">Membership Plan</h3>
+                <Select value={tempPlanFilter || "all"} onValueChange={(v) => setTempPlanFilter(v === "all" ? "" : v)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="All plans" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All plans</SelectItem>
+                    {plans.filter((p: { isActive: boolean }) => p.isActive).map((plan: { id: number; name: string }) => (
+                      <SelectItem key={plan.id} value={String(plan.id)}>{plan.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             <div>
               <h3 className="text-sm font-semibold text-foreground mb-3">Risk Tier</h3>
               <div className="space-y-2">
