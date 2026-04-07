@@ -38,7 +38,7 @@ export interface ValidationPreferences {
 }
 
 export interface Violation {
-  type: "banned_movement" | "equipment" | "frequency" | "structure" | "time_budget" | "coaching_quality" | "constraint" | "generation" | "pattern_balance";
+  type: "banned_movement" | "equipment" | "frequency" | "structure" | "time_budget" | "coaching_quality" | "constraint" | "generation" | "pattern_balance" | "temporal";
   severity: "error" | "warning";
   message: string;
   details?: Record<string, unknown>;
@@ -574,10 +574,13 @@ export function parseBannedMovements(constraints: string | null): string[] {
     /(?:banned|excluded|blacklisted|prohibited)\s*(?:movements?)?[:\s]+(.+?)(?:\.\s|$)/gi,
   ];
 
+  const TEMPORAL_PHRASES = /(?:consecutive\s+days|back[\s-]to[\s-]back|day\s+after|days?\s+apart)/i;
+
   for (const pat of patterns) {
     let match;
     while ((match = pat.exec(constraints)) !== null) {
       const segment = match[1].replace(/\s+anywhere.*$/, "").replace(/\s+in the\s.*$/, "");
+      if (TEMPORAL_PHRASES.test(segment)) continue;
       const items = segment.split(/,\s*(?:or\s+)?|\s+or\s+/);
       for (const item of items) {
         const cleaned = item.trim().toLowerCase()
@@ -594,6 +597,9 @@ export function parseBannedMovements(constraints: string | null): string[] {
   let noMatch;
   while ((noMatch = noPattern.exec(constraints)) !== null) {
     const segment = noMatch[1];
+    const lowerSeg = segment.toLowerCase();
+    if (lowerSeg.includes("consecutive days") || lowerSeg.includes("back-to-back") ||
+        lowerSeg.includes("back to back") || lowerSeg.includes("day after")) continue;
     const items = segment.split(/,\s*(?:or\s+)?|\s+or\s+/);
     for (const item of items) {
       const cleaned = item.trim().toLowerCase()
@@ -641,6 +647,214 @@ export function parseFrequencyRules(constraints: string | null): FrequencyRule[]
   }
 
   return rules;
+}
+
+export type TemporalRuleType = "consecutive" | "spacing" | "sequence";
+
+export interface TemporalRule {
+  type: TemporalRuleType;
+  movement: string;
+  movementB?: string;
+  minDaysApart?: number;
+}
+
+const WORD_TO_NUMBER: Record<string, number> = {
+  two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7,
+};
+
+function parseNumberWord(s: string): number | null {
+  const trimmed = s.trim().toLowerCase();
+  if (WORD_TO_NUMBER[trimmed] !== undefined) return WORD_TO_NUMBER[trimmed];
+  const n = parseInt(trimmed);
+  return isNaN(n) ? null : n;
+}
+
+export function parseTemporalRules(constraints: string | null): TemporalRule[] {
+  if (!constraints) return [];
+  const rules: TemporalRule[] = [];
+
+  const consecutivePatterns = [
+    /no\s+([\w][\w\s-]+?)\s+on\s+consecutive\s+days/gi,
+    /(?:don'?t|do\s+not|never)\s+(?:program|include|do|schedule)\s+([\w][\w\s-]+?)\s+on\s+consecutive\s+days/gi,
+    /(?:don'?t|do\s+not|never)\s+(?:program|include|do|schedule)\s+([\w][\w\s-]+?)\s+(?:on\s+)?back[\s-]to[\s-]back\s+days/gi,
+    /no\s+back[\s-]to[\s-]back\s+([\w][\w\s-]+?)(?:\.(?:\s|$)|,|$)/gi,
+  ];
+
+  for (const pat of consecutivePatterns) {
+    let match;
+    while ((match = pat.exec(constraints)) !== null) {
+      const mov = normalizeMovement(match[1].replace(/\s+(?:anywhere|in\s+the).*$/, ""));
+      if (mov.length > 1 && mov.length < 60) {
+        rules.push({ type: "consecutive", movement: mov });
+      }
+    }
+  }
+
+  const spacingPatterns = [
+    /space\s+([\w][\w\s-]+?)\s+(?:at\s+least\s+)?(\d+|two|three|four|five|six|seven)\s+days?\s+apart/gi,
+    /([\w][\w\s-]+?)\s+(?:should|must)\s+(?:be\s+)?(?:at\s+least\s+)?(?:spaced\s+)?(\d+|two|three|four|five|six|seven)\s+days?\s+apart/gi,
+    /(?:at\s+least\s+)(\d+|two|three|four|five|six|seven)\s+days?\s+(?:between|apart\s+for)\s+([\w][\w\s-]+?)(?:\.(?:\s|$)|,|$)/gi,
+  ];
+
+  for (const pat of spacingPatterns) {
+    let match;
+    while ((match = pat.exec(constraints)) !== null) {
+      if (pat === spacingPatterns[2]) {
+        const n = parseNumberWord(match[1]);
+        const mov = normalizeMovement(match[2].replace(/\s+(?:anywhere|in\s+the).*$/, ""));
+        if (n && mov.length > 1 && mov.length < 60) {
+          rules.push({ type: "spacing", movement: mov, minDaysApart: n });
+        }
+      } else {
+        const mov = normalizeMovement(match[1].replace(/\s+(?:anywhere|in\s+the).*$/, ""));
+        const n = parseNumberWord(match[2]);
+        if (n && mov.length > 1 && mov.length < 60) {
+          rules.push({ type: "spacing", movement: mov, minDaysApart: n });
+        }
+      }
+    }
+  }
+
+  const sequencePatterns = [
+    /(?:don'?t|do\s+not|never)\s+(?:program|include|do|schedule)\s+([\w][\w\s-]+?)\s+(?:the\s+)?day\s+after\s+([\w][\w\s-]+?)(?:\.(?:\s|$)|,|$)/gi,
+    /no\s+([\w][\w\s-]+?)\s+(?:the\s+)?day\s+after\s+([\w][\w\s-]+?)(?:\.(?:\s|$)|,|$)/gi,
+  ];
+
+  for (const pat of sequencePatterns) {
+    let match;
+    while ((match = pat.exec(constraints)) !== null) {
+      const movA = normalizeMovement(match[1].replace(/\s+(?:anywhere|in\s+the).*$/, ""));
+      const movB = normalizeMovement(match[2].replace(/\s+(?:anywhere|in\s+the).*$/, ""));
+      if (movA.length > 1 && movA.length < 60 && movB.length > 1 && movB.length < 60) {
+        rules.push({ type: "sequence", movement: movA, movementB: movB });
+      }
+    }
+  }
+
+  const seen = new Set<string>();
+  return rules.filter(r => {
+    const key = `${r.type}|${r.movement}|${r.movementB || ""}|${r.minDaysApart || ""}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function getMovementsForDay(day: GeneratedDay): string[] {
+  const movements: string[] = [];
+  for (const section of day.sections) {
+    if (!Array.isArray(section.movements)) continue;
+    for (const m of section.movements) {
+      movements.push(normalizeMovement(m));
+    }
+  }
+  return movements;
+}
+
+function stemMovement(s: string): string {
+  return s.replace(/s$/, "").replace(/ing$/, "").replace(/ting$/, "t").trim();
+}
+
+function movementMatchesPattern(movement: string, pattern: string): boolean {
+  if (movement === pattern) return true;
+  if (movement.includes(pattern) || pattern.includes(movement)) return true;
+  const movRoot = stemMovement(movement);
+  const patRoot = stemMovement(pattern);
+  if (movRoot === patRoot) return true;
+  if (movRoot.includes(patRoot) || patRoot.includes(movRoot)) return true;
+  const movWords = movement.split(/\s+/);
+  const patWords = pattern.split(/\s+/);
+  for (const mw of movWords) {
+    for (const pw of patWords) {
+      const mwRoot = stemMovement(mw);
+      const pwRoot = stemMovement(pw);
+      if (mwRoot.length > 2 && pwRoot.length > 2 && (mwRoot === pwRoot || mwRoot.includes(pwRoot) || pwRoot.includes(mwRoot))) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+function dayHasMovementPattern(day: GeneratedDay, pattern: string): boolean {
+  const movements = getMovementsForDay(day);
+  return movements.some(m => movementMatchesPattern(m, pattern));
+}
+
+function dayIndexDifference(dateA: string, dateB: string): number {
+  const a = new Date(dateA);
+  const b = new Date(dateB);
+  return Math.round(Math.abs(b.getTime() - a.getTime()) / (1000 * 60 * 60 * 24));
+}
+
+export function checkTemporalRules(days: GeneratedDay[], rules: TemporalRule[]): Violation[] {
+  if (rules.length === 0 || days.length < 2) return [];
+  const violations: Violation[] = [];
+
+  const sorted = [...days].sort((a, b) => a.date.localeCompare(b.date));
+
+  for (const rule of rules) {
+    if (rule.type === "consecutive") {
+      for (let i = 1; i < sorted.length; i++) {
+        const prev = sorted[i - 1];
+        const curr = sorted[i];
+        const gap = dayIndexDifference(prev.date, curr.date);
+        if (gap === 1 && dayHasMovementPattern(prev, rule.movement) && dayHasMovementPattern(curr, rule.movement)) {
+          violations.push({
+            type: "temporal",
+            severity: "error",
+            message: `Temporal violation: "${rule.movement}" appears on consecutive days (${prev.date} and ${curr.date}).`,
+            details: { rule: "consecutive", movement: rule.movement, days: [prev.date, curr.date] },
+          });
+        }
+      }
+    } else if (rule.type === "spacing" && rule.minDaysApart) {
+      const minApart = rule.minDaysApart;
+      const daysWithMovement = sorted.filter(d => dayHasMovementPattern(d, rule.movement));
+      for (let i = 1; i < daysWithMovement.length; i++) {
+        const gap = dayIndexDifference(daysWithMovement[i - 1].date, daysWithMovement[i].date);
+        if (gap < minApart) {
+          violations.push({
+            type: "temporal",
+            severity: "error",
+            message: `Temporal violation: "${rule.movement}" appears on ${daysWithMovement[i - 1].date} and ${daysWithMovement[i].date} (${gap} day(s) apart, minimum ${minApart} required).`,
+            details: { rule: "spacing", movement: rule.movement, days: [daysWithMovement[i - 1].date, daysWithMovement[i].date], gap, minDaysApart: minApart },
+          });
+        }
+      }
+    } else if (rule.type === "sequence" && rule.movementB) {
+      for (let i = 1; i < sorted.length; i++) {
+        const prev = sorted[i - 1];
+        const curr = sorted[i];
+        const gap = dayIndexDifference(prev.date, curr.date);
+        if (gap === 1 && dayHasMovementPattern(prev, rule.movementB) && dayHasMovementPattern(curr, rule.movement)) {
+          violations.push({
+            type: "temporal",
+            severity: "error",
+            message: `Temporal violation: "${rule.movement}" on ${curr.date} is the day after "${rule.movementB}" on ${prev.date}.`,
+            details: { rule: "sequence", movement: rule.movement, movementB: rule.movementB, days: [prev.date, curr.date] },
+          });
+        }
+      }
+    }
+  }
+
+  return violations;
+}
+
+export function formatTemporalRulesForPrompt(rules: TemporalRule[]): string {
+  if (rules.length === 0) return "";
+  const lines: string[] = ["TEMPORAL SEQUENCING RULES (HARD CONSTRAINT — STRICTLY ENFORCED):"];
+  for (const rule of rules) {
+    if (rule.type === "consecutive") {
+      lines.push(`- Do NOT program "${rule.movement}" on consecutive (back-to-back) days.`);
+    } else if (rule.type === "spacing" && rule.minDaysApart) {
+      lines.push(`- Space "${rule.movement}" at least ${rule.minDaysApart} day(s) apart.`);
+    } else if (rule.type === "sequence" && rule.movementB) {
+      lines.push(`- Do NOT program "${rule.movement}" the day after "${rule.movementB}".`);
+    }
+  }
+  return lines.join("\n");
 }
 
 function checkBannedMovements(days: GeneratedDay[], banned: string[]): Violation[] {
@@ -1044,6 +1258,9 @@ export function validateGeneratedWeek(days: GeneratedDay[], prefs: ValidationPre
 
   const patternDistribution = categorizeMovements(days);
   violations.push(...checkPatternBalanceFromDist(patternDistribution));
+
+  const temporalRules = parseTemporalRules(prefs.constraints);
+  violations.push(...checkTemporalRules(days, temporalRules));
 
   const movementCounts = countMovements(days);
   const hasErrors = violations.some(v => v.severity === "error");

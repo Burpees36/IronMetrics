@@ -4,8 +4,12 @@ import {
   validateGeneratedWeek,
   parseBannedMovements,
   parseFrequencyRules,
+  parseTemporalRules,
+  checkTemporalRules,
+  formatTemporalRulesForPrompt,
   type ValidationPreferences,
   type Violation,
+  type TemporalRule,
 } from "../services/programmingValidation";
 
 interface GeneratedSection {
@@ -693,5 +697,319 @@ describe("12-Scenario Stress Test — Validation Pipeline", () => {
     const result = validateGeneratedDay(day, prefs);
     expect(result.structureMatch).toBe(true);
     expect(result.equipmentCompliant).toBe(true);
+  });
+});
+
+describe("Temporal Rule Parsing & Validation", () => {
+  function makeSection(overrides: Partial<GeneratedSection> = {}): GeneratedSection {
+    return {
+      sectionType: "conditioning",
+      title: "Test WOD",
+      instructions: "Complete as fast as possible",
+      duration: "12 min",
+      timeCap: "15 min",
+      intendedStimulus: "High intensity sprint workout targeting full body power and conditioning",
+      movements: ["Thruster", "Pull-ups"],
+      scalingNotes: "Rx: 95/65 lb. Scaled: 65/45 lb with ring rows. Beginner: 45/35 lb.",
+      coachNotes: "Watch form",
+      memberNotes: "Push hard",
+      resultTrackingEnabled: true,
+      ...overrides,
+    };
+  }
+
+  function makeDay(date: string, sections: GeneratedSection[]): GeneratedDay {
+    return {
+      date,
+      title: `Workout – ${date}`,
+      publicNotes: "Test day",
+      coachNotes: "Test coach notes",
+      sections,
+    };
+  }
+
+  describe("parseTemporalRules", () => {
+    it("returns empty for null/empty constraints", () => {
+      expect(parseTemporalRules(null)).toEqual([]);
+      expect(parseTemporalRules("")).toEqual([]);
+    });
+
+    it("parses 'no squatting on consecutive days'", () => {
+      const rules = parseTemporalRules("No squatting on consecutive days.");
+      expect(rules.length).toBe(1);
+      expect(rules[0].type).toBe("consecutive");
+      expect(rules[0].movement).toBe("squatting");
+    });
+
+    it("parses 'don't program deadlifts on consecutive days'", () => {
+      const rules = parseTemporalRules("Don't program deadlifts on consecutive days.");
+      expect(rules.length).toBe(1);
+      expect(rules[0].type).toBe("consecutive");
+      expect(rules[0].movement).toBe("deadlifts");
+    });
+
+    it("parses 'never schedule heavy squats on back-to-back days'", () => {
+      const rules = parseTemporalRules("Never schedule heavy squats on back-to-back days.");
+      expect(rules.length).toBe(1);
+      expect(rules[0].type).toBe("consecutive");
+      expect(rules[0].movement).toBe("heavy squats");
+    });
+
+    it("parses 'space Olympic lifts at least 2 days apart'", () => {
+      const rules = parseTemporalRules("Space Olympic lifts at least 2 days apart.");
+      expect(rules.length).toBe(1);
+      expect(rules[0].type).toBe("spacing");
+      expect(rules[0].movement).toBe("olympic lifts");
+      expect(rules[0].minDaysApart).toBe(2);
+    });
+
+    it("parses spacing with word numbers", () => {
+      const rules = parseTemporalRules("Space heavy deadlifts at least three days apart.");
+      expect(rules.length).toBe(1);
+      expect(rules[0].type).toBe("spacing");
+      expect(rules[0].minDaysApart).toBe(3);
+    });
+
+    it("parses 'should be spaced N days apart'", () => {
+      const rules = parseTemporalRules("Back squats should be spaced 2 days apart.");
+      expect(rules.length).toBe(1);
+      expect(rules[0].type).toBe("spacing");
+      expect(rules[0].movement).toBe("back squats");
+      expect(rules[0].minDaysApart).toBe(2);
+    });
+
+    it("parses 'don't program deadlifts the day after heavy squats'", () => {
+      const rules = parseTemporalRules("Don't program deadlifts the day after heavy squats.");
+      expect(rules.length).toBe(1);
+      expect(rules[0].type).toBe("sequence");
+      expect(rules[0].movement).toBe("deadlifts");
+      expect(rules[0].movementB).toBe("heavy squats");
+    });
+
+    it("parses 'no deadlifts day after back squats'", () => {
+      const rules = parseTemporalRules("No deadlifts the day after back squats.");
+      expect(rules.length).toBe(1);
+      expect(rules[0].type).toBe("sequence");
+      expect(rules[0].movement).toBe("deadlifts");
+      expect(rules[0].movementB).toBe("back squats");
+    });
+
+    it("parses multiple temporal rules in one constraint string", () => {
+      const rules = parseTemporalRules(
+        "No squatting on consecutive days. Space Olympic lifts at least 2 days apart. Don't program deadlifts the day after heavy squats."
+      );
+      expect(rules.length).toBe(3);
+      expect(rules.map(r => r.type)).toContain("consecutive");
+      expect(rules.map(r => r.type)).toContain("spacing");
+      expect(rules.map(r => r.type)).toContain("sequence");
+    });
+
+    it("does not interfere with banned movement parsing", () => {
+      const constraints = "No squatting on consecutive days. Do NOT include burpees anywhere in the week.";
+      const temporal = parseTemporalRules(constraints);
+      const banned = parseBannedMovements(constraints);
+      expect(temporal.length).toBe(1);
+      expect(temporal[0].type).toBe("consecutive");
+      expect(banned).toContain("burpees");
+      expect(banned.some(b => b.includes("consecutive"))).toBe(false);
+    });
+
+    it("don't program X on consecutive days does not create banned movement", () => {
+      const constraints = "Don't program deadlifts on consecutive days.";
+      const banned = parseBannedMovements(constraints);
+      expect(banned.some(b => b.includes("deadlift"))).toBe(false);
+    });
+
+    it("never include X day after Y does not create banned movement", () => {
+      const constraints = "Never include deadlifts the day after heavy squats.";
+      const banned = parseBannedMovements(constraints);
+      expect(banned.some(b => b.includes("deadlift"))).toBe(false);
+    });
+
+    it("deduplicates overlapping temporal rules", () => {
+      const rules = parseTemporalRules("No squatting on consecutive days. No squatting on consecutive days.");
+      expect(rules.length).toBe(1);
+    });
+  });
+
+  describe("checkTemporalRules — consecutive day violations", () => {
+    it("detects squatting on consecutive days", () => {
+      const days = [
+        makeDay("2026-04-13", [makeSection({ movements: ["Back Squat", "Pull-ups"] })]),
+        makeDay("2026-04-14", [makeSection({ movements: ["Front Squat", "Push-ups"] })]),
+      ];
+      const rules: TemporalRule[] = [{ type: "consecutive", movement: "squat" }];
+      const violations = checkTemporalRules(days, rules);
+      expect(violations.length).toBe(1);
+      expect(violations[0].type).toBe("temporal");
+      expect(violations[0].severity).toBe("error");
+      expect(violations[0].message).toContain("consecutive days");
+    });
+
+    it("passes when squatting is not on consecutive days", () => {
+      const days = [
+        makeDay("2026-04-13", [makeSection({ movements: ["Back Squat", "Pull-ups"] })]),
+        makeDay("2026-04-14", [makeSection({ movements: ["Deadlift", "Push-ups"] })]),
+        makeDay("2026-04-15", [makeSection({ movements: ["Front Squat", "Row"] })]),
+      ];
+      const rules: TemporalRule[] = [{ type: "consecutive", movement: "squat" }];
+      const violations = checkTemporalRules(days, rules);
+      expect(violations.length).toBe(0);
+    });
+
+    it("ignores non-consecutive days even with same movements", () => {
+      const days = [
+        makeDay("2026-04-13", [makeSection({ movements: ["Back Squat"] })]),
+        makeDay("2026-04-15", [makeSection({ movements: ["Back Squat"] })]),
+      ];
+      const rules: TemporalRule[] = [{ type: "consecutive", movement: "squat" }];
+      const violations = checkTemporalRules(days, rules);
+      expect(violations.length).toBe(0);
+    });
+  });
+
+  describe("checkTemporalRules — spacing violations", () => {
+    it("detects movements too close together", () => {
+      const days = [
+        makeDay("2026-04-13", [makeSection({ movements: ["Snatch", "Pull-ups"] })]),
+        makeDay("2026-04-14", [makeSection({ movements: ["Clean and Jerk", "Push-ups"] })]),
+      ];
+      const rules: TemporalRule[] = [{ type: "spacing", movement: "snatch", minDaysApart: 2 }];
+      const violations = checkTemporalRules(days, rules);
+      expect(violations.length).toBe(0);
+    });
+
+    it("detects spacing violation when same movement appears within minimum gap", () => {
+      const days = [
+        makeDay("2026-04-13", [makeSection({ movements: ["Power Snatch", "Pull-ups"] })]),
+        makeDay("2026-04-14", [makeSection({ movements: ["Snatch", "Push-ups"] })]),
+      ];
+      const rules: TemporalRule[] = [{ type: "spacing", movement: "snatch", minDaysApart: 3 }];
+      const violations = checkTemporalRules(days, rules);
+      expect(violations.length).toBe(1);
+      expect(violations[0].message).toContain("minimum 3 required");
+    });
+
+    it("passes when spacing is sufficient", () => {
+      const days = [
+        makeDay("2026-04-13", [makeSection({ movements: ["Snatch"] })]),
+        makeDay("2026-04-16", [makeSection({ movements: ["Snatch"] })]),
+      ];
+      const rules: TemporalRule[] = [{ type: "spacing", movement: "snatch", minDaysApart: 3 }];
+      const violations = checkTemporalRules(days, rules);
+      expect(violations.length).toBe(0);
+    });
+  });
+
+  describe("checkTemporalRules — sequence violations", () => {
+    it("detects deadlifts the day after heavy squats", () => {
+      const days = [
+        makeDay("2026-04-13", [makeSection({ movements: ["Back Squat", "Pull-ups"] })]),
+        makeDay("2026-04-14", [makeSection({ movements: ["Deadlift", "Push-ups"] })]),
+      ];
+      const rules: TemporalRule[] = [{ type: "sequence", movement: "deadlift", movementB: "back squat" }];
+      const violations = checkTemporalRules(days, rules);
+      expect(violations.length).toBe(1);
+      expect(violations[0].message).toContain("day after");
+    });
+
+    it("passes when sequence order is reversed (squats after deadlifts is fine)", () => {
+      const days = [
+        makeDay("2026-04-13", [makeSection({ movements: ["Deadlift", "Pull-ups"] })]),
+        makeDay("2026-04-14", [makeSection({ movements: ["Back Squat", "Push-ups"] })]),
+      ];
+      const rules: TemporalRule[] = [{ type: "sequence", movement: "deadlift", movementB: "back squat" }];
+      const violations = checkTemporalRules(days, rules);
+      expect(violations.length).toBe(0);
+    });
+
+    it("passes when movements are not on adjacent days", () => {
+      const days = [
+        makeDay("2026-04-13", [makeSection({ movements: ["Back Squat"] })]),
+        makeDay("2026-04-15", [makeSection({ movements: ["Deadlift"] })]),
+      ];
+      const rules: TemporalRule[] = [{ type: "sequence", movement: "deadlift", movementB: "back squat" }];
+      const violations = checkTemporalRules(days, rules);
+      expect(violations.length).toBe(0);
+    });
+  });
+
+  describe("temporal rules in validateGeneratedWeek integration", () => {
+    it("flags consecutive day violation via full validation pipeline", () => {
+      const days = [
+        makeDay("2026-04-13", [makeSection({ movements: ["Back Squat", "Pull-ups"] })]),
+        makeDay("2026-04-14", [makeSection({ movements: ["Front Squat", "Deadlift"] })]),
+      ];
+      const prefs: ValidationPreferences = {
+        methodology: "crossfit",
+        structureTemplate: ["conditioning"],
+        equipment: [],
+        constraints: "No squatting on consecutive days.",
+        defaultTimeDomains: { conditioning: "8-20 min" },
+      };
+      const result = validateGeneratedWeek(days, prefs);
+      const temporalViolations = result.violations.filter(v => v.type === "temporal");
+      expect(temporalViolations.length).toBeGreaterThan(0);
+      expect(result.valid).toBe(false);
+    });
+
+    it("passes when temporal rules are satisfied", () => {
+      const days = [
+        makeDay("2026-04-13", [makeSection({ movements: ["Back Squat", "Pull-ups"] })]),
+        makeDay("2026-04-14", [makeSection({ movements: ["Deadlift", "Push-ups"] })]),
+        makeDay("2026-04-15", [makeSection({ movements: ["Front Squat", "Row"] })]),
+      ];
+      const prefs: ValidationPreferences = {
+        methodology: "crossfit",
+        structureTemplate: ["conditioning"],
+        equipment: [],
+        constraints: "No squatting on consecutive days.",
+        defaultTimeDomains: { conditioning: "8-20 min" },
+      };
+      const result = validateGeneratedWeek(days, prefs);
+      const temporalViolations = result.violations.filter(v => v.type === "temporal");
+      expect(temporalViolations.length).toBe(0);
+    });
+  });
+
+  describe("formatTemporalRulesForPrompt", () => {
+    it("returns empty string for no rules", () => {
+      expect(formatTemporalRulesForPrompt([])).toBe("");
+    });
+
+    it("formats consecutive rule", () => {
+      const result = formatTemporalRulesForPrompt([{ type: "consecutive", movement: "squatting" }]);
+      expect(result).toContain("TEMPORAL SEQUENCING RULES");
+      expect(result).toContain("squatting");
+      expect(result).toContain("consecutive");
+    });
+
+    it("formats spacing rule", () => {
+      const result = formatTemporalRulesForPrompt([{ type: "spacing", movement: "olympic lifts", minDaysApart: 2 }]);
+      expect(result).toContain("olympic lifts");
+      expect(result).toContain("2 day(s) apart");
+    });
+
+    it("formats sequence rule", () => {
+      const result = formatTemporalRulesForPrompt([{ type: "sequence", movement: "deadlifts", movementB: "heavy squats" }]);
+      expect(result).toContain("deadlifts");
+      expect(result).toContain("heavy squats");
+    });
+  });
+
+  describe("returns < 2 days gracefully", () => {
+    it("returns empty for single day", () => {
+      const days = [makeDay("2026-04-13", [makeSection({ movements: ["Back Squat"] })])];
+      const rules: TemporalRule[] = [{ type: "consecutive", movement: "squat" }];
+      expect(checkTemporalRules(days, rules)).toEqual([]);
+    });
+
+    it("returns empty for empty rules", () => {
+      const days = [
+        makeDay("2026-04-13", [makeSection({ movements: ["Back Squat"] })]),
+        makeDay("2026-04-14", [makeSection({ movements: ["Back Squat"] })]),
+      ];
+      expect(checkTemporalRules(days, [])).toEqual([]);
+    });
   });
 });

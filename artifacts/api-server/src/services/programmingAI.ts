@@ -6,6 +6,8 @@ import {
   validateGeneratedWeek,
   formatViolationsForRetry,
   parseBannedMovements,
+  parseTemporalRules,
+  formatTemporalRulesForPrompt,
   ProgrammingValidationError,
   type ValidationPreferences,
   type ValidationResult,
@@ -147,6 +149,8 @@ function buildMethodologyRules(methodology: string): string {
 
 export function buildSystemPrompt(prefs: GenerationPreferences, history: string): string {
   const bannedMovements = parseBannedMovements(prefs.constraints);
+  const temporalRules = parseTemporalRules(prefs.constraints);
+  const temporalSection = formatTemporalRulesForPrompt(temporalRules);
 
   const equipmentSection = prefs.equipment.length > 0
     ? `EQUIPMENT RULES (HARD CONSTRAINT — STRICTLY ENFORCED):
@@ -178,6 +182,8 @@ ${structureSection}
 ${equipmentSection}
 
 ${constraintSection}
+
+${temporalSection}
 
 TIME DOMAINS (target durations for each section type):
 ${Object.entries(prefs.defaultTimeDomains).map(([k, v]) => `- ${k}: ${v}`).join("\n")}
