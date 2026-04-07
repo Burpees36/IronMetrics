@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { useAuth } from "@workspace/replit-auth-web";
 import { useGym } from "@/store/GymContext";
 import { useGetDashboardStats, useGetMorningBriefing } from "@workspace/api-client-react";
 import { useQuery } from "@tanstack/react-query";
@@ -405,6 +406,7 @@ function FinancialSummaryCard({ gymId }: { gymId: number }) {
 }
 
 export function Dashboard() {
+  const { user } = useAuth();
   const { activeGymId } = useGym();
   const { data: stats, isLoading: statsLoading } = useGetDashboardStats(activeGymId as number, {
     query: { enabled: !!activeGymId }
@@ -465,7 +467,7 @@ export function Dashboard() {
             <p className="text-xs font-mono text-muted-foreground uppercase tracking-wider">Owner Console</p>
           </div>
           <h1 className="text-3xl md:text-4xl font-display font-bold text-foreground mb-2">
-            {getGreeting()}, Boss.
+            {getGreeting()}, {user?.firstName || "Boss"}.
           </h1>
           <p className="text-lg text-muted-foreground max-w-2xl leading-relaxed">
             {briefingSummary ? (
