@@ -89,6 +89,7 @@ export function Members() {
   const urlFilter = urlParams.get("filter");
   const urlIds = urlParams.get("ids");
   const urlSource = urlParams.get("source");
+  const urlPlan = urlParams.get("plan");
   const [idsFilter, setIdsFilter] = useState<string | null>(urlIds);
   const [idsSource, setIdsSource] = useState<string | null>(urlSource);
   const [riskViewActive, setRiskViewActive] = useState(urlFilter === "at-risk");
@@ -104,6 +105,10 @@ export function Members() {
     setIdsFilter(urlIds);
     setIdsSource(urlSource);
   }, [urlIds, urlSource]);
+
+  useEffect(() => {
+    setPlanFilter(urlPlan || "");
+  }, [urlPlan]);
 
   const [addOpen, setAddOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
@@ -128,8 +133,8 @@ export function Members() {
   const [tempStatusFilter, setTempStatusFilter] = useState<string[]>([]);
   const [tempRiskFilter, setTempRiskFilter] = useState<string[]>([]);
   const [riskFilter, setRiskFilter] = useState<string[]>([]);
-  const [planFilter, setPlanFilter] = useState<string>("");
-  const [tempPlanFilter, setTempPlanFilter] = useState<string>("");
+  const [planFilter, setPlanFilter] = useState<string>(urlPlan || "");
+  const [tempPlanFilter, setTempPlanFilter] = useState<string>(urlPlan || "");
 
   const { data: plans } = useListMembershipPlans(activeGymId as number, {
     query: { enabled: !!activeGymId }
@@ -313,6 +318,11 @@ export function Members() {
       setRiskViewActive(false);
     }
     setFilterOpen(false);
+    const params = new URLSearchParams();
+    if (tempPlanFilter) params.set("plan", tempPlanFilter);
+    if (tempRiskFilter.length > 0) params.set("filter", "at-risk");
+    const qs = params.toString();
+    navigate(qs ? `/members?${qs}` : "/members");
   };
 
   const clearFilters = () => {
