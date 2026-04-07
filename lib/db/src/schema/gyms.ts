@@ -71,7 +71,7 @@ export type GymStaff = typeof gymStaffTable.$inferSelect;
 export const gymOnboardingTable = pgTable("gym_onboarding", {
   id: serial("id").primaryKey(),
   gymId: integer("gym_id").notNull().references(() => gymsTable.id).unique(),
-  currentStep: text("current_step").notNull().default("basics"),
+  currentStep: text("current_step").notNull().default("gym_details"),
   completedSteps: text("completed_steps").array().notNull().default([]),
   skippedSteps: text("skipped_steps").array().notNull().default([]),
   isComplete: boolean("is_complete").notNull().default(false),

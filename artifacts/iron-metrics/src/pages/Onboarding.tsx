@@ -6,8 +6,10 @@ import { Check, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { STEPS, apiFetch } from "./onboarding/types";
 import type { StepId, OnboardingState } from "./onboarding/types";
-import { ConnectDataStep } from "./onboarding/ConnectDataStep";
 import { BasicsStep } from "./onboarding/BasicsStep";
+import { ConnectBillingStep } from "./onboarding/ConnectBillingStep";
+import { ConnectDataStep } from "./onboarding/ConnectDataStep";
+import { EmailBrandingStep } from "./onboarding/EmailBrandingStep";
 import { FinishStep } from "./onboarding/FinishStep";
 
 export function Onboarding() {
@@ -16,7 +18,7 @@ export function Onboarding() {
   const { toast } = useToast();
   const [loading, setLoading] = useState(true);
   const [state, setState] = useState<OnboardingState | null>(null);
-  const [activeStep, setActiveStep] = useState<StepId>("connect_data");
+  const [activeStep, setActiveStep] = useState<StepId>("gym_details");
 
   const fetchOnboarding = useCallback(async () => {
     if (!activeGymId) return;
@@ -30,7 +32,7 @@ export function Onboarding() {
         if (validStepIds.includes(data.currentStep)) {
           setActiveStep(data.currentStep as StepId);
         } else {
-          setActiveStep("connect_data");
+          setActiveStep("gym_details");
         }
       }
     } catch (e) {
@@ -80,6 +82,14 @@ export function Onboarding() {
     if (idx > 0) setActiveStep(STEPS[idx - 1].id);
   };
 
+  const handleGoToStep = (stepId: string) => {
+    const validStepIds = STEPS.map((s) => s.id) as readonly string[];
+    if (validStepIds.includes(stepId)) {
+      setActiveStep(stepId as StepId);
+      updateStep("go_to_step", stepId);
+    }
+  };
+
   const handleFinish = async () => {
     const ok = await updateStep("finish");
     if (!ok) return;
@@ -115,7 +125,7 @@ export function Onboarding() {
               Set Up Your Gym
             </h1>
             <p className="text-muted-foreground">
-              Connect your data and you'll have insights in minutes.
+              Complete these steps and you'll be ready to run your business.
             </p>
           </motion.div>
         </div>
@@ -175,21 +185,39 @@ export function Onboarding() {
             exit={{ opacity: 0, x: -20 }}
             transition={{ duration: 0.2 }}
           >
-            {activeStep === "connect_data" && (
-              <ConnectDataStep
-                gymId={activeGymId}
-                onComplete={() => handleComplete("connect_data")}
-                onSkip={() => handleSkip("connect_data")}
-                isComplete={isStepComplete("connect_data")}
-              />
-            )}
             {activeStep === "gym_details" && (
               <BasicsStep
                 gymId={activeGymId}
                 onComplete={() => handleComplete("gym_details")}
                 onSkip={() => handleSkip("gym_details")}
-                onBack={handleBack}
                 isComplete={isStepComplete("gym_details")}
+              />
+            )}
+            {activeStep === "connect_billing" && (
+              <ConnectBillingStep
+                gymId={activeGymId}
+                onComplete={() => handleComplete("connect_billing")}
+                onSkip={() => handleSkip("connect_billing")}
+                onBack={handleBack}
+                isComplete={isStepComplete("connect_billing")}
+              />
+            )}
+            {activeStep === "connect_data" && (
+              <ConnectDataStep
+                gymId={activeGymId}
+                onComplete={() => handleComplete("connect_data")}
+                onSkip={() => handleSkip("connect_data")}
+                onBack={handleBack}
+                isComplete={isStepComplete("connect_data")}
+              />
+            )}
+            {activeStep === "email_branding" && (
+              <EmailBrandingStep
+                gymId={activeGymId}
+                onComplete={() => handleComplete("email_branding")}
+                onSkip={() => handleSkip("email_branding")}
+                onBack={handleBack}
+                isComplete={isStepComplete("email_branding")}
               />
             )}
             {activeStep === "finish" && (
@@ -197,6 +225,7 @@ export function Onboarding() {
                 state={state}
                 onFinish={handleFinish}
                 onBack={handleBack}
+                onGoToStep={handleGoToStep}
               />
             )}
           </motion.div>

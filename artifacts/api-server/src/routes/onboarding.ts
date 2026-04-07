@@ -9,7 +9,7 @@ import {
 
 const router: IRouter = Router();
 
-const STEPS = ["connect_data", "gym_details", "finish"] as const;
+const STEPS = ["gym_details", "connect_billing", "connect_data", "email_branding", "finish"] as const;
 type StepId = (typeof STEPS)[number];
 const VALID_STEPS = new Set<string>(STEPS);
 
@@ -33,7 +33,7 @@ async function getOrCreateOnboarding(gymId: number) {
     try {
       [onboarding] = await db
         .insert(gymOnboardingTable)
-        .values({ gymId })
+        .values({ gymId, currentStep: "gym_details" })
         .onConflictDoNothing()
         .returning();
     } catch (_) {}
@@ -61,15 +61,26 @@ async function computeStepStatus(gymId: number) {
 
   const gymDetailsComplete = !!(gym && gym.name && gym.timezone);
 
+  const connectBillingComplete = !!(gym && (
+    gym.isBetaAccess ||
+    (gym.subscriptionTier !== "none" && gym.platformSubscriptionId)
+  ));
+
+  const emailBrandingComplete = !!(gym && gym.fromEmail);
+
   return {
     stepStatus: {
-      connect_data: connectDataComplete,
       gym_details: gymDetailsComplete,
+      connect_billing: connectBillingComplete,
+      connect_data: connectDataComplete,
+      email_branding: emailBrandingComplete,
       finish: false,
     },
     counts: {
       members: membersTotal,
     },
+    gymName: gym?.name || "",
+    gymTimezone: gym?.timezone || "",
   };
 }
 
@@ -80,13 +91,15 @@ router.get("/gyms/:gymId/onboarding", async (req, res): Promise<void> => {
   const onboarding = await getOrCreateOnboarding(gymId);
   if (!onboarding) { res.status(500).json({ error: "Failed to initialize onboarding" }); return; }
 
-  const { stepStatus, counts } = await computeStepStatus(gymId);
+  const { stepStatus, counts, gymName, gymTimezone } = await computeStepStatus(gymId);
 
   res.json({
     ...onboarding,
     stepStatus,
     counts,
     steps: STEPS,
+    gymName,
+    gymTimezone,
   });
 });
 
@@ -138,6 +151,12 @@ router.patch("/gyms/:gymId/onboarding", async (req, res): Promise<void> => {
       .where(eq(gymOnboardingTable.gymId, gymId))
       .returning();
   } else if (action === "finish") {
+    const { stepStatus, gymName, gymTimezone } = await computeStepStatus(gymId);
+    if (!gymName || !gymName.trim() || !gymTimezone || !gymTimezone.trim()) {
+      res.status(400).json({ error: "Gym name and timezone are required before finishing onboarding." });
+      return;
+    }
+
     [onboarding] = await db
       .update(gymOnboardingTable)
       .set({
@@ -152,13 +171,15 @@ router.patch("/gyms/:gymId/onboarding", async (req, res): Promise<void> => {
     return;
   }
 
-  const { stepStatus, counts } = await computeStepStatus(gymId);
+  const { stepStatus, counts, gymName, gymTimezone } = await computeStepStatus(gymId);
 
   res.json({
     ...onboarding,
     stepStatus,
     counts,
     steps: STEPS,
+    gymName,
+    gymTimezone,
   });
 });
 
