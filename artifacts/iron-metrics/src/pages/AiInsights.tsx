@@ -17,6 +17,11 @@ import {
   useUpdateAutopilotSettings,
   getGetAutopilotSettingsQueryKey,
   useGetInterventions,
+  useGetDismissedInterventions,
+  getGetDismissedInterventionsQueryKey,
+  useDismissIntervention,
+  useRestoreIntervention,
+  getGetInterventionsQueryKey,
 } from "@workspace/api-client-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
@@ -992,7 +997,6 @@ export function AiInsights() {
   const [sendingTaskId, setSendingTaskId] = useState<number | null>(null);
   const [historyAutoFilter, setHistoryAutoFilter] = useState<"all" | "auto" | "manual">("all");
   const [expandedInterventions, setExpandedInterventions] = useState<Set<string>>(new Set());
-  const [dismissedInterventions, setDismissedInterventions] = useState<Set<string>>(new Set());
   const [showDismissed, setShowDismissed] = useState(false);
   const [trendWindow, setTrendWindow] = useState<"30d" | "90d" | "all">("90d");
   const [showRsiTrend, setShowRsiTrend] = useState(false);
@@ -1003,6 +1007,28 @@ export function AiInsights() {
 
   const { data: interventions, isLoading: interventionsLoading, isError: interventionsError } = useGetInterventions(activeGymId as number, {
     query: { enabled: !!activeGymId, staleTime: 30000 }
+  });
+
+  const { data: dismissedInterventionIds } = useGetDismissedInterventions(activeGymId as number, {
+    query: { enabled: !!activeGymId }
+  });
+
+  const dismissedInterventions = useMemo(() => new Set(dismissedInterventionIds ?? []), [dismissedInterventionIds]);
+
+  const dismissMutation = useDismissIntervention({
+    mutation: {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: getGetDismissedInterventionsQueryKey(activeGymId as number) });
+      },
+    },
+  });
+
+  const restoreMutation = useRestoreIntervention({
+    mutation: {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: getGetDismissedInterventionsQueryKey(activeGymId as number) });
+      },
+    },
   });
 
   const { data: rsiHistory } = useRsiHistory(activeGymId, trendWindow);
@@ -1125,8 +1151,14 @@ export function AiInsights() {
     mutation: {
       onSuccess: (data) => {
         queryClient.invalidateQueries({ queryKey });
-        const created = (data as unknown as Record<string, unknown>).created as number;
-        toast({ title: "Tasks Generated", description: `${created} new task${created !== 1 ? 's' : ''} created from gym data.` });
+        queryClient.invalidateQueries({ queryKey: getGetInterventionsQueryKey(activeGymId as number) });
+        const result = data as unknown as Record<string, unknown>;
+        const created = result.created as number;
+        if (created === 0 && result.reason) {
+          toast({ title: "Scan Complete", description: result.reason as string });
+        } else {
+          toast({ title: "Tasks Generated", description: `${created} new task${created !== 1 ? 's' : ''} created from gym data.` });
+        }
       },
       onError: () => {
         toast({ title: "Error", description: "Failed to generate tasks.", variant: "destructive" });
@@ -1198,25 +1230,21 @@ export function AiInsights() {
   }, [interventions, dismissedInterventions]);
 
   const handleDismissIntervention = useCallback((id: string) => {
-    setDismissedInterventions(prev => new Set(prev).add(id));
+    dismissMutation.mutate({ gymId: activeGymId as number, data: { interventionId: id } });
     const intervention = (interventions as Intervention[])?.find(i => i.id === id);
     toast({
       title: "Recommendation dismissed",
       description: intervention ? `"${intervention.title}" moved to dismissed.` : "Item dismissed.",
       action: (
         <button
-          onClick={() => setDismissedInterventions(prev => {
-            const next = new Set(prev);
-            next.delete(id);
-            return next;
-          })}
+          onClick={() => restoreMutation.mutate({ gymId: activeGymId as number, interventionId: id })}
           className="flex items-center gap-1 text-xs font-medium text-primary hover:text-primary/80"
         >
           <Undo2 className="h-3 w-3" /> Undo
         </button>
       ),
     });
-  }, [interventions, toast]);
+  }, [interventions, toast, dismissMutation, restoreMutation, activeGymId]);
 
   const handleToggleExpand = useCallback((id: string) => {
     setExpandedInterventions(prev => {
@@ -1491,11 +1519,7 @@ export function AiInsights() {
                               <span className="text-sm text-foreground">{intervention.title}</span>
                             </div>
                             <button
-                              onClick={() => setDismissedInterventions(prev => {
-                                const next = new Set(prev);
-                                next.delete(intervention.id);
-                                return next;
-                              })}
+                              onClick={() => restoreMutation.mutate({ gymId: activeGymId as number, interventionId: intervention.id })}
                               className="text-xs text-primary hover:text-primary/80 font-medium flex items-center gap-1"
                             >
                               <Undo2 className="h-3 w-3" /> Restore

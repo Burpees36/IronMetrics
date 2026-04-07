@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { eq, and, count, sql, gte, desc, asc } from "drizzle-orm";
-import { db, membersTable, subscriptionsTable, attendanceTable, leadsTable, classesTable, rsiSnapshotsTable, benchmarksTable, billingAuditLogsTable } from "@workspace/db";
+import { db, membersTable, subscriptionsTable, attendanceTable, leadsTable, classesTable, rsiSnapshotsTable, benchmarksTable, billingAuditLogsTable, dismissedInterventionsTable } from "@workspace/db";
 import { computeRSI } from "./computations";
 import { getGymMetrics, getRiskProfiles, getInterventions, computeRevenueForecast } from "./metrics";
 import { computeBlendedMRR, computeBlendedEngagement, isActiveBillableMember } from "../../blendedMetrics";
@@ -157,6 +157,59 @@ router.get("/gyms/:gymId/intelligence/interventions", async (req, res): Promise<
   } catch (err) {
     console.error("[intelligence/interventions] Failed to generate interventions:", err);
     res.status(500).json({ error: "Failed to generate interventions. Please try again." });
+  }
+});
+
+router.get("/gyms/:gymId/intelligence/dismissed-interventions", async (req, res): Promise<void> => {
+  const gymId = parseGymId(req.params);
+  if (!gymId) { res.status(400).json({ error: "Invalid gym ID" }); return; }
+
+  try {
+    const rows = await db.select({ interventionId: dismissedInterventionsTable.interventionId })
+      .from(dismissedInterventionsTable)
+      .where(eq(dismissedInterventionsTable.gymId, gymId));
+    res.json(rows.map(r => r.interventionId));
+  } catch (err) {
+    console.error("[intelligence/dismissed-interventions] Failed to fetch:", err);
+    res.status(500).json({ error: "Failed to fetch dismissed interventions." });
+  }
+});
+
+router.post("/gyms/:gymId/intelligence/dismissed-interventions", async (req, res): Promise<void> => {
+  const gymId = parseGymId(req.params);
+  if (!gymId) { res.status(400).json({ error: "Invalid gym ID" }); return; }
+
+  const { interventionId } = req.body;
+  if (!interventionId || typeof interventionId !== "string") {
+    res.status(400).json({ error: "interventionId is required" });
+    return;
+  }
+
+  try {
+    await db.insert(dismissedInterventionsTable)
+      .values({ gymId, interventionId })
+      .onConflictDoNothing();
+    res.json({ success: true });
+  } catch (err) {
+    console.error("[intelligence/dismissed-interventions] Failed to dismiss:", err);
+    res.status(500).json({ error: "Failed to dismiss intervention." });
+  }
+});
+
+router.delete("/gyms/:gymId/intelligence/dismissed-interventions/:interventionId", async (req, res): Promise<void> => {
+  const gymId = parseGymId(req.params);
+  if (!gymId) { res.status(400).json({ error: "Invalid gym ID" }); return; }
+
+  const interventionId = req.params.interventionId;
+  if (!interventionId) { res.status(400).json({ error: "interventionId is required" }); return; }
+
+  try {
+    await db.delete(dismissedInterventionsTable)
+      .where(and(eq(dismissedInterventionsTable.gymId, gymId), eq(dismissedInterventionsTable.interventionId, interventionId)));
+    res.json({ success: true });
+  } catch (err) {
+    console.error("[intelligence/dismissed-interventions] Failed to restore:", err);
+    res.status(500).json({ error: "Failed to restore intervention." });
   }
 });
 

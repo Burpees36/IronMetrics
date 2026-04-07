@@ -3159,6 +3159,85 @@ paths:
                 items:
                   $ref: "#/components/schemas/Intervention"
 
+  /gyms/{gymId}/intelligence/dismissed-interventions:
+    get:
+      operationId: getDismissedInterventions
+      tags: [intelligence]
+      summary: Get dismissed intervention IDs for a gym
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of dismissed intervention IDs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string
+    post:
+      operationId: dismissIntervention
+      tags: [intelligence]
+      summary: Dismiss a recommended intervention
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                interventionId:
+                  type: string
+              required:
+                - interventionId
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+
+  /gyms/{gymId}/intelligence/dismissed-interventions/{interventionId}:
+    delete:
+      operationId: restoreIntervention
+      tags: [intelligence]
+      summary: Restore a previously dismissed intervention
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: interventionId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+
   /gyms/{gymId}/intelligence/cohorts:
     get:
       operationId: getCohortAnalysis
@@ -7044,6 +7123,8 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/AiTask"
+        reason:
+          type: string
       required:
         - created
         - tasks

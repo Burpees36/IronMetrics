@@ -514,7 +514,12 @@ export async function generateAiTasks(gymId: number): Promise<{ created: number;
   }
 
   if (allCandidates.length === 0) {
-    return { created: 0, tasks: [] };
+    const checkedCategories = ["at-risk member outreach", "stale lead follow-up", "failed payment recovery"];
+    return {
+      created: 0,
+      tasks: [],
+      reason: `Checked ${checkedCategories.join(", ")} — no new risks detected. Your gym metrics look healthy.`,
+    };
   }
 
   allCandidates.sort((a, b) => (a._sortKey ?? 99) - (b._sortKey ?? 99));
@@ -527,7 +532,11 @@ export async function generateAiTasks(gymId: number): Promise<{ created: number;
   const slotsAvailable = Math.max(0, MAX_PENDING_TASKS - currentPending);
 
   if (slotsAvailable === 0) {
-    return { created: 0, tasks: [] };
+    return {
+      created: 0,
+      tasks: [],
+      reason: `All identified risks already have pending tasks (${currentPending} active). Review or complete existing tasks first.`,
+    };
   }
 
   const toInsert = allCandidates.slice(0, slotsAvailable).map(({ _sortKey, ...task }) => task);

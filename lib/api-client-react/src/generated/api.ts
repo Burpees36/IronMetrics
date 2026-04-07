@@ -12,19 +12,9 @@ import type {
   QueryKey,
   UseMutationOptions,
   UseMutationResult,
-  UseQueryOptions as _UseQueryOptions,
+  UseQueryOptions,
   UseQueryResult,
 } from "@tanstack/react-query";
-
-type UseQueryOptions<
-  TQueryFnData = unknown,
-  TError = unknown,
-  TData = TQueryFnData,
-  TQueryKey extends QueryKey = QueryKey,
-> = Omit<
-  _UseQueryOptions<TQueryFnData, TError, TData, TQueryKey>,
-  "queryKey"
-> & { queryKey?: TQueryKey };
 
 import type {
   AdjustBalanceBody,
@@ -94,6 +84,8 @@ import type {
   DashboardStats,
   DisableTax200,
   DiscountCode,
+  DismissIntervention200,
+  DismissInterventionBody,
   DuplicateProgrammingDayBody,
   EmailCheckResult,
   EmailStatusResponse,
@@ -163,6 +155,7 @@ import type {
   RemoveDiscountFromSubscription200,
   RemovePaymentMethod200,
   ReorderSectionsBody,
+  RestoreIntervention200,
   RetentionStabilityIndex,
   RevenueForecast,
   RevenueReport,
@@ -11102,6 +11095,273 @@ export function useGetInterventions<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * @summary Get dismissed intervention IDs for a gym
+ */
+export const getGetDismissedInterventionsUrl = (gymId: number) => {
+  return `/api/gyms/${gymId}/intelligence/dismissed-interventions`;
+};
+
+export const getDismissedInterventions = async (
+  gymId: number,
+  options?: RequestInit,
+): Promise<string[]> => {
+  return customFetch<string[]>(getGetDismissedInterventionsUrl(gymId), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetDismissedInterventionsQueryKey = (gymId: number) => {
+  return [`/api/gyms/${gymId}/intelligence/dismissed-interventions`] as const;
+};
+
+export const getGetDismissedInterventionsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getDismissedInterventions>>,
+  TError = ErrorType<unknown>,
+>(
+  gymId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getDismissedInterventions>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetDismissedInterventionsQueryKey(gymId);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getDismissedInterventions>>
+  > = ({ signal }) =>
+    getDismissedInterventions(gymId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!gymId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getDismissedInterventions>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetDismissedInterventionsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getDismissedInterventions>>
+>;
+export type GetDismissedInterventionsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get dismissed intervention IDs for a gym
+ */
+
+export function useGetDismissedInterventions<
+  TData = Awaited<ReturnType<typeof getDismissedInterventions>>,
+  TError = ErrorType<unknown>,
+>(
+  gymId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getDismissedInterventions>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetDismissedInterventionsQueryOptions(gymId, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Dismiss a recommended intervention
+ */
+export const getDismissInterventionUrl = (gymId: number) => {
+  return `/api/gyms/${gymId}/intelligence/dismissed-interventions`;
+};
+
+export const dismissIntervention = async (
+  gymId: number,
+  dismissInterventionBody: DismissInterventionBody,
+  options?: RequestInit,
+): Promise<DismissIntervention200> => {
+  return customFetch<DismissIntervention200>(getDismissInterventionUrl(gymId), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(dismissInterventionBody),
+  });
+};
+
+export const getDismissInterventionMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof dismissIntervention>>,
+    TError,
+    { gymId: number; data: BodyType<DismissInterventionBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof dismissIntervention>>,
+  TError,
+  { gymId: number; data: BodyType<DismissInterventionBody> },
+  TContext
+> => {
+  const mutationKey = ["dismissIntervention"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof dismissIntervention>>,
+    { gymId: number; data: BodyType<DismissInterventionBody> }
+  > = (props) => {
+    const { gymId, data } = props ?? {};
+
+    return dismissIntervention(gymId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DismissInterventionMutationResult = NonNullable<
+  Awaited<ReturnType<typeof dismissIntervention>>
+>;
+export type DismissInterventionMutationBody = BodyType<DismissInterventionBody>;
+export type DismissInterventionMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Dismiss a recommended intervention
+ */
+export const useDismissIntervention = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof dismissIntervention>>,
+    TError,
+    { gymId: number; data: BodyType<DismissInterventionBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof dismissIntervention>>,
+  TError,
+  { gymId: number; data: BodyType<DismissInterventionBody> },
+  TContext
+> => {
+  return useMutation(getDismissInterventionMutationOptions(options));
+};
+
+/**
+ * @summary Restore a previously dismissed intervention
+ */
+export const getRestoreInterventionUrl = (
+  gymId: number,
+  interventionId: string,
+) => {
+  return `/api/gyms/${gymId}/intelligence/dismissed-interventions/${interventionId}`;
+};
+
+export const restoreIntervention = async (
+  gymId: number,
+  interventionId: string,
+  options?: RequestInit,
+): Promise<RestoreIntervention200> => {
+  return customFetch<RestoreIntervention200>(
+    getRestoreInterventionUrl(gymId, interventionId),
+    {
+      ...options,
+      method: "DELETE",
+    },
+  );
+};
+
+export const getRestoreInterventionMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof restoreIntervention>>,
+    TError,
+    { gymId: number; interventionId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof restoreIntervention>>,
+  TError,
+  { gymId: number; interventionId: string },
+  TContext
+> => {
+  const mutationKey = ["restoreIntervention"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof restoreIntervention>>,
+    { gymId: number; interventionId: string }
+  > = (props) => {
+    const { gymId, interventionId } = props ?? {};
+
+    return restoreIntervention(gymId, interventionId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RestoreInterventionMutationResult = NonNullable<
+  Awaited<ReturnType<typeof restoreIntervention>>
+>;
+
+export type RestoreInterventionMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Restore a previously dismissed intervention
+ */
+export const useRestoreIntervention = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof restoreIntervention>>,
+    TError,
+    { gymId: number; interventionId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof restoreIntervention>>,
+  TError,
+  { gymId: number; interventionId: string },
+  TContext
+> => {
+  return useMutation(getRestoreInterventionMutationOptions(options));
+};
 
 /**
  * @summary Get cohort analysis

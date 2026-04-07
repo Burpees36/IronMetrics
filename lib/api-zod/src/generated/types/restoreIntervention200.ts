@@ -5,10 +5,7 @@
  * Iron Metrics Gym Management Platform API
  * OpenAPI spec version: 0.1.0
  */
-import type { AiTask } from "./aiTask";
 
-export interface GenerateAiTasksResponse {
-  created: number;
-  tasks: AiTask[];
-  reason?: string;
-}
+export type RestoreIntervention200 = {
+  success?: boolean;
+};

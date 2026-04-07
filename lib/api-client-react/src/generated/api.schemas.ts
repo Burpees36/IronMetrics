@@ -1731,6 +1731,7 @@ export interface UpdateAiTaskBody {
 export interface GenerateAiTasksResponse {
   created: number;
   tasks: AiTask[];
+  reason?: string;
 }
 
 export interface SendEmailResponse {
@@ -2674,6 +2675,18 @@ export const GetRsiHistoryWindow = {
   "90d": "90d",
   all: "all",
 } as const;
+
+export type DismissInterventionBody = {
+  interventionId: string;
+};
+
+export type DismissIntervention200 = {
+  success?: boolean;
+};
+
+export type RestoreIntervention200 = {
+  success?: boolean;
+};
 
 export type SubmitLeadCapture201 = {
   message?: string;

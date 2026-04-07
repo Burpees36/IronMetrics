@@ -3260,6 +3260,45 @@ export const GetInterventionsResponseItem = zod.object({
 export const GetInterventionsResponse = zod.array(GetInterventionsResponseItem);
 
 /**
+ * @summary Get dismissed intervention IDs for a gym
+ */
+export const GetDismissedInterventionsParams = zod.object({
+  gymId: zod.coerce.number(),
+});
+
+export const GetDismissedInterventionsResponseItem = zod.string();
+export const GetDismissedInterventionsResponse = zod.array(
+  GetDismissedInterventionsResponseItem,
+);
+
+/**
+ * @summary Dismiss a recommended intervention
+ */
+export const DismissInterventionParams = zod.object({
+  gymId: zod.coerce.number(),
+});
+
+export const DismissInterventionBody = zod.object({
+  interventionId: zod.string(),
+});
+
+export const DismissInterventionResponse = zod.object({
+  success: zod.boolean().optional(),
+});
+
+/**
+ * @summary Restore a previously dismissed intervention
+ */
+export const RestoreInterventionParams = zod.object({
+  gymId: zod.coerce.number(),
+  interventionId: zod.coerce.string(),
+});
+
+export const RestoreInterventionResponse = zod.object({
+  success: zod.boolean().optional(),
+});
+
+/**
  * @summary Get cohort analysis
  */
 export const GetCohortAnalysisParams = zod.object({
@@ -3521,6 +3560,7 @@ export const GenerateAiTasksResponse = zod.object({
       createdAt: zod.date(),
     }),
   ),
+  reason: zod.string().optional(),
 });
 
 /**

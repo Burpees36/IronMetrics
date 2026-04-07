@@ -1,4 +1,4 @@
-import { pgTable, text, serial, timestamp, integer, numeric, boolean } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, timestamp, integer, numeric, boolean, uniqueIndex } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { gymsTable } from "./gyms";
@@ -67,3 +67,14 @@ export const aiOperatorSettingsTable = pgTable("ai_operator_settings", {
 export const insertAiOperatorSettingsSchema = createInsertSchema(aiOperatorSettingsTable).omit({ id: true, createdAt: true, updatedAt: true });
 export type InsertAiOperatorSettings = z.infer<typeof insertAiOperatorSettingsSchema>;
 export type AiOperatorSettings = typeof aiOperatorSettingsTable.$inferSelect;
+
+export const dismissedInterventionsTable = pgTable("dismissed_interventions", {
+  id: serial("id").primaryKey(),
+  gymId: integer("gym_id").notNull().references(() => gymsTable.id),
+  interventionId: text("intervention_id").notNull(),
+  dismissedAt: timestamp("dismissed_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("dismissed_interventions_gym_intervention_idx").on(table.gymId, table.interventionId),
+]);
+
+export type DismissedIntervention = typeof dismissedInterventionsTable.$inferSelect;
