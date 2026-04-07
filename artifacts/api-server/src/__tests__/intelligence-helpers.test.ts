@@ -4,6 +4,8 @@ let mockMembers: any[] = [];
 let mockSubscriptions: any[] = [];
 let mockAttendance: any[] = [];
 let mockLeads: any[] = [];
+let mockLearningStats: any[] = [];
+let mockClasses: any[] = [];
 
 vi.mock("drizzle-orm", () => ({
   eq: (left: any, right: any) => ({ _type: "eq", left, right }),
@@ -14,6 +16,7 @@ vi.mock("drizzle-orm", () => ({
   count: () => ({ _type: "count" }),
   sql: Object.assign((() => ({})) as any, { raw: () => ({}) }),
   notInArray: (left: any, values: any[]) => ({ _type: "notInArray", left, values }),
+  inArray: (left: any, values: any[]) => ({ _type: "inArray", left, values }),
 }));
 
 vi.mock("@workspace/db", () => {
@@ -48,7 +51,9 @@ vi.mock("@workspace/db", () => {
               let data = tn === "members" ? mockMembers :
                          tn === "subscriptions" ? mockSubscriptions :
                          tn === "attendance" ? mockAttendance :
-                         tn === "leads" ? mockLeads : [];
+                         tn === "leads" ? mockLeads :
+                         tn === "recommendation_learning_stats" ? mockLearningStats :
+                         tn === "classes" ? mockClasses : [];
               const filtered = data.filter(r => matchesCondition(r, cond));
               if (fields && fields.count) {
                 resolve([{ count: filtered.length }]);
@@ -70,6 +75,8 @@ vi.mock("@workspace/db", () => {
     subscriptionsTable: makeTable("subscriptions"),
     attendanceTable: makeTable("attendance"),
     leadsTable: makeTable("leads"),
+    recommendationLearningStatsTable: makeTable("recommendation_learning_stats"),
+    classesTable: makeTable("classes"),
   };
 });
 
@@ -81,6 +88,8 @@ describe("Intelligence helper functions (DB integration)", () => {
     mockSubscriptions = [];
     mockAttendance = [];
     mockLeads = [];
+    mockLearningStats = [];
+    mockClasses = [];
   });
 
   describe("getGymMetrics", () => {
@@ -143,11 +152,11 @@ describe("Intelligence helper functions (DB integration)", () => {
   });
 
   describe("getInterventions", () => {
-    it("returns intervention recommendations", async () => {
+    it("returns intervention recommendations for at-risk members", async () => {
       mockMembers = [
-        { id: 1, gymId: 1, status: "active", riskTier: "critical" },
-        { id: 2, gymId: 1, status: "active", riskTier: "high" },
-        { id: 3, gymId: 1, status: "active", riskTier: "low" },
+        { id: 1, gymId: 1, status: "active", riskTier: "critical", monthlyRevenue: "100" },
+        { id: 2, gymId: 1, status: "active", riskTier: "high", monthlyRevenue: "150" },
+        { id: 3, gymId: 1, status: "active", riskTier: "low", monthlyRevenue: "120" },
       ];
 
       const interventions = await getInterventions(1);
@@ -161,11 +170,32 @@ describe("Intelligence helper functions (DB integration)", () => {
         expect(intervention).toHaveProperty("impact");
         expect(intervention).toHaveProperty("actions");
       }
+      const hasRetention = interventions.some((i: any) => i.category === "retention");
+      expect(hasRetention).toBe(true);
     });
 
-    it("returns interventions even with no at-risk members", async () => {
+    it("returns empty array when gym has no actionable data", async () => {
       const interventions = await getInterventions(999);
       expect(Array.isArray(interventions)).toBe(true);
+      expect(interventions.length).toBe(0);
+    });
+
+    it("returns interventions sorted by score descending", async () => {
+      mockMembers = [
+        { id: 1, gymId: 1, status: "active", riskTier: "critical", monthlyRevenue: "200" },
+        { id: 2, gymId: 1, status: "active", riskTier: "high", monthlyRevenue: "150" },
+      ];
+      mockSubscriptions = [
+        { id: 1, gymId: 1, status: "past_due", memberId: 1, amount: "200" },
+      ];
+      mockLeads = [
+        { id: 1, gymId: 1, stage: "new", isStale: false },
+      ];
+
+      const interventions = await getInterventions(1);
+      for (let i = 1; i < interventions.length; i++) {
+        expect((interventions as any)[i - 1].score).toBeGreaterThanOrEqual((interventions as any)[i].score);
+      }
     });
   });
 });

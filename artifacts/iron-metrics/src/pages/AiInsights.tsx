@@ -81,6 +81,7 @@ const CATEGORY_ROUTE_MAP: Record<string, { route: string; label: string }> = {
   pricing: { route: "/billing", label: "Billing" },
   coaching: { route: "/members", label: "Members" },
   engagement: { route: "/retention", label: "Retention" },
+  winback: { route: "/retention", label: "Retention" },
 };
 
 const CATEGORY_CONFIG: Record<string, { icon: React.ElementType; color: string; bgColor: string; borderColor: string }> = {
@@ -89,6 +90,8 @@ const CATEGORY_CONFIG: Record<string, { icon: React.ElementType; color: string; 
   onboarding: { icon: UserCheck, color: "text-blue-600", bgColor: "bg-blue-50", borderColor: "border-blue-200" },
   leads: { icon: Target, color: "text-cyan-600", bgColor: "bg-cyan-50", borderColor: "border-cyan-200" },
   campaign: { icon: Megaphone, color: "text-pink-600", bgColor: "bg-pink-50", borderColor: "border-pink-200" },
+  pricing: { icon: DollarSign, color: "text-emerald-600", bgColor: "bg-emerald-50", borderColor: "border-emerald-200" },
+  engagement: { icon: Activity, color: "text-orange-600", bgColor: "bg-orange-50", borderColor: "border-orange-200" },
 };
 
 const URGENCY_CONFIG: Record<string, { label: string; color: string; dotColor: string }> = {
@@ -1440,14 +1443,16 @@ export function AiInsights() {
                   <motion.div
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
-                    className="bg-card border border-border rounded-xl p-8 text-center"
+                    className="bg-card border border-emerald-200 rounded-xl p-8 text-center"
                   >
-                    <CheckCircle2 className="h-10 w-10 text-emerald-500/50 mx-auto mb-3" />
-                    <h3 className="font-semibold text-foreground">All caught up</h3>
-                    <p className="text-sm text-muted-foreground mt-1">
+                    <div className="h-14 w-14 rounded-2xl bg-emerald-50 flex items-center justify-center mx-auto mb-4">
+                      <CheckCircle2 className="h-8 w-8 text-emerald-500" />
+                    </div>
+                    <h3 className="font-semibold text-foreground text-lg">All clear</h3>
+                    <p className="text-sm text-muted-foreground mt-2 max-w-md mx-auto leading-relaxed">
                       {dismissedInterventions.size > 0
-                        ? "All recommendations have been addressed or dismissed."
-                        : "No new recommendations at this time. Run a scan to check for updates."}
+                        ? "All recommendations have been addressed or dismissed. Nice work — your gym is in good shape."
+                        : "Nothing needs your attention right now. Your metrics look healthy — keep doing what you're doing."}
                     </p>
                   </motion.div>
                 )}

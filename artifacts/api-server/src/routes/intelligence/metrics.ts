@@ -2,6 +2,7 @@ import { eq, and, count, sql } from "drizzle-orm";
 import { db, membersTable, subscriptionsTable, leadsTable, invoicesTable } from "@workspace/db";
 import { calculateRiskScore, getRiskTier } from "./computations";
 import { getBlendedGymMetrics, computeBlendedMRR, getMemberRevenueFromMembersTable, activeMemberCondition, isActiveBillableMember } from "../../blendedMetrics";
+export { getInterventionsDynamic } from "./intervention-engine";
 
 export async function getGymMetrics(gymId: number) {
   const blended = await getBlendedGymMetrics(gymId);
@@ -64,100 +65,7 @@ export async function getRiskProfiles(gymId: number) {
   }).sort((a, b) => b.riskScore - a.riskScore);
 }
 
-export async function getInterventions(gymId: number) {
-  const [atRiskResult] = await db.select({ count: count() }).from(membersTable).where(
-    and(eq(membersTable.gymId, gymId), activeMemberCondition(membersTable),
-      sql`(${membersTable.riskTier} = 'critical' OR ${membersTable.riskTier} = 'high')`)
-  );
-  const atRiskCount = Number(atRiskResult?.count ?? 0);
-
-  const [openLeadCount] = await db.select({ count: count() }).from(leadsTable).where(eq(leadsTable.gymId, gymId));
-  const failedSubs = await db.select().from(subscriptionsTable).where(and(eq(subscriptionsTable.gymId, gymId), eq(subscriptionsTable.status, "past_due")));
-
-  const blendedMRR = await computeBlendedMRR(gymId);
-  const avgSubAmount = blendedMRR.activeBillableMembers > 0
-    ? blendedMRR.totalMRR / blendedMRR.activeBillableMembers
-    : 0;
-
-  const atRiskMembers = await db.select().from(membersTable).where(
-    and(eq(membersTable.gymId, gymId), activeMemberCondition(membersTable),
-      sql`(${membersTable.riskTier} = 'critical' OR ${membersTable.riskTier} = 'high')`)
-  );
-  const atRiskSubsByMember = await db.select().from(subscriptionsTable).where(and(eq(subscriptionsTable.gymId, gymId), eq(subscriptionsTable.status, "active")));
-  const subLookup: Record<number, number> = {};
-  for (const s of atRiskSubsByMember) subLookup[s.memberId] = parseFloat(s.amount || "0");
-  const atRiskRevenue = atRiskMembers.reduce((sum, m) => sum + (subLookup[m.id] ?? getMemberRevenueFromMembersTable(m)), 0);
-
-  const interventions = [
-    {
-      id: "int-1",
-      category: "retention",
-      title: "Reach out to at-risk members",
-      description: `${atRiskCount} member${atRiskCount !== 1 ? 's' : ''} show${atRiskCount === 1 ? 's' : ''} elevated risk signals. Personal outreach can reduce churn by 15-25%.`,
-      impact: "high",
-      urgency: "immediate" as const,
-      score: 92,
-      expectedRevenue: Math.round(atRiskRevenue * 100) / 100,
-      affectedMembers: atRiskCount,
-      actions: ["Review risk radar for critical-tier members", "Draft personalized check-in messages", "Schedule 1:1 calls with top at-risk members", "Track response and re-engagement within 7 days"],
-      status: "pending",
-    },
-    {
-      id: "int-2",
-      category: "billing",
-      title: "Recover failed payments",
-      description: `${failedSubs.length} subscription${failedSubs.length !== 1 ? 's' : ''} with payment issues. Prompt follow-up typically recovers 60-80%.`,
-      impact: failedSubs.length > 0 ? "high" : "low",
-      urgency: failedSubs.length > 0 ? "this_week" as const : "this_month" as const,
-      score: failedSubs.length > 0 ? 85 : 30,
-      expectedRevenue: failedSubs.reduce((s, sub) => s + parseFloat(sub.amount || "0"), 0),
-      affectedMembers: failedSubs.length,
-      actions: ["Review dunning report for failed charges", "Send payment update reminders", "Offer alternative payment methods", "Follow up with personal call after 48 hours"],
-      status: "pending",
-    },
-    {
-      id: "int-3",
-      category: "onboarding",
-      title: "Improve first-30-day experience",
-      description: "New member retention in the first 30 days is critical. Structured onboarding increases 90-day retention by 20%.",
-      impact: "medium",
-      urgency: "this_week" as const,
-      score: 78,
-      expectedRevenue: null,
-      affectedMembers: null,
-      actions: ["Create welcome sequence for new members", "Schedule intro sessions within first week", "Assign accountability buddies", "Check in at day 7, 14, and 30"],
-      status: "pending",
-    },
-    {
-      id: "int-4",
-      category: "leads",
-      title: "Follow up on open leads",
-      description: `${Number(openLeadCount?.count ?? 0)} lead${Number(openLeadCount?.count ?? 0) !== 1 ? 's' : ''} in pipeline. Speed to lead matters for conversion.`,
-      impact: "medium",
-      urgency: "this_week" as const,
-      score: 72,
-      expectedRevenue: avgSubAmount > 0 ? Math.round(Number(openLeadCount?.count ?? 0) * avgSubAmount * 100) / 100 : null,
-      affectedMembers: null,
-      actions: ["Review lead pipeline for stale entries", "Send follow-up emails or texts", "Offer free trial or No Sweat Intro", "Remove or archive truly cold leads"],
-      status: "pending",
-    },
-    {
-      id: "int-5",
-      category: "campaign",
-      title: "Launch referral campaign",
-      description: "Member referrals have 3x higher retention than cold leads. A structured referral program can drive consistent growth.",
-      impact: "medium",
-      urgency: "this_month" as const,
-      score: 65,
-      expectedRevenue: null,
-      affectedMembers: null,
-      actions: ["Design referral incentive structure", "Announce to current members", "Create tracking system", "Measure results after 30 days"],
-      status: "pending",
-    },
-  ];
-
-  return interventions;
-}
+export { getInterventionsDynamic as getInterventions } from "./intervention-engine";
 
 export async function computeRevenueForecast(gymId: number, currentMrr: number, churnRate: number, activeSubCount: number) {
   const paidInvoices = await db.select().from(invoicesTable).where(and(eq(invoicesTable.gymId, gymId), eq(invoicesTable.status, "paid")));
