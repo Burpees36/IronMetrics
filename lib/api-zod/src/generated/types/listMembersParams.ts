@@ -11,4 +11,8 @@ export type ListMembersParams = {
   search?: string;
   limit?: number;
   offset?: number;
+  /**
+   * Comma-separated list of member IDs to filter by
+   */
+  ids?: string;
 };

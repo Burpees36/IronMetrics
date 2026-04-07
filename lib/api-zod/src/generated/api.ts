@@ -225,6 +225,10 @@ export const ListMembersQueryParams = zod.object({
   search: zod.coerce.string().optional(),
   limit: zod.coerce.number().optional(),
   offset: zod.coerce.number().optional(),
+  ids: zod.coerce
+    .string()
+    .optional()
+    .describe("Comma-separated list of member IDs to filter by"),
 });
 
 export const ListMembersResponse = zod.object({
@@ -3124,6 +3128,7 @@ export const GetIntelligenceOverviewResponse = zod.object({
       score: zod.number(),
       expectedRevenue: zod.number().nullish(),
       affectedMembers: zod.number().nullish(),
+      affectedMemberIds: zod.array(zod.number()).nullish(),
       actions: zod.array(zod.string()),
       status: zod.enum(["pending", "in_progress", "completed", "dismissed"]),
     }),
@@ -3254,6 +3259,7 @@ export const GetInterventionsResponseItem = zod.object({
   score: zod.number(),
   expectedRevenue: zod.number().nullish(),
   affectedMembers: zod.number().nullish(),
+  affectedMemberIds: zod.array(zod.number()).nullish(),
   actions: zod.array(zod.string()),
   status: zod.enum(["pending", "in_progress", "completed", "dismissed"]),
 });

@@ -22,6 +22,7 @@ export interface Intervention {
   expectedRevenue?: number | null;
   /** @nullable */
   affectedMembers?: number | null;
+  affectedMemberIds?: number[] | null;
   actions: string[];
   status: InterventionStatus;
 }

@@ -15,10 +15,17 @@ router.get("/gyms/:gymId/members", async (req, res): Promise<void> => {
 
   const status = req.query.status as string | undefined;
   const search = req.query.search as string | undefined;
+  const idsParam = req.query.ids as string | undefined;
   const limit = Math.min(parseInt(req.query.limit as string) || 50, 200);
   const offset = parseInt(req.query.offset as string) || 0;
 
   let conditions = [eq(membersTable.gymId, gymId)];
+  if (idsParam) {
+    const ids = idsParam.split(",").map(id => parseInt(id.trim(), 10)).filter(id => !isNaN(id));
+    if (ids.length > 0) {
+      conditions.push(inArray(membersTable.id, ids));
+    }
+  }
   if (status) conditions.push(eq(membersTable.status, status));
   if (search) {
     conditions.push(

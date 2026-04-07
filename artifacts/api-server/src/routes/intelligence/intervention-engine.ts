@@ -12,6 +12,7 @@ interface Intervention {
   score: number;
   expectedRevenue: number | null;
   affectedMembers: number | null;
+  affectedMemberIds?: number[] | null;
   actions: string[];
   status: string;
 }
@@ -405,6 +406,7 @@ const winBackIntervention: InterventionBuilder = (ctx) => {
     score,
     expectedRevenue: recoverableRevenue > 0 ? Math.round(recoverableRevenue * 0.12 * 100) / 100 : null,
     affectedMembers: recentlyCancelled.length,
+    affectedMemberIds: recentlyCancelled.map(m => m.id),
     actions: [
       "Review recently cancelled members for win-back potential",
       "Send a personal 'we miss you' message or call",

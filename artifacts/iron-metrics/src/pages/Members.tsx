@@ -4,7 +4,7 @@ import { useListMembers, useUpdateMember, useAddMemberNote, getListMembersQueryK
 import type { ApiError } from "@workspace/api-client-react/custom-fetch";
 import { useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
-import { Loader2, Search, Plus, Filter, MoreHorizontal, UserCircle, Upload, FileSpreadsheet, ShieldAlert, X as XIcon, ChevronLeft, ChevronRight } from "lucide-react";
+import { Loader2, Search, Plus, Filter, MoreHorizontal, UserCircle, Upload, FileSpreadsheet, ShieldAlert, Users, X as XIcon, ChevronLeft, ChevronRight } from "lucide-react";
 import { ImportMembersDialog } from "@/components/members/ImportMembersDialog";
 import { SyncStatusBanner } from "@/components/members/SyncStatusBanner";
 import { AddMemberWizard } from "@/components/members/AddMemberWizard";
@@ -40,6 +40,7 @@ type MemberFromList = {
   emergencyContactName?: string | null;
   emergencyContactPhone?: string | null;
   waiverSigned?: boolean;
+  updatedAt?: string | null;
 };
 
 function daysSince(dateStr: string | null | undefined): number | null {
@@ -85,6 +86,10 @@ export function Members() {
   const searchString = useSearch();
   const urlParams = new URLSearchParams(searchString);
   const urlFilter = urlParams.get("filter");
+  const urlIds = urlParams.get("ids");
+  const urlSource = urlParams.get("source");
+  const [idsFilter, setIdsFilter] = useState<string | null>(urlIds);
+  const [idsSource, setIdsSource] = useState<string | null>(urlSource);
   const [riskViewActive, setRiskViewActive] = useState(urlFilter === "at-risk");
 
   useEffect(() => {
@@ -93,6 +98,11 @@ export function Members() {
       setStatusFilter(["active"]);
     }
   }, [urlFilter]);
+
+  useEffect(() => {
+    setIdsFilter(urlIds);
+    setIdsSource(urlSource);
+  }, [urlIds, urlSource]);
 
   const [addOpen, setAddOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
@@ -123,8 +133,12 @@ export function Members() {
 
   const filterParams: Record<string, string | number> = {};
   if (search) filterParams.search = search;
+  if (idsFilter) filterParams.ids = idsFilter;
   if (statusFilter.length === 1) filterParams.status = statusFilter[0];
   if (riskViewActive) {
+    filterParams.limit = 200;
+    filterParams.offset = 0;
+  } else if (idsFilter) {
     filterParams.limit = 200;
     filterParams.offset = 0;
   } else {
@@ -297,6 +311,8 @@ export function Members() {
     setStatusFilter([]);
     setRiskFilter([]);
     setRiskViewActive(false);
+    setIdsFilter(null);
+    setIdsSource(null);
     setFilterOpen(false);
     navigate("/members");
   };
@@ -438,6 +454,31 @@ export function Members() {
         </div>
       )}
 
+      {idsFilter && (
+        <div className="flex items-center gap-3 px-4 py-3 bg-primary/5 border border-primary/20 rounded-xl">
+          <Users className="h-5 w-5 text-primary shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-foreground">
+              {displayMembers.length} recently cancelled member{displayMembers.length !== 1 ? "s" : ""} — {idsSource || "Win-back targets"}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Showing members flagged by AI for outreach.
+              {(() => {
+                const totalRev = displayMembers.reduce((sum: number, m: MemberFromList) => sum + (m.monthlyRevenue ? parseFloat(String(m.monthlyRevenue)) : 0), 0);
+                return totalRev > 0 ? ` $${Math.round(totalRev).toLocaleString()}/mo revenue lost.` : "";
+              })()}
+            </p>
+          </div>
+          <button
+            onClick={() => { setIdsFilter(null); setIdsSource(null); navigate("/members"); }}
+            className="p-1.5 hover:bg-primary/10 rounded-lg transition-colors"
+            aria-label="Clear member filter"
+          >
+            <XIcon className="h-4 w-4 text-muted-foreground" />
+          </button>
+        </div>
+      )}
+
       <div className="flex-1 bg-card border border-border rounded-2xl shadow-sm overflow-hidden flex flex-col">
         {isLoading && !data ? (
           <div className="flex-1 flex items-center justify-center">
@@ -477,7 +518,22 @@ export function Members() {
                         </span>
                       ) : null}
                     </div>
-                    {riskViewActive && member.riskTier && (
+                    {idsFilter && (
+                      <div className="flex items-center gap-3 mt-1.5 text-[10px]">
+                        {member.updatedAt && (
+                          <span className="text-muted-foreground">
+                            Cancelled {new Date(member.updatedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                          </span>
+                        )}
+                        {member.membershipType && (
+                          <span className="text-muted-foreground">{member.membershipType}</span>
+                        )}
+                        {member.monthlyRevenue ? (
+                          <span className="font-semibold text-destructive">${parseFloat(String(member.monthlyRevenue)).toFixed(0)}/mo lost</span>
+                        ) : null}
+                      </div>
+                    )}
+                    {riskViewActive && !idsFilter && member.riskTier && (
                       <div className="flex items-center gap-3 mt-1.5 text-[10px]">
                         <div className="flex items-center gap-1.5">
                           <div className="w-10 h-1.5 bg-muted rounded-full overflow-hidden">
@@ -505,7 +561,7 @@ export function Members() {
               </motion.div>
             ))}
             {displayMembers.length === 0 && data && (
-              <EmptyMemberState hasSearch={!!search || statusFilter.length > 0 || riskViewActive} onImport={() => setImportOpen(true)} onAdd={() => setAddOpen(true)} />
+              <EmptyMemberState hasSearch={!!search || statusFilter.length > 0 || riskViewActive || !!idsFilter} onImport={() => setImportOpen(true)} onAdd={() => setAddOpen(true)} />
             )}
           </div>
         ) : (
@@ -515,7 +571,13 @@ export function Members() {
                 <tr>
                   <th className="px-6 py-4 font-semibold">Member</th>
                   <th className="px-6 py-4 font-semibold">Status</th>
-                  {riskViewActive ? (
+                  {idsFilter ? (
+                    <>
+                      <th className="px-6 py-4 font-semibold">Cancelled</th>
+                      <th className="px-6 py-4 font-semibold">Plan</th>
+                      <th className="px-6 py-4 font-semibold">Revenue Lost</th>
+                    </>
+                  ) : riskViewActive ? (
                     <>
                       <th className="px-6 py-4 font-semibold">Risk</th>
                       <th className="px-6 py-4 font-semibold">Last Visit</th>
@@ -560,7 +622,29 @@ export function Members() {
                         {member.status.charAt(0).toUpperCase() + member.status.slice(1)}
                       </span>
                     </td>
-                    {riskViewActive ? (
+                    {idsFilter ? (
+                      <>
+                        <td className="px-6 py-4">
+                          {member.updatedAt ? (
+                            <span className="text-xs text-foreground">
+                              {new Date(member.updatedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                              {(() => {
+                                const days = daysSince(member.updatedAt);
+                                return days !== null ? <span className="text-muted-foreground ml-1">({days}d ago)</span> : null;
+                              })()}
+                            </span>
+                          ) : <span className="text-muted-foreground">-</span>}
+                        </td>
+                        <td className="px-6 py-4 text-muted-foreground">
+                          {member.membershipType || "—"}
+                        </td>
+                        <td className="px-6 py-4">
+                          {member.monthlyRevenue ? (
+                            <span className="text-xs font-semibold text-destructive">${parseFloat(String(member.monthlyRevenue)).toFixed(0)}/mo</span>
+                          ) : <span className="text-muted-foreground">-</span>}
+                        </td>
+                      </>
+                    ) : riskViewActive ? (
                       <>
                         <td className="px-6 py-4">
                           {member.riskTier ? (
@@ -620,8 +704,8 @@ export function Members() {
                 ))}
                 {displayMembers.length === 0 && data && (
                   <tr>
-                    <td colSpan={riskViewActive ? 6 : 5}>
-                      <EmptyMemberState hasSearch={!!search || statusFilter.length > 0 || riskViewActive} onImport={() => setImportOpen(true)} onAdd={() => setAddOpen(true)} />
+                    <td colSpan={idsFilter || riskViewActive ? 6 : 5}>
+                      <EmptyMemberState hasSearch={!!search || statusFilter.length > 0 || riskViewActive || !!idsFilter} onImport={() => setImportOpen(true)} onAdd={() => setAddOpen(true)} />
                     </td>
                   </tr>
                 )}
@@ -631,8 +715,8 @@ export function Members() {
         )}
         {data && (
           <div className="p-3 md:p-4 border-t border-border bg-muted/10 text-xs text-muted-foreground flex justify-between items-center shrink-0">
-            <span>Showing {riskViewActive ? `${displayMembers.length} at-risk of ` : ""}{Math.min((currentPage - 1) * PAGE_SIZE + 1, data.total)}–{Math.min(currentPage * PAGE_SIZE, data.total)} of {data.total} members</span>
-            {totalPages > 1 && !riskViewActive && (
+            <span>{idsFilter ? `Showing ${data.total} filtered member${data.total !== 1 ? "s" : ""}` : riskViewActive ? `Showing ${displayMembers.length} at-risk of ${data.total} members` : `Showing ${Math.min((currentPage - 1) * PAGE_SIZE + 1, data.total)}–${Math.min(currentPage * PAGE_SIZE, data.total)} of ${data.total} members`}</span>
+            {totalPages > 1 && !riskViewActive && !idsFilter && (
               <div className="flex items-center gap-1">
                 <button
                   onClick={() => setCurrentPage(p => Math.max(1, p - 1))}

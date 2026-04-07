@@ -1450,6 +1450,7 @@ export interface Intervention {
   expectedRevenue?: number | null;
   /** @nullable */
   affectedMembers?: number | null;
+  affectedMemberIds?: number[] | null;
   actions: string[];
   status: InterventionStatus;
 }
@@ -2461,6 +2462,10 @@ export type ListMembersParams = {
   search?: string;
   limit?: number;
   offset?: number;
+  /**
+   * Comma-separated list of member IDs to filter by
+   */
+  ids?: string;
 };
 
 export type CheckMemberEmailParams = {

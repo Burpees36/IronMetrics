@@ -653,6 +653,7 @@ interface Intervention {
   score: number;
   expectedRevenue: number | null;
   affectedMembers: number | null;
+  affectedMemberIds?: number[] | null;
   actions: string[];
   status: string;
 }
@@ -774,7 +775,13 @@ function InterventionCard({
             Not now
           </button>
           <button
-            onClick={() => setLocation(routeInfo?.route || "/dashboard")}
+            onClick={() => {
+              if (intervention.affectedMemberIds && intervention.affectedMemberIds.length > 0) {
+                setLocation(`/members?ids=${intervention.affectedMemberIds.join(",")}&source=${encodeURIComponent(intervention.title)}`);
+              } else {
+                setLocation(routeInfo?.route || "/dashboard");
+              }
+            }}
             className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground hover:bg-primary/90 rounded-lg text-xs font-semibold shadow-sm shadow-primary/20 transition-all group"
           >
             Execute Smart Action

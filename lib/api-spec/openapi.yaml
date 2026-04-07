@@ -265,6 +265,11 @@ paths:
           in: query
           schema:
             type: integer
+        - name: ids
+          in: query
+          schema:
+            type: string
+          description: Comma-separated list of member IDs to filter by
       responses:
         "200":
           description: List of members
@@ -6780,6 +6785,11 @@ components:
           type: ["number", "null"]
         affectedMembers:
           type: ["integer", "null"]
+        affectedMemberIds:
+          type: array
+          nullable: true
+          items:
+            type: integer
         actions:
           type: array
           items:
