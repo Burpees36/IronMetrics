@@ -29,6 +29,7 @@ import { WebhookHandlers } from "./webhookHandlers";
 import router from "./routes";
 import paymentUpdatePublicRouter from "./routes/payment-update-public";
 import leadCaptureRouter from "./routes/lead-capture";
+import publicWodRouter from "./routes/public-wod";
 
 const app: Express = express();
 
@@ -138,9 +139,10 @@ app.use("/api/payment-update", paymentUpdateLimiter);
 app.use("/api/lead-capture", leadCaptureLimiter);
 app.use("/api", apiLimiter);
 
-// Public routes that do not require authentication (e.g., payment update links, lead capture)
+// Public routes that do not require authentication (e.g., payment update links, lead capture, public WOD)
 app.use("/api", paymentUpdatePublicRouter);
 app.use("/api", leadCaptureRouter);
+app.use("/api", publicWodRouter);
 
 // Dev-only preview bypass — must run before authMiddleware
 app.use(previewMiddleware);

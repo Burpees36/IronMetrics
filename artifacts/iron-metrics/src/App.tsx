@@ -26,6 +26,7 @@ import { Settings } from "@/pages/Settings";
 import { Onboarding } from "@/pages/Onboarding";
 import { UpdatePayment } from "@/pages/UpdatePayment";
 import { LeadCapture } from "@/pages/LeadCapture";
+import { PublicWod } from "@/pages/PublicWod";
 import { Retention } from "@/pages/Retention";
 import { LeadSequences } from "@/pages/LeadSequences";
 import { Finances } from "@/pages/Finances";
@@ -89,6 +90,7 @@ function Router() {
       <Route path="/select-gym" component={GymSelect} />
       <Route path="/update-payment" component={UpdatePayment} />
       <Route path="/join/:gymSlug" component={LeadCapture} />
+      <Route path="/wod/:gymSlug" component={PublicWod} />
       
       {/* Protected Routes */}
       <Route path="/">
