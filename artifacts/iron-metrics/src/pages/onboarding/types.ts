@@ -3,7 +3,7 @@ import {
 } from "lucide-react";
 
 export const STEPS = [
-  { id: "gym_details", label: "Gym Details", icon: Building2, description: "Your gym profile" },
+  { id: "gym_details", label: "Business Details", icon: Building2, description: "Your business profile" },
   { id: "connect_billing", label: "Connect Billing", icon: CreditCard, description: "Set up Stripe" },
   { id: "connect_data", label: "Import Members", icon: Database, description: "Import your members" },
   { id: "email_branding", label: "Email Branding", icon: Mail, description: "Outbound email setup" },

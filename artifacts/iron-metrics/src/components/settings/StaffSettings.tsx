@@ -219,7 +219,7 @@ export function StaffSettings({ gymId }: Props) {
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
                           <DropdownMenuItem onClick={() => setRemoveTarget(s)} className="text-destructive focus:text-destructive">
-                            Remove from Gym
+                            Remove from Business
                           </DropdownMenuItem>
                         </>
                       )}
@@ -381,7 +381,7 @@ export function StaffSettings({ gymId }: Props) {
                     className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-destructive/30 text-destructive hover:bg-destructive/10 transition-colors"
                   >
                     <UserX className="h-4 w-4" />
-                    Remove from Gym
+                    Remove from Business
                   </button>
                 </div>
               )}

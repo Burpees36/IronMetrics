@@ -411,7 +411,7 @@ export function Members() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl md:text-3xl font-display font-bold text-foreground">Directory</h1>
-            <p className="text-sm md:text-base text-muted-foreground mt-1">Manage your gym's member base.</p>
+            <p className="text-sm md:text-base text-muted-foreground mt-1">Manage your member base.</p>
           </div>
           <div className="flex items-center gap-2 md:gap-3">
             <button

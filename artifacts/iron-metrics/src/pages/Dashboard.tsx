@@ -52,7 +52,7 @@ function OnboardingBanner({ gymId }: { gymId: number }) {
         <Rocket className="h-5 w-5 text-primary" />
         <div>
           <p className="font-medium text-foreground text-sm">Setup isn't complete yet</p>
-          <p className="text-xs text-muted-foreground">Pick up where you left off and finish configuring your gym.</p>
+          <p className="text-xs text-muted-foreground">Pick up where you left off and finish configuring your business.</p>
         </div>
       </div>
       <Link href="/onboarding">
@@ -339,7 +339,7 @@ function BenchmarkHighlightsCard({ gymId }: { gymId: number }) {
           );
         })}
         <p className="text-[10px] text-muted-foreground pt-1">
-          vs. {data.sampleCount} similar-sized gyms
+          vs. {data.sampleCount} similar-sized businesses
         </p>
       </div>
     </Card>
@@ -418,7 +418,7 @@ export function Dashboard() {
   if (!activeGymId) {
     return (
       <div className="h-full flex items-center justify-center">
-        <p className="text-muted-foreground">Select a gym to view your dashboard.</p>
+        <p className="text-muted-foreground">Select a business to view your dashboard.</p>
       </div>
     );
   }
@@ -558,7 +558,7 @@ export function Dashboard() {
             <div className="text-center py-12 text-muted-foreground">
               <CheckCircle2 className="w-10 h-10 mx-auto mb-3 text-emerald-500" />
               <p className="text-lg font-medium text-foreground">All clear!</p>
-              <p className="text-sm">No action items for today. Your gym is running smoothly.</p>
+              <p className="text-sm">No action items for today. Your business is running smoothly.</p>
             </div>
           )}
 

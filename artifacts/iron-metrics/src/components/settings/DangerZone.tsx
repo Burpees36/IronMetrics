@@ -18,17 +18,17 @@ export function DangerZone({ gymName }: Props) {
     {
       id: "deactivate",
       icon: Power,
-      label: "Deactivate Gym",
-      desc: "Temporarily disable this gym. Members and staff will lose access until reactivated.",
+      label: "Deactivate Business",
+      desc: "Temporarily disable this business. Members and staff will lose access until reactivated.",
       buttonText: "Deactivate",
       confirmWord: "DEACTIVATE",
     },
     {
       id: "delete",
       icon: Trash2,
-      label: "Delete Gym",
-      desc: "Permanently delete this gym and all associated data. This action cannot be undone.",
-      buttonText: "Delete Gym",
+      label: "Delete Business",
+      desc: "Permanently delete this business and all associated data. This action cannot be undone.",
+      buttonText: "Delete Business",
       confirmWord: gymName.toUpperCase(),
     },
   ];

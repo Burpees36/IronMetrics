@@ -22,7 +22,7 @@ export function FinishStep({ state, onFinish, onBack, onGoToStep }: {
   const essentialsComplete = !!(gymName && gymName.trim() && gymTimezone && gymTimezone.trim());
 
   const summaryItems = [
-    { id: "gym_details", label: "Gym Details", complete: state?.stepStatus?.gym_details, icon: Building2, required: true },
+    { id: "gym_details", label: "Business Details", complete: state?.stepStatus?.gym_details, icon: Building2, required: true },
     { id: "connect_billing", label: "Connect Billing", complete: state?.stepStatus?.connect_billing, icon: CreditCard, required: false },
     { id: "connect_data", label: "Member Data", complete: state?.stepStatus?.connect_data, count: counts?.members, icon: Database, required: false },
     { id: "email_branding", label: "Email Branding", complete: state?.stepStatus?.email_branding, icon: Mail, required: false },
@@ -47,7 +47,7 @@ export function FinishStep({ state, onFinish, onBack, onGoToStep }: {
         <p className="text-muted-foreground">
           {essentialsComplete
             ? "Here's a summary of your setup. You can always adjust things later in Settings."
-            : "Complete the required steps before launching your gym."}
+            : "Complete the required steps before launching your business."}
         </p>
       </div>
 
@@ -55,16 +55,16 @@ export function FinishStep({ state, onFinish, onBack, onGoToStep }: {
         <div className="mb-6 p-4 rounded-xl border border-amber-500/20 bg-amber-500/5 flex items-start gap-3">
           <AlertTriangle className="h-5 w-5 text-amber-500 shrink-0 mt-0.5" />
           <div>
-            <p className="text-sm font-medium text-amber-500">Required: Gym name and timezone</p>
+            <p className="text-sm font-medium text-amber-500">Required: Business name and timezone</p>
             <p className="text-xs text-muted-foreground mt-1">
-              Go back to Gym Details to set your gym name and timezone before launching.
+              Go back to Business Details to set your business name and timezone before launching.
             </p>
             {onGoToStep && (
               <button
                 onClick={() => onGoToStep("gym_details")}
                 className="mt-2 text-xs text-primary hover:underline font-medium"
               >
-                Go to Gym Details
+                Go to Business Details
               </button>
             )}
           </div>

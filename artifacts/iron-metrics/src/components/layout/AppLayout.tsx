@@ -72,12 +72,12 @@ function SidebarContent({ location, gym, gymLoading, user, logout, onNavigate, c
       <div>
         <div className="px-4 py-4">
           <div className="mb-6 px-2">
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Active Gym</p>
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Active Business</p>
             {gymLoading ? (
               <div className="h-6 w-32 bg-muted animate-pulse rounded" />
             ) : (
               <div className="flex items-center justify-between group cursor-pointer">
-                <span className="text-sm font-medium truncate">{gym?.name || "Select Gym"}</span>
+                <span className="text-sm font-medium truncate">{gym?.name || "Select Business"}</span>
                 <Link href="/select-gym" onClick={onNavigate} className="text-xs text-primary opacity-0 group-hover:opacity-100 transition-opacity">Change</Link>
               </div>
             )}

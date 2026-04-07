@@ -99,7 +99,7 @@ export function Onboarding() {
   if (!activeGymId) {
     return (
       <div className="h-full flex items-center justify-center">
-        <p className="text-muted-foreground">Select a gym first.</p>
+        <p className="text-muted-foreground">Select a business first.</p>
       </div>
     );
   }
@@ -122,7 +122,7 @@ export function Onboarding() {
         <div className="mb-8">
           <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}>
             <h1 className="text-2xl md:text-3xl font-display font-bold text-foreground mb-2">
-              Set Up Your Gym
+              Set Up Your Business
             </h1>
             <p className="text-muted-foreground">
               Complete these steps and you'll be ready to run your business.
