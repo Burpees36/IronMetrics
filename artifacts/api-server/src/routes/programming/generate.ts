@@ -3,8 +3,8 @@ import { eq, and, lte } from "drizzle-orm";
 import { db, programmingPreferencesTable, programmingDaysTable, programmingSectionsTable } from "@workspace/db";
 import { requireProgrammingWrite } from "../../middlewares/programmingRbac";
 import { parseGymId } from "./helpers";
-import { generateDay, generateWeek } from "../../services/programmingAI";
-import { ProgrammingValidationError } from "../../services/programmingValidation";
+import { generateDay, generateWeek, buildValidationMeta } from "../../services/programmingAI";
+import { validateGeneratedDay, ProgrammingValidationError } from "../../services/programmingValidation";
 
 const router: IRouter = Router();
 
@@ -134,7 +134,9 @@ router.post(
         .where(eq(programmingPreferencesTable.gymId, gymId));
 
       const effectivePrefs = loadPrefs(prefs);
-      const generated = await generateDay(gymId, date, effectivePrefs);
+      const result = await generateDay(gymId, date, effectivePrefs);
+      const generated = result.day;
+      const validationMeta = buildValidationMeta(result.validation, result.retries);
 
       const userId = req.user?.id || null;
       const [day] = await db
@@ -149,6 +151,7 @@ router.post(
           track: "default",
           createdBy: userId,
           updatedBy: userId,
+          validationMeta,
         })
         .returning();
 
@@ -162,7 +165,15 @@ router.post(
         .from(programmingSectionsTable)
         .where(eq(programmingSectionsTable.dayId, day.id));
 
-      res.status(201).json({ ...day, sections });
+      res.status(201).json({
+        ...day,
+        sections,
+        validation: {
+          valid: validationMeta.valid,
+          warningCount: validationMeta.warningCount,
+          retryCount: validationMeta.retryCount,
+        },
+      });
     } catch (error: unknown) {
       if (error instanceof ProgrammingValidationError) {
         console.error("AI generation validation error:", error.message, error.violations);
@@ -212,7 +223,7 @@ router.post(
       const userId = req.user?.id || null;
       const results = [];
 
-      for (const generated of generatedDays) {
+      for (const { day: generated, validationMeta } of generatedDays) {
         try {
           const dayDate = (typeof generated.date === "string" && DATE_RE.test(generated.date)) ? generated.date : null;
           if (!dayDate) continue;
@@ -231,6 +242,7 @@ router.post(
               track: "default",
               createdBy: userId,
               updatedBy: userId,
+              validationMeta,
             })
             .returning();
 
@@ -244,7 +256,15 @@ router.post(
             .from(programmingSectionsTable)
             .where(eq(programmingSectionsTable.dayId, day.id));
 
-          results.push({ ...day, sections });
+          results.push({
+            ...day,
+            sections,
+            validation: {
+              valid: validationMeta.valid,
+              warningCount: validationMeta.warningCount,
+              retryCount: validationMeta.retryCount,
+            },
+          });
         } catch (dayError) {
           console.error(`Failed to save generated day ${generated.date}:`, dayError instanceof Error ? dayError.message : dayError);
         }

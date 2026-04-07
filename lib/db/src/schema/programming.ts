@@ -3,6 +3,20 @@ import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { gymsTable } from "./gyms";
 
+export interface ValidationMetaViolation {
+  type: string;
+  severity: "error" | "warning";
+  message: string;
+}
+
+export interface ValidationMeta {
+  valid: boolean;
+  errorCount: number;
+  warningCount: number;
+  retryCount: number;
+  violations: ValidationMetaViolation[];
+}
+
 export const programmingDayStatusEnum = pgEnum("programming_day_status", ["draft", "published", "archived"]);
 
 export const sectionTypeEnum = pgEnum("section_type", [
@@ -28,6 +42,7 @@ export const programmingDaysTable = pgTable("programming_days", {
   createdBy: text("created_by"),
   updatedBy: text("updated_by"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  validationMeta: jsonb("validation_meta").$type<ValidationMeta>(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 }, (table) => [
   index("idx_programming_days_gym").on(table.gymId),

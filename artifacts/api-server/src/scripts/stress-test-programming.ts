@@ -214,7 +214,7 @@ async function generateDaysViaPipeline(config: TestConfig): Promise<{ days: Gene
     const dayName = d.toLocaleDateString("en-US", { weekday: "long" });
 
     try {
-      const generated = await generateDay(STRESS_TEST_GYM_ID, dateStr, {
+      const result = await generateDay(STRESS_TEST_GYM_ID, dateStr, {
         methodology: config.prefs.methodology,
         structureTemplate: config.prefs.structureTemplate,
         equipment: config.prefs.equipment,
@@ -222,7 +222,7 @@ async function generateDaysViaPipeline(config: TestConfig): Promise<{ days: Gene
         defaultTimeDomains: config.prefs.defaultTimeDomains,
       }, dayName);
 
-      days.push(generated as GeneratedDay);
+      days.push(result.day as GeneratedDay);
     } catch (err) {
       if (err instanceof ProgrammingValidationError) {
         pipelineRetried = true;

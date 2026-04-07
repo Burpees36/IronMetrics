@@ -9,7 +9,9 @@ import {
   ProgrammingValidationError,
   type ValidationPreferences,
   type ValidationResult,
+  type Violation,
 } from "./programmingValidation";
+import type { ValidationMeta } from "@workspace/db";
 
 export interface GenerationPreferences {
   methodology: string;
@@ -211,6 +213,22 @@ export interface GenerateDayResult {
   retries: number;
 }
 
+export function buildValidationMeta(validation: ValidationResult, retryCount: number): ValidationMeta {
+  const errors = validation.violations.filter(v => v.severity === "error");
+  const warnings = validation.violations.filter(v => v.severity === "warning");
+  return {
+    valid: validation.valid,
+    errorCount: errors.length,
+    warningCount: warnings.length,
+    retryCount,
+    violations: validation.violations.map(v => ({
+      type: v.type,
+      severity: v.severity,
+      message: v.message,
+    })),
+  };
+}
+
 async function callGenerateDay(
   prefs: GenerationPreferences,
   history: string,
@@ -280,7 +298,7 @@ export async function generateDay(
   date: string,
   prefs: GenerationPreferences,
   dayOfWeek?: string
-): Promise<GeneratedDay> {
+): Promise<GenerateDayResult> {
   const history = await getRecentProgrammingHistory(gymId);
   const dayName = dayOfWeek || new Date(date + "T00:00:00").toLocaleDateString("en-US", { weekday: "long" });
 
@@ -308,7 +326,7 @@ export async function generateDay(
 
     if (validation.valid) {
       console.log(`[programmingAI] generateDay ${date}: passed validation on attempt ${attempt + 1}`);
-      return generated;
+      return { day: generated, validation, retries: attempt };
     }
 
     console.log(`[programmingAI] generateDay ${date}: attempt ${attempt + 1} had ${errorCount} error(s), ${validation.violations.length} total violations`);
@@ -323,11 +341,16 @@ export async function generateDay(
     }
   }
 
-  return bestDay!;
+  return { day: bestDay!, validation: bestValidation!, retries: MAX_RETRIES };
+}
+
+export interface GeneratedDayWithMeta {
+  day: GeneratedDay;
+  validationMeta: ValidationMeta;
 }
 
 export interface GenerateWeekResult {
-  generatedDays: GeneratedDay[];
+  generatedDays: GeneratedDayWithMeta[];
   skippedDates: string[];
 }
 
@@ -434,6 +457,38 @@ Ensure intelligent periodization across the entire week:
   return normalizedDays;
 }
 
+function identifyFailingDays(
+  days: GeneratedDay[],
+  validation: ValidationResult,
+  prefs: GenerationPreferences,
+): Set<string> {
+  const failingDates = new Set<string>();
+  for (const v of validation.violations) {
+    if (v.severity !== "error") continue;
+    for (const day of days) {
+      const dayDate = day.date;
+      if (v.message.includes(dayDate) || v.details?.date === dayDate) {
+        failingDates.add(dayDate);
+      }
+    }
+    if (v.details?.day !== undefined) {
+      const idx = Number(v.details.day);
+      if (!isNaN(idx) && days[idx]) {
+        failingDates.add(days[idx].date);
+      }
+    }
+  }
+  if (failingDates.size === 0 && validation.violations.some(v => v.severity === "error")) {
+    for (const day of days) {
+      const dayValidation = validateGeneratedDay(day, prefs);
+      if (!dayValidation.valid) {
+        failingDates.add(day.date);
+      }
+    }
+  }
+  return failingDates;
+}
+
 export async function generateWeek(
   gymId: number,
   startDate: string,
@@ -493,44 +548,106 @@ export async function generateWeek(
 
   const history = await getRecentProgrammingHistory(gymId);
 
-  let bestDays: GeneratedDay[] = [];
-  let bestErrorCount = Infinity;
-  let bestValidation: ValidationResult | null = null;
-  let lastValidation: ValidationResult | null = null;
+  const generatedDays = await callGenerateWeek(prefs, history, missingDates, existingContext);
+  const initialValidation = validateGeneratedWeek(generatedDays, prefs);
 
-  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-    const correctionPrompt = attempt > 0 && lastValidation
-      ? formatViolationsForRetry(lastValidation.violations)
-      : undefined;
+  if (initialValidation.valid) {
+    console.log(`[programmingAI] generateWeek: passed validation on first attempt`);
+    const daysMeta: GeneratedDayWithMeta[] = generatedDays.map(day => {
+      const dayVal = validateGeneratedDay(day, prefs);
+      return { day, validationMeta: buildValidationMeta(dayVal, 0) };
+    });
+    return { generatedDays: daysMeta, skippedDates };
+  }
 
-    const generatedDays = await callGenerateWeek(prefs, history, missingDates, existingContext, correctionPrompt);
-    const validation = validateGeneratedWeek(generatedDays, prefs);
+  const initialErrorCount = initialValidation.violations.filter(v => v.severity === "error").length;
+  console.log(`[programmingAI] generateWeek: initial attempt had ${initialErrorCount} error(s), ${initialValidation.violations.length} total violations`);
+
+  let bestDays = generatedDays;
+  let bestErrorCount = initialErrorCount;
+  let bestValidation = initialValidation;
+
+  const failingDates = identifyFailingDays(bestDays, bestValidation, prefs);
+
+  if (failingDates.size > 0 && failingDates.size < bestDays.length) {
+    console.log(`[programmingAI] generateWeek: attempting per-day retry for ${failingDates.size} failing day(s): ${[...failingDates].join(", ")}`);
+
+    const mergedDays = [...bestDays];
+    const perDayRetries: Map<string, number> = new Map();
+
+    for (const failDate of failingDates) {
+      const idx = mergedDays.findIndex(d => d.date === failDate);
+      if (idx === -1) continue;
+
+      const dayInfo = weekDates.find(wd => wd.date === failDate);
+      const dayName = dayInfo?.dayName || "Day";
+
+      try {
+        const result = await generateDay(gymId, failDate, prefs, dayName);
+        mergedDays[idx] = result.day;
+        perDayRetries.set(failDate, result.retries);
+        console.log(`[programmingAI] generateWeek: per-day retry for ${failDate} succeeded`);
+      } catch (err) {
+        console.warn(`[programmingAI] generateWeek: per-day retry for ${failDate} failed:`, err instanceof Error ? err.message : err);
+        perDayRetries.set(failDate, MAX_RETRIES);
+      }
+    }
+
+    const mergedValidation = validateGeneratedWeek(mergedDays, prefs);
+    const mergedErrors = mergedValidation.violations.filter(v => v.severity === "error").length;
+
+    if (mergedErrors === 0) {
+      console.log(`[programmingAI] generateWeek: per-day retry resolved all errors`);
+      const daysMeta: GeneratedDayWithMeta[] = mergedDays.map(day => {
+        const dayVal = validateGeneratedDay(day, prefs);
+        const retries = perDayRetries.get(day.date) ?? 0;
+        return { day, validationMeta: buildValidationMeta(dayVal, retries) };
+      });
+      return { generatedDays: daysMeta, skippedDates };
+    }
+
+    if (mergedErrors < bestErrorCount) {
+      console.log(`[programmingAI] generateWeek: per-day retry reduced errors from ${bestErrorCount} to ${mergedErrors}`);
+      bestDays = mergedDays;
+      bestErrorCount = mergedErrors;
+      bestValidation = mergedValidation;
+    }
+  }
+
+  console.log(`[programmingAI] generateWeek: falling back to full-week retry`);
+  let lastValidation: ValidationResult = bestValidation;
+
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    const correctionPrompt = formatViolationsForRetry(lastValidation.violations);
+
+    const retryDays = await callGenerateWeek(prefs, history, missingDates, existingContext, correctionPrompt);
+    const validation = validateGeneratedWeek(retryDays, prefs);
     lastValidation = validation;
 
     const errorCount = validation.violations.filter(v => v.severity === "error").length;
 
     if (errorCount < bestErrorCount) {
-      bestDays = generatedDays;
+      bestDays = retryDays;
       bestErrorCount = errorCount;
       bestValidation = validation;
     }
 
     if (validation.valid) {
-      console.log(`[programmingAI] generateWeek: passed validation on attempt ${attempt + 1}`);
-      return { generatedDays, skippedDates };
+      console.log(`[programmingAI] generateWeek: full-week retry passed on attempt ${attempt + 1}`);
+      const daysMeta: GeneratedDayWithMeta[] = retryDays.map(day => {
+        const dayVal = validateGeneratedDay(day, prefs);
+        return { day, validationMeta: buildValidationMeta(dayVal, attempt) };
+      });
+      return { generatedDays: daysMeta, skippedDates };
     }
 
-    console.log(`[programmingAI] generateWeek: attempt ${attempt + 1} had ${errorCount} error(s), ${validation.violations.length} total violations`);
-
-    if (attempt === MAX_RETRIES) {
-      const bestErrors = bestValidation!.violations.filter(v => v.severity === "error");
-      console.warn(`[programmingAI] generateWeek: exhausted ${MAX_RETRIES + 1} attempts with ${bestErrorCount} remaining error(s)`);
-      throw new ProgrammingValidationError(
-        `AI week generation failed validation after ${MAX_RETRIES + 1} attempts with ${bestErrorCount} unresolved error(s).`,
-        bestErrors,
-      );
-    }
+    console.log(`[programmingAI] generateWeek: full-week retry attempt ${attempt + 1} had ${errorCount} error(s)`);
   }
 
-  return { generatedDays: bestDays, skippedDates };
+  const bestErrors = bestValidation.violations.filter(v => v.severity === "error");
+  console.warn(`[programmingAI] generateWeek: exhausted all strategies with ${bestErrorCount} remaining error(s)`);
+  throw new ProgrammingValidationError(
+    `AI week generation failed validation after all retry strategies with ${bestErrorCount} unresolved error(s).`,
+    bestErrors,
+  );
 }
