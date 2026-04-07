@@ -318,9 +318,9 @@ export function Members() {
       setRiskViewActive(false);
     }
     setFilterOpen(false);
-    const params = new URLSearchParams();
-    if (tempPlanFilter) params.set("plan", tempPlanFilter);
-    if (tempRiskFilter.length > 0) params.set("filter", "at-risk");
+    const params = new URLSearchParams(searchString);
+    if (tempPlanFilter) { params.set("plan", tempPlanFilter); } else { params.delete("plan"); }
+    if (tempRiskFilter.length > 0) { params.set("filter", "at-risk"); } else { params.delete("filter"); }
     const qs = params.toString();
     navigate(qs ? `/members?${qs}` : "/members");
   };
