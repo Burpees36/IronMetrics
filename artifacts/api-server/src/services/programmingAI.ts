@@ -360,6 +360,48 @@ export interface GenerateWeekResult {
   skippedDates: string[];
 }
 
+export function normalizeWeekDays(
+  aiDays: GeneratedDay[],
+  missingDates: Array<{ date: string; dayName: string }>,
+): GeneratedDay[] {
+  const normalizedDays: GeneratedDay[] = [];
+  const missingDateSet = new Set(missingDates.map(d => d.date));
+  const assignedDates = new Set<string>();
+  const matchedIndices = new Set<number>();
+
+  const validAiDays = aiDays.filter(
+    d => d && Array.isArray(d.sections) && d.sections.length > 0
+  );
+
+  for (let i = 0; i < validAiDays.length; i++) {
+    const aiDay = validAiDays[i];
+    const aiDate = typeof aiDay.date === "string" ? aiDay.date.trim() : "";
+    if (aiDate && missingDateSet.has(aiDate) && !assignedDates.has(aiDate)) {
+      normalizedDays.push({ ...aiDay, date: aiDate });
+      assignedDates.add(aiDate);
+      matchedIndices.add(i);
+    }
+  }
+
+  if (assignedDates.size < missingDates.length) {
+    const unmatchedAiDays = validAiDays.filter((_, i) => !matchedIndices.has(i));
+    const unfilledDates = missingDates.filter(md => !assignedDates.has(md.date));
+
+    for (let i = 0; i < Math.min(unmatchedAiDays.length, unfilledDates.length); i++) {
+      normalizedDays.push({ ...unmatchedAiDays[i], date: unfilledDates[i].date });
+      assignedDates.add(unfilledDates[i].date);
+    }
+  }
+
+  normalizedDays.sort((a, b) => a.date.localeCompare(b.date));
+
+  if (normalizedDays.length === 0) {
+    throw new Error(`AI generated ${aiDays.length} day(s) but none had valid sections. Please try again.`);
+  }
+
+  return normalizedDays;
+}
+
 async function callGenerateWeek(
   prefs: GenerationPreferences,
   history: string,
@@ -449,18 +491,7 @@ Ensure intelligent periodization across the entire week:
     throw new Error("AI returned no workout days. Please try again.");
   }
 
-  const normalizedDays: GeneratedDay[] = [];
-  for (let i = 0; i < Math.min(parsed.days.length, missingDates.length); i++) {
-    const aiDay = parsed.days[i];
-    if (!aiDay || !Array.isArray(aiDay.sections) || aiDay.sections.length === 0) continue;
-    normalizedDays.push({ ...aiDay, date: missingDates[i].date });
-  }
-
-  if (normalizedDays.length === 0) {
-    throw new Error(`AI generated ${parsed.days.length} day(s) but none had valid sections. Please try again.`);
-  }
-
-  return normalizedDays;
+  return normalizeWeekDays(parsed.days, missingDates);
 }
 
 function identifyFailingDays(

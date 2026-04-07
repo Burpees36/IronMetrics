@@ -11,6 +11,7 @@ import {
   type Violation,
   type TemporalRule,
 } from "../services/programmingValidation";
+import { normalizeWeekDays } from "../services/programmingAI";
 
 interface GeneratedSection {
   sectionType: string;
@@ -1011,5 +1012,150 @@ describe("Temporal Rule Parsing & Validation", () => {
       ];
       expect(checkTemporalRules(days, [])).toEqual([]);
     });
+  });
+});
+
+describe("normalizeWeekDays — date matching", () => {
+  const missingDates = [
+    { date: "2026-04-06", dayName: "Monday" },
+    { date: "2026-04-07", dayName: "Tuesday" },
+    { date: "2026-04-08", dayName: "Wednesday" },
+    { date: "2026-04-09", dayName: "Thursday" },
+    { date: "2026-04-10", dayName: "Friday" },
+    { date: "2026-04-11", dayName: "Saturday" },
+    { date: "2026-04-12", dayName: "Sunday" },
+  ];
+
+  function makeDayWithDate(date: string, title: string): GeneratedDay {
+    return {
+      date,
+      title,
+      publicNotes: "notes",
+      coachNotes: "coach",
+      sections: [makeSection()],
+    };
+  }
+
+  it("matches AI days by date when returned in correct order", () => {
+    const aiDays = missingDates.map(d => makeDayWithDate(d.date, `${d.dayName} Workout`));
+    const result = normalizeWeekDays(aiDays, missingDates);
+    expect(result).toHaveLength(7);
+    for (let i = 0; i < 7; i++) {
+      expect(result[i].date).toBe(missingDates[i].date);
+      expect(result[i].title).toBe(`${missingDates[i].dayName} Workout`);
+    }
+  });
+
+  it("correctly matches AI days returned in reverse order", () => {
+    const aiDays = [...missingDates].reverse().map(d => makeDayWithDate(d.date, `${d.dayName} Workout`));
+    const result = normalizeWeekDays(aiDays, missingDates);
+    expect(result).toHaveLength(7);
+    expect(result[0].date).toBe("2026-04-06");
+    expect(result[0].title).toBe("Monday Workout");
+    expect(result[6].date).toBe("2026-04-12");
+    expect(result[6].title).toBe("Sunday Workout");
+  });
+
+  it("correctly matches AI days returned in scrambled order", () => {
+    const scrambled = [
+      makeDayWithDate("2026-04-08", "Wednesday - Olympic"),
+      makeDayWithDate("2026-04-06", "Monday - Squat"),
+      makeDayWithDate("2026-04-12", "Sunday - Recovery"),
+      makeDayWithDate("2026-04-10", "Friday - Deadlift"),
+      makeDayWithDate("2026-04-07", "Tuesday - Press"),
+      makeDayWithDate("2026-04-11", "Saturday - Team"),
+      makeDayWithDate("2026-04-09", "Thursday - Zone 2"),
+    ];
+    const result = normalizeWeekDays(scrambled, missingDates);
+    expect(result).toHaveLength(7);
+    expect(result[0].date).toBe("2026-04-06");
+    expect(result[0].title).toBe("Monday - Squat");
+    expect(result[1].date).toBe("2026-04-07");
+    expect(result[1].title).toBe("Tuesday - Press");
+    expect(result[2].date).toBe("2026-04-08");
+    expect(result[2].title).toBe("Wednesday - Olympic");
+    expect(result[6].date).toBe("2026-04-12");
+    expect(result[6].title).toBe("Sunday - Recovery");
+  });
+
+  it("falls back to positional assignment when AI returns wrong dates", () => {
+    const aiDays = [
+      makeDayWithDate("2099-01-01", "Day A"),
+      makeDayWithDate("2099-01-02", "Day B"),
+      makeDayWithDate("2099-01-03", "Day C"),
+    ];
+    const threeDates = missingDates.slice(0, 3);
+    const result = normalizeWeekDays(aiDays, threeDates);
+    expect(result).toHaveLength(3);
+    expect(result[0].date).toBe("2026-04-06");
+    expect(result[1].date).toBe("2026-04-07");
+    expect(result[2].date).toBe("2026-04-08");
+  });
+
+  it("handles mix of correct and wrong dates", () => {
+    const aiDays = [
+      makeDayWithDate("2026-04-08", "Wednesday Correct"),
+      makeDayWithDate("INVALID", "Fallback Day"),
+      makeDayWithDate("2026-04-06", "Monday Correct"),
+    ];
+    const threeDates = missingDates.slice(0, 3);
+    const result = normalizeWeekDays(aiDays, threeDates);
+    expect(result).toHaveLength(3);
+    expect(result.find(d => d.date === "2026-04-06")?.title).toBe("Monday Correct");
+    expect(result.find(d => d.date === "2026-04-08")?.title).toBe("Wednesday Correct");
+    expect(result.find(d => d.date === "2026-04-07")?.title).toBe("Fallback Day");
+  });
+
+  it("deduplicates AI days with the same date", () => {
+    const aiDays = [
+      makeDayWithDate("2026-04-06", "Monday First"),
+      makeDayWithDate("2026-04-06", "Monday Duplicate"),
+      makeDayWithDate("2026-04-07", "Tuesday"),
+    ];
+    const twoDates = missingDates.slice(0, 2);
+    const result = normalizeWeekDays(aiDays, twoDates);
+    expect(result).toHaveLength(2);
+    expect(result[0].date).toBe("2026-04-06");
+    expect(result[0].title).toBe("Monday First");
+    expect(result[1].date).toBe("2026-04-07");
+    expect(result[1].title).toBe("Tuesday");
+  });
+
+  it("skips AI days with empty sections", () => {
+    const aiDays = [
+      makeDayWithDate("2026-04-06", "Valid"),
+      { date: "2026-04-07", title: "Empty", publicNotes: "", coachNotes: "", sections: [] },
+      makeDayWithDate("2026-04-08", "Also Valid"),
+    ];
+    const threeDates = missingDates.slice(0, 3);
+    const result = normalizeWeekDays(aiDays, threeDates);
+    expect(result).toHaveLength(2);
+    expect(result[0].date).toBe("2026-04-06");
+    expect(result[1].date).toBe("2026-04-08");
+  });
+
+  it("throws when no AI days have valid sections", () => {
+    const aiDays = [
+      { date: "2026-04-06", title: "Empty", publicNotes: "", coachNotes: "", sections: [] },
+    ];
+    expect(() => normalizeWeekDays(aiDays, missingDates)).toThrow("none had valid sections");
+  });
+
+  it("output is always sorted by date", () => {
+    const aiDays = [
+      makeDayWithDate("2026-04-12", "Sunday"),
+      makeDayWithDate("2026-04-06", "Monday"),
+      makeDayWithDate("2026-04-09", "Thursday"),
+    ];
+    const threeDates = [
+      { date: "2026-04-06", dayName: "Monday" },
+      { date: "2026-04-09", dayName: "Thursday" },
+      { date: "2026-04-12", dayName: "Sunday" },
+    ];
+    const result = normalizeWeekDays(aiDays, threeDates);
+    expect(result).toHaveLength(3);
+    expect(result[0].date).toBe("2026-04-06");
+    expect(result[1].date).toBe("2026-04-09");
+    expect(result[2].date).toBe("2026-04-12");
   });
 });
