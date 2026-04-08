@@ -48,7 +48,7 @@ function getRandomElement<T>(arr: T[]): T {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
-function extractStylePatterns(samples: string[]): { avgSentenceLength: "short" | "medium" | "long"; usesExclamation: boolean; usesEmoji: boolean; commonClosing: string | null } {
+export function extractStylePatterns(samples: string[]): { avgSentenceLength: "short" | "medium" | "long"; usesExclamation: boolean; usesEmoji: boolean; commonClosing: string | null } {
   if (samples.length === 0) {
     return { avgSentenceLength: "medium", usesExclamation: false, usesEmoji: false, commonClosing: null };
   }
@@ -87,23 +87,193 @@ function extractStylePatterns(samples: string[]): { avgSentenceLength: "short" |
   return { avgSentenceLength, usesExclamation, usesEmoji, commonClosing };
 }
 
-export function applyOwnerVoice(content: string, subject: string, style: CommunicationStyle): { content: string; subject: string } {
+export interface VoiceValidationResult {
+  bannedPhrasesFound: string[];
+  signOffPresent: boolean;
+  sampleLeakageDetected: string[];
+  isValid: boolean;
+}
+
+function detectContradictoryRules(rules: string[]): Array<{ ruleA: string; ruleB: string }> {
+  const contradictions: Array<{ ruleA: string; ruleB: string }> = [];
+  const parsed: Array<{ find: string; replacement: string; original: string }> = [];
+
+  for (const rule of rules) {
+    const match = rule.match(/^(?:never\s+say|replace)\s+['"](.+?)['"]\s*(?:,?\s*(?:say|with)\s+['"](.+?)['"])?$/i);
+    if (match) {
+      parsed.push({ find: match[1].toLowerCase(), replacement: (match[2] || "").toLowerCase(), original: rule });
+    }
+  }
+
+  for (let i = 0; i < parsed.length; i++) {
+    for (let j = i + 1; j < parsed.length; j++) {
+      if (parsed[i].find === parsed[j].replacement && parsed[j].find === parsed[i].replacement) {
+        contradictions.push({ ruleA: parsed[i].original, ruleB: parsed[j].original });
+      }
+    }
+  }
+
+  return contradictions;
+}
+
+function extractSamplePrivateContent(samples: string[]): string[] {
+  const privatePatterns: string[] = [];
+  for (const sample of samples) {
+    const nameMatches = sample.match(/\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)+\b/g);
+    if (nameMatches) {
+      for (const name of nameMatches) {
+        if (!["Looking forward", "Best regards", "Dear Sir", "Dear Madam", "Good day", "Hi there", "Hey there"].some(common => name === common)) {
+          privatePatterns.push(name);
+        }
+      }
+    }
+    const phoneMatches = sample.match(/\b\d{3}[-.]?\d{3}[-.]?\d{4}\b/g);
+    if (phoneMatches) privatePatterns.push(...phoneMatches);
+    const emailMatches = sample.match(/\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/g);
+    if (emailMatches) privatePatterns.push(...emailMatches);
+  }
+  return [...new Set(privatePatterns)];
+}
+
+function applyWordBoundaryReplacement(text: string, find: string, replacement: string): string {
+  const escaped = find.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const regex = new RegExp(`\\b${escaped}\\b`, "gi");
+  return text.replace(regex, replacement);
+}
+
+function detectSignOffBlock(text: string): { beforeSignOff: string; signOffLine: string } | null {
+  const lines = text.trimEnd().split("\n");
+
+  let lastNonEmptyIdx = -1;
+  for (let i = lines.length - 1; i >= 0; i--) {
+    if (lines[i].trim() !== "") {
+      lastNonEmptyIdx = i;
+      break;
+    }
+  }
+  if (lastNonEmptyIdx < 1) return null;
+
+  let signOffStartIdx = lastNonEmptyIdx;
+
+  for (let i = lastNonEmptyIdx; i >= 0; i--) {
+    const line = lines[i].trim();
+    if (line === "") {
+      signOffStartIdx = i + 1;
+      break;
+    }
+    if (i === 0) {
+      return null;
+    }
+  }
+
+  const signOffLines = lines.slice(signOffStartIdx, lastNonEmptyIdx + 1).map(l => l.trim());
+  const signOffText = signOffLines.join("\n");
+
+  if (signOffLines.length > 3) return null;
+
+  const firstSignOffLine = signOffLines[0];
+  const isKnownSignOff = Object.values(TONE_SIGN_OFFS).flat().some(s => firstSignOffLine === s) ||
+    /^(?:best|regards|sincerely|cheers|thanks|thank you|warm|warmly|kind regards|take care|yours|cordially|respectfully|looking forward|hope to|see you|talk soon|let's|stay|your best|wishing)/i.test(firstSignOffLine);
+
+  const isStructuralSignOff =
+    signOffLines.length <= 3 &&
+    signOffLines.every(l => l.split(/\s+/).length <= 8) &&
+    signOffStartIdx > 0 &&
+    lines.slice(0, signOffStartIdx).some(l => l.trim() !== "");
+
+  if (isKnownSignOff || isStructuralSignOff) {
+    const beforeLines = lines.slice(0, signOffStartIdx);
+    while (beforeLines.length > 0 && beforeLines[beforeLines.length - 1].trim() === "") {
+      beforeLines.pop();
+    }
+    return { beforeSignOff: beforeLines.join("\n"), signOffLine: signOffText };
+  }
+
+  return null;
+}
+
+export function validateVoiceOutput(
+  output: string,
+  style: CommunicationStyle,
+  bannedPhrases: string[]
+): VoiceValidationResult {
+  const result: VoiceValidationResult = {
+    bannedPhrasesFound: [],
+    signOffPresent: false,
+    sampleLeakageDetected: [],
+    isValid: true,
+  };
+
+  for (const phrase of bannedPhrases) {
+    const regex = new RegExp(`\\b${phrase.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "gi");
+    if (regex.test(output)) {
+      result.bannedPhrasesFound.push(phrase);
+    }
+  }
+
+  let expectedSignOff: string | null = null;
+  for (const rule of style.rules) {
+    const signOffMatch = rule.match(/^(?:always\s+)?sign\s+off\s+with\s+['"](.+?)['"]$/i);
+    if (signOffMatch) expectedSignOff = signOffMatch[1];
+  }
+  if (expectedSignOff) {
+    result.signOffPresent = output.includes(expectedSignOff);
+  } else {
+    const allSignOffs = Object.values(TONE_SIGN_OFFS).flat();
+    result.signOffPresent = allSignOffs.some(s => output.includes(s));
+  }
+
+  const privateContent = extractSamplePrivateContent(style.samples);
+  for (const pc of privateContent) {
+    if (output.includes(pc)) {
+      result.sampleLeakageDetected.push(pc);
+    }
+  }
+
+  result.isValid = result.bannedPhrasesFound.length === 0 &&
+    result.signOffPresent &&
+    result.sampleLeakageDetected.length === 0;
+
+  return result;
+}
+
+export function applyOwnerVoice(content: string, subject: string, style: CommunicationStyle): { content: string; subject: string; warnings?: string[] } {
   let processed = content;
   let processedSubject = subject;
+  const warnings: string[] = [];
 
   const greetings = TONE_GREETINGS[style.tone] || TONE_GREETINGS.casual_friendly;
   processed = processed.replace(/^Hi /, `${getRandomElement(greetings)} `);
 
   let customSignOff: string | null = null;
+  const bannedPhrases: string[] = [];
+
+  const contradictions = detectContradictoryRules(style.rules);
+  for (const c of contradictions) {
+    warnings.push(`Contradictory rules detected: "${c.ruleA}" conflicts with "${c.ruleB}"`);
+  }
+
+  const contradictoryFinds = new Set(
+    contradictions.flatMap(c => {
+      const matchA = c.ruleA.match(/^(?:never\s+say|replace)\s+['"](.+?)['"]/i);
+      const matchB = c.ruleB.match(/^(?:never\s+say|replace)\s+['"](.+?)['"]/i);
+      return [matchA?.[1]?.toLowerCase(), matchB?.[1]?.toLowerCase()].filter(Boolean) as string[];
+    })
+  );
 
   for (const rule of style.rules) {
-    const match = rule.match(/^(?:never\s+say|replace)\s+['"](.+?)['"]\s*(?:,\s*(?:say|with)\s+['"](.+?)['"])?$/i);
+    const match = rule.match(/^(?:never\s+say|replace)\s+['"](.+?)['"]\s*(?:,?\s*(?:say|with)\s+['"](.+?)['"])?$/i);
     if (match) {
       const find = match[1];
       const replacement = match[2] || "";
-      const regex = new RegExp(find.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi");
-      processed = processed.replace(regex, replacement);
-      processedSubject = processedSubject.replace(regex, replacement);
+
+      if (contradictoryFinds.has(find.toLowerCase())) {
+        continue;
+      }
+
+      bannedPhrases.push(find);
+      processed = applyWordBoundaryReplacement(processed, find, replacement);
+      processedSubject = applyWordBoundaryReplacement(processedSubject, find, replacement);
     }
 
     const signOffMatch = rule.match(/^(?:always\s+)?sign\s+off\s+with\s+['"](.+?)['"]$/i);
@@ -113,23 +283,53 @@ export function applyOwnerVoice(content: string, subject: string, style: Communi
   }
 
   const signOff = customSignOff || getRandomElement(TONE_SIGN_OFFS[style.tone] || TONE_SIGN_OFFS.casual_friendly);
-  processed = processed.replace(/\n\n(?:Looking forward to hearing from you!|Hope to see you soon!|Talk soon!|Best regards,|Sincerely,|See you in the gym!|Let me know what works for you!|Let me know what day works best!)$/, `\n\n${signOff}`);
+
+  const signOffBlock = detectSignOffBlock(processed);
+  if (signOffBlock) {
+    processed = signOffBlock.beforeSignOff + "\n\n" + signOff;
+  } else {
+    const knownSignOffRegex = /\n\n(?:Looking forward to hearing from you!|Hope to see you soon!|Talk soon!|Best regards,|Sincerely,|See you in the gym!|Let me know what works for you!|Let me know what day works best!)$/;
+    if (knownSignOffRegex.test(processed)) {
+      processed = processed.replace(knownSignOffRegex, `\n\n${signOff}`);
+    } else {
+      processed = processed.trimEnd() + "\n\n" + signOff;
+    }
+  }
 
   const samplePatterns = extractStylePatterns(style.samples);
 
   if (samplePatterns.commonClosing && !customSignOff) {
-    processed = processed.replace(/\n\n[^]*$/, (lastBlock) => {
-      const lines = lastBlock.split("\n").filter(l => l.trim());
-      if (lines.length <= 1) return `\n\n${samplePatterns.commonClosing}`;
-      return lastBlock;
-    });
+    const finalSignOffBlock = detectSignOffBlock(processed);
+    if (finalSignOffBlock) {
+      processed = finalSignOffBlock.beforeSignOff + "\n\n" + samplePatterns.commonClosing;
+    }
   }
 
   if (samplePatterns.usesExclamation && style.tone === "motivational_coach") {
     processed = processed.replace(/\.\n/g, "!\n");
   }
 
-  return { content: processed, subject: processedSubject };
+  const validation = validateVoiceOutput(processed, style, bannedPhrases);
+  if (validation.bannedPhrasesFound.length > 0) {
+    for (const phrase of validation.bannedPhrasesFound) {
+      processed = applyWordBoundaryReplacement(processed, phrase, "");
+      processedSubject = applyWordBoundaryReplacement(processedSubject, phrase, "");
+    }
+    warnings.push(`Post-validation caught banned phrases: ${validation.bannedPhrasesFound.join(", ")}`);
+  }
+  const sampleClosingUsed = samplePatterns.commonClosing && !customSignOff && processed.includes(samplePatterns.commonClosing);
+  if (!validation.signOffPresent && !sampleClosingUsed) {
+    const expectedSignOff = customSignOff || signOff;
+    if (!processed.trimEnd().endsWith(expectedSignOff)) {
+      processed = processed.trimEnd() + "\n\n" + expectedSignOff;
+      warnings.push(`Post-validation re-applied missing sign-off: "${expectedSignOff}"`);
+    }
+  }
+  if (validation.sampleLeakageDetected.length > 0) {
+    warnings.push(`Sample content leakage detected: ${validation.sampleLeakageDetected.join(", ")}`);
+  }
+
+  return { content: processed, subject: processedSubject, ...(warnings.length > 0 ? { warnings } : {}) };
 }
 
 async function fetchCommunicationStyle(gymId: number): Promise<CommunicationStyle> {
