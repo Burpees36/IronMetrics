@@ -10,6 +10,7 @@ import {
   Trash2,
   ChevronDown,
   ChevronUp,
+  Share2,
 } from "lucide-react";
 import { getSectionTypeInfo, SectionData, type SectionType } from "./SectionEditor";
 import type { ProgrammingDayWithSections } from "@workspace/api-client-react";
@@ -23,6 +24,7 @@ interface DayCardProps {
   onDuplicate?: () => void;
   onTogglePublish?: () => void;
   onDelete?: () => void;
+  onShareDay?: () => void;
   isStaff: boolean;
   animationDelay?: number;
 }
@@ -47,6 +49,7 @@ export function DayCard({
   onDuplicate,
   onTogglePublish,
   onDelete,
+  onShareDay,
   isStaff,
   animationDelay = 0,
 }: DayCardProps) {
@@ -92,6 +95,15 @@ export function DayCard({
           </div>
           {isStaff && (
             <div className="flex items-center gap-1 shrink-0 ml-2">
+              {day.status === "published" && onShareDay && (
+                <button
+                  onClick={onShareDay}
+                  className="h-8 w-8 flex items-center justify-center rounded-lg hover:bg-primary/10 transition-colors"
+                  title="Share programming"
+                >
+                  <Share2 className="h-4 w-4 text-primary" />
+                </button>
+              )}
               <button
                 onClick={onTogglePublish}
                 className="h-8 w-8 flex items-center justify-center rounded-lg hover:bg-accent transition-colors"

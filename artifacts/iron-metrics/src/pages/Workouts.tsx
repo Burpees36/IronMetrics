@@ -16,6 +16,7 @@ import {
   useGenerateProgrammingDay,
   useGenerateProgrammingWeek,
   getListProgrammingDaysQueryKey,
+  useGetGym,
 } from "@workspace/api-client-react";
 import type { ProgrammingDayWithSections, SectionType as ApiSectionType } from "@workspace/api-client-react";
 import { useAuth } from "@workspace/replit-auth-web";
@@ -32,6 +33,7 @@ import {
   Eye,
   Sparkles,
   Wand2,
+  Share2,
 } from "lucide-react";
 
 import { DateNavigation } from "@/components/programming/DateNavigation";
@@ -54,6 +56,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ShareWorkoutDialog } from "@/components/programming/ShareWorkoutDialog";
 
 function toDateString(d: Date): string {
   return d.toISOString().split("T")[0];
@@ -243,6 +246,14 @@ export function Workouts() {
   const [deleteConfirmDay, setDeleteConfirmDay] = useState<ProgrammingDayWithSections | null>(null);
   const [overwriteConfirm, setOverwriteConfirm] = useState<{ date: string } | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [shareDialogOpen, setShareDialogOpen] = useState(false);
+  const [shareDialogDay, setShareDialogDay] = useState<{ title?: string; date?: string } | null>(null);
+
+  const { data: gym } = useGetGym(activeGymId as number, { query: { enabled: !!activeGymId } });
+  const gymSlug = (gym as { slug?: string } | undefined)?.slug;
+  const publicWodUrl = gymSlug
+    ? `${window.location.origin}${import.meta.env.BASE_URL.replace(/\/$/, "")}/wod/${gymSlug}`
+    : "";
 
   const dateStr = toDateString(selectedDate);
   const weekDates = useMemo(() => getWeekDates(selectedDate), [dateStr]);
@@ -283,6 +294,10 @@ export function Workouts() {
     const raw = (membersList as { members?: unknown }).members || membersList;
     return Array.isArray(raw) ? (raw as import("@workspace/api-client-react").Member[]) : [];
   }, [membersList]);
+
+  const activeMemberCount = useMemo(() => {
+    return allMembers.filter((m) => m.status === "active").length;
+  }, [allMembers]);
 
   const currentMemberId = useMemo(() => {
     if (!currentUser?.email || allMembers.length === 0) return null;
@@ -497,10 +512,15 @@ export function Workouts() {
           dayId: day.id,
         });
         invalidateProgramming();
+        const wasPublishing = day.status !== "published";
         toast({
-          title: day.status === "published" ? "Unpublished" : "Published",
-          description: `Programming for ${new Date(day.date + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })} has been ${day.status === "published" ? "unpublished" : "published"}.`,
+          title: wasPublishing ? "Published" : "Unpublished",
+          description: `Programming for ${new Date(day.date + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })} has been ${wasPublishing ? "published" : "unpublished"}.`,
         });
+        if (wasPublishing && publicWodUrl) {
+          setShareDialogDay({ title: day.title, date: day.date });
+          setShareDialogOpen(true);
+        }
       } catch (error: any) {
         toast({
           title: "Error",
@@ -509,7 +529,7 @@ export function Workouts() {
         });
       }
     },
-    [activeGymId, togglePublishMutation, invalidateProgramming, toast]
+    [activeGymId, togglePublishMutation, invalidateProgramming, toast, publicWodUrl]
   );
 
   const handleDelete = useCallback(
@@ -712,6 +732,19 @@ export function Workouts() {
               <span>Generating...</span>
             </div>
           )}
+          {publicWodUrl && (
+            <button
+              onClick={() => {
+                setShareDialogDay(null);
+                setShareDialogOpen(true);
+              }}
+              className="flex items-center gap-2 px-4 py-2.5 border border-border bg-background hover:bg-accent rounded-xl font-medium transition-colors text-foreground"
+              title="Share programming"
+            >
+              <Share2 className="h-4 w-4" />
+              <span className="hidden sm:inline">Share</span>
+            </button>
+          )}
           <button
             onClick={() => handleGenerateDay()}
             disabled={isGenerating}
@@ -773,6 +806,10 @@ export function Workouts() {
                     onDuplicate={() => handleDuplicate(day)}
                     onTogglePublish={() => handleTogglePublish(day)}
                     onDelete={() => setDeleteConfirmDay(day)}
+                    onShareDay={() => {
+                      setShareDialogDay({ title: day.title, date: day.date });
+                      setShareDialogOpen(true);
+                    }}
                   />
                   {hasTrackableSections && (
                     <MemberProgrammingView
@@ -882,6 +919,10 @@ export function Workouts() {
                 onDuplicate={() => handleDuplicate(day)}
                 onTogglePublish={() => handleTogglePublish(day)}
                 onDelete={() => setDeleteConfirmDay(day)}
+                onShareDay={() => {
+                  setShareDialogDay({ title: day.title, date: day.date });
+                  setShareDialogOpen(true);
+                }}
               />
             );
           })}
@@ -949,6 +990,18 @@ export function Workouts() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {publicWodUrl && activeGymId && (
+        <ShareWorkoutDialog
+          open={shareDialogOpen}
+          onOpenChange={setShareDialogOpen}
+          publicUrl={publicWodUrl}
+          gymId={activeGymId}
+          activeMemberCount={activeMemberCount}
+          dayTitle={shareDialogDay?.title}
+          dayDate={shareDialogDay?.date}
+        />
+      )}
     </div>
   );
 }

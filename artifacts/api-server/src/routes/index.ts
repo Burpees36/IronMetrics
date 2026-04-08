@@ -54,6 +54,7 @@ import adminRouter from "./admin";
 import wodifyRouter from "./integrations/wodify";
 import financesRouter from "./finances";
 import appointmentsRouter from "./appointments";
+import notifyWorkoutRouter from "./notify-workout";
 
 const router: IRouter = Router();
 
@@ -125,6 +126,7 @@ router.use("/gyms/:gymId/appointments", requireTierAccess("schedule"));
 router.use("/gyms/:gymId/attendance", requireTierAccess("attendance"));
 router.use("/gyms/:gymId/workouts", requireTierAccess("workouts"));
 router.use("/gyms/:gymId/programming", requireTierAccess("programming"));
+router.use("/gyms/:gymId/notify-workout", requireTierAccess("programming"));
 router.use("/gyms/:gymId/staff", requireTierAccess("staff"));
 
 // Pro-tier access gates — must come before the corresponding routers
@@ -141,5 +143,6 @@ router.use(attendanceRouter);
 router.use(appointmentsRouter);
 router.use(workoutsRouter);
 router.use(programmingRouter);
+router.use(notifyWorkoutRouter);
 
 export default router;
