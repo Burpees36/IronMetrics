@@ -31,14 +31,22 @@ router.post("/gyms/:gymId/notify-workout", requireProgrammingWrite(), async (req
       return;
     }
 
-    const { date } = req.body as { date?: string };
+    const { date, startDate, endDate } = req.body as { date?: string; startDate?: string; endDate?: string };
 
     if (date && !DATE_REGEX.test(date)) {
       res.status(400).json({ error: "Invalid date format. Expected YYYY-MM-DD." });
       return;
     }
+    if (startDate && !DATE_REGEX.test(startDate)) {
+      res.status(400).json({ error: "Invalid startDate format. Expected YYYY-MM-DD." });
+      return;
+    }
+    if (endDate && !DATE_REGEX.test(endDate)) {
+      res.status(400).json({ error: "Invalid endDate format. Expected YYYY-MM-DD." });
+      return;
+    }
 
-    const cooldownKey = getCooldownKey(gymId, date);
+    const cooldownKey = getCooldownKey(gymId, date || startDate);
     const lastSent = lastNotifyTimestamps.get(cooldownKey);
     if (lastSent && Date.now() - lastSent < COOLDOWN_MS) {
       const remainingMin = Math.ceil((COOLDOWN_MS - (Date.now() - lastSent)) / 60000);
@@ -62,10 +70,20 @@ router.post("/gyms/:gymId/notify-workout", requireProgrammingWrite(), async (req
 
     if (date) {
       conditions.push(eq(programmingDaysTable.date, date));
+    } else if (startDate || endDate) {
+      if (startDate) {
+        conditions.push(gte(programmingDaysTable.date, startDate));
+      }
+      if (endDate) {
+        conditions.push(lte(programmingDaysTable.date, endDate));
+      }
     } else {
       const today = new Date().toISOString().split("T")[0];
+      const weekFromNow = new Date();
+      weekFromNow.setDate(weekFromNow.getDate() + 7);
+      const weekEnd = weekFromNow.toISOString().split("T")[0];
       conditions.push(gte(programmingDaysTable.date, today));
-      conditions.push(lte(programmingDaysTable.date, today));
+      conditions.push(lte(programmingDaysTable.date, weekEnd));
     }
 
     const publishedDays = await db

@@ -383,6 +383,10 @@ export function Workouts() {
             title: "Week Generated",
             description: `${generated} days created${skipped > 0 ? `, ${skipped} days skipped (already exist)` : ""}. Review and edit before publishing.`,
           });
+          if (generated > 0 && publicWodUrl) {
+            setShareDialogDay(null);
+            setShareDialogOpen(true);
+          }
         }
       } catch (error: unknown) {
         const err = error as { data?: { error?: string }; message?: string };
@@ -395,7 +399,7 @@ export function Workouts() {
         setIsGenerating(false);
       }
     },
-    [activeGymId, weekDates, generateWeekMutation, invalidateProgramming, toast]
+    [activeGymId, weekDates, generateWeekMutation, invalidateProgramming, toast, publicWodUrl]
   );
 
   const daysByDate = useMemo(() => {
@@ -806,10 +810,8 @@ export function Workouts() {
                     onDuplicate={() => handleDuplicate(day)}
                     onTogglePublish={() => handleTogglePublish(day)}
                     onDelete={() => setDeleteConfirmDay(day)}
-                    onShareDay={() => {
-                      setShareDialogDay({ title: day.title, date: day.date });
-                      setShareDialogOpen(true);
-                    }}
+                    publicWodUrl={publicWodUrl}
+                    onCopyLink={(msg) => toast({ title: "Link Copied", description: msg })}
                   />
                   {hasTrackableSections && (
                     <MemberProgrammingView
@@ -919,10 +921,8 @@ export function Workouts() {
                 onDuplicate={() => handleDuplicate(day)}
                 onTogglePublish={() => handleTogglePublish(day)}
                 onDelete={() => setDeleteConfirmDay(day)}
-                onShareDay={() => {
-                  setShareDialogDay({ title: day.title, date: day.date });
-                  setShareDialogOpen(true);
-                }}
+                publicWodUrl={publicWodUrl}
+                onCopyLink={(msg) => toast({ title: "Link Copied", description: msg })}
               />
             );
           })}

@@ -11,6 +11,7 @@ import {
   ChevronDown,
   ChevronUp,
   Share2,
+  Check,
 } from "lucide-react";
 import { getSectionTypeInfo, SectionData, type SectionType } from "./SectionEditor";
 import type { ProgrammingDayWithSections } from "@workspace/api-client-react";
@@ -24,7 +25,8 @@ interface DayCardProps {
   onDuplicate?: () => void;
   onTogglePublish?: () => void;
   onDelete?: () => void;
-  onShareDay?: () => void;
+  publicWodUrl?: string;
+  onCopyLink?: (message: string) => void;
   isStaff: boolean;
   animationDelay?: number;
 }
@@ -49,7 +51,8 @@ export function DayCard({
   onDuplicate,
   onTogglePublish,
   onDelete,
-  onShareDay,
+  publicWodUrl,
+  onCopyLink,
   isStaff,
   animationDelay = 0,
 }: DayCardProps) {
@@ -60,12 +63,32 @@ export function DayCard({
   });
 
   const [expanded, setExpanded] = useState(false);
+  const [shareCopied, setShareCopied] = useState(false);
   const scoredSections = day.sections.filter((s) => s.resultTrackingEnabled).length;
 
   const hasOverflow = day.sections.some((s) => {
     if (!s.instructions) return false;
     return s.instructions.split("\n").length > PREVIEW_LINES;
   });
+
+  const handleShareCopy = async () => {
+    if (!publicWodUrl) return;
+    try {
+      await navigator.clipboard.writeText(publicWodUrl);
+    } catch {
+      const input = document.createElement("input");
+      input.value = publicWodUrl;
+      document.body.appendChild(input);
+      input.select();
+      document.execCommand("copy");
+      document.body.removeChild(input);
+    }
+    setShareCopied(true);
+    setTimeout(() => setShareCopied(false), 2000);
+    if (onCopyLink) {
+      onCopyLink(`Link copied for ${day.title}`);
+    }
+  };
 
   return (
     <motion.div
@@ -95,13 +118,17 @@ export function DayCard({
           </div>
           {isStaff && (
             <div className="flex items-center gap-1 shrink-0 ml-2">
-              {day.status === "published" && onShareDay && (
+              {day.status === "published" && publicWodUrl && (
                 <button
-                  onClick={onShareDay}
+                  onClick={handleShareCopy}
                   className="h-8 w-8 flex items-center justify-center rounded-lg hover:bg-primary/10 transition-colors"
-                  title="Share programming"
+                  title={shareCopied ? "Copied!" : "Copy public link"}
                 >
-                  <Share2 className="h-4 w-4 text-primary" />
+                  {shareCopied ? (
+                    <Check className="h-4 w-4 text-emerald-500" />
+                  ) : (
+                    <Share2 className="h-4 w-4 text-primary" />
+                  )}
                 </button>
               )}
               <button

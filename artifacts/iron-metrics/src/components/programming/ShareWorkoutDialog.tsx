@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Share2,
@@ -18,6 +18,22 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
+
+const COOLDOWN_MS = 15 * 60 * 1000;
+
+function getCooldownStorageKey(gymId: number, dayDate?: string): string {
+  return `im_notify_cooldown_${gymId}_${dayDate || "all"}`;
+}
+
+function getStoredCooldownRemaining(gymId: number, dayDate?: string): number {
+  const key = getCooldownStorageKey(gymId, dayDate);
+  const stored = localStorage.getItem(key);
+  if (!stored) return 0;
+  const ts = parseInt(stored, 10);
+  if (isNaN(ts)) return 0;
+  const remaining = COOLDOWN_MS - (Date.now() - ts);
+  return remaining > 0 ? remaining : 0;
+}
 
 interface ShareWorkoutDialogProps {
   open: boolean;
@@ -42,6 +58,17 @@ export function ShareWorkoutDialog({
   const [notifyState, setNotifyState] = useState<"idle" | "loading" | "success" | "cooldown" | "error">("idle");
   const [notifyCount, setNotifyCount] = useState(0);
   const [notifyError, setNotifyError] = useState("");
+  const [cooldownMinutes, setCooldownMinutes] = useState(0);
+
+  useEffect(() => {
+    if (!open) return;
+    const remaining = getStoredCooldownRemaining(gymId, dayDate);
+    if (remaining > 0) {
+      setCooldownMinutes(Math.ceil(remaining / 60000));
+      setNotifyState("cooldown");
+      setNotifyError(`Notification was sent recently. Please wait ${Math.ceil(remaining / 60000)} minute${Math.ceil(remaining / 60000) !== 1 ? "s" : ""} before sending again.`);
+    }
+  }, [open, gymId, dayDate]);
 
   const handleCopyLink = useCallback(async () => {
     try {
@@ -79,6 +106,9 @@ export function ShareWorkoutDialog({
         if (response.status === 429) {
           setNotifyState("cooldown");
           setNotifyError(data.error || "Notification was recently sent. Please wait before sending again.");
+          if (data.cooldownMinutes) {
+            setCooldownMinutes(data.cooldownMinutes);
+          }
           return;
         }
         throw new Error(data.error || "Failed to notify members");
@@ -87,6 +117,9 @@ export function ShareWorkoutDialog({
       const data = await response.json() as { emailsSent: number };
       setNotifyCount(data.emailsSent);
       setNotifyState("success");
+
+      const key = getCooldownStorageKey(gymId, dayDate);
+      localStorage.setItem(key, String(Date.now()));
     } catch (err: unknown) {
       const error = err as Error;
       setNotifyState("error");
@@ -100,6 +133,7 @@ export function ShareWorkoutDialog({
       setNotifyState("idle");
       setNotifyCount(0);
       setNotifyError("");
+      setCooldownMinutes(0);
     }
     onOpenChange(open);
   }, [onOpenChange]);
@@ -178,7 +212,9 @@ export function ShareWorkoutDialog({
             </div>
 
             <p className="text-xs text-muted-foreground">
-              Send an email to all active members with a link to today's published programming.
+              {dayTitle
+                ? `Send an email to all active members with a link to "${dayTitle}".`
+                : "Send an email to all active members with a link to your published programming."}
             </p>
 
             <AnimatePresence mode="wait">
