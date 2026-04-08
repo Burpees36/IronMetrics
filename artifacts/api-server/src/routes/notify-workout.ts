@@ -159,7 +159,8 @@ router.post("/gyms/:gymId/notify-workout", requireProgrammingWrite(), async (req
         html: htmlBody,
         emailType: "workout_notification",
         timelineTitle: "Workout notification sent",
-        fromName: gym.name,
+        fromEmail: gym.fromEmail || undefined,
+        fromName: gym.fromName || gym.name,
       });
       if (result.success) {
         emailsSent++;

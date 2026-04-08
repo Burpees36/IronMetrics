@@ -73,11 +73,12 @@ export function DayCard({
 
   const handleShareCopy = async () => {
     if (!publicWodUrl) return;
+    const dayUrl = `${publicWodUrl}?date=${day.date}`;
     try {
-      await navigator.clipboard.writeText(publicWodUrl);
+      await navigator.clipboard.writeText(dayUrl);
     } catch {
       const input = document.createElement("input");
-      input.value = publicWodUrl;
+      input.value = dayUrl;
       document.body.appendChild(input);
       input.select();
       document.execCommand("copy");
