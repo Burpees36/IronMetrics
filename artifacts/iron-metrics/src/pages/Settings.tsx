@@ -3,7 +3,7 @@ import { useGym } from "@/store/GymContext";
 import { useGetGym } from "@workspace/api-client-react";
 import { useLocation } from "wouter";
 import { motion } from "framer-motion";
-import { Building2, Users, Mail, CreditCard, Shield, Palette, Puzzle, AlertTriangle, Settings as SettingsIcon, Dumbbell, MessageSquare } from "lucide-react";
+import { Building2, Users, Mail, CreditCard, Shield, ShieldOff, Palette, Puzzle, AlertTriangle, Settings as SettingsIcon, Dumbbell, MessageSquare } from "lucide-react";
 import { GeneralSettings } from "@/components/settings/GeneralSettings";
 import { StaffSettings } from "@/components/settings/StaffSettings";
 import { EmailSettings } from "@/components/settings/EmailSettings";
@@ -24,7 +24,7 @@ const SECTIONS = [
   { id: "email", label: "Email & Notifications", icon: Mail },
   { id: "sms", label: "SMS / Text Messaging", icon: MessageSquare },
   { id: "platform-billing", label: "Platform Subscription", icon: CreditCard },
-  { id: "billing", label: "Member Billing", icon: CreditCard },
+  { id: "billing", label: "Member Payment Policies", icon: ShieldOff },
   { id: "security", label: "Security", icon: Shield },
   { id: "communication", label: "Communication Style", icon: MessageSquare },
   { id: "branding", label: "Branding", icon: Palette },
