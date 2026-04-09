@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { AutopilotSettingsChannelBilling } from "./autopilotSettingsChannelBilling";
+import type { AutopilotSettingsChannelCelebrations } from "./autopilotSettingsChannelCelebrations";
 import type { AutopilotSettingsChannelLeads } from "./autopilotSettingsChannelLeads";
 import type { AutopilotSettingsChannelOutreach } from "./autopilotSettingsChannelOutreach";
 import type { AutopilotSettingsDigestFrequency } from "./autopilotSettingsDigestFrequency";
@@ -14,9 +15,18 @@ export interface AutopilotSettings {
   autopilotOutreach: boolean;
   autopilotBilling: boolean;
   autopilotLeads: boolean;
+  autopilotCelebrations: boolean;
   channelOutreach: AutopilotSettingsChannelOutreach;
   channelBilling: AutopilotSettingsChannelBilling;
   channelLeads: AutopilotSettingsChannelLeads;
+  channelCelebrations: AutopilotSettingsChannelCelebrations;
   cooldownDays: number;
+  cooldownOutreach: number;
+  cooldownBilling: number;
+  cooldownLeads: number;
+  cooldownCelebrations: number;
   digestFrequency: AutopilotSettingsDigestFrequency;
+  briefingEmailEnabled: boolean;
+  briefingDeliveryHour: number;
+  briefingSmsEnabled: boolean;
 }

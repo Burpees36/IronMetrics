@@ -11,6 +11,8 @@ import {
 } from "./personalization-context";
 import { processAutopilotTasks } from "./autopilot-sender";
 import { assertVoiceCompliance } from "./iron-metrics-voice";
+import { detectMilestones } from "./milestone-detection";
+import { buildCelebrationContent } from "./celebration-content";
 
 export interface CommunicationStyle {
   tone: string;
@@ -358,11 +360,13 @@ const PRIORITY_ORDER: Record<string, number> = {
   high_outreach: 1,
   billing: 2,
   leads: 3,
+  celebration: 4,
 };
 
 interface GeneratedTask {
   gymId: number;
   type: string;
+  subtype?: string;
   title: string;
   description: string;
   priority: string;
@@ -692,6 +696,53 @@ async function generateFailedPaymentTasks(gymId: number): Promise<GeneratedTask[
   return tasks;
 }
 
+async function generateCelebrationTasks(gymId: number, cooldownDays: number): Promise<GeneratedTask[]> {
+  const [gym] = await db.select({ name: gymsTable.name }).from(gymsTable).where(eq(gymsTable.id, gymId));
+  const gymName = gym?.name || "Your Gym";
+
+  const milestones = await detectMilestones(gymId, cooldownDays);
+  const tasks: GeneratedTask[] = [];
+
+  for (const milestone of milestones) {
+    const ctx = await assembleMemberContext(milestone.memberId, gymId);
+    const celebContent = buildCelebrationContent(
+      milestone.milestoneType,
+      milestone.detail,
+      milestone.memberFirstName,
+      milestone.memberLastName,
+      milestone.value,
+      ctx,
+      gymName
+    );
+
+    let personalizationMeta: string | undefined;
+    if (ctx) {
+      const meta = buildMemberPersonalizationMeta(ctx);
+      meta.dataPoints.push(`Milestone: ${milestone.detail}`);
+      meta.hooks.push("celebration");
+      personalizationMeta = JSON.stringify(meta);
+    }
+
+    tasks.push({
+      gymId,
+      type: "celebration",
+      subtype: milestone.milestoneType,
+      title: celebContent.title,
+      description: celebContent.description,
+      priority: "low",
+      status: "pending",
+      targetId: milestone.memberId,
+      targetType: "member",
+      aiContent: celebContent.content,
+      subject: celebContent.subject,
+      personalizationMeta,
+      _sortKey: PRIORITY_ORDER.celebration,
+    });
+  }
+
+  return tasks;
+}
+
 export async function generateAiTasks(gymId: number): Promise<{ created: number; tasks: any[] }> {
   await refreshRiskScores(gymId);
 
@@ -702,7 +753,17 @@ export async function generateAiTasks(gymId: number): Promise<{ created: number;
     fetchCommunicationStyle(gymId),
   ]);
 
-  const allCandidates = [...atRiskTasks, ...leadTasks, ...billingTasks];
+  let celebrationTasks: GeneratedTask[] = [];
+  try {
+    const { aiOperatorSettingsTable } = await import("@workspace/db");
+    const [settings] = await db.select().from(aiOperatorSettingsTable).where(eq(aiOperatorSettingsTable.gymId, gymId));
+    const cooldownCelebrations = settings?.cooldownCelebrations ?? 90;
+    celebrationTasks = await generateCelebrationTasks(gymId, cooldownCelebrations);
+  } catch (err: any) {
+    console.error(`[ai-task-generation] Celebration task generation error for gym ${gymId}:`, err.message);
+  }
+
+  const allCandidates = [...atRiskTasks, ...leadTasks, ...billingTasks, ...celebrationTasks];
 
   if (commStyle.rules.length > 0 || commStyle.tone !== "casual_friendly") {
     for (const task of allCandidates) {
@@ -715,7 +776,7 @@ export async function generateAiTasks(gymId: number): Promise<{ created: number;
   }
 
   if (allCandidates.length === 0) {
-    const checkedCategories = ["at-risk member outreach", "stale lead follow-up", "failed payment recovery"];
+    const checkedCategories = ["at-risk member outreach", "stale lead follow-up", "failed payment recovery", "member celebrations"];
     return {
       created: 0,
       tasks: [],

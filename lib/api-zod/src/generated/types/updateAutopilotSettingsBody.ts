@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { UpdateAutopilotSettingsBodyChannelBilling } from "./updateAutopilotSettingsBodyChannelBilling";
+import type { UpdateAutopilotSettingsBodyChannelCelebrations } from "./updateAutopilotSettingsBodyChannelCelebrations";
 import type { UpdateAutopilotSettingsBodyChannelLeads } from "./updateAutopilotSettingsBodyChannelLeads";
 import type { UpdateAutopilotSettingsBodyChannelOutreach } from "./updateAutopilotSettingsBodyChannelOutreach";
 import type { UpdateAutopilotSettingsBodyDigestFrequency } from "./updateAutopilotSettingsBodyDigestFrequency";
@@ -14,13 +15,42 @@ export interface UpdateAutopilotSettingsBody {
   autopilotOutreach?: boolean;
   autopilotBilling?: boolean;
   autopilotLeads?: boolean;
+  autopilotCelebrations?: boolean;
   channelOutreach?: UpdateAutopilotSettingsBodyChannelOutreach;
   channelBilling?: UpdateAutopilotSettingsBodyChannelBilling;
   channelLeads?: UpdateAutopilotSettingsBodyChannelLeads;
+  channelCelebrations?: UpdateAutopilotSettingsBodyChannelCelebrations;
   /**
    * @minimum 1
    * @maximum 90
    */
   cooldownDays?: number;
+  /**
+   * @minimum 1
+   * @maximum 90
+   */
+  cooldownOutreach?: number;
+  /**
+   * @minimum 1
+   * @maximum 90
+   */
+  cooldownBilling?: number;
+  /**
+   * @minimum 1
+   * @maximum 90
+   */
+  cooldownLeads?: number;
+  /**
+   * @minimum 1
+   * @maximum 365
+   */
+  cooldownCelebrations?: number;
   digestFrequency?: UpdateAutopilotSettingsBodyDigestFrequency;
+  briefingEmailEnabled?: boolean;
+  /**
+   * @minimum 4
+   * @maximum 10
+   */
+  briefingDeliveryHour?: number;
+  briefingSmsEnabled?: boolean;
 }

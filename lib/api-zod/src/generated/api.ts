@@ -3735,11 +3735,20 @@ export const GetAutopilotSettingsResponse = zod.object({
   autopilotOutreach: zod.boolean(),
   autopilotBilling: zod.boolean(),
   autopilotLeads: zod.boolean(),
+  autopilotCelebrations: zod.boolean(),
   channelOutreach: zod.enum(["email", "sms", "both"]),
   channelBilling: zod.enum(["email", "sms", "both"]),
   channelLeads: zod.enum(["email", "sms", "both"]),
+  channelCelebrations: zod.enum(["email", "sms", "both"]),
   cooldownDays: zod.number(),
+  cooldownOutreach: zod.number(),
+  cooldownBilling: zod.number(),
+  cooldownLeads: zod.number(),
+  cooldownCelebrations: zod.number(),
   digestFrequency: zod.enum(["daily", "weekly", "disabled"]),
+  briefingEmailEnabled: zod.boolean(),
+  briefingDeliveryHour: zod.number(),
+  briefingSmsEnabled: zod.boolean(),
 });
 
 /**
@@ -3751,30 +3760,79 @@ export const UpdateAutopilotSettingsParams = zod.object({
 
 export const updateAutopilotSettingsBodyCooldownDaysMax = 90;
 
+export const updateAutopilotSettingsBodyCooldownOutreachMax = 90;
+
+export const updateAutopilotSettingsBodyCooldownBillingMax = 90;
+
+export const updateAutopilotSettingsBodyCooldownLeadsMax = 90;
+
+export const updateAutopilotSettingsBodyCooldownCelebrationsMax = 365;
+
+export const updateAutopilotSettingsBodyBriefingDeliveryHourMin = 4;
+export const updateAutopilotSettingsBodyBriefingDeliveryHourMax = 10;
+
 export const UpdateAutopilotSettingsBody = zod.object({
   autopilotOutreach: zod.boolean().optional(),
   autopilotBilling: zod.boolean().optional(),
   autopilotLeads: zod.boolean().optional(),
+  autopilotCelebrations: zod.boolean().optional(),
   channelOutreach: zod.enum(["email", "sms", "both"]).optional(),
   channelBilling: zod.enum(["email", "sms", "both"]).optional(),
   channelLeads: zod.enum(["email", "sms", "both"]).optional(),
+  channelCelebrations: zod.enum(["email", "sms", "both"]).optional(),
   cooldownDays: zod
     .number()
     .min(1)
     .max(updateAutopilotSettingsBodyCooldownDaysMax)
     .optional(),
+  cooldownOutreach: zod
+    .number()
+    .min(1)
+    .max(updateAutopilotSettingsBodyCooldownOutreachMax)
+    .optional(),
+  cooldownBilling: zod
+    .number()
+    .min(1)
+    .max(updateAutopilotSettingsBodyCooldownBillingMax)
+    .optional(),
+  cooldownLeads: zod
+    .number()
+    .min(1)
+    .max(updateAutopilotSettingsBodyCooldownLeadsMax)
+    .optional(),
+  cooldownCelebrations: zod
+    .number()
+    .min(1)
+    .max(updateAutopilotSettingsBodyCooldownCelebrationsMax)
+    .optional(),
   digestFrequency: zod.enum(["daily", "weekly", "disabled"]).optional(),
+  briefingEmailEnabled: zod.boolean().optional(),
+  briefingDeliveryHour: zod
+    .number()
+    .min(updateAutopilotSettingsBodyBriefingDeliveryHourMin)
+    .max(updateAutopilotSettingsBodyBriefingDeliveryHourMax)
+    .optional(),
+  briefingSmsEnabled: zod.boolean().optional(),
 });
 
 export const UpdateAutopilotSettingsResponse = zod.object({
   autopilotOutreach: zod.boolean(),
   autopilotBilling: zod.boolean(),
   autopilotLeads: zod.boolean(),
+  autopilotCelebrations: zod.boolean(),
   channelOutreach: zod.enum(["email", "sms", "both"]),
   channelBilling: zod.enum(["email", "sms", "both"]),
   channelLeads: zod.enum(["email", "sms", "both"]),
+  channelCelebrations: zod.enum(["email", "sms", "both"]),
   cooldownDays: zod.number(),
+  cooldownOutreach: zod.number(),
+  cooldownBilling: zod.number(),
+  cooldownLeads: zod.number(),
+  cooldownCelebrations: zod.number(),
   digestFrequency: zod.enum(["daily", "weekly", "disabled"]),
+  briefingEmailEnabled: zod.boolean(),
+  briefingDeliveryHour: zod.number(),
+  briefingSmsEnabled: zod.boolean(),
 });
 
 /**

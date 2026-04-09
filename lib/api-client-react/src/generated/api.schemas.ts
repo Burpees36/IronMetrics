@@ -1796,6 +1796,15 @@ export const AutopilotSettingsChannelLeads = {
   both: "both",
 } as const;
 
+export type AutopilotSettingsChannelCelebrations =
+  (typeof AutopilotSettingsChannelCelebrations)[keyof typeof AutopilotSettingsChannelCelebrations];
+
+export const AutopilotSettingsChannelCelebrations = {
+  email: "email",
+  sms: "sms",
+  both: "both",
+} as const;
+
 export type AutopilotSettingsDigestFrequency =
   (typeof AutopilotSettingsDigestFrequency)[keyof typeof AutopilotSettingsDigestFrequency];
 
@@ -1809,11 +1818,20 @@ export interface AutopilotSettings {
   autopilotOutreach: boolean;
   autopilotBilling: boolean;
   autopilotLeads: boolean;
+  autopilotCelebrations: boolean;
   channelOutreach: AutopilotSettingsChannelOutreach;
   channelBilling: AutopilotSettingsChannelBilling;
   channelLeads: AutopilotSettingsChannelLeads;
+  channelCelebrations: AutopilotSettingsChannelCelebrations;
   cooldownDays: number;
+  cooldownOutreach: number;
+  cooldownBilling: number;
+  cooldownLeads: number;
+  cooldownCelebrations: number;
   digestFrequency: AutopilotSettingsDigestFrequency;
+  briefingEmailEnabled: boolean;
+  briefingDeliveryHour: number;
+  briefingSmsEnabled: boolean;
 }
 
 export type UpdateAutopilotSettingsBodyChannelOutreach =
@@ -1843,6 +1861,15 @@ export const UpdateAutopilotSettingsBodyChannelLeads = {
   both: "both",
 } as const;
 
+export type UpdateAutopilotSettingsBodyChannelCelebrations =
+  (typeof UpdateAutopilotSettingsBodyChannelCelebrations)[keyof typeof UpdateAutopilotSettingsBodyChannelCelebrations];
+
+export const UpdateAutopilotSettingsBodyChannelCelebrations = {
+  email: "email",
+  sms: "sms",
+  both: "both",
+} as const;
+
 export type UpdateAutopilotSettingsBodyDigestFrequency =
   (typeof UpdateAutopilotSettingsBodyDigestFrequency)[keyof typeof UpdateAutopilotSettingsBodyDigestFrequency];
 
@@ -1856,15 +1883,44 @@ export interface UpdateAutopilotSettingsBody {
   autopilotOutreach?: boolean;
   autopilotBilling?: boolean;
   autopilotLeads?: boolean;
+  autopilotCelebrations?: boolean;
   channelOutreach?: UpdateAutopilotSettingsBodyChannelOutreach;
   channelBilling?: UpdateAutopilotSettingsBodyChannelBilling;
   channelLeads?: UpdateAutopilotSettingsBodyChannelLeads;
+  channelCelebrations?: UpdateAutopilotSettingsBodyChannelCelebrations;
   /**
    * @minimum 1
    * @maximum 90
    */
   cooldownDays?: number;
+  /**
+   * @minimum 1
+   * @maximum 90
+   */
+  cooldownOutreach?: number;
+  /**
+   * @minimum 1
+   * @maximum 90
+   */
+  cooldownBilling?: number;
+  /**
+   * @minimum 1
+   * @maximum 90
+   */
+  cooldownLeads?: number;
+  /**
+   * @minimum 1
+   * @maximum 365
+   */
+  cooldownCelebrations?: number;
   digestFrequency?: UpdateAutopilotSettingsBodyDigestFrequency;
+  briefingEmailEnabled?: boolean;
+  /**
+   * @minimum 4
+   * @maximum 10
+   */
+  briefingDeliveryHour?: number;
+  briefingSmsEnabled?: boolean;
 }
 
 export interface AiLastScanResponse {

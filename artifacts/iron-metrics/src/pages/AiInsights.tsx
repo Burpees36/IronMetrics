@@ -51,7 +51,7 @@ import { useGymTier } from "@/hooks/useGymTier";
 const BASE_URL = import.meta.env.BASE_URL || "/";
 const API_BASE = `${BASE_URL}api`.replace(/\/+/g, "/");
 
-const EMAIL_TASK_TYPES = new Set(["outreach", "leads", "billing"]);
+const EMAIL_TASK_TYPES = new Set(["outreach", "leads", "billing", "celebration"]);
 
 const TYPE_CONFIG: Record<string, { label: string; icon: React.ElementType; color: string }> = {
   outreach: { label: "Outreach", icon: Send, color: "bg-blue-500/10 text-blue-500" },
@@ -60,6 +60,7 @@ const TYPE_CONFIG: Record<string, { label: string; icon: React.ElementType; colo
   leads: { label: "Leads", icon: Target, color: "bg-cyan-500/10 text-cyan-500" },
   campaign: { label: "Campaign", icon: Megaphone, color: "bg-pink-500/10 text-pink-500" },
   analysis: { label: "Analysis", icon: BarChart3, color: "bg-orange-500/10 text-orange-500" },
+  celebration: { label: "Celebration", icon: Sparkles, color: "bg-violet-500/10 text-violet-500" },
 };
 
 const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
@@ -73,6 +74,7 @@ const OUTCOME_CONFIG: Record<string, { label: string; color: string; icon: React
   won_back: { label: "Member returned", color: "bg-emerald-500/10 text-emerald-500 border-emerald-500/20", icon: UserCheck },
   reactivated: { label: "Reactivated", color: "bg-emerald-500/10 text-emerald-500 border-emerald-500/20", icon: ArrowUpRight },
   converted: { label: "Converted", color: "bg-primary/10 text-primary border-primary/20", icon: TrendingUp },
+  positive_engagement: { label: "Engaged", color: "bg-violet-500/10 text-violet-500 border-violet-500/20", icon: Sparkles },
   no_change: { label: "No change", color: "bg-muted text-muted-foreground border-border", icon: ArrowDownRight },
   pending_observation: { label: "Observing", color: "bg-amber-500/10 text-amber-500 border-amber-500/20", icon: Eye },
 };
@@ -209,6 +211,21 @@ const SMART_ACTION_CATEGORIES = [
     cooldownLabel: "days between lead follow-ups",
     exampleMessage: `"Hey Taylor — you asked about CrossFit. The No Sweat Intro is 15 minutes, free, and we'll map out a plan that fits your schedule. Pick a time this week."`,
   },
+  {
+    key: "autopilotCelebrations",
+    channelKey: "channelCelebrations",
+    cooldownKey: "cooldownCelebrations",
+    label: "Member Celebrations",
+    subtitle: "Birthdays, anniversaries, streaks, and milestones",
+    icon: Sparkles,
+    color: "bg-violet-500/10 text-violet-600",
+    borderActive: "border-violet-300",
+    explanation: "Iron Metrics detects member milestones — birthdays, membership anniversaries, attendance streaks, class milestones, and comebacks after time away. Each celebration gets a warm, personalized message that strengthens the relationship.",
+    timing: "Sent on the day of the milestone. Cooldown prevents repeats for the same milestone type.",
+    defaultCooldown: 90,
+    cooldownLabel: "days between celebration messages per milestone type",
+    exampleMessage: `"Happy birthday, Sarah! 2 years at the gym — that's real commitment. From the 6am WOD crew to everything else, you've put in the work. Here's to the next year."`,
+  },
 ] as const;
 
 function SmartActionsModal({ gymId, open, onOpenChange }: { gymId: number; open: boolean; onOpenChange: (v: boolean) => void }) {
@@ -250,7 +267,7 @@ function SmartActionsModal({ gymId, open, onOpenChange }: { gymId: number; open:
   };
 
   const s = settings as unknown as Record<string, unknown> | undefined;
-  const anyEnabled = settings?.autopilotOutreach || settings?.autopilotBilling || settings?.autopilotLeads;
+  const anyEnabled = !!(settings?.autopilotOutreach || settings?.autopilotBilling || settings?.autopilotLeads || (s && s["autopilotCelebrations"]));
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -368,7 +385,7 @@ function SmartActionsModal({ gymId, open, onOpenChange }: { gymId: number; open:
                                       <input
                                         type="range"
                                         min={1}
-                                        max={cat.key === "autopilotBilling" ? 14 : 60}
+                                        max={cat.key === "autopilotBilling" ? 14 : cat.key === "autopilotCelebrations" ? 365 : 60}
                                         value={currentCooldown}
                                         onChange={(e) => handleUpdate({ [cat.cooldownKey]: parseInt(e.target.value, 10) })}
                                         disabled={updateSettings.isPending}
@@ -423,6 +440,64 @@ function SmartActionsModal({ gymId, open, onOpenChange }: { gymId: number; open:
                     {freq === "daily" ? "📬 Daily" : freq === "weekly" ? "📅 Weekly" : "Off"}
                   </button>
                 ))}
+              </div>
+            </div>
+
+            <div className="border-t border-border pt-4 space-y-3">
+              <h3 className="text-xs font-semibold text-foreground flex items-center gap-2">
+                <Mail className="h-3.5 w-3.5 text-primary" />
+                Morning Briefing
+              </h3>
+              <p className="text-xs text-muted-foreground">
+                Get a daily snapshot of your gym delivered to your inbox every morning — metrics, overnight actions, and member milestones.
+              </p>
+
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Mail className="h-3.5 w-3.5 text-muted-foreground" />
+                    <span className="text-xs font-medium text-foreground">Email briefing</span>
+                  </div>
+                  <ToggleSwitch
+                    checked={!!(s && s["briefingEmailEnabled"])}
+                    onChange={(v) => handleUpdate({ briefingEmailEnabled: v })}
+                    disabled={updateSettings.isPending}
+                  />
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <MessageSquare className="h-3.5 w-3.5 text-muted-foreground" />
+                    <span className="text-xs font-medium text-foreground">SMS summary</span>
+                  </div>
+                  <ToggleSwitch
+                    checked={!!(s && s["briefingSmsEnabled"])}
+                    onChange={(v) => handleUpdate({ briefingSmsEnabled: v })}
+                    disabled={updateSettings.isPending}
+                  />
+                </div>
+
+                {!!(s && (s["briefingEmailEnabled"] || s["briefingSmsEnabled"])) && (
+                  <div>
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1.5">
+                      Delivery time
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="range"
+                        min={4}
+                        max={10}
+                        value={(s["briefingDeliveryHour"] as number) ?? 6}
+                        onChange={(e) => handleUpdate({ briefingDeliveryHour: parseInt(e.target.value, 10) })}
+                        disabled={updateSettings.isPending}
+                        className="flex-1 accent-primary h-1"
+                      />
+                      <span className="text-xs font-mono font-semibold text-foreground w-16 text-right">
+                        {(s["briefingDeliveryHour"] as number) ?? 6}:00 AM
+                      </span>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 

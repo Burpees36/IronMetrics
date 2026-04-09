@@ -560,6 +560,7 @@ router.get("/gyms/:gymId/ai/impact", async (req, res): Promise<void> => {
     won_back: 0,
     reactivated: 0,
     converted: 0,
+    positive_engagement: 0,
     no_change: 0,
     pending_observation: 0,
   };
@@ -582,21 +583,21 @@ router.get("/gyms/:gymId/ai/impact", async (req, res): Promise<void> => {
     } else if (outcome === "reactivated") {
       totalRevenueRecovered += impact;
       membersSaved++;
-    } else if (outcome === "converted") {
+    } else if (outcome === "converted" || outcome === "positive_engagement") {
       membersSaved++;
     }
   }
 
   const resolvedTasks = actionedTasks.filter(t => t.outcome && t.outcome !== "pending_observation" && t.outcome !== "none");
-  const successfulTasks = resolvedTasks.filter(t => ["won_back", "reactivated", "converted"].includes(t.outcome!));
+  const successfulTasks = resolvedTasks.filter(t => ["won_back", "reactivated", "converted", "positive_engagement"].includes(t.outcome!));
   const successRate = resolvedTasks.length > 0 ? Math.round((successfulTasks.length / resolvedTasks.length) * 100) : 0;
 
-  const monthlyBreakdown: Record<string, { won_back: number; reactivated: number; converted: number; no_change: number }> = {};
+  const monthlyBreakdown: Record<string, { won_back: number; reactivated: number; converted: number; positive_engagement: number; no_change: number }> = {};
   for (const task of actionedTasks) {
     if (!task.actionedAt || !task.outcome || task.outcome === "pending_observation" || task.outcome === "none") continue;
     const monthKey = `${task.actionedAt.getFullYear()}-${String(task.actionedAt.getMonth() + 1).padStart(2, "0")}`;
     if (!monthlyBreakdown[monthKey]) {
-      monthlyBreakdown[monthKey] = { won_back: 0, reactivated: 0, converted: 0, no_change: 0 };
+      monthlyBreakdown[monthKey] = { won_back: 0, reactivated: 0, converted: 0, positive_engagement: 0, no_change: 0 };
     }
     if (task.outcome in monthlyBreakdown[monthKey]) {
       (monthlyBreakdown[monthKey] as any)[task.outcome]++;
@@ -646,14 +647,20 @@ router.get("/gyms/:gymId/ai/autopilot-settings", async (req, res): Promise<void>
     autopilotOutreach: settings.autopilotOutreach,
     autopilotBilling: settings.autopilotBilling,
     autopilotLeads: settings.autopilotLeads,
+    autopilotCelebrations: settings.autopilotCelebrations,
     channelOutreach: settings.channelOutreach,
     channelBilling: settings.channelBilling,
     channelLeads: settings.channelLeads,
+    channelCelebrations: settings.channelCelebrations,
     cooldownDays: settings.cooldownDays,
     cooldownOutreach: settings.cooldownOutreach,
     cooldownBilling: settings.cooldownBilling,
     cooldownLeads: settings.cooldownLeads,
+    cooldownCelebrations: settings.cooldownCelebrations,
     digestFrequency: settings.digestFrequency,
+    briefingEmailEnabled: settings.briefingEmailEnabled,
+    briefingDeliveryHour: settings.briefingDeliveryHour,
+    briefingSmsEnabled: settings.briefingSmsEnabled,
   };
   res.json(settingsResponse);
 });
@@ -667,11 +674,11 @@ router.put("/gyms/:gymId/ai/autopilot-settings", async (req, res): Promise<void>
 
   const body = req.body as Record<string, unknown>;
 
-  const booleanKeys = ["autopilotOutreach", "autopilotBilling", "autopilotLeads"];
-  const channelKeys = ["channelOutreach", "channelBilling", "channelLeads"];
-  const cooldownKeys = ["cooldownDays", "cooldownOutreach", "cooldownBilling", "cooldownLeads"];
+  const booleanKeys = ["autopilotOutreach", "autopilotBilling", "autopilotLeads", "autopilotCelebrations", "briefingEmailEnabled", "briefingSmsEnabled"];
+  const channelKeys = ["channelOutreach", "channelBilling", "channelLeads", "channelCelebrations"];
+  const cooldownKeys = ["cooldownDays", "cooldownOutreach", "cooldownBilling", "cooldownLeads", "cooldownCelebrations"];
   const validChannels = ["email", "sms", "both"];
-  const validDigest = ["daily", "weekly", "off"];
+  const validDigest = ["daily", "weekly", "disabled"];
 
   const updateData: Record<string, unknown> = {};
   const errors: string[] = [];
@@ -691,13 +698,19 @@ router.put("/gyms/:gymId/ai/autopilot-settings", async (req, res): Promise<void>
   for (const key of cooldownKeys) {
     if (body[key] !== undefined) {
       const val = Number(body[key]);
-      if (!Number.isFinite(val) || val < 1 || val > 90) { errors.push(`${key} must be an integer between 1 and 90`); continue; }
+      const maxVal = key === "cooldownCelebrations" ? 365 : 90;
+      if (!Number.isFinite(val) || val < 1 || val > maxVal) { errors.push(`${key} must be an integer between 1 and ${maxVal}`); continue; }
       updateData[key] = Math.round(val);
     }
   }
   if (body.digestFrequency !== undefined) {
     if (!validDigest.includes(body.digestFrequency as string)) { errors.push(`digestFrequency must be one of: ${validDigest.join(", ")}`); }
     else updateData.digestFrequency = body.digestFrequency;
+  }
+  if (body.briefingDeliveryHour !== undefined) {
+    const val = Number(body.briefingDeliveryHour);
+    if (!Number.isFinite(val) || val < 4 || val > 10) { errors.push("briefingDeliveryHour must be an integer between 4 and 10"); }
+    else updateData.briefingDeliveryHour = Math.round(val);
   }
 
   if (errors.length > 0) {
@@ -723,14 +736,20 @@ router.put("/gyms/:gymId/ai/autopilot-settings", async (req, res): Promise<void>
     autopilotOutreach: settings.autopilotOutreach,
     autopilotBilling: settings.autopilotBilling,
     autopilotLeads: settings.autopilotLeads,
+    autopilotCelebrations: settings.autopilotCelebrations,
     channelOutreach: settings.channelOutreach,
     channelBilling: settings.channelBilling,
     channelLeads: settings.channelLeads,
+    channelCelebrations: settings.channelCelebrations,
     cooldownDays: settings.cooldownDays,
     cooldownOutreach: settings.cooldownOutreach,
     cooldownBilling: settings.cooldownBilling,
     cooldownLeads: settings.cooldownLeads,
+    cooldownCelebrations: settings.cooldownCelebrations,
     digestFrequency: settings.digestFrequency,
+    briefingEmailEnabled: settings.briefingEmailEnabled,
+    briefingDeliveryHour: settings.briefingDeliveryHour,
+    briefingSmsEnabled: settings.briefingSmsEnabled,
   });
 });
 

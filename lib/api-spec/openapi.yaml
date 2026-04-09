@@ -7226,6 +7226,8 @@ components:
           type: boolean
         autopilotLeads:
           type: boolean
+        autopilotCelebrations:
+          type: boolean
         channelOutreach:
           type: string
           enum: [email, sms, both]
@@ -7235,20 +7237,46 @@ components:
         channelLeads:
           type: string
           enum: [email, sms, both]
+        channelCelebrations:
+          type: string
+          enum: [email, sms, both]
         cooldownDays:
+          type: integer
+        cooldownOutreach:
+          type: integer
+        cooldownBilling:
+          type: integer
+        cooldownLeads:
+          type: integer
+        cooldownCelebrations:
           type: integer
         digestFrequency:
           type: string
           enum: [daily, weekly, disabled]
+        briefingEmailEnabled:
+          type: boolean
+        briefingDeliveryHour:
+          type: integer
+        briefingSmsEnabled:
+          type: boolean
       required:
         - autopilotOutreach
         - autopilotBilling
         - autopilotLeads
+        - autopilotCelebrations
         - channelOutreach
         - channelBilling
         - channelLeads
+        - channelCelebrations
         - cooldownDays
+        - cooldownOutreach
+        - cooldownBilling
+        - cooldownLeads
+        - cooldownCelebrations
         - digestFrequency
+        - briefingEmailEnabled
+        - briefingDeliveryHour
+        - briefingSmsEnabled
 
     UpdateAutopilotSettingsBody:
       type: object
@@ -7259,6 +7287,8 @@ components:
           type: boolean
         autopilotLeads:
           type: boolean
+        autopilotCelebrations:
+          type: boolean
         channelOutreach:
           type: string
           enum: [email, sms, both]
@@ -7268,13 +7298,40 @@ components:
         channelLeads:
           type: string
           enum: [email, sms, both]
+        channelCelebrations:
+          type: string
+          enum: [email, sms, both]
         cooldownDays:
           type: integer
           minimum: 1
           maximum: 90
+        cooldownOutreach:
+          type: integer
+          minimum: 1
+          maximum: 90
+        cooldownBilling:
+          type: integer
+          minimum: 1
+          maximum: 90
+        cooldownLeads:
+          type: integer
+          minimum: 1
+          maximum: 90
+        cooldownCelebrations:
+          type: integer
+          minimum: 1
+          maximum: 365
         digestFrequency:
           type: string
           enum: [daily, weekly, disabled]
+        briefingEmailEnabled:
+          type: boolean
+        briefingDeliveryHour:
+          type: integer
+          minimum: 4
+          maximum: 10
+        briefingSmsEnabled:
+          type: boolean
 
     AiLastScanResponse:
       type: object

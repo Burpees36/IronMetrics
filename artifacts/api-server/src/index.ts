@@ -10,6 +10,7 @@ import { startAutopilotDigestScheduler } from "./schedulers/autopilot-digest-sch
 import { startAutoPublishScheduler } from "./schedulers/auto-publish-scheduler";
 import { startLeadSequenceScheduler } from "./schedulers/lead-sequence-scheduler";
 import { startAppointmentReminders } from "./schedulers/appointment-reminders";
+import { startBriefingScheduler } from "./schedulers/briefing-scheduler";
 import { runOnboardingMigrationCleanup } from "./migrations/onboarding-cleanup";
 
 const REQUIRED_ENV_VARS = [
@@ -57,6 +58,7 @@ async function main() {
     startAutoPublishScheduler();
     startLeadSequenceScheduler();
     startAppointmentReminders();
+    startBriefingScheduler();
   });
 }
 

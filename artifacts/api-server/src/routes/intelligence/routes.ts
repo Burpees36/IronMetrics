@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
 import { eq, and, count, sql, gte, desc, asc } from "drizzle-orm";
-import { db, membersTable, subscriptionsTable, attendanceTable, leadsTable, classesTable, rsiSnapshotsTable, benchmarksTable, billingAuditLogsTable, dismissedInterventionsTable } from "@workspace/db";
+import { db, membersTable, subscriptionsTable, attendanceTable, leadsTable, classesTable, rsiSnapshotsTable, benchmarksTable, billingAuditLogsTable, dismissedInterventionsTable, aiOperatorSettingsTable } from "@workspace/db";
+import { detectMilestonesForBriefing } from "../../services/milestone-detection";
 import { computeRSI } from "./computations";
 import { getGymMetrics, getRiskProfiles, getInterventions, computeRevenueForecast } from "./metrics";
 import { computeBlendedMRR, computeBlendedEngagement, isActiveBillableMember } from "../../blendedMetrics";
@@ -565,12 +566,36 @@ router.get("/gyms/:gymId/intelligence/morning-briefing", async (req, res): Promi
     };
     const summary = generateConversationalSummary(briefingSnapshot);
 
+    let celebrations: { type: string; memberName: string; detail: string }[] = [];
+    try {
+      const [opSettings] = await db.select().from(aiOperatorSettingsTable).where(eq(aiOperatorSettingsTable.gymId, gymId));
+      const cooldown = opSettings?.cooldownCelebrations ?? 90;
+      const milestones = await detectMilestonesForBriefing(gymId);
+      celebrations = milestones.map((m) => ({
+        type: m.milestoneType,
+        memberName: `${m.memberFirstName} ${m.memberLastName}`,
+        detail: m.detail,
+      }));
+    } catch (err: any) {
+      console.error("[intelligence/morning-briefing] Celebration detection error:", err.message);
+    }
+
+    if (celebrations.length > 0) {
+      items.push({
+        icon: "celebration",
+        priority: "positive",
+        message: `${celebrations.length} member milestone${celebrations.length !== 1 ? "s" : ""} today — birthdays, anniversaries, and wins worth celebrating.`,
+        action: "View celebrations",
+        link: "/ai-insights",
+      });
+    }
+
     res.json({
       date: todayStr,
       summary,
       items: items.sort((a, b) => {
-        const priorityOrder = { critical: 0, warning: 1, info: 2, positive: 3 };
-        return priorityOrder[a.priority] - priorityOrder[b.priority];
+        const priorityOrder: Record<string, number> = { critical: 0, warning: 1, info: 2, positive: 3 };
+        return (priorityOrder[a.priority] ?? 3) - (priorityOrder[b.priority] ?? 3);
       }),
       snapshot: {
         activeMembers: metrics.active,
@@ -589,6 +614,7 @@ router.get("/gyms/:gymId/intelligence/morning-briefing", async (req, res): Promi
         todayClasses: todayClasses.length,
         classFillRate,
       },
+      celebrations,
     });
   } catch (err) {
     console.error("[intelligence/morning-briefing] Failed to generate briefing:", err);

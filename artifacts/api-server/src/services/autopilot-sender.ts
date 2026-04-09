@@ -5,45 +5,55 @@ import { sendMemberSms, sendLeadSms } from "./member-sms";
 import { getEmailService } from "./email-service";
 import { getSmsService } from "./sms-service";
 
-const TYPE_TO_SETTING_KEY: Record<string, "autopilotOutreach" | "autopilotBilling" | "autopilotLeads"> = {
+const TYPE_TO_SETTING_KEY: Record<string, "autopilotOutreach" | "autopilotBilling" | "autopilotLeads" | "autopilotCelebrations"> = {
   outreach: "autopilotOutreach",
   billing: "autopilotBilling",
   leads: "autopilotLeads",
+  celebration: "autopilotCelebrations",
 };
 
-const TYPE_TO_CHANNEL_KEY: Record<string, "channelOutreach" | "channelBilling" | "channelLeads"> = {
+const TYPE_TO_CHANNEL_KEY: Record<string, "channelOutreach" | "channelBilling" | "channelLeads" | "channelCelebrations"> = {
   outreach: "channelOutreach",
   billing: "channelBilling",
   leads: "channelLeads",
+  celebration: "channelCelebrations",
 };
 
-const TYPE_TO_COOLDOWN_KEY: Record<string, "cooldownOutreach" | "cooldownBilling" | "cooldownLeads"> = {
+const TYPE_TO_COOLDOWN_KEY: Record<string, "cooldownOutreach" | "cooldownBilling" | "cooldownLeads" | "cooldownCelebrations"> = {
   outreach: "cooldownOutreach",
   billing: "cooldownBilling",
   leads: "cooldownLeads",
+  celebration: "cooldownCelebrations",
 };
 
 async function isWithinCooldown(
   gymId: number,
   targetId: number,
   targetType: string,
-  cooldownDays: number
+  cooldownDays: number,
+  taskType: string,
+  taskSubtype?: string | null
 ): Promise<boolean> {
   const cutoffDate = new Date();
   cutoffDate.setDate(cutoffDate.getDate() - cooldownDays);
 
+  const conditions = [
+    eq(aiTasksTable.gymId, gymId),
+    eq(aiTasksTable.targetId, targetId),
+    eq(aiTasksTable.targetType, targetType),
+    eq(aiTasksTable.type, taskType),
+    eq(aiTasksTable.status, "sent"),
+    sql`${aiTasksTable.updatedAt} >= ${cutoffDate.toISOString()}`,
+  ];
+
+  if (taskType === "celebration" && taskSubtype) {
+    conditions.push(eq(aiTasksTable.subtype, taskSubtype));
+  }
+
   const [recent] = await db
     .select({ id: aiTasksTable.id })
     .from(aiTasksTable)
-    .where(
-      and(
-        eq(aiTasksTable.gymId, gymId),
-        eq(aiTasksTable.targetId, targetId),
-        eq(aiTasksTable.targetType, targetType),
-        eq(aiTasksTable.status, "sent"),
-        sql`${aiTasksTable.updatedAt} >= ${cutoffDate.toISOString()}`
-      )
-    )
+    .where(and(...conditions))
     .orderBy(desc(aiTasksTable.updatedAt))
     .limit(1);
 
@@ -56,6 +66,7 @@ function buildSmsContent(task: any, recipientName: string): string {
     outreach: `Hey ${firstName}! We miss you at the gym. Want to set up a quick catch-up this week? No pressure - just want to make sure you're doing well. Reply or call us anytime!`,
     leads: `Hi ${firstName}! Thanks for your interest in our gym. We'd love to set up a free No Sweat Intro for you - 20 min, zero pressure. What day works best?`,
     billing: `Hi ${firstName}, quick heads-up - looks like there's a small issue with your payment on file. Super easy to fix! Give us a call or stop by and we'll sort it out in 2 min.`,
+    celebration: `Hey ${firstName}! Just wanted to say congrats and thank you for being part of the gym. You're crushing it! See you soon!`,
   };
   return smsTemplates[task.type] || `Hi ${firstName}, this is a message from your gym. Give us a call when you get a chance!`;
 }
@@ -78,7 +89,7 @@ export async function processAutopilotTasks(
   }
 
   const hasAnyAutopilot =
-    settings.autopilotOutreach || settings.autopilotBilling || settings.autopilotLeads;
+    settings.autopilotOutreach || settings.autopilotBilling || settings.autopilotLeads || settings.autopilotCelebrations;
   if (!hasAnyAutopilot) {
     return { autoSentCount: 0, skippedCount: 0 };
   }
@@ -118,7 +129,9 @@ export async function processAutopilotTasks(
       gymId,
       task.targetId,
       task.targetType,
-      cooldownDays
+      cooldownDays,
+      task.type,
+      task.subtype
     );
     if (inCooldown) {
       skippedCount++;
