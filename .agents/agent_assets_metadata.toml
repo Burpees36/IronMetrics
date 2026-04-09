@@ -1,5 +1,22 @@
 uploads = []
-generated = []
+
+[[generated]]
+id = "3UTvKl3lr5BHedL7nWI02"
+uri = "file://artifacts/mockup-sandbox/public/images/landing/hero-mission.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "vbocOga7A0BAz5y9l53Zu"
+uri = "file://artifacts/mockup-sandbox/public/images/landing/hero-proof.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "P50RcH10vfClBCOkWItU-"
+uri = "file://artifacts/mockup-sandbox/public/images/landing/hero-community.png"
+type = "image"
+title = "generated_image"
 
 [[outputs]]
 id = "yniQHRatN8Rov3SdKQZ-w"
