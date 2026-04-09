@@ -454,7 +454,16 @@ export function Billing() {
         )}
 
         {hasSubscriptionData ? (
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="bg-card border border-border p-5 rounded-2xl shadow-sm">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2 }}
+            role="button"
+            tabIndex={0}
+            className="bg-card border border-border p-5 rounded-2xl shadow-sm cursor-pointer hover:border-primary/40 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 transition-all"
+            onClick={() => navigate("/members?filter=cancelled")}
+            onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); navigate("/members?filter=cancelled"); } }}
+          >
             <div className="flex items-center gap-2 mb-3">
               <UserMinus className="h-4 w-4 text-muted-foreground" />
               <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Cancelled</span>

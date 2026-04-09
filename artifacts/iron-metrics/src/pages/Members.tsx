@@ -98,6 +98,9 @@ export function Members() {
     if (urlFilter === "at-risk") {
       setRiskViewActive(true);
       setStatusFilter(["active"]);
+    } else if (urlFilter === "cancelled") {
+      setRiskViewActive(false);
+      setStatusFilter(["cancelled"]);
     }
   }, [urlFilter]);
 
