@@ -1,7 +1,7 @@
 import React from "react";
 import { motion } from "framer-motion";
 import { Badge } from "@/components/ui/badge";
-import { Puzzle, CheckCircle2, Circle, MessageSquare, ExternalLink } from "lucide-react";
+import { Puzzle, CheckCircle2, Circle, MessageSquare, ExternalLink, ArrowRight } from "lucide-react";
 import { WodifyConnectionCard } from "./WodifyConnectionCard";
 import { useGetGym } from "@workspace/api-client-react";
 
@@ -11,12 +11,18 @@ const STATIC_INTEGRATIONS = [
     desc: "Payment processing, subscriptions, and billing.",
     status: "connected" as const,
     statusText: "Connected",
+    managedLabel: "Managed by ForgeOS",
+    linkLabel: "Go to Platform Subscription",
+    linkSection: "platform-billing",
   },
   {
     name: "Resend",
     desc: "Transactional email delivery for member communications.",
     status: "connected" as const,
     statusText: "Connected",
+    managedLabel: "Managed by ForgeOS",
+    linkLabel: "Go to Email Settings",
+    linkSection: "email",
   },
 ];
 
@@ -62,8 +68,14 @@ export function IntegrationsSettings({ gymId, onNavigateToSection }: Props) {
                     {integration.statusText}
                   </Badge>
                 </div>
-                <button className="w-full px-4 py-2 text-sm font-medium rounded-xl border transition-colors border-border text-muted-foreground hover:bg-secondary">
-                  Manage
+                <p className="text-xs text-muted-foreground mb-2">{integration.managedLabel}</p>
+                <button
+                  type="button"
+                  onClick={() => onNavigateToSection?.(integration.linkSection)}
+                  className="w-full px-4 py-2 text-sm font-medium rounded-xl border transition-colors border-border text-muted-foreground hover:bg-secondary hover:text-foreground flex items-center justify-center gap-2"
+                >
+                  {integration.linkLabel}
+                  <ArrowRight className="h-3.5 w-3.5" />
                 </button>
               </motion.div>
             );
