@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { blendWithLearning, clamp, _interventionBuilders, type InterventionContext } from "../routes/intelligence/intervention-engine";
+import { BANNED_PHRASES } from "../services/iron-metrics-voice";
 
 function makeContext(overrides: Partial<InterventionContext> = {}): InterventionContext {
   return {
@@ -431,32 +432,9 @@ describe("edge cases", () => {
 });
 
 describe("Voice compliance", () => {
-  const BANNED = [
-    "consider reaching out",
-    "optimize your revenue",
-    "you might want to",
-    "it could be beneficial",
-    "keep doing what's working",
-    "there may be room to improve",
-    "worth investigating",
-    "we suggest exploring",
-    "you may want to consider",
-    "proactively engage",
-    "leverage your community",
-    "take your gym to the next level",
-    "maximize your results",
-    "elevate your business",
-    "supercharge your growth",
-    "we recommend",
-    "it might be helpful to",
-    "no pressure",
-    "no worries",
-    "zero pressure",
-  ];
-
-  function assertNoBanned(text: string, label: string) {
+  function assertNoBanned(text: string) {
     const lower = text.toLowerCase();
-    for (const phrase of BANNED) {
+    for (const phrase of BANNED_PHRASES) {
       expect(lower).not.toContain(phrase);
     }
   }
@@ -509,9 +487,9 @@ describe("Voice compliance", () => {
       const builders = Object.values(_interventionBuilders);
       const results = builders.map(b => b(ctx)).filter((r): r is NonNullable<typeof r> => r !== null);
       for (const r of results) {
-        assertNoBanned(r.description, `${name} description`);
+        assertNoBanned(r.description);
         for (const a of r.actions) {
-          assertNoBanned(a, `${name} action`);
+          assertNoBanned(a);
         }
       }
     });
