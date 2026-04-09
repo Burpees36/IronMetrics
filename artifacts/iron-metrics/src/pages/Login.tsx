@@ -1,7 +1,8 @@
 import React from "react";
 import { useAuth } from "@workspace/replit-auth-web";
-import { Dumbbell, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { motion } from "framer-motion";
+import { ForgeOSLogo } from "@/components/brand/ForgeOSLogo";
 
 export function Login() {
   const { login, isLoading } = useAuth();
@@ -24,16 +25,14 @@ export function Login() {
         className="relative z-10 w-full max-w-md p-6 sm:p-10 glass-panel rounded-3xl text-center"
       >
         <div className="flex justify-center mb-6 sm:mb-8">
-          <div className="h-14 w-14 sm:h-16 sm:w-16 bg-primary/20 rounded-2xl flex items-center justify-center border border-primary/30 shadow-[0_0_30px_rgba(16,185,129,0.3)]">
-            <Dumbbell className="h-7 w-7 sm:h-8 sm:w-8 text-primary" />
-          </div>
+          <ForgeOSLogo size="xl" variant="icon" />
         </div>
         
         <h1 className="text-3xl sm:text-4xl font-display font-bold text-foreground tracking-tight mb-2">
-          IRON<span className="text-primary">METRICS</span>
+          FORGE<span className="text-orange-500">OS</span>
         </h1>
         <p className="text-muted-foreground mb-8 sm:mb-10 text-base sm:text-lg">
-          The intelligence engine for modern gyms.
+          The operating system for modern fitness businesses.
         </p>
 
         <button

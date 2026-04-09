@@ -123,7 +123,7 @@ export function ConnectBillingStep({ gymId, onComplete, onSkip, onBack, isComple
             </div>
             <h3 className="text-lg font-semibold text-foreground mb-2">No Subscription Yet</h3>
             <p className="text-sm text-muted-foreground mb-4">
-              Choose a plan to unlock Iron Metrics features and start billing your members through Stripe.
+              Choose a plan to unlock ForgeOS features and start billing your members through Stripe.
             </p>
             <Button onClick={handleViewPlans}>
               <ArrowUpRight className="h-4 w-4 mr-2" />

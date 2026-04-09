@@ -20,7 +20,7 @@ function getPublicBaseUrl(): string {
   if (devDomain) {
     return `https://${devDomain}`;
   }
-  return process.env.APP_URL || "https://ironmetrics.app";
+  return process.env.APP_URL || "https://forgeos.app";
 }
 
 router.post("/gyms/:gymId/notify-workout", requireProgrammingWrite(), async (req, res): Promise<void> => {
@@ -248,7 +248,7 @@ function buildNotificationHtml(
           </div>
         </div>
         <p style="text-align:center;color:#999;font-size:12px;margin-top:16px;">
-          Sent by ${safeGymName} via Iron Metrics
+          Sent by ${safeGymName} via ForgeOS
         </p>
       </div>
     </body>

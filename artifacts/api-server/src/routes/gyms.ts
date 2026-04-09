@@ -286,7 +286,7 @@ router.post("/gyms/:gymId/sms/test", async (req, res): Promise<void> => {
 
   const result = await smsService.sendSms({
     to: parsed.data.to,
-    body: `Test message from ${gym.name} via Iron Metrics. Your SMS setup is working!`,
+    body: `Test message from ${gym.name} via ForgeOS. Your SMS setup is working!`,
   });
 
   if (!result.success) {

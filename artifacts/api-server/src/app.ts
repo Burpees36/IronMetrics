@@ -78,6 +78,8 @@ const allowedOrigins: (string | RegExp)[] = process.env.ALLOWED_ORIGINS
     ? [
         "https://iron-metrics.app",
         "https://www.iron-metrics.app",
+        "https://forgeos.app",
+        "https://www.forgeos.app",
       ]
     : [/\.replit\.dev$/, /\.replit\.app$/, /localhost/];
 

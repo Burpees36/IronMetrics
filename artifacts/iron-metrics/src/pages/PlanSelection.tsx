@@ -2,7 +2,8 @@ import React, { useState } from "react";
 import { useGym } from "@/store/GymContext";
 import { useLocation } from "wouter";
 import { motion } from "framer-motion";
-import { Check, Dumbbell, Loader2, Zap, TrendingUp, Crown, ArrowRight } from "lucide-react";
+import { Check, Loader2, Zap, TrendingUp, Crown, ArrowRight } from "lucide-react";
+import { ForgeOSLogo } from "@/components/brand/ForgeOSLogo";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
@@ -106,10 +107,7 @@ export function PlanSelection() {
           className="text-center mb-12"
         >
           <div className="flex items-center justify-center gap-3 mb-6">
-            <Dumbbell className="h-8 w-8 text-primary" />
-            <span className="font-display font-bold text-2xl tracking-tight text-foreground">
-              IRON<span className="text-primary">METRICS</span>
-            </span>
+            <ForgeOSLogo size="lg" />
           </div>
           <h1 className="text-4xl font-display font-bold text-foreground mb-4">
             Choose your plan

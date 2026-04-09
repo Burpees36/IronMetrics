@@ -177,7 +177,7 @@ export function InterventionCommand() {
             </div>
             <div>
               <h1 className="font-bold text-lg tracking-tight leading-none text-zinc-100">Intervention Command</h1>
-              <p className="text-xs text-zinc-500 font-medium">Iron Metrics Intelligence</p>
+              <p className="text-xs text-zinc-500 font-medium">ForgeOS Intelligence</p>
             </div>
           </div>
           

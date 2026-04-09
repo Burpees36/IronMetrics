@@ -136,7 +136,7 @@ export function ConnectDataStep({ gymId, onComplete, onSkip, onBack, isComplete 
   if (loading) return <div className="flex justify-center py-20"><Loader2 className="h-6 w-6 text-primary animate-spin" /></div>;
 
   return (
-    <StepCard title="Connect Your Data" description="Bring your member list into Iron Metrics. Connect Wodify, import a CSV, or add members manually." onSkip={onSkip} onBack={onBack}>
+    <StepCard title="Connect Your Data" description="Bring your member list into ForgeOS. Connect Wodify, import a CSV, or add members manually." onSkip={onSkip} onBack={onBack}>
       {memberCount > 0 && wodifyState !== "complete" && (
         <div className="bg-green-500/10 border border-green-500/20 rounded-xl p-5 mb-6 flex items-center gap-4">
           <div className="h-10 w-10 bg-green-500/20 rounded-full flex items-center justify-center">

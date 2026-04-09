@@ -2,12 +2,13 @@ import React, { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { motion, useInView } from "framer-motion";
 import {
-  Dumbbell, BrainCircuit, ShieldCheck, LayoutDashboard, UserX,
+  BrainCircuit, ShieldCheck, LayoutDashboard, UserX,
   ArrowRight, Check, Menu, X, Zap, BarChart3, Users, ChevronRight,
   CreditCard, Calendar, Target, TrendingUp, Mail, Sun, Moon,
   MessageSquare, Layers, Crown
 } from "lucide-react";
 import { useTheme } from "@/store/ThemeContext";
+import { ForgeOSLogo } from "@/components/brand/ForgeOSLogo";
 
 function Section({ children, className = "", delay = 0, id }: { children: React.ReactNode; className?: string; delay?: number; id?: string }) {
   const ref = React.useRef(null);
@@ -55,14 +56,7 @@ function Navbar() {
     <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${scrolled ? "bg-background/80 backdrop-blur-xl border-b border-border shadow-lg shadow-black/5 dark:shadow-black/20" : "bg-transparent"}`}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16 sm:h-20">
-          <div className="flex items-center gap-3">
-            <div className="h-9 w-9 bg-primary/20 rounded-xl flex items-center justify-center border border-primary/30">
-              <Dumbbell className="h-5 w-5 text-primary" />
-            </div>
-            <span className="font-display font-bold text-xl tracking-tight text-foreground">
-              IRON<span className="text-primary">METRICS</span>
-            </span>
-          </div>
+          <ForgeOSLogo size="md" />
 
           <div className="hidden md:flex items-center gap-8">
             {navLinks.map((link) => (
@@ -192,7 +186,7 @@ function Hero() {
           transition={{ duration: 0.7, delay: 0.2, ease: "easeOut" }}
           className="text-lg sm:text-xl text-muted-foreground max-w-2xl mx-auto mb-10"
         >
-          Iron Metrics brings your members, billing, scheduling, and AI-powered insights into one clean platform — so you can spend less time in spreadsheets and more time on the floor.
+          ForgeOS brings your members, billing, scheduling, and AI-powered insights into one clean platform — so you can spend less time in spreadsheets and more time on the floor.
         </motion.p>
 
         <motion.div
@@ -233,7 +227,7 @@ function Hero() {
                   <div className="w-3 h-3 rounded-full bg-yellow-500/60" />
                   <div className="w-3 h-3 rounded-full bg-green-500/60" />
                 </div>
-                <span className="text-xs text-muted-foreground font-mono">Iron Metrics — Dashboard</span>
+                <span className="text-xs text-muted-foreground font-mono">ForgeOS — Dashboard</span>
               </div>
               <div className="grid grid-cols-3 gap-3 sm:gap-4 mb-4">
                 {[
@@ -304,7 +298,7 @@ function PainPoint() {
             <span className="text-primary">a second job</span>
           </h2>
           <p className="text-lg text-muted-foreground mb-12">
-            Between chasing payments, tracking attendance, scheduling classes, and trying to figure out why members are leaving — you barely have time to coach. Iron Metrics handles the operations so you can focus on what you're actually good at.
+            Between chasing payments, tracking attendance, scheduling classes, and trying to figure out why members are leaving — you barely have time to coach. ForgeOS handles the operations so you can focus on what you're actually good at.
           </p>
           <div className="grid sm:grid-cols-3 gap-6">
             {[
@@ -351,7 +345,7 @@ function Features() {
     {
       icon: CreditCard,
       title: "Billing & Payment Recovery",
-      description: "Subscriptions, plan upgrades, holds, discount codes, and automatic payment recovery links. Stop chasing failed payments manually — Iron Metrics handles it.",
+      description: "Subscriptions, plan upgrades, holds, discount codes, and automatic payment recovery links. Stop chasing failed payments manually — ForgeOS handles it.",
     },
     {
       icon: Calendar,
@@ -415,7 +409,7 @@ function HowItWorks() {
     {
       step: "03",
       title: "Let the AI Work",
-      description: "Iron Metrics continuously analyzes your data and surfaces what matters: who's at risk of leaving, where revenue is leaking, and what to do next.",
+      description: "The Iron Metrics intelligence engine continuously analyzes your data and surfaces what matters: who's at risk of leaving, where revenue is leaking, and what to do next.",
       icon: BrainCircuit,
     },
   ];
@@ -586,7 +580,7 @@ function Pricing() {
 function Testimonials() {
   const testimonials = [
     {
-      quote: "I used to spend Sunday afternoons digging through reports trying to figure out who was at risk. Iron Metrics just tells me. It's the first tool that actually saves me time.",
+      quote: "I used to spend Sunday afternoons digging through reports trying to figure out who was at risk. ForgeOS just tells me. It's the first tool that actually saves me time.",
       name: "Marcus D.",
       role: "Owner, Apex CrossFit",
     },
@@ -646,8 +640,8 @@ function CTA() {
             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[300px] bg-primary/10 rounded-full blur-[100px]" />
           </div>
           <div className="relative z-10">
-            <div className="h-16 w-16 bg-primary/10 rounded-2xl flex items-center justify-center mx-auto mb-6 border border-primary/20">
-              <Dumbbell className="h-8 w-8 text-primary" />
+            <div className="flex justify-center mb-6">
+              <ForgeOSLogo size="xl" variant="icon" />
             </div>
             <h2 className="text-3xl sm:text-4xl md:text-5xl font-display font-bold mb-4">
               Ready to take control of your gym?
@@ -687,14 +681,7 @@ function Footer() {
     <footer className="border-t border-border py-12">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex flex-col md:flex-row items-center justify-between gap-6">
-          <div className="flex items-center gap-3">
-            <div className="h-8 w-8 bg-primary/20 rounded-lg flex items-center justify-center border border-primary/30">
-              <Dumbbell className="h-4 w-4 text-primary" />
-            </div>
-            <span className="font-display font-bold text-lg tracking-tight text-foreground">
-              IRON<span className="text-primary">METRICS</span>
-            </span>
-          </div>
+          <ForgeOSLogo size="sm" />
           <div className="flex items-center gap-6 text-sm text-muted-foreground">
             <button onClick={() => setLocation("/login")} className="hover:text-foreground transition-colors">Log In</button>
             <button onClick={() => {
@@ -706,7 +693,7 @@ function Footer() {
               if (el) el.scrollIntoView({ behavior: "smooth" });
             }} className="hover:text-foreground transition-colors">Features</button>
           </div>
-          <p className="text-xs text-muted-foreground">© {new Date().getFullYear()} Iron Metrics. All rights reserved.</p>
+          <p className="text-xs text-muted-foreground">© {new Date().getFullYear()} ForgeOS. All rights reserved.</p>
         </div>
       </div>
     </footer>

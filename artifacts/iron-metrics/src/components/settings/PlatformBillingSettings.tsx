@@ -151,7 +151,7 @@ export function PlatformBillingSettings() {
             <div className="flex-1">
               <h3 className="text-lg font-semibold text-foreground mb-1">No Active Subscription</h3>
               <p className="text-sm text-muted-foreground mb-4">
-                Choose a plan to unlock Iron Metrics features for your gym.
+                Choose a plan to unlock ForgeOS features for your business.
               </p>
               <Button onClick={() => setLocation("/plan-selection")}>
                 <ArrowUpRight className="h-4 w-4 mr-2" />

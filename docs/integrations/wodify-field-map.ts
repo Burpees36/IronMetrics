@@ -1,7 +1,7 @@
 /**
- * Wodify → Iron Metrics Field Map
+ * Wodify → ForgeOS Field Map
  *
- * Source-of-truth mapping between Wodify API entities and Iron Metrics
+ * Source-of-truth mapping between Wodify API entities and ForgeOS
  * internal schema.
  *
  * ## Verification status (updated 2026-03-25)

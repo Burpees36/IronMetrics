@@ -319,7 +319,7 @@ export function PublicWod() {
         </div>
 
         <div className="text-center mt-8 text-xs text-muted-foreground opacity-60">
-          Powered by Iron Metrics
+          Powered by ForgeOS
         </div>
       </div>
     </div>

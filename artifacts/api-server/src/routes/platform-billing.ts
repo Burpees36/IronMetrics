@@ -1,7 +1,7 @@
 /**
  * @module platform-billing
- * API routes for Iron Metrics platform subscription management.
- * These handle the gym-as-customer billing (gym subscribing to Iron Metrics),
+ * API routes for ForgeOS platform subscription management.
+ * These handle the gym-as-customer billing (gym subscribing to ForgeOS),
  * separate from the member billing handled in billing.ts.
  *
  * Routes:

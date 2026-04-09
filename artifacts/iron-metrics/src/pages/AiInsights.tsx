@@ -173,7 +173,7 @@ const SMART_ACTION_CATEGORIES = [
     icon: Send,
     color: "bg-blue-500/10 text-blue-600",
     borderActive: "border-blue-300",
-    explanation: "When a member stops attending or shows risk signals (missed classes, declining visits), Iron Metrics detects it and sends a personalized message using their name, favorite class, and recent activity.",
+    explanation: "When a member stops attending or shows risk signals (missed classes, declining visits), the Iron Metrics engine detects it and sends a personalized message using their name, favorite class, and recent activity.",
     timing: "Sent after a member misses their typical attendance pattern — usually 7–14 days of inactivity.",
     defaultCooldown: 14,
     cooldownLabel: "days between re-engagement messages",
@@ -188,7 +188,7 @@ const SMART_ACTION_CATEGORIES = [
     icon: CreditCard,
     color: "bg-amber-500/10 text-amber-600",
     borderActive: "border-amber-300",
-    explanation: "When a member's payment fails (expired card, insufficient funds), Iron Metrics sends a helpful, non-threatening message to update their info — before it becomes an awkward conversation.",
+    explanation: "When a member's payment fails (expired card, insufficient funds), the Iron Metrics engine sends a helpful, non-threatening message to update their info — before it becomes an awkward conversation.",
     timing: "Sent after the first failed payment attempt, with a follow-up if not resolved.",
     defaultCooldown: 1,
     cooldownLabel: "days between payment reminders",
@@ -203,7 +203,7 @@ const SMART_ACTION_CATEGORIES = [
     icon: Target,
     color: "bg-cyan-500/10 text-cyan-600",
     borderActive: "border-cyan-300",
-    explanation: "When someone fills out your lead form or reaches out but hasn't booked a No Sweat Intro, Iron Metrics follows up with a friendly nudge tailored to their interest and source.",
+    explanation: "When someone fills out your lead form or reaches out but hasn't booked a No Sweat Intro, the Iron Metrics engine follows up with a friendly nudge tailored to their interest and source.",
     timing: "Sent when a lead goes stale — typically 24–72 hours after initial contact with no booking.",
     defaultCooldown: 3,
     cooldownLabel: "days between lead follow-ups",
@@ -276,7 +276,7 @@ function SmartActionsModal({ gymId, open, onOpenChange }: { gymId: number; open:
             <div className="flex items-start gap-2.5 p-3 rounded-lg bg-secondary/50 border border-border">
               <ShieldCheck className="h-4 w-4 text-primary shrink-0 mt-0.5" />
               <div className="text-xs text-muted-foreground leading-relaxed">
-                <span className="font-medium text-foreground">How it works:</span> Iron Metrics scans your data daily, drafts personalized messages, and (when enabled) sends them automatically. Every auto-sent message appears in your task history so you can review what went out. Messages are never sent to people without valid contact info.
+                <span className="font-medium text-foreground">How it works:</span> The Iron Metrics engine scans your data daily, drafts personalized messages, and (when enabled) sends them automatically. Every auto-sent message appears in your task history so you can review what went out. Messages are never sent to people without valid contact info.
               </div>
             </div>
 

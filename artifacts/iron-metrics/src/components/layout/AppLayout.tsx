@@ -2,10 +2,11 @@ import React, { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@workspace/replit-auth-web";
 import { 
-  Dumbbell, LayoutDashboard, BrainCircuit, Users, CalendarDays, 
+  LayoutDashboard, BrainCircuit, Users, CalendarDays, 
   Target, CreditCard, Activity, LogOut, Menu, BookOpen,
   Settings, Sun, Moon, RefreshCw, Lock, Wallet
 } from "lucide-react";
+import { ForgeOSLogo } from "@/components/brand/ForgeOSLogo";
 import { useGym } from "@/store/GymContext";
 import { useTheme } from "@/store/ThemeContext";
 import { useGetGym } from "@workspace/api-client-react";
@@ -178,11 +179,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           >
             <Menu className="h-6 w-6" />
           </button>
-          <Link href="/dashboard" className="flex items-center gap-2 text-primary">
-            <Dumbbell className="h-5 w-5" />
-            <span className="font-display font-bold text-lg tracking-tight text-foreground">
-              IRON<span className="text-primary">METRICS</span>
-            </span>
+          <Link href="/dashboard">
+            <ForgeOSLogo size="sm" />
           </Link>
           <div className="min-w-[44px]" />
         </header>
@@ -190,11 +188,9 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         <Sheet open={drawerOpen} onOpenChange={setDrawerOpen}>
           <SheetContent side="left" className="w-[280px] p-0 bg-sidebar">
             <SheetHeader className="h-14 flex items-center px-6 border-b border-border/50 flex-row">
-              <Link href="/dashboard" className="flex items-center gap-3 text-primary hover:opacity-80 transition-opacity">
-                <Dumbbell className="h-6 w-6" />
-                <SheetTitle className="font-display font-bold text-xl tracking-tight text-foreground">
-                  IRON<span className="text-primary">METRICS</span>
-                </SheetTitle>
+              <Link href="/dashboard" className="hover:opacity-80 transition-opacity">
+                <SheetTitle className="sr-only">ForgeOS</SheetTitle>
+                <ForgeOSLogo size="md" />
               </Link>
             </SheetHeader>
             <SidebarContent
@@ -250,11 +246,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     <div className="flex h-screen w-full bg-background overflow-hidden">
       <aside className="w-64 border-r border-border bg-sidebar flex flex-col shrink-0">
         <div className="h-16 flex items-center px-6 border-b border-border/50 shrink-0">
-          <Link href="/dashboard" className="flex items-center gap-3 text-primary hover:opacity-80 transition-opacity">
-            <Dumbbell className="h-6 w-6" />
-            <span className="font-display font-bold text-xl tracking-tight text-foreground">
-              IRON<span className="text-primary">METRICS</span>
-            </span>
+          <Link href="/dashboard" className="hover:opacity-80 transition-opacity">
+            <ForgeOSLogo size="md" />
           </Link>
         </div>
         <SidebarContent

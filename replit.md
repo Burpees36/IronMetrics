@@ -1,8 +1,12 @@
-# Iron Metrics — Gym Management SaaS
+# ForgeOS — Gym Management Platform
 
 ## Overview
 
-Iron Metrics is a comprehensive gym management SaaS platform designed for CrossFit and functional fitness gyms. It provides essential tools for member management, billing, scheduling, programming, and lead management. The platform also features an AI-powered assistant to streamline administrative tasks, enhance member engagement, and offer actionable insights for gym owners to optimize operations and improve member retention.
+ForgeOS is a comprehensive gym management platform designed for CrossFit and functional fitness businesses. It provides essential tools for member management, billing, scheduling, programming, and lead management. The platform features an embedded AI intelligence engine called **Iron Metrics** that powers retention scoring, risk radar, revenue insights, and automated intervention — streamlining administrative tasks, enhancing member engagement, and offering actionable insights for business owners.
+
+**Dual-brand architecture:**
+- **ForgeOS** = the operating system (scheduling, billing, CRM, members, dashboard, workouts)
+- **Iron Metrics** = the AI intelligence engine embedded within ForgeOS (retention scoring, risk radar, revenue insights, smart actions, intervention engine)
 
 ## User Preferences
 
@@ -10,7 +14,7 @@ I prefer concise and direct communication. When making changes, please prioritiz
 
 ## System Architecture
 
-Iron Metrics is built as a pnpm workspace monorepo using TypeScript, designed for scalability and maintainability, leveraging Node.js 24, TypeScript 5.9, and pnpm.
+ForgeOS is built as a pnpm workspace monorepo using TypeScript, designed for scalability and maintainability, leveraging Node.js 24, TypeScript 5.9, and pnpm.
 
 **Monorepo Structure:**
 - `artifacts/api-server/`: Express 5 API server.
@@ -73,7 +77,7 @@ A premium SaaS theme with light/dark mode, 2xl rounded corners, and a glass-pane
 - `GET /api/healthz` — verifies database connectivity. Returns `{"status":"ok","checks":{"database":"healthy"}}` (200) or `{"status":"degraded","checks":{"database":"unreachable"}}` (503). Mounted before auth middleware so deployment probes always succeed.
 
 **CORS:**
-- Production: allows only `https://iron-metrics.app` and `https://www.iron-metrics.app` by default (strict, no wildcards).
+- Production: allows `https://iron-metrics.app`, `https://www.iron-metrics.app`, `https://forgeos.app`, and `https://www.forgeos.app` by default (strict, no wildcards).
 - Development: allows `*.replit.dev`, `*.replit.app`, and `localhost`.
 - Override with `ALLOWED_ORIGINS` env var (comma-separated) for custom configurations.
 
