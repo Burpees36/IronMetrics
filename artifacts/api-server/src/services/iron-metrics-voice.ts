@@ -55,3 +55,13 @@ export function fmtDollars(val: number): string {
 export function fmtPercent(val: number): string {
   return `${val.toFixed(1)}%`;
 }
+
+export function assertVoiceCompliance(text: string): void {
+  if (process.env.NODE_ENV === "production") return;
+  const lower = text.toLowerCase();
+  for (const phrase of BANNED_PHRASES) {
+    if (lower.includes(phrase)) {
+      console.warn(`[iron-metrics-voice] Banned phrase detected: "${phrase}" in: "${text.slice(0, 80)}..."`);
+    }
+  }
+}

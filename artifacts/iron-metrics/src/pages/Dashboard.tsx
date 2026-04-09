@@ -557,8 +557,8 @@ export function Dashboard() {
           {actionItems.length === 0 && (
             <div className="text-center py-12 text-muted-foreground">
               <CheckCircle2 className="w-10 h-10 mx-auto mb-3 text-emerald-500" />
-              <p className="text-lg font-medium text-foreground">All clear!</p>
-              <p className="text-sm">No action items for today. Your business is running smoothly.</p>
+              <p className="text-lg font-medium text-foreground">Nothing flagged</p>
+              <p className="text-sm">No action items today. Metrics are clean — use the time to build.</p>
             </div>
           )}
 

@@ -1,3 +1,5 @@
+import { assertVoiceCompliance, fmtDollars, fmtPercent } from "../../services/iron-metrics-voice";
+
 interface RSIBreakdownItem {
   metric: string;
   value: number;
@@ -57,15 +59,6 @@ interface BriefingSnapshot {
   failedPayments: number;
   todayClasses: number;
   classFillRate: number;
-}
-
-function fmtDollars(val: number): string {
-  if (val >= 1000) return `$${(val / 1000).toFixed(1)}k`;
-  return `$${Math.round(val).toLocaleString()}`;
-}
-
-function fmtPercent(val: number): string {
-  return `${val.toFixed(1)}%`;
 }
 
 export function generateRSIComponentInsight(item: RSIBreakdownItem, components: RSIData["components"]): { explanation: string; lever: string; ctaLabel: string; ctaRoute: string } {
@@ -430,5 +423,7 @@ export function generateConversationalSummary(snapshot: BriefingSnapshot): strin
   }
 
   const actionPart = parts.join(". ");
-  return `${actionPart}. ${fmtDollars(snapshot.mrr)} MRR, ${snapshot.activeMembers} active members. Handle these first.`;
+  const result = `${actionPart}. ${fmtDollars(snapshot.mrr)} MRR, ${snapshot.activeMembers} active members. Handle these first.`;
+  assertVoiceCompliance(result);
+  return result;
 }

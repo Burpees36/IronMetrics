@@ -1,6 +1,7 @@
 import { eq, and, count, sql, gte } from "drizzle-orm";
 import { db, membersTable, subscriptionsTable, leadsTable, attendanceTable, recommendationLearningStatsTable, classesTable } from "@workspace/db";
 import { computeBlendedMRR, activeMemberCondition, getMemberRevenueFromMembersTable } from "../../blendedMetrics";
+import { assertVoiceCompliance, fmtDollars, fmtPercent } from "../../services/iron-metrics-voice";
 
 interface Intervention {
   id: string;
@@ -41,11 +42,6 @@ interface InterventionContext {
 }
 
 type InterventionBuilder = (ctx: InterventionContext) => Intervention | null;
-
-function fmtDollars(val: number): string {
-  if (val >= 1000) return `$${(val / 1000).toFixed(1)}k`;
-  return `$${Math.round(val).toLocaleString()}`;
-}
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
@@ -646,6 +642,14 @@ export async function getInterventionsDynamic(gymId: number): Promise<Interventi
   }
 
   results.sort((a, b) => b.score - a.score);
+
+  for (const r of results) {
+    assertVoiceCompliance(r.description);
+    for (const a of r.actions) {
+      assertVoiceCompliance(a);
+    }
+  }
+
   return results;
 }
 

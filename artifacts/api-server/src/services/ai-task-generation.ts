@@ -10,6 +10,7 @@ import {
   type LeadContext,
 } from "./personalization-context";
 import { processAutopilotTasks } from "./autopilot-sender";
+import { assertVoiceCompliance } from "./iron-metrics-voice";
 
 export interface CommunicationStyle {
   tone: string;
@@ -762,6 +763,11 @@ export async function generateAiTasks(gymId: number): Promise<{ created: number;
       sql`${aiTasksTable.id} IN (${sql.join(inserted.map(t => sql`${t.id}`), sql`, `)})`
     )
   );
+
+  for (const t of finalTasks) {
+    if (t.description) assertVoiceCompliance(t.description);
+    if (t.aiContent) assertVoiceCompliance(t.aiContent);
+  }
 
   return { created: inserted.length, tasks: finalTasks };
 }

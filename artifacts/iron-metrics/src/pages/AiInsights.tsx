@@ -1483,11 +1483,11 @@ export function AiInsights() {
                     <div className="h-14 w-14 rounded-2xl bg-emerald-50 flex items-center justify-center mx-auto mb-4">
                       <CheckCircle2 className="h-8 w-8 text-emerald-500" />
                     </div>
-                    <h3 className="font-semibold text-foreground text-lg">All clear</h3>
+                    <h3 className="font-semibold text-foreground text-lg">Nothing flagged</h3>
                     <p className="text-sm text-muted-foreground mt-2 max-w-md mx-auto leading-relaxed">
                       {dismissedInterventions.size > 0
-                        ? "All recommendations have been addressed or dismissed. Nice work — your gym is in good shape."
-                        : "Nothing needs your attention right now. Your metrics look healthy — keep doing what you're doing."}
+                        ? "Every recommendation handled. Metrics are clean — use the time to build."
+                        : "No issues detected. Metrics look clean. Use the time to build."}
                     </p>
                   </motion.div>
                 )}
