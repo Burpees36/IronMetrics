@@ -59,6 +59,35 @@ A premium SaaS theme with light/dark mode, 2xl rounded corners, and a glass-pane
 - **Date Columns:** All date-only fields use PostgreSQL `date` type.
 - **Object Storage:** GCS-backed via Replit App Storage for file uploads.
 
+## Production Deployment
+
+**Build & Run:**
+- Frontend (`iron-metrics`): Static build via `vite build`, served as static files from `dist/public/` with SPA fallback rewrites.
+- API Server: Bundled via esbuild to `dist/index.cjs` (CJS format), run with `node artifacts/api-server/dist/index.cjs`.
+
+**Environment Variables:**
+- Required: `PORT`, `DATABASE_URL`, `STRIPE_SECRET_KEY`, `STRIPE_PUBLISHABLE_KEY`, `RESEND_API_KEY` — server will not start if any are missing.
+- Optional: `ALLOWED_ORIGINS` (comma-separated) — overrides default CORS origins.
+
+**Health Check:**
+- `GET /api/healthz` — verifies database connectivity. Returns `{"status":"ok","checks":{"database":"healthy"}}` (200) or `{"status":"degraded","checks":{"database":"unreachable"}}` (503). Mounted before auth middleware so deployment probes always succeed.
+
+**CORS:**
+- Production: allows only `https://iron-metrics.app` and `https://www.iron-metrics.app` by default (strict, no wildcards).
+- Development: allows `*.replit.dev`, `*.replit.app`, and `localhost`.
+- Override with `ALLOWED_ORIGINS` env var (comma-separated) for custom configurations.
+
+**Custom Domain Setup (`iron-metrics.app`):**
+1. Publish the app via Replit's deployment settings.
+2. In the Replit deployment panel, go to Settings → Custom Domains → Add `iron-metrics.app`.
+3. At your domain registrar (where `iron-metrics.app` is registered), configure DNS:
+   - **Option A (CNAME):** Add a CNAME record for `iron-metrics.app` → the Replit-provided target hostname (shown in the custom domain settings panel).
+   - **Option B (A record):** If your registrar doesn't support CNAME at the apex, add an A record pointing `iron-metrics.app` to the IP address Replit provides.
+   - If using `www`, add a CNAME for `www.iron-metrics.app` pointing to the same Replit target.
+4. Wait for DNS propagation (usually 5–30 minutes, up to 48 hours).
+5. Replit automatically provisions an SSL certificate once DNS is verified.
+6. If using `ALLOWED_ORIGINS`, ensure both `https://iron-metrics.app` and `https://www.iron-metrics.app` are included.
+
 ## External Dependencies
 
 -   **Stripe:** For billing, subscription management, payment processing, billing portal, and webhooks.

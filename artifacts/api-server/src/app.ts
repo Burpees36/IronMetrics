@@ -72,9 +72,14 @@ app.post(
 );
 
 // --- Global middleware ---
-const allowedOrigins = process.env.ALLOWED_ORIGINS
+const allowedOrigins: (string | RegExp)[] = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(",").map((o) => o.trim())
-  : [/\.replit\.dev$/, /localhost/];
+  : process.env.NODE_ENV === "production"
+    ? [
+        "https://iron-metrics.app",
+        "https://www.iron-metrics.app",
+      ]
+    : [/\.replit\.dev$/, /\.replit\.app$/, /localhost/];
 
 app.use(cors({
   credentials: true,
@@ -131,6 +136,10 @@ const leadCaptureLimiter = rateLimit({
   message: { error: "Too many submissions. Please try again later." },
   validate: { ip: false, trustProxy: false },
 } as Partial<Options>);
+
+// Health check — mounted before rate limiters and auth so deployment probes always succeed
+import healthRouter from "./routes/health";
+app.use("/api", healthRouter);
 
 // Apply rate limiters to their respective route prefixes
 app.use("/api/login", authLimiter);
