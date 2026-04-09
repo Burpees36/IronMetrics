@@ -429,3 +429,91 @@ describe("edge cases", () => {
     expect(sorted[0].score).toBeGreaterThanOrEqual(sorted[sorted.length - 1].score);
   });
 });
+
+describe("Voice compliance", () => {
+  const BANNED = [
+    "consider reaching out",
+    "optimize your revenue",
+    "you might want to",
+    "it could be beneficial",
+    "keep doing what's working",
+    "there may be room to improve",
+    "worth investigating",
+    "we suggest exploring",
+    "you may want to consider",
+    "proactively engage",
+    "leverage your community",
+    "take your gym to the next level",
+    "maximize your results",
+    "elevate your business",
+    "supercharge your growth",
+    "we recommend",
+    "it might be helpful to",
+    "no pressure",
+    "no worries",
+    "zero pressure",
+  ];
+
+  function assertNoBanned(text: string, label: string) {
+    const lower = text.toLowerCase();
+    for (const phrase of BANNED) {
+      expect(lower).not.toContain(phrase);
+    }
+  }
+
+  const scenarios = [
+    {
+      name: "retention (critical risk)",
+      ctx: makeContext({
+        atRiskMembers: [
+          { id: 1, riskTier: "critical", firstName: "Alex", lastName: "Test", revenueAmount: 200, attendanceCount30d: 0, tenureMonths: 6, status: "active" },
+        ],
+        atRiskCount: 1,
+        atRiskRevenue: 200,
+      }),
+    },
+    {
+      name: "billing (failed payments)",
+      ctx: makeContext({
+        failedSubs: [
+          { memberId: 1, firstName: "Jane", lastName: "Doe", amount: 150, failedSince: new Date() },
+        ],
+      }),
+    },
+    {
+      name: "leads (stale pipeline)",
+      ctx: makeContext({ staleLeadCount: 8, openLeadCount: 15 }),
+    },
+    {
+      name: "engagement (attendance drop)",
+      ctx: makeContext({ engagementRate: 32, engagementChange: -18 }),
+    },
+    {
+      name: "capacity (low fill classes)",
+      ctx: makeContext({
+        recentClasses: Array.from({ length: 10 }, (_, i) => ({
+          id: i,
+          title: `Class ${i}`,
+          attendees: i < 7 ? 3 : 12,
+          capacity: 20,
+          fillRate: i < 7 ? 15 : 60,
+          scheduledAt: new Date(),
+        })),
+        avgFillRate: 28,
+      }),
+    },
+  ];
+
+  for (const { name, ctx } of scenarios) {
+    it(`produces banned-phrase-free output for ${name}`, () => {
+      const builders = Object.values(_interventionBuilders);
+      const results = builders.map(b => b(ctx)).filter((r): r is NonNullable<typeof r> => r !== null);
+      for (const r of results) {
+        assertNoBanned(r.description, `${name} description`);
+        for (const a of r.actions) {
+          assertNoBanned(a, `${name} action`);
+        }
+      }
+    });
+  }
+});
