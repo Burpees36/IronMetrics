@@ -1,5 +1,12 @@
 import { assertVoiceCompliance, fmtDollars, fmtPercent } from "../../services/iron-metrics-voice";
 
+function validateCopyResult<T extends Record<string, unknown>>(result: T): T {
+  for (const val of Object.values(result)) {
+    if (typeof val === "string") assertVoiceCompliance(val);
+  }
+  return result;
+}
+
 interface RSIBreakdownItem {
   metric: string;
   value: number;
@@ -62,6 +69,10 @@ interface BriefingSnapshot {
 }
 
 export function generateRSIComponentInsight(item: RSIBreakdownItem, components: RSIData["components"]): { explanation: string; lever: string; ctaLabel: string; ctaRoute: string } {
+  return validateCopyResult(_generateRSIComponentInsight(item, components));
+}
+
+function _generateRSIComponentInsight(item: RSIBreakdownItem, components: RSIData["components"]): { explanation: string; lever: string; ctaLabel: string; ctaRoute: string } {
   switch (item.metric) {
     case "Churn Rate":
       if (components.churnRate <= 3) {
@@ -166,15 +177,19 @@ export function generateRSIComponentInsight(item: RSIBreakdownItem, components: 
 }
 
 export function generateRSIOverallInsight(rsi: RSIData): string {
-  const { score, band, components } = rsi;
+  const { score, band } = rsi;
   const weakest = rsi.breakdown.reduce((min, b) => b.normalized < min.normalized ? b : min, rsi.breakdown[0]);
+  let result: string;
 
   if (band === "Strong") {
-    return `RSI: ${score.toFixed(1)}. Your retention engine is solid. The one place to push: ${weakest.metric.toLowerCase()}. That's your ceiling right now.`;
+    result = `RSI: ${score.toFixed(1)}. Your retention engine is solid. The one place to push: ${weakest.metric.toLowerCase()}. That's your ceiling right now.`;
   } else if (band === "Moderate") {
-    return `RSI: ${score.toFixed(1)}. Not bad, not great. Your weakest link is ${weakest.metric.toLowerCase()}. Fix that first — everything else improves when you do.`;
+    result = `RSI: ${score.toFixed(1)}. Not bad, not great. Your weakest link is ${weakest.metric.toLowerCase()}. Fix that first — everything else improves when you do.`;
+  } else {
+    result = `RSI: ${score.toFixed(1)}. Your retention is fragile. Start with ${weakest.metric.toLowerCase()} — it's dragging everything else down. Small fixes here compound fast.`;
   }
-  return `RSI: ${score.toFixed(1)}. Your retention is fragile. Start with ${weakest.metric.toLowerCase()} — it's dragging everything else down. Small fixes here compound fast.`;
+  assertVoiceCompliance(result);
+  return result;
 }
 
 export function generateRevenueForecastInsight(forecast: RevenueForecast, openLeads: number, churnRate: number, activeMembers: number): {
@@ -222,7 +237,7 @@ export function generateRevenueForecastInsight(forecast: RevenueForecast, openLe
     }
   }
 
-  return {
+  const result = {
     headline,
     currentPace,
     leadScenario,
@@ -230,9 +245,23 @@ export function generateRevenueForecastInsight(forecast: RevenueForecast, openLe
     ctaLabel: openLeads > 0 ? "View open leads" : "View billing",
     ctaRoute: openLeads > 0 ? "/leads" : "/billing",
   };
+  assertVoiceCompliance(result.headline);
+  assertVoiceCompliance(result.currentPace);
+  if (result.leadScenario) assertVoiceCompliance(result.leadScenario);
+  if (result.churnScenario) assertVoiceCompliance(result.churnScenario);
+  return result;
 }
 
 export function generateBenchmarkInsight(comparison: BenchmarkComparison): {
+  conversational: string;
+  recommendation: string;
+  ctaLabel: string;
+  ctaRoute: string;
+} {
+  return validateCopyResult(_generateBenchmarkInsight(comparison));
+}
+
+function _generateBenchmarkInsight(comparison: BenchmarkComparison): {
   conversational: string;
   recommendation: string;
   ctaLabel: string;
@@ -310,6 +339,26 @@ function getSpecificBenchmarkAdvice(metric: string, lowerIsBetter?: boolean): st
 }
 
 export function generateConversationalBriefingItem(
+  type: string,
+  data: {
+    count?: number;
+    amount?: number;
+    names?: string[];
+    avgRevPerMember?: number;
+    rsiScore?: number;
+    rsiBand?: string;
+    classFillRate?: number;
+    classCount?: number;
+    enrolled?: number;
+    capacity?: number;
+  }
+): { message: string; action: string; link: string } {
+  const result = _generateConversationalBriefingItem(type, data);
+  if (result.message) assertVoiceCompliance(result.message);
+  return result;
+}
+
+function _generateConversationalBriefingItem(
   type: string,
   data: {
     count?: number;
