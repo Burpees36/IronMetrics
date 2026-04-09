@@ -5,6 +5,7 @@ import { CreateGymBody, UpdateGymBody, GetGymParams, SendTestSmsBody } from "@wo
 import { activeMemberCondition } from "../blendedMetrics";
 import { applyOwnerVoice, type CommunicationStyle } from "../services/ai-task-generation";
 import { getSmsService } from "../services/sms-service";
+import { ObjectStorageService } from "../lib/objectStorage";
 
 const router: IRouter = Router();
 
@@ -300,6 +301,126 @@ router.post("/gyms/:gymId/sms/test", async (req, res): Promise<void> => {
     recipientPhone: parsed.data.to,
     recipientName: "Test",
   });
+});
+
+const ALLOWED_LOGO_TYPES = ["image/png", "image/jpeg", "image/svg+xml"];
+const MAX_LOGO_SIZE = 2 * 1024 * 1024; // 2MB
+
+router.post("/gyms/:gymId/logo", async (req, res): Promise<void> => {
+  const raw = Array.isArray(req.params.gymId) ? req.params.gymId[0] : req.params.gymId;
+  const gymId = parseInt(raw, 10);
+  if (isNaN(gymId)) {
+    res.status(400).json({ error: "Invalid gym ID" });
+    return;
+  }
+
+  const [gym] = await db.select().from(gymsTable).where(eq(gymsTable.id, gymId));
+  if (!gym) {
+    res.status(404).json({ error: "Gym not found" });
+    return;
+  }
+
+  const [staffEntry] = await db.select().from(gymStaffTable).where(
+    and(eq(gymStaffTable.gymId, gymId), eq(gymStaffTable.userId, req.user!.id), eq(gymStaffTable.isActive, true))
+  );
+  if (!staffEntry || !["gym_owner", "admin"].includes(staffEntry.role)) {
+    res.status(403).json({ error: "Only owners and admins can update the gym logo" });
+    return;
+  }
+
+  const { contentType, size } = req.body || {};
+
+  if (!contentType || !ALLOWED_LOGO_TYPES.includes(contentType)) {
+    res.status(400).json({ error: "Invalid file type. Accepted formats: PNG, JPG, SVG." });
+    return;
+  }
+
+  if (typeof size !== "number" || size <= 0 || size > MAX_LOGO_SIZE) {
+    res.status(400).json({ error: `File size must be under ${MAX_LOGO_SIZE / (1024 * 1024)}MB.` });
+    return;
+  }
+
+  try {
+    const objectStorageService = new ObjectStorageService();
+    const uploadURL = await objectStorageService.getObjectEntityUploadURL();
+    const objectPath = objectStorageService.normalizeObjectEntityPath(uploadURL);
+
+    res.json({ uploadURL, objectPath });
+  } catch (error) {
+    console.error("[gyms] Error generating logo upload URL:", error);
+    res.status(500).json({ error: "Failed to generate upload URL" });
+  }
+});
+
+router.put("/gyms/:gymId/logo", async (req, res): Promise<void> => {
+  const raw = Array.isArray(req.params.gymId) ? req.params.gymId[0] : req.params.gymId;
+  const gymId = parseInt(raw, 10);
+  if (isNaN(gymId)) {
+    res.status(400).json({ error: "Invalid gym ID" });
+    return;
+  }
+
+  const [gym] = await db.select().from(gymsTable).where(eq(gymsTable.id, gymId));
+  if (!gym) {
+    res.status(404).json({ error: "Gym not found" });
+    return;
+  }
+
+  const [staffEntry] = await db.select().from(gymStaffTable).where(
+    and(eq(gymStaffTable.gymId, gymId), eq(gymStaffTable.userId, req.user!.id), eq(gymStaffTable.isActive, true))
+  );
+  if (!staffEntry || !["gym_owner", "admin"].includes(staffEntry.role)) {
+    res.status(403).json({ error: "Only owners and admins can update the gym logo" });
+    return;
+  }
+
+  const { objectPath } = req.body || {};
+  const objectPathPattern = /^\/objects\/[a-f0-9-]+$/;
+  if (!objectPath || typeof objectPath !== "string" || !objectPathPattern.test(objectPath)) {
+    res.status(400).json({ error: "Invalid objectPath" });
+    return;
+  }
+
+  const logoUrl = `/api/storage${objectPath}`;
+
+  const [updated] = await db
+    .update(gymsTable)
+    .set({ logoUrl })
+    .where(eq(gymsTable.id, gymId))
+    .returning();
+
+  res.json(updated);
+});
+
+router.delete("/gyms/:gymId/logo", async (req, res): Promise<void> => {
+  const raw = Array.isArray(req.params.gymId) ? req.params.gymId[0] : req.params.gymId;
+  const gymId = parseInt(raw, 10);
+  if (isNaN(gymId)) {
+    res.status(400).json({ error: "Invalid gym ID" });
+    return;
+  }
+
+  const [gym] = await db.select().from(gymsTable).where(eq(gymsTable.id, gymId));
+  if (!gym) {
+    res.status(404).json({ error: "Gym not found" });
+    return;
+  }
+
+  const [staffEntry] = await db.select().from(gymStaffTable).where(
+    and(eq(gymStaffTable.gymId, gymId), eq(gymStaffTable.userId, req.user!.id), eq(gymStaffTable.isActive, true))
+  );
+  if (!staffEntry || !["gym_owner", "admin"].includes(staffEntry.role)) {
+    res.status(403).json({ error: "Only owners and admins can remove the gym logo" });
+    return;
+  }
+
+  const [updated] = await db
+    .update(gymsTable)
+    .set({ logoUrl: null })
+    .where(eq(gymsTable.id, gymId))
+    .returning();
+
+  res.json(updated);
 });
 
 export default router;
