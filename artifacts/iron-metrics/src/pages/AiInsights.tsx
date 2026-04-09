@@ -173,7 +173,7 @@ const SMART_ACTION_CATEGORIES = [
     icon: Send,
     color: "bg-blue-500/10 text-blue-600",
     borderActive: "border-blue-300",
-    explanation: "When a member stops attending or shows risk signals (missed classes, declining visits), the Iron Metrics engine detects it and sends a personalized message using their name, favorite class, and recent activity.",
+    explanation: "When a member goes dark — missed classes, declining visits — Iron Metrics flags them and drafts a personal message using their name, favorite class, and activity data. You review it or it sends automatically.",
     timing: "Sent after a member misses their typical attendance pattern — usually 7–14 days of inactivity.",
     defaultCooldown: 14,
     cooldownLabel: "days between re-engagement messages",
@@ -188,11 +188,11 @@ const SMART_ACTION_CATEGORIES = [
     icon: CreditCard,
     color: "bg-amber-500/10 text-amber-600",
     borderActive: "border-amber-300",
-    explanation: "When a member's payment fails (expired card, insufficient funds), the Iron Metrics engine sends a helpful, non-threatening message to update their info — before it becomes an awkward conversation.",
+    explanation: "When a payment fails — expired card, insufficient funds — Iron Metrics sends a direct, non-threatening nudge to update their info. Most fix it within 48 hours.",
     timing: "Sent after the first failed payment attempt, with a follow-up if not resolved.",
     defaultCooldown: 1,
     cooldownLabel: "days between payment reminders",
-    exampleMessage: `"Hi Jake — heads up, your payment for this month didn't go through. It's usually just an expired card. You can update it in your account or swing by the front desk. No worries at all! 🙏"`,
+    exampleMessage: `"Hi Jake — your payment didn't go through. Usually just an expired card. Update it online or call us — takes 2 minutes."`,
   },
   {
     key: "autopilotLeads",
@@ -203,11 +203,11 @@ const SMART_ACTION_CATEGORIES = [
     icon: Target,
     color: "bg-cyan-500/10 text-cyan-600",
     borderActive: "border-cyan-300",
-    explanation: "When someone fills out your lead form or reaches out but hasn't booked a No Sweat Intro, the Iron Metrics engine follows up with a friendly nudge tailored to their interest and source.",
+    explanation: "When a lead reaches out but doesn't book, Iron Metrics follows up with a direct, personalized message based on their source and interest. Speed wins with leads.",
     timing: "Sent when a lead goes stale — typically 24–72 hours after initial contact with no booking.",
     defaultCooldown: 3,
     cooldownLabel: "days between lead follow-ups",
-    exampleMessage: `"Hey Taylor — thanks for reaching out about CrossFit! I know taking the first step can feel like a lot. Our No Sweat Intro is just a casual 15-min chat — zero pressure. Want to grab a time this week?"`,
+    exampleMessage: `"Hey Taylor — you asked about CrossFit. The No Sweat Intro is 15 minutes, free, and we'll map out a plan that fits your schedule. Pick a time this week."`,
   },
 ] as const;
 
@@ -263,7 +263,7 @@ function SmartActionsModal({ gymId, open, onOpenChange }: { gymId: number; open:
             Smart Actions
           </DialogTitle>
           <DialogDescription className="text-sm leading-relaxed">
-            Smart Actions monitors your gym data and automatically sends personalized messages to members and leads at the right time. Every message is crafted using real data — attendance patterns, billing status, and lead activity. You control what gets sent and when.
+            Smart Actions scans your data, spots problems, and drafts personalized messages — attendance drops, failed payments, stale leads. Every message is built from real behavior, not templates. You control what sends and when.
           </DialogDescription>
         </DialogHeader>
 
@@ -276,7 +276,7 @@ function SmartActionsModal({ gymId, open, onOpenChange }: { gymId: number; open:
             <div className="flex items-start gap-2.5 p-3 rounded-lg bg-secondary/50 border border-border">
               <ShieldCheck className="h-4 w-4 text-primary shrink-0 mt-0.5" />
               <div className="text-xs text-muted-foreground leading-relaxed">
-                <span className="font-medium text-foreground">How it works:</span> The Iron Metrics engine scans your data daily, drafts personalized messages, and (when enabled) sends them automatically. Every auto-sent message appears in your task history so you can review what went out. Messages are never sent to people without valid contact info.
+                <span className="font-medium text-foreground">How it works:</span> Iron Metrics scans your data daily, drafts outreach based on real behavior, and sends it automatically when enabled. Everything that goes out shows up in your task history. No message is ever sent without valid contact info.
               </div>
             </div>
 

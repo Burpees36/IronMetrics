@@ -145,7 +145,7 @@ describe("AI Task Generation", () => {
       const result = await generateAiTasks(1);
       expect(result.created).toBe(0);
       expect(result.reason).toBeDefined();
-      expect(result.reason).toContain("no new risks detected");
+      expect(result.reason).toContain("nothing flagged");
     });
 
     it("returns a reason about pending tasks when queue is full", async () => {
@@ -160,7 +160,7 @@ describe("AI Task Generation", () => {
       const result = await generateAiTasks(1);
       expect(result.created).toBe(0);
       expect(result.reason).toBeDefined();
-      expect(result.reason).toContain("pending tasks");
+      expect(result.reason).toContain("already pending");
     });
 
     it("generates at-risk member outreach tasks for critical risk tier", async () => {

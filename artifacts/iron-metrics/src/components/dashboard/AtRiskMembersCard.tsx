@@ -84,8 +84,8 @@ export function AtRiskMembersCard({ gymId }: { gymId: number }) {
             <div className="h-10 w-10 bg-emerald-500/10 rounded-full flex items-center justify-center mb-2">
               <Shield className="h-5 w-5 text-emerald-400" />
             </div>
-            <p className="text-xs font-medium text-foreground">All clear</p>
-            <p className="text-[10px] text-muted-foreground mt-0.5">No high-risk members right now</p>
+            <p className="text-xs font-medium text-foreground">No flags</p>
+            <p className="text-[10px] text-muted-foreground mt-0.5">Zero high-risk members. Stay sharp.</p>
           </div>
         ) : (
           <div className="divide-y divide-border/50">

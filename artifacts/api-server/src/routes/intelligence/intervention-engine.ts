@@ -73,15 +73,15 @@ const retentionIntervention: InterventionBuilder = (ctx) => {
   const score = blendWithLearning(clamp(baseScore, 40, 99), "retention", ctx.learningStats);
 
   const pct = ctx.activeBillableMembers > 0 ? Math.round((ctx.atRiskCount / ctx.activeBillableMembers) * 100) : 0;
-  const revenueStr = ctx.atRiskRevenue > 0 ? ` That's ${fmtDollars(ctx.atRiskRevenue)}/mo walking out the door if you don't act.` : "";
+  const revenueStr = ctx.atRiskRevenue > 0 ? ` That's ${fmtDollars(ctx.atRiskRevenue)}/mo you're about to lose.` : "";
 
   let description: string;
   if (ctx.atRiskCount >= 10) {
-    description = `${ctx.atRiskCount} members (${pct}% of your roster) are showing elevated risk signals.${revenueStr} Start with the critical-tier members — personal outreach can reduce churn by 15–25%.`;
+    description = `${ctx.atRiskCount} members (${pct}% of your roster) haven't shown up in 10+ days.${revenueStr} Pull up the risk radar. Call the critical ones today — not tomorrow.`;
   } else if (ctx.atRiskCount >= 3) {
-    description = `${ctx.atRiskCount} member${ctx.atRiskCount !== 1 ? "s" : ""} ${ctx.atRiskCount !== 1 ? "are" : "is"} flagged as at-risk.${revenueStr} A quick personal check-in often turns this around before it becomes a cancellation.`;
+    description = `${ctx.atRiskCount} member${ctx.atRiskCount !== 1 ? "s" : ""} ${ctx.atRiskCount !== 1 ? "are" : "is"} going dark.${revenueStr} Pick up the phone. A 2-minute call now saves a cancellation later.`;
   } else {
-    description = `${ctx.atRiskCount} member${ctx.atRiskCount !== 1 ? "s" : ""} ${ctx.atRiskCount !== 1 ? "need" : "needs"} attention.${revenueStr} Early outreach is the cheapest retention tool you have.`;
+    description = `${ctx.atRiskCount} member${ctx.atRiskCount !== 1 ? "s" : ""} ${ctx.atRiskCount !== 1 ? "need" : "needs"} a call.${revenueStr} Reach out today — the longer you wait, the harder it gets.`;
   }
 
   return {
@@ -95,10 +95,10 @@ const retentionIntervention: InterventionBuilder = (ctx) => {
     expectedRevenue: Math.round(ctx.atRiskRevenue * 100) / 100,
     affectedMembers: ctx.atRiskCount,
     actions: [
-      "Review risk radar for critical-tier members",
-      "Draft personalized check-in messages",
-      "Schedule 1:1 calls with top at-risk members",
-      "Track response and re-engagement within 7 days",
+      "Open the risk radar — sort by critical tier first",
+      "Call or text each critical member today",
+      "Book a specific class or session for each one",
+      "Check back in 7 days — did they show up?",
     ],
     status: "pending",
   };
@@ -115,9 +115,9 @@ const billingIntervention: InterventionBuilder = (ctx) => {
 
   let description: string;
   if (ctx.failedSubs.length >= 5) {
-    description = `${ctx.failedSubs.length} subscriptions have payment issues totaling ${fmtDollars(failedAmount)}/mo. Most are just expired cards — a batch of friendly reminders typically recovers 60–80% within 48 hours.`;
+    description = `${ctx.failedSubs.length} payments failed this week. ${fmtDollars(failedAmount)} is sitting on the table. Most are expired cards — send the update link now. 80% will fix it within 48 hours if you move today.`;
   } else {
-    description = `${ctx.failedSubs.length} subscription${ctx.failedSubs.length !== 1 ? "s" : ""} with payment ${ctx.failedSubs.length !== 1 ? "issues" : "issue"} (${fmtDollars(failedAmount)}/mo). Usually just an expired card — a quick heads-up resolves most of these.`;
+    description = `${ctx.failedSubs.length} payment${ctx.failedSubs.length !== 1 ? "s" : ""} failed (${fmtDollars(failedAmount)}/mo at stake). Expired card, most likely. Send the update link today — this is free money you're leaving behind.`;
   }
 
   return {
@@ -131,10 +131,10 @@ const billingIntervention: InterventionBuilder = (ctx) => {
     expectedRevenue: failedAmount,
     affectedMembers: ctx.failedSubs.length,
     actions: [
-      "Review dunning report for failed charges",
-      "Send payment update reminders",
-      "Offer alternative payment methods",
-      "Follow up with personal call after 48 hours",
+      "Send payment update links to all failed accounts today",
+      "Text anyone who hasn't updated within 48 hours",
+      "Call stragglers by end of week — 2 minutes solves it",
+      "Flag recurring failures for a plan conversation",
     ],
     status: "pending",
   };
@@ -155,15 +155,15 @@ const onboardingIntervention: InterventionBuilder = (ctx) => {
 
   let description: string;
   if (needAttention.length >= 5) {
-    description = `${needAttention.length} of your ${ctx.newMembers.length} new members (joined in the last 30 days) haven't built a consistent attendance habit yet. The first month is make-or-break — structured onboarding increases 90-day retention by 20%.`;
+    description = `${needAttention.length} of your ${ctx.newMembers.length} new members joined and aren't showing up. If they don't build a habit in the first 30 days, they're gone. Text them. Invite them to a specific class. Give them a reason to walk in.`;
   } else {
-    description = `${needAttention.length} new member${needAttention.length !== 1 ? "s" : ""} joined recently but ${needAttention.length !== 1 ? "haven't" : "hasn't"} attended enough yet. A personal welcome and intro session can make the difference between a long-term member and a quick cancellation.`;
+    description = `${needAttention.length} new member${needAttention.length !== 1 ? "s" : ""} joined but ${needAttention.length !== 1 ? "aren't" : "isn't"} attending. The first 30 days decide everything. Send a personal text with a specific class and time — vague invites don't work.`;
   }
 
   return {
     id: "int-onboarding",
     category: "onboarding",
-    title: "Improve first-30-day experience",
+    title: "New members need attention now",
     description,
     impact: needAttention.length >= 5 ? "high" : "medium",
     urgency: "this_week",
@@ -171,10 +171,10 @@ const onboardingIntervention: InterventionBuilder = (ctx) => {
     expectedRevenue: ctx.avgSubAmount > 0 ? Math.round(needAttention.length * ctx.avgSubAmount * 100) / 100 : null,
     affectedMembers: needAttention.length,
     actions: [
-      "Create welcome sequence for new members",
-      "Schedule intro sessions within first week",
-      "Assign accountability buddies",
-      "Check in at day 7, 14, and 30",
+      "Text each new member today with a specific class invite",
+      "Schedule a 10-minute intro call this week",
+      "Pair them with a regular member for their next session",
+      "Check in at day 7 and day 14 — no exceptions",
     ],
     status: "pending",
   };
@@ -191,9 +191,9 @@ const leadsIntervention: InterventionBuilder = (ctx) => {
 
   let description: string;
   if (ctx.staleLeadCount > 0 && ctx.staleLeadCount >= ctx.openLeadCount * 0.5) {
-    description = `${ctx.openLeadCount} lead${ctx.openLeadCount !== 1 ? "s" : ""} in your pipeline, and ${ctx.staleLeadCount} went stale — they were interested but nobody followed up. Speed to lead matters: prospects contacted within 1 hour are 7x more likely to convert.`;
+    description = `${ctx.openLeadCount} lead${ctx.openLeadCount !== 1 ? "s" : ""} sitting in your pipeline with no follow-up. ${ctx.staleLeadCount} went stale. Every hour you wait, the close rate drops. Pick up the phone. Send the text. Do it now — not after lunch.`;
   } else {
-    description = `${ctx.openLeadCount} lead${ctx.openLeadCount !== 1 ? "s" : ""} in your pipeline.${potentialRevenue ? ` That's potentially ${fmtDollars(potentialRevenue)}/mo in new revenue if you convert even a fraction.` : ""} Consistent follow-up is what separates growing gyms from stagnant ones.`;
+    description = `${ctx.openLeadCount} lead${ctx.openLeadCount !== 1 ? "s" : ""} in your pipeline.${potentialRevenue ? ` That's ${fmtDollars(potentialRevenue)}/mo if you close even a few.` : ""} Follow up today. Speed is the only thing that matters with leads.`;
   }
 
   return {
@@ -207,10 +207,10 @@ const leadsIntervention: InterventionBuilder = (ctx) => {
     expectedRevenue: potentialRevenue,
     affectedMembers: null,
     actions: [
-      "Review lead pipeline for stale entries",
-      "Send follow-up emails or texts",
-      "Offer free trial or No Sweat Intro",
-      "Remove or archive truly cold leads",
+      "Call or text every stale lead today",
+      "Book a No Sweat Intro for each one — give them a specific time",
+      "Archive anything older than 30 days with no response",
+      "Set a daily reminder: leads get contacted within 1 hour",
     ],
     status: "pending",
   };
@@ -236,11 +236,11 @@ const campaignIntervention: InterventionBuilder = (ctx) => {
 
   let description: string;
   if (hasLowPipeline && hasLongTenureMembers) {
-    description = `Your lead pipeline is thin (${ctx.openLeadCount} leads), but you have ${ctx.longTenureActiveCount} members with 12+ months of tenure — your best referral advocates. Member referrals have 3x higher retention than cold leads. A structured referral program could fill your pipeline without ad spend.`;
+    description = `Your pipeline is dry (${ctx.openLeadCount} leads). You have ${ctx.longTenureActiveCount} members who've been here 12+ months — they're your best salespeople. Ask them for a referral. One text. One ask. Do it this week.`;
   } else if (hasLowPipeline) {
-    description = `Your lead pipeline is thin (${ctx.openLeadCount} leads). A referral campaign leveraging your existing members is the most cost-effective way to refill it. Referral members retain 3x better than cold leads.`;
+    description = `Your pipeline is dry (${ctx.openLeadCount} leads). Your existing members are your cheapest growth channel. Ask 10 of them for a referral this week. Referral members stick 3x longer than cold leads.`;
   } else {
-    description = `You have ${ctx.longTenureActiveCount} loyal members with 12+ months of tenure. They're your strongest advocates — a referral incentive could turn their loyalty into growth without spending on ads.`;
+    description = `You have ${ctx.longTenureActiveCount} loyal members with 12+ months tenure. They're already selling you to their friends — give them a reason to do it formally. One referral ask per member. This week.`;
   }
 
   return {
@@ -254,10 +254,10 @@ const campaignIntervention: InterventionBuilder = (ctx) => {
     expectedRevenue: null,
     affectedMembers: null,
     actions: [
-      "Design referral incentive structure",
-      "Announce to current members",
-      "Create tracking system",
-      "Measure results after 30 days",
+      "Pick 10 long-tenure members and text them a referral ask today",
+      "Offer something simple: free month for every sign-up they bring",
+      "Track who refers whom — reward it publicly",
+      "Review results in 30 days and double down on what works",
     ],
     status: "pending",
   };
@@ -277,15 +277,15 @@ const pricingIntervention: InterventionBuilder = (ctx) => {
 
   let description: string;
   if (ctx.arm < 80) {
-    description = `Your average revenue per member is ${fmtDollars(ctx.arm)}/mo — well below the ${fmtDollars(ARM_BENCHMARK)} benchmark. Even a ${fmtDollars(Math.round(gap * 0.5))}/mo increase across your base would add ${fmtDollars(Math.round(ctx.activeBillableMembers * gap * 0.5))}/mo without adding a single member.`;
+    description = `You're leaving money on the table. ${fmtDollars(ctx.arm)}/member when the benchmark is ${fmtDollars(ARM_BENCHMARK)}. You don't have a member problem — you have a pricing problem. A ${fmtDollars(Math.round(gap * 0.5))}/mo bump would add ${fmtDollars(Math.round(ctx.activeBillableMembers * gap * 0.5))}/mo. Review your tiers.`;
   } else {
-    description = `Your average revenue per member is ${fmtDollars(ctx.arm)}/mo, which is below the ${fmtDollars(ARM_BENCHMARK)} benchmark. Tiered pricing, premium add-ons, or a modest rate increase could close the gap and add roughly ${fmtDollars(potentialUplift)}/mo.`;
+    description = `${fmtDollars(ctx.arm)}/member vs the ${fmtDollars(ARM_BENCHMARK)} benchmark. That gap is costing you ${fmtDollars(potentialUplift)}/mo in revenue you're not collecting. Add a premium tier, raise your base rate, or bundle add-ons. Pick one and do it this month.`;
   }
 
   return {
     id: "int-pricing",
     category: "pricing",
-    title: "Pricing & revenue-per-member opportunity",
+    title: "Pricing gap is costing you money",
     description,
     impact: gapRatio > 0.4 ? "high" : "medium",
     urgency: "this_month",
@@ -293,10 +293,10 @@ const pricingIntervention: InterventionBuilder = (ctx) => {
     expectedRevenue: potentialUplift,
     affectedMembers: ctx.activeBillableMembers,
     actions: [
-      "Review current pricing tiers and membership mix",
-      "Identify members on legacy or low-cost plans",
-      "Consider premium add-ons (personal training, nutrition, open gym)",
-      "Plan a pricing update with grandfather clauses for loyal members",
+      "Pull your membership mix — how many are on your cheapest plan?",
+      "Identify legacy rates that haven't been updated in 12+ months",
+      "Add one premium add-on (personal training, nutrition, open gym)",
+      "Set a price increase date and communicate it 30 days out",
     ],
     status: "pending",
   };
@@ -314,15 +314,15 @@ const engagementDeclineIntervention: InterventionBuilder = (ctx) => {
 
   let description: string;
   if (dropMagnitude >= 15) {
-    description = `Gym-wide attendance dropped ${dropMagnitude.toFixed(1)} percentage points this week (now at ${ctx.engagementRate.toFixed(1)}%). That's a significant shift — it could be seasonal, scheduling, or a sign of broader disengagement. Worth investigating before it turns into cancellations.`;
+    description = `Attendance dropped ${dropMagnitude.toFixed(1)}% this week (now ${ctx.engagementRate.toFixed(1)}%). That's not a blip — it's a signal. Something changed. Check your schedule, check your coaching, check the vibe. Fix it before it compounds.`;
   } else {
-    description = `Attendance is trending down ${dropMagnitude.toFixed(1)} points this week to ${ctx.engagementRate.toFixed(1)}%. Keep an eye on this — consistent drops often precede churn. An attendance challenge or schedule adjustment could reverse the trend.`;
+    description = `Attendance slid ${dropMagnitude.toFixed(1)} points this week to ${ctx.engagementRate.toFixed(1)}%. Small drops compound fast. Look at which classes lost people and why. If nothing changed in your schedule, something changed with your members.`;
   }
 
   return {
     id: "int-engagement",
     category: "engagement",
-    title: "Engagement decline alert",
+    title: "Attendance is dropping",
     description,
     impact: dropMagnitude >= 15 ? "high" : "medium",
     urgency: dropMagnitude >= 15 ? "immediate" : "this_week",
@@ -330,10 +330,10 @@ const engagementDeclineIntervention: InterventionBuilder = (ctx) => {
     expectedRevenue: null,
     affectedMembers: null,
     actions: [
-      "Review class attendance data for patterns",
-      "Check if schedule changes or holidays are a factor",
-      "Run a re-engagement challenge or attendance incentive",
-      "Reach out to members who haven't visited recently",
+      "Pull class-by-class attendance for the last 2 weeks",
+      "Identify which time slots lost the most people",
+      "Talk to your coaches — what are they seeing on the floor?",
+      "Launch a 2-week attendance challenge to stop the slide",
     ],
     status: "pending",
   };
@@ -353,8 +353,8 @@ const newMemberRampUpIntervention: InterventionBuilder = (ctx) => {
   const score = blendWithLearning(clamp(baseScore, 40, 90), "onboarding", ctx.learningStats);
 
   const description = veryNew.length >= 3
-    ? `${veryNew.length} members joined in the last 2 weeks but have attended fewer than 2 classes each. The first 14 days are the highest-risk window — if they don't build a habit now, they likely won't stick. A personal check-in or invite to a specific class makes a huge difference.`
-    : `${veryNew.length} new member${veryNew.length !== 1 ? "s" : ""} joined in the last 2 weeks with very low attendance. The first 14 days matter most — reach out now while they're still excited about joining.`;
+    ? `${veryNew.length} new members in their first 2 weeks and they're barely showing up. This is where you lose them. Personal text from the head coach. Name a class. Make it specific.`
+    : `${veryNew.length} new member${veryNew.length !== 1 ? "s" : ""} in ${veryNew.length !== 1 ? "their" : "the"} first 2 weeks with almost no attendance. The clock is ticking. Text them today with a specific class and time.`;
 
   return {
     id: "int-newmember-ramp",
@@ -367,10 +367,10 @@ const newMemberRampUpIntervention: InterventionBuilder = (ctx) => {
     expectedRevenue: ctx.avgSubAmount > 0 ? Math.round(veryNew.length * ctx.avgSubAmount * 100) / 100 : null,
     affectedMembers: veryNew.length,
     actions: [
-      "Send a personal welcome message to each new member",
-      "Invite them to a specific class that matches their goals",
-      "Schedule a free intro session or goal-setting call",
-      "Set a reminder to check in at day 7 and day 14",
+      "Text each new member today — use their name, pick a class for them",
+      "Have the head coach send a personal video or voice note",
+      "Book a 10-minute intro call for anyone who hasn't attended yet",
+      "Follow up at day 7 and day 14 — mark it on your calendar now",
     ],
     status: "pending",
   };
@@ -391,9 +391,9 @@ const winBackIntervention: InterventionBuilder = (ctx) => {
 
   let description: string;
   if (recentlyCancelled.length >= 5) {
-    description = `${recentlyCancelled.length} members cancelled in the last 60 days.${recoverableRevenue > 0 ? ` That's ${fmtDollars(recoverableRevenue)}/mo that left.` : ""} Win-back campaigns within 60 days of cancellation have a 10–15% success rate — much cheaper than acquiring new members.`;
+    description = `${recentlyCancelled.length} members walked out in the last 60 days.${recoverableRevenue > 0 ? ` ${fmtDollars(recoverableRevenue)}/mo gone.` : ""} Some are recoverable. Reach out with something real — not a discount. A genuine check-in. 1 in 10 comes back when you do.`;
   } else {
-    description = `${recentlyCancelled.length} member${recentlyCancelled.length !== 1 ? "s" : ""} cancelled recently.${recoverableRevenue > 0 ? ` Worth ${fmtDollars(recoverableRevenue)}/mo.` : ""} A personal outreach or a "we miss you" offer within 60 days often brings people back.`;
+    description = `${recentlyCancelled.length} member${recentlyCancelled.length !== 1 ? "s" : ""} cancelled recently.${recoverableRevenue > 0 ? ` ${fmtDollars(recoverableRevenue)}/mo on the line.` : ""} Call them. Not an email — a call. Ask what happened. Listen. Make it personal.`;
   }
 
   return {
@@ -408,10 +408,10 @@ const winBackIntervention: InterventionBuilder = (ctx) => {
     affectedMembers: recentlyCancelled.length,
     affectedMemberIds: recentlyCancelled.map(m => m.id),
     actions: [
-      "Review recently cancelled members for win-back potential",
-      "Send a personal 'we miss you' message or call",
-      "Offer a comeback incentive (free week, waived join fee)",
-      "Track who returns and adjust approach based on results",
+      "Call each cancelled member this week — not email, not text",
+      "Ask what happened and listen — don't pitch",
+      "Offer a no-strings comeback: free week, no re-sign fee",
+      "Track who returns — learn what worked for next time",
     ],
     status: "pending",
   };
@@ -441,13 +441,13 @@ const capacityOptimizationIntervention: InterventionBuilder = (ctx) => {
   let title: string;
   if (isLowFillProblem && isCapacityProblem) {
     title = "Optimize class schedule capacity";
-    description = `Your schedule has a split problem: ${lowFillClasses.length} classes are under 40% capacity while ${fullClasses.length} are at or over capacity. Consider consolidating low-fill time slots and adding capacity or sessions at peak times. Your average fill rate is ${ctx.avgFillRate.toFixed(0)}%.`;
+    description = `${lowFillClasses.length} classes are half-empty. ${fullClasses.length} classes are packed. You don't need more members — you need better distribution. Move your best coach to the dead slot. Promote it. Fill it.`;
   } else if (isLowFillProblem) {
     title = "Address low class attendance";
-    description = `${lowFillClasses.length} of your ${ctx.recentClasses.length} recent classes are under 40% capacity (average fill rate: ${ctx.avgFillRate.toFixed(0)}%). Consider consolidating underperforming time slots, promoting them with targeted outreach, or adjusting the schedule to match when members actually want to train.`;
+    description = `${lowFillClasses.length} of ${ctx.recentClasses.length} classes are under 40% full (${ctx.avgFillRate.toFixed(0)}% avg fill). Empty classes cost you money and energy. Cut the dead weight, merge the weak slots, or put your best coach in the worst time. Something has to change.`;
   } else {
     title = "Add capacity at peak times";
-    description = `${fullClasses.length} of your ${ctx.recentClasses.length} recent classes are at or over capacity. Members may be getting shut out of popular times. Adding a session or increasing capacity at peak hours could improve satisfaction and reduce churn from scheduling frustration.`;
+    description = `${fullClasses.length} of ${ctx.recentClasses.length} classes are at capacity. Members are getting shut out. Every turned-away member is a churn risk. Add a session at peak times or raise the cap — do it this week.`;
   }
 
   return {
@@ -461,10 +461,10 @@ const capacityOptimizationIntervention: InterventionBuilder = (ctx) => {
     expectedRevenue: null,
     affectedMembers: null,
     actions: [
-      "Review class-by-class attendance data for the last 30 days",
-      "Identify consistently under-filled and over-filled time slots",
-      isLowFillProblem ? "Consider merging or rescheduling low-attendance classes" : "Add sessions or increase capacity at peak times",
-      "Survey members about preferred class times",
+      "Pull class-by-class fill rates for the last 30 days",
+      isLowFillProblem ? "Merge or kill classes running below 30% — stop bleeding energy" : "Add one session at your most packed time slot this week",
+      "Move your strongest coach to the weakest slot",
+      "Post the updated schedule and tell members about the change",
     ],
     status: "pending",
   };

@@ -401,28 +401,28 @@ function buildCriticalOutreachContent(ctx: MemberContext): { content: string; su
 
   if (ctx.favoriteClassName) {
     variants.push((c) => ({
-      subject: `The ${c.favoriteClassName} crew misses you, ${c.firstName}`,
-      content: `Hi ${c.firstName},\n\nI wanted to reach out personally — the ${c.favoriteClassName}${c.favoriteTimeSlot ? ` ${c.favoriteTimeSlot}` : ""} crew has been asking about you.${c.lastCoachName ? ` Coach ${c.lastCoachName} mentioned it the other day.` : ""}\n\nYou've been part of our community for ${c.tenureMonths} month${c.tenureMonths !== 1 ? "s" : ""} and we genuinely miss having you around. We've got some exciting new programming coming up that I think you'd love.\n\nI'd love to set up a quick 15-minute catch-up — no pressure at all, just a chance to reconnect and see how we can help.\n\nWould you be free for a coffee or a quick chat this week? I'll buy the coffee.\n\nLooking forward to hearing from you!`,
+      subject: `${c.favoriteClassName} isn't the same without you, ${c.firstName}`,
+      content: `Hi ${c.firstName},\n\nStraight up — the ${c.favoriteClassName}${c.favoriteTimeSlot ? ` ${c.favoriteTimeSlot}` : ""} crew noticed you've been gone.${c.lastCoachName ? ` Coach ${c.lastCoachName} brought it up.` : ""}\n\nYou've been here ${c.tenureMonths} month${c.tenureMonths !== 1 ? "s" : ""}. That's not nothing. Whatever pulled you away, let's figure it out.\n\n15 minutes. Coffee on me. This week. What day works?`,
     }));
   }
 
   if (ctx.lastCoachName) {
     variants.push((c) => ({
-      subject: `Coach ${c.lastCoachName} was asking about you, ${c.firstName}`,
-      content: `Hi ${c.firstName},\n\nCoach ${c.lastCoachName} was asking about you the other day, and it got me thinking — we should reconnect.\n\nYou've been with us for ${c.tenureMonths} month${c.tenureMonths !== 1 ? "s" : ""}${c.favoriteClassName ? ` and we know how much you loved ${c.favoriteClassName}` : ""}. We'd hate to see you drift away.\n\nI'd love to set up a quick goal review — just 15 minutes to catch up, see where you're at, and figure out a plan that works for your schedule. Zero pressure.\n\nWould any day this week work for a quick coffee or chat at the gym?\n\nHope to see you soon!`,
+      subject: `Coach ${c.lastCoachName} asked about you, ${c.firstName}`,
+      content: `Hi ${c.firstName},\n\nCoach ${c.lastCoachName} was asking about you. That says something.\n\nYou've been with us ${c.tenureMonths} month${c.tenureMonths !== 1 ? "s" : ""}${c.favoriteClassName ? ` and ${c.favoriteClassName} is still going strong` : ""}. I don't want you to drift away without us at least having a conversation.\n\n15-minute check-in. No pitch, no pressure. Just want to see where you're at and if there's anything we can do differently.\n\nWhat day this week works for you?`,
     }));
   }
 
   if (ctx.recentPRs.length > 0) {
     variants.push((c) => ({
-      subject: `Don't lose your momentum, ${c.firstName}`,
-      content: `Hi ${c.firstName},\n\nI was looking back at your recent results and wanted to remind you — you hit ${c.recentPRs.length} PR${c.recentPRs.length !== 1 ? "s" : ""} in the last few months${c.recentPRs[0] ? ` (including ${c.recentPRs[0].workoutTitle})` : ""}. That's real progress.\n\nI'd hate to see that momentum fade.${c.favoriteClassName ? ` ${c.favoriteClassName} is still going strong` : ""}${c.lastCoachName ? ` and Coach ${c.lastCoachName} would love to help you build on those gains.` : "."}\n\nLet's set up a quick 15-minute session to map out your next goals. No pressure — just a chance to reconnect.\n\nWhat day works best for you this week?`,
+      subject: `You were making real progress, ${c.firstName}`,
+      content: `Hi ${c.firstName},\n\nI pulled up your numbers — ${c.recentPRs.length} PR${c.recentPRs.length !== 1 ? "s" : ""} in the last few months${c.recentPRs[0] ? ` (${c.recentPRs[0].workoutTitle} included)` : ""}. That's real work.\n\nDon't let that momentum die.${c.favoriteClassName ? ` ${c.favoriteClassName} is still running` : ""}${c.lastCoachName ? ` and Coach ${c.lastCoachName} wants to help you build on it.` : "."}\n\n15 minutes this week. We map out your next targets.\n\nWhat day works?`,
     }));
   }
 
   variants.push((c) => ({
-    subject: `We'd love to reconnect, ${c.firstName}`,
-    content: `Hi ${c.firstName},\n\nI was thinking about you and wanted to reach out personally.${c.tenureMonths > 0 ? ` You've been part of our community for ${c.tenureMonths} month${c.tenureMonths !== 1 ? "s" : ""}, and that means a lot to us.` : ""}\n\nWe've got some exciting new programming and challenges coming up that I think you'd really enjoy.${c.favoriteClassName ? ` Especially if you loved ${c.favoriteClassName} — there's more of that energy coming.` : ""}\n\nI'd love to set up a quick goal review session — just 15 minutes to catch up, see where you're at, and map out a plan that fits your schedule. No pressure at all.\n\nWould you be free for a coffee or a quick chat at the gym this week? I'll buy the coffee.\n\nLooking forward to hearing from you!`,
+    subject: `Checking in, ${c.firstName}`,
+    content: `Hi ${c.firstName},\n\nReaching out.${c.tenureMonths > 0 ? ` You've been here ${c.tenureMonths} month${c.tenureMonths !== 1 ? "s" : ""} — that's real commitment.` : ""}\n\nNew programming just dropped that fits what you've been doing.${c.favoriteClassName ? ` Especially if you liked ${c.favoriteClassName}.` : ""}\n\n15 minutes. We review your goals and adjust the plan.\n\nWhat day this week?`,
   }));
 
   const idx = Math.floor(Math.random() * variants.length);
@@ -434,28 +434,28 @@ function buildHighRiskOutreachContent(ctx: MemberContext): { content: string; su
 
   if (ctx.attendanceTrend === "declining" && ctx.attendancePrior30d > 0) {
     variants.push((c) => ({
-      subject: `Everything okay, ${c.firstName}?`,
-      content: `Hi ${c.firstName},\n\nJust wanted to check in — we noticed you've gone from ${c.attendancePrior30d}x to ${c.attendanceLast30d}x in the last month. Everything okay?\n\nLife gets busy, and we totally get it.${c.favoriteClassName ? ` Your ${c.favoriteClassName} crew is still going strong and would love to see you back.` : ""}\n\nI'd love to schedule a quick 10-minute goal review — just to check in on your progress and make sure we're helping you hit your targets. We also have some awesome upcoming events and challenges that might be right up your alley.\n\nWant to grab a quick coffee or chat this week? Let me know what works!`,
+      subject: `Everything good, ${c.firstName}?`,
+      content: `Hi ${c.firstName},\n\nNoticed your visits dropped from ${c.attendancePrior30d}x to ${c.attendanceLast30d}x this month. No judgment — life happens.${c.favoriteClassName ? ` Your ${c.favoriteClassName} crew is still at it and would be glad to see you back.` : ""}\n\nLet's do a quick 10-minute check-in. See where you're at, adjust the plan if needed. No pitch, just a conversation.\n\nWhat day works this week?`,
     }));
   }
 
   if (ctx.favoriteTimeSlot) {
     variants.push((c) => ({
-      subject: `Checking in, ${c.firstName}`,
-      content: `Hi ${c.firstName},\n\nJust wanted to reach out and see how things are going! It's been a little while since we've seen you${c.favoriteTimeSlot ? ` at the ${c.favoriteTimeSlot} sessions` : ""}, and we genuinely miss having you around.${c.tenureMonths > 0 ? `\n\nYou've been with us for ${c.tenureMonths} month${c.tenureMonths !== 1 ? "s" : ""} — that kind of commitment is impressive.` : ""}\n\nI'd love to schedule a quick goal review — even just 10 minutes to check in on your progress.${c.lastCoachName ? ` Coach ${c.lastCoachName} can work with you on a refreshed plan.` : ""}\n\nWant to grab a quick coffee or chat at the gym this week? Let me know what works for you!`,
+      subject: `Haven't seen you, ${c.firstName}`,
+      content: `Hi ${c.firstName},\n\nIt's been a while since you've been in${c.favoriteTimeSlot ? ` for the ${c.favoriteTimeSlot} sessions` : ""}.${c.tenureMonths > 0 ? ` You've been here ${c.tenureMonths} month${c.tenureMonths !== 1 ? "s" : ""} — I don't want to see that go to waste.` : ""}\n\n10-minute goal review. Quick check-in on where you're at.${c.lastCoachName ? ` Coach ${c.lastCoachName} can help reset your plan.` : ""}\n\nWhat day this week works?`,
     }));
   }
 
   if (ctx.recentPRs.length > 0) {
     variants.push((c) => ({
-      subject: `Keep the streak going, ${c.firstName}!`,
-      content: `Hi ${c.firstName},\n\nHey, congrats on those recent PRs! ${c.recentPRs[0] ? `Crushing ${c.recentPRs[0].workoutTitle}` : "That progress"} is no joke.\n\nWe've noticed things have slowed down a bit lately, and we want to make sure we're still helping you hit your goals.${c.favoriteClassName ? ` ${c.favoriteClassName} sessions are a great way to keep building on that momentum.` : ""}\n\nWant to come in for a quick goal review this week? 10 minutes, zero pressure. Just want to make sure you've got a plan that works.\n\nLet me know what day works best!`,
+      subject: `Don't lose the momentum, ${c.firstName}`,
+      content: `Hi ${c.firstName},\n\nThose recent PRs were legit — ${c.recentPRs[0] ? `${c.recentPRs[0].workoutTitle}` : "that progress"} was real work.\n\nThings have slowed down though. I want to make sure we're still helping you move forward.${c.favoriteClassName ? ` ${c.favoriteClassName} is a good way to get back in rhythm.` : ""}\n\n10 minutes this week. Quick goal review, no pressure. Just want to make sure you have a plan.\n\nWhat day works?`,
     }));
   }
 
   variants.push((c) => ({
     subject: `Checking in, ${c.firstName}`,
-    content: `Hi ${c.firstName},\n\nJust wanted to reach out and see how things are going! It's been a little while since we've seen you, and we genuinely miss having you around.${c.tenureMonths > 0 ? `\n\nYou've been part of our community for ${c.tenureMonths} month${c.tenureMonths !== 1 ? "s" : ""}, and we value that.` : ""}\n\nI'd love to schedule a quick goal review — even just 10 minutes to check in on your progress and make sure we're helping you hit your targets. We also have some awesome upcoming events and challenges that might be right up your alley.\n\nWant to grab a quick coffee or chat at the gym this week? Let me know what works for you!`,
+    content: `Hi ${c.firstName},\n\nBeen a while.${c.tenureMonths > 0 ? ` You've been here ${c.tenureMonths} month${c.tenureMonths !== 1 ? "s" : ""} — that's not nothing.` : ""}\n\n10-minute check-in. We look at where things stand, make sure the plan still fits your schedule.\n\nWhat day this week works?`,
   }));
 
   const idx = Math.floor(Math.random() * variants.length);
@@ -502,10 +502,10 @@ async function generateAtRiskMemberTasks(gymId: number): Promise<GeneratedTask[]
       }
     } else {
       content = isCritical
-        ? `Hi ${member.firstName},\n\nI was thinking about you and wanted to reach out personally. We've got some exciting new programming and challenges coming up that I think you'd really enjoy.\n\nI'd love to set up a quick goal review session — just 15 minutes to catch up, see where you're at, and map out a plan that fits your schedule. No pressure at all, just a chance to reconnect.\n\nWould you be free for a coffee or a quick chat at the gym this week? I'll buy the coffee.\n\nLooking forward to hearing from you!`
-        : `Hi ${member.firstName},\n\nJust wanted to reach out and see how things are going! It's been a little while since we've seen you, and we genuinely miss having you around.\n\nI'd love to schedule a quick goal review — even just 10 minutes to check in on your progress and make sure we're helping you hit your targets. We also have some awesome upcoming events and challenges that might be right up your alley.\n\nWant to grab a quick coffee or chat at the gym this week? Let me know what works for you!`;
+        ? `Hi ${member.firstName},\n\nNew programming just dropped — it fits what you've been doing.\n\n15 minutes. We review your goals and adjust the plan.\n\nWhat day this week works?`
+        : `Hi ${member.firstName},\n\nBeen a while. 10-minute check-in — we look at where things stand, make sure the plan still fits.\n\nWhat day this week works?`;
       subject = isCritical
-        ? `We'd love to reconnect, ${member.firstName}`
+        ? `Let's get back on track, ${member.firstName}`
         : `Checking in, ${member.firstName}`;
     }
 
@@ -516,7 +516,7 @@ async function generateAtRiskMemberTasks(gymId: number): Promise<GeneratedTask[]
       if (ctx.lastCoachName) descParts.push(`Last coach: ${ctx.lastCoachName}.`);
       if (ctx.tenureMonths > 0) descParts.push(`Member for ${ctx.tenureMonths} month${ctx.tenureMonths !== 1 ? "s" : ""}.`);
     }
-    descParts.push(isCritical ? "Reach out with a personal invitation to reconnect." : "Schedule a goal review or casual catch-up.");
+    descParts.push(isCritical ? "Call them. Personal outreach — not a mass message." : "Text or call. Quick check-in before they drift further.");
 
     tasks.push({
       gymId,
@@ -541,21 +541,21 @@ function buildStaleLeadContent(ctx: LeadContext): { content: string; subject: st
 
   if (ctx.source) {
     variants.push((c) => ({
-      subject: `Following up from ${c.source}, ${c.firstName}`,
-      content: `Hi ${c.firstName},\n\nI wanted to follow up since you reached out through ${c.source} about ${c.daysSinceCreated} day${c.daysSinceCreated !== 1 ? "s" : ""} ago.${c.notes ? ` I see you were interested in ${c.notes} — we'd love to tell you more about that.` : ""}\n\nWe'd love to have you in for a No Sweat Intro — it's a free, no-pressure consultation where we sit down, learn about your goals, and show you around the gym. It takes about 20 minutes, and there's zero obligation.\n\nWould any of these times work for you this week?\n- [Morning option]\n- [Afternoon option]\n- [Evening option]\n\nJust let me know, and I'll get you on the calendar!`,
+      subject: `Following up, ${c.firstName}`,
+      content: `Hi ${c.firstName},\n\nYou reached out through ${c.source} ${c.daysSinceCreated} day${c.daysSinceCreated !== 1 ? "s" : ""} ago.${c.notes ? ` You mentioned ${c.notes} — that's exactly what we do well.` : ""}\n\nNo Sweat Intro — 20 minutes. We learn your goals, show you the gym, you decide if it fits.\n\nPick a time this week:\n- [Morning option]\n- [Afternoon option]\n- [Evening option]\n\nLet me know and I'll lock it in.`,
     }));
   }
 
   if (ctx.notes) {
     variants.push((c) => ({
-      subject: `Still interested in checking us out, ${c.firstName}?`,
-      content: `Hi ${c.firstName},\n\nI saw that you mentioned interest in ${c.notes} when you first reached out${c.source ? ` via ${c.source}` : ""}. That's awesome — it's one of the things our members love most about training here.\n\nIt's been ${c.daysSinceCreated} day${c.daysSinceCreated !== 1 ? "s" : ""} since then, and I just wanted to make sure you didn't slip through the cracks. We'd love to set up a No Sweat Intro — a free, 20-minute consultation to learn about your goals and show you around.\n\nNo workout required (unless you want to!). What day this week works best for you?`,
+      subject: `Quick follow-up, ${c.firstName}`,
+      content: `Hi ${c.firstName},\n\nYou mentioned ${c.notes} when you reached out${c.source ? ` via ${c.source}` : ""}. It's been ${c.daysSinceCreated} day${c.daysSinceCreated !== 1 ? "s" : ""} — don't let this slip.\n\nNo Sweat Intro. 20 minutes. We talk goals and show you around.\n\nWhat day this week works?`,
     }));
   }
 
   variants.push((c) => ({
     subject: `Let's connect, ${c.firstName}`,
-    content: `Hi ${c.firstName},\n\nI wanted to follow up and see if you're still interested in checking us out!${c.source ? ` It's been ${c.daysSinceCreated} day${c.daysSinceCreated !== 1 ? "s" : ""} since you reached out through ${c.source}.` : ` It's been ${c.daysSinceCreated} day${c.daysSinceCreated !== 1 ? "s" : ""} since you inquired.`}\n\nWe'd love to have you in for a No Sweat Intro — it's a free, no-pressure consultation where we sit down, learn about your goals, and show you around the gym. It's completely casual, takes about 20 minutes, and there's zero obligation.\n\nWe find it's the best way for people to see if we're the right fit. No workout required (unless you want to!).\n\nWould any of these times work for you this week?\n- [Morning option]\n- [Afternoon option]\n- [Evening option]\n\nJust let me know, and I'll get you on the calendar!`,
+    content: `Hi ${c.firstName},\n\n${c.source ? `It's been ${c.daysSinceCreated} day${c.daysSinceCreated !== 1 ? "s" : ""} since you reached out through ${c.source}.` : `It's been ${c.daysSinceCreated} day${c.daysSinceCreated !== 1 ? "s" : ""} since you inquired.`} Let's connect.\n\nNo Sweat Intro — 20 minutes. We learn your goals and you see if it fits.\n\nPick a time this week:\n- [Morning option]\n- [Afternoon option]\n- [Evening option]\n\nLet me know and I'll get you on the calendar.`,
   }));
 
   const idx = Math.floor(Math.random() * variants.length);
@@ -595,12 +595,12 @@ async function generateStaleLeadTasks(gymId: number): Promise<GeneratedTask[]> {
       descParts.push(`${ctx.daysSinceCreated} day${ctx.daysSinceCreated !== 1 ? "s" : ""} ago`);
       descParts.push(`but hasn't booked yet (stage: ${ctx.stage}).`);
       if (ctx.notes) descParts.push(`Interest: ${ctx.notes}.`);
-      descParts.push("Invite them to a No Sweat Intro before the lead goes cold.");
+      descParts.push("Follow up now — every hour you wait drops the close rate.");
       description = descParts.join(" ");
     } else {
-      content = `Hi ${lead.firstName},\n\nI wanted to follow up and see if you're still interested in checking us out!\n\nWe'd love to have you in for a No Sweat Intro — it's a free, no-pressure consultation where we sit down, learn about your goals, and show you around the gym. It's completely casual, takes about 20 minutes, and there's zero obligation.\n\nWe find it's the best way for people to see if we're the right fit. No workout required (unless you want to!).\n\nWould any of these times work for you this week?\n- [Morning option]\n- [Afternoon option]\n- [Evening option]\n\nJust let me know, and I'll get you on the calendar!`;
+      content = `Hi ${lead.firstName},\n\nFollowing up on your inquiry. No Sweat Intro — 20 minutes. We learn your goals and you see if it fits.\n\nPick a time this week:\n- [Morning option]\n- [Afternoon option]\n- [Evening option]\n\nLet me know and I'll lock it in.`;
       subject = `Let's connect, ${lead.firstName}`;
-      description = `${lead.firstName} ${lead.lastName} was contacted via ${lead.source} but hasn't booked yet. Invite them to a No Sweat Intro before the lead goes cold.`;
+      description = `${lead.firstName} ${lead.lastName} reached out via ${lead.source} but hasn't booked. Follow up now — every hour you wait drops the close rate.`;
     }
 
     tasks.push({
@@ -626,14 +626,14 @@ function buildBillingContent(ctx: MemberContext, sub: { planName: string; amount
 
   if (ctx.tenureMonths >= 6) {
     variants.push((c) => ({
-      subject: `Quick heads-up about your account, ${c.firstName}`,
-      content: `Hi ${c.firstName},\n\nYou've been with us for ${c.tenureMonths} months now, and we truly appreciate your commitment. I wanted to give you a personal heads-up — it looks like there's a small hiccup with the payment method on file for your ${sub.planName} membership.\n\nThese things happen all the time (expired cards, bank updates, etc.), and it's super easy to fix. We just want to make sure everything stays smooth so you don't miss any sessions${c.favoriteClassName ? ` — especially ${c.favoriteClassName}` : ""}.\n\nYou can update your info anytime, or just give us a call and we'll sort it out together in 2 minutes.\n\nThanks so much for being a valued member!`,
+      subject: `Heads up on your account, ${c.firstName}`,
+      content: `Hi ${c.firstName},\n\nYou've been here ${c.tenureMonths} months — I appreciate that. Quick heads up: your payment for ${sub.planName} didn't go through.\n\nUsually an expired card. Takes 2 minutes to fix — update online or call us and we'll handle it together.${c.favoriteClassName ? ` Don't want you missing ${c.favoriteClassName}.` : ""}\n\nThanks for taking care of it.`,
     }));
   }
 
   variants.push((c) => ({
-    subject: `Quick heads-up about your account, ${c.firstName}`,
-    content: `Hi ${c.firstName},\n\nHope you're doing well! I wanted to give you a quick heads-up — it looks like there might be a small hiccup with the payment method on file for your ${sub.planName} membership.\n\nThese things happen all the time (expired cards, bank updates, etc.), and it's super easy to fix. We just want to make sure everything stays smooth so you don't miss any sessions.\n\nYou can update your info anytime, or just give us a call and we'll sort it out together in 2 minutes.${c.tenureMonths > 0 ? `\n\nYou've been with us for ${c.tenureMonths} month${c.tenureMonths !== 1 ? "s" : ""} — we want to keep it going!` : ""}\n\nThanks so much, and see you in class!`,
+    subject: `Heads up on your account, ${c.firstName}`,
+    content: `Hi ${c.firstName},\n\nQuick heads up — your payment for ${sub.planName} didn't go through. Usually just an expired card.\n\nUpdate your info online or give us a call — takes 2 minutes.${c.tenureMonths > 0 ? ` You've been here ${c.tenureMonths} month${c.tenureMonths !== 1 ? "s" : ""} — let's keep it going.` : ""}\n\nThanks for taking care of it.`,
   }));
 
   const idx = Math.floor(Math.random() * variants.length);
@@ -669,15 +669,15 @@ async function generateFailedPaymentTasks(gymId: number): Promise<GeneratedTask[
       content = generated.content;
       subject = generated.subject;
     } else {
-      content = `Hi ${member.firstName},\n\nHope you're doing well! I wanted to give you a quick heads-up — it looks like there might be a small hiccup with the payment method on file for your membership.\n\nThese things happen all the time (expired cards, bank updates, etc.), and it's super easy to fix. We just want to make sure everything stays smooth so you don't miss any sessions.\n\nYou can update your info anytime, or just give us a call and we'll sort it out together in 2 minutes.\n\nThanks so much, and see you in class!`;
-      subject = `Quick heads-up about your account, ${member.firstName}`;
+      content = `Hi ${member.firstName},\n\nQuick heads up — your payment didn't go through. Usually just an expired card.\n\nUpdate your info online or give us a call — takes 2 minutes. Want to make sure you don't miss any sessions.\n\nThanks for taking care of it.`;
+      subject = `Heads up on your account, ${member.firstName}`;
     }
 
     tasks.push({
       gymId,
       type: "billing",
       title: `Payment issue: ${member.firstName} ${member.lastName}`,
-      description: `${member.firstName} ${member.lastName}'s subscription (${sub.planName}) has a payment issue.${ctx && ctx.tenureMonths > 0 ? ` Member for ${ctx.tenureMonths} month${ctx.tenureMonths !== 1 ? "s" : ""}.` : ""} Reach out warmly to resolve and keep them active.`,
+      description: `${member.firstName} ${member.lastName}'s ${sub.planName} payment failed.${ctx && ctx.tenureMonths > 0 ? ` Member for ${ctx.tenureMonths} month${ctx.tenureMonths !== 1 ? "s" : ""}.` : ""} Send the update link today — most fix it within 48 hours.`,
       priority: "high",
       status: "pending",
       targetId: member.id,
@@ -718,7 +718,7 @@ export async function generateAiTasks(gymId: number): Promise<{ created: number;
     return {
       created: 0,
       tasks: [],
-      reason: `Checked ${checkedCategories.join(", ")} — no new risks detected. Your gym metrics look healthy.`,
+      reason: `Checked ${checkedCategories.join(", ")} — nothing flagged. Metrics look clean. Use the time to build.`,
     };
   }
 
@@ -735,7 +735,7 @@ export async function generateAiTasks(gymId: number): Promise<{ created: number;
     return {
       created: 0,
       tasks: [],
-      reason: `All identified risks already have pending tasks (${currentPending} active). Review or complete existing tasks first.`,
+      reason: `${currentPending} tasks already pending. Handle those first before generating new ones.`,
     };
   }
 

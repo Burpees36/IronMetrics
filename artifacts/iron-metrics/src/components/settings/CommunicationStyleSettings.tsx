@@ -13,29 +13,29 @@ const TONE_PRESETS = [
   {
     value: "casual_friendly",
     label: "Casual & Friendly",
-    description: "Warm, conversational, like texting a friend. Uses contractions and casual language.",
-    example: "Hey Sarah! Just wanted to check in — we miss seeing you around the gym!",
+    description: "Warm and direct, like texting someone you know. Contractions, short sentences, no fluff.",
+    example: "Hey Sarah — haven't seen you in a bit. Everything good? We've got a solid class Thursday if you want to jump back in.",
   },
   {
     value: "professional",
     label: "Professional",
-    description: "Polished and respectful. Clear, direct communication with a warm touch.",
-    example: "Hello Sarah, I wanted to reach out personally to check in on how things are going.",
+    description: "Clear and respectful. Gets to the point without being cold.",
+    example: "Hi Sarah, I noticed it's been a while since your last visit. I'd like to set up a quick check-in — no pressure, just want to make sure we're helping you reach your goals.",
   },
   {
     value: "motivational_coach",
     label: "Motivational Coach",
-    description: "High energy, encouraging, action-oriented. Pushes members to show up and crush it.",
-    example: "Hey Sarah! You've been crushing it — don't let that momentum slip. Let's get after it!",
+    description: "High energy, action-oriented. Pushes members to show up and put in the work.",
+    example: "Sarah — you've been putting in work. Don't let it slip now. Class is at 6am Thursday. Be there.",
   },
 ] as const;
 
 const RULE_SUGGESTIONS = [
-  'Never say "cancellation", say "taking a break"',
+  'Never say "cancellation", say "pause"',
   'Always sign off with "See you in the gym!"',
-  'Never say "payment failed", say "billing hiccup"',
+  'Never say "payment failed", say "billing issue"',
   'Replace "membership" with "training"',
-  'Never say "overdue", say "needs attention"',
+  'Never say "overdue", say "needs your attention"',
 ];
 
 interface Props {

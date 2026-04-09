@@ -323,7 +323,8 @@ describe("capacityOptimizationIntervention", () => {
     const result = builder(ctx)!;
     expect(result).not.toBeNull();
     expect(result.category).toBe("engagement");
-    expect(result.title).toContain("low class attendance");
+    expect(result.title).toContain("low class");
+    expect(result.description).toContain("under 40%");
   });
 
   it("returns intervention for consistently full classes", () => {
