@@ -48,6 +48,7 @@ A premium SaaS theme featuring light/dark mode, 2xl rounded corners, and a glass
 -   **MRR Snapshots:** Daily snapshots stored for historical reporting and trend analysis.
 -   **Owner Console Dashboard:** Action-queue-first layout with critical counts, MRR growth, action items, and a KPI sidebar.
 -   **Communication Style (Owner Voice):** Settings for gym owners to configure communication tone (e.g., Casual & Friendly, Professional), define custom word-replacement rules, and provide writing samples for AI task generation.
+-   **Danger Zone (Deactivate & Delete):** Settings Danger Zone allows gym owners to deactivate (temporarily disable, blocking staff/member access) or permanently delete a business and all associated data. Includes owner-only authorization enforcement, deactivated-gym middleware guard, and a frontend deactivation banner.
 -   **Onboarding Wizard:** A streamlined 3-step guided setup for new gyms.
 -   **Error Handling:** Centralized error handling with structured responses and logging.
 -   **Rate Limiting:** `express-rate-limit` for API protection.

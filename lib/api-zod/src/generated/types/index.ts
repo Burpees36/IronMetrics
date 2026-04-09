@@ -108,6 +108,7 @@ export * from "./dashboardStats";
 export * from "./dashboardStatsAttendanceByDayItem";
 export * from "./dashboardStatsMemberStatusBreakdownItem";
 export * from "./dashboardStatsRevenueByMonthItem";
+export * from "./deleteGym200";
 export * from "./disableTax200";
 export * from "./discountCode";
 export * from "./discountCodeDuration";

@@ -44,6 +44,9 @@ export interface Gym {
   smsEnabled?: boolean;
   /** @nullable */
   twilioPhoneNumber?: string | null;
+  isActive: boolean;
+  /** @nullable */
+  deactivatedAt?: Date | null;
   memberCount: number;
   activeCount: number;
   createdAt: Date;

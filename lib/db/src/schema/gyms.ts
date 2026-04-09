@@ -37,6 +37,8 @@ export const gymsTable = pgTable("gyms", {
   communicationStyleTone: text("communication_style_tone").notNull().default("casual_friendly"),
   communicationStyleRules: text("communication_style_rules").array().notNull().default([]),
   communicationStyleSamples: text("communication_style_samples").array().notNull().default([]),
+  isActive: boolean("is_active").notNull().default(true),
+  deactivatedAt: timestamp("deactivated_at", { withTimezone: true }),
   wodifyApiKey: text("wodify_api_key"),
   smsEnabled: boolean("sms_enabled").notNull().default(false),
   twilioAccountSid: text("twilio_account_sid"),

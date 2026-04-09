@@ -93,6 +93,8 @@ export const ListGymsResponseItem = zod.object({
   communicationStyleSamples: zod.array(zod.string()).optional(),
   smsEnabled: zod.boolean().optional(),
   twilioPhoneNumber: zod.string().nullish(),
+  isActive: zod.boolean(),
+  deactivatedAt: zod.date().nullish(),
   memberCount: zod.number(),
   activeCount: zod.number(),
   createdAt: zod.date(),
@@ -145,6 +147,8 @@ export const GetGymResponse = zod.object({
   communicationStyleSamples: zod.array(zod.string()).optional(),
   smsEnabled: zod.boolean().optional(),
   twilioPhoneNumber: zod.string().nullish(),
+  isActive: zod.boolean(),
+  deactivatedAt: zod.date().nullish(),
   memberCount: zod.number(),
   activeCount: zod.number(),
   createdAt: zod.date(),
@@ -208,6 +212,97 @@ export const UpdateGymResponse = zod.object({
   communicationStyleSamples: zod.array(zod.string()).optional(),
   smsEnabled: zod.boolean().optional(),
   twilioPhoneNumber: zod.string().nullish(),
+  isActive: zod.boolean(),
+  deactivatedAt: zod.date().nullish(),
+  memberCount: zod.number(),
+  activeCount: zod.number(),
+  createdAt: zod.date(),
+});
+
+/**
+ * @summary Permanently delete a gym and all associated data (owner only)
+ */
+export const DeleteGymParams = zod.object({
+  gymId: zod.coerce.number(),
+});
+
+export const DeleteGymResponse = zod.object({
+  success: zod.boolean(),
+});
+
+/**
+ * @summary Deactivate a gym (owner only)
+ */
+export const DeactivateGymParams = zod.object({
+  gymId: zod.coerce.number(),
+});
+
+export const DeactivateGymResponse = zod.object({
+  id: zod.number(),
+  name: zod.string(),
+  slug: zod.string(),
+  businessName: zod.string().nullish(),
+  description: zod.string().nullish(),
+  email: zod.string().nullish(),
+  phone: zod.string().nullish(),
+  address: zod.string().nullish(),
+  city: zod.string().nullish(),
+  state: zod.string().nullish(),
+  zip: zod.string().nullish(),
+  timezone: zod.string(),
+  logoUrl: zod.string().nullish(),
+  website: zod.string().nullish(),
+  fromEmail: zod.string().nullish(),
+  fromName: zod.string().nullish(),
+  ownerId: zod.string().optional(),
+  autoSuspendEnabled: zod.boolean().optional(),
+  autoSuspendBufferDays: zod.number().optional(),
+  communicationStyleTone: zod.string().optional(),
+  communicationStyleRules: zod.array(zod.string()).optional(),
+  communicationStyleSamples: zod.array(zod.string()).optional(),
+  smsEnabled: zod.boolean().optional(),
+  twilioPhoneNumber: zod.string().nullish(),
+  isActive: zod.boolean(),
+  deactivatedAt: zod.date().nullish(),
+  memberCount: zod.number(),
+  activeCount: zod.number(),
+  createdAt: zod.date(),
+});
+
+/**
+ * @summary Reactivate a deactivated gym (owner only)
+ */
+export const ReactivateGymParams = zod.object({
+  gymId: zod.coerce.number(),
+});
+
+export const ReactivateGymResponse = zod.object({
+  id: zod.number(),
+  name: zod.string(),
+  slug: zod.string(),
+  businessName: zod.string().nullish(),
+  description: zod.string().nullish(),
+  email: zod.string().nullish(),
+  phone: zod.string().nullish(),
+  address: zod.string().nullish(),
+  city: zod.string().nullish(),
+  state: zod.string().nullish(),
+  zip: zod.string().nullish(),
+  timezone: zod.string(),
+  logoUrl: zod.string().nullish(),
+  website: zod.string().nullish(),
+  fromEmail: zod.string().nullish(),
+  fromName: zod.string().nullish(),
+  ownerId: zod.string().optional(),
+  autoSuspendEnabled: zod.boolean().optional(),
+  autoSuspendBufferDays: zod.number().optional(),
+  communicationStyleTone: zod.string().optional(),
+  communicationStyleRules: zod.array(zod.string()).optional(),
+  communicationStyleSamples: zod.array(zod.string()).optional(),
+  smsEnabled: zod.boolean().optional(),
+  twilioPhoneNumber: zod.string().nullish(),
+  isActive: zod.boolean(),
+  deactivatedAt: zod.date().nullish(),
   memberCount: zod.number(),
   activeCount: zod.number(),
   createdAt: zod.date(),

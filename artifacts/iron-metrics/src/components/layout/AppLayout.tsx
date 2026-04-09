@@ -4,7 +4,7 @@ import { useAuth } from "@workspace/replit-auth-web";
 import { 
   LayoutDashboard, BrainCircuit, Users, CalendarDays, 
   Target, CreditCard, Activity, LogOut, Menu, BookOpen,
-  Settings, Sun, Moon, RefreshCw, Lock, Wallet
+  Settings, Sun, Moon, RefreshCw, Lock, Wallet, AlertTriangle, Power
 } from "lucide-react";
 import { ForgeOSLogo } from "@/components/brand/ForgeOSLogo";
 import { useGym } from "@/store/GymContext";
@@ -166,7 +166,21 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     query: { enabled: !!activeGymId }
   });
 
+  const isDeactivated = gym?.isActive === false;
+
   if (!activeGymId) return <>{children}</>;
+
+  const deactivatedBanner = isDeactivated ? (
+    <div className="bg-amber-500/10 border-b border-amber-500/30 px-4 py-3 flex items-center gap-3 shrink-0">
+      <Power className="h-4 w-4 text-amber-500 shrink-0" />
+      <p className="text-sm text-amber-700 dark:text-amber-300 flex-1">
+        <strong>This business is deactivated.</strong> Members and staff cannot access it.{" "}
+        <Link href="/settings?section=danger" className="underline font-medium hover:text-amber-800 dark:hover:text-amber-200">
+          Go to Settings
+        </Link>{" "}to reactivate.
+      </p>
+    </div>
+  ) : null;
 
   if (isMobile) {
     return (
@@ -204,6 +218,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             />
           </SheetContent>
         </Sheet>
+
+        {deactivatedBanner}
 
         <main className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
           <div className="absolute top-0 left-1/4 w-96 h-96 bg-primary/5 rounded-full blur-[120px] pointer-events-none" />
@@ -261,6 +277,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       </aside>
 
       <main className="flex-1 flex flex-col min-w-0 h-full overflow-hidden relative">
+        {deactivatedBanner}
         <div className="absolute top-0 left-1/4 w-96 h-96 bg-primary/5 rounded-full blur-[120px] pointer-events-none" />
         
         <div className="flex-1 overflow-y-auto p-6 md:p-8 z-10 custom-scrollbar">

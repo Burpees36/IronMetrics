@@ -236,6 +236,78 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Gym"
+    delete:
+      operationId: deleteGym
+      tags: [gyms]
+      summary: Permanently delete a gym and all associated data (owner only)
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Gym deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                required:
+                  - success
+        "403":
+          description: Forbidden - owner only
+        "404":
+          description: Not found
+
+  /gyms/{gymId}/deactivate:
+    post:
+      operationId: deactivateGym
+      tags: [gyms]
+      summary: Deactivate a gym (owner only)
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Deactivated gym
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Gym"
+        "403":
+          description: Forbidden - owner only
+        "404":
+          description: Not found
+
+  /gyms/{gymId}/reactivate:
+    post:
+      operationId: reactivateGym
+      tags: [gyms]
+      summary: Reactivate a deactivated gym (owner only)
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Reactivated gym
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Gym"
+        "403":
+          description: Forbidden - owner only
+        "404":
+          description: Not found
 
   # MEMBERS
   /gyms/{gymId}/members:
@@ -4689,6 +4761,11 @@ components:
           type: boolean
         twilioPhoneNumber:
           type: ["string", "null"]
+        isActive:
+          type: boolean
+        deactivatedAt:
+          type: ["string", "null"]
+          format: date-time
         memberCount:
           type: integer
         activeCount:
@@ -4704,6 +4781,7 @@ components:
         - memberCount
         - activeCount
         - createdAt
+        - isActive
 
     CreateGymBody:
       type: object

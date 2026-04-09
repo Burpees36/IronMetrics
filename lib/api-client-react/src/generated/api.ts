@@ -82,6 +82,7 @@ import type {
   CreateWorkoutBody,
   CreateWorkoutResultBody,
   DashboardStats,
+  DeleteGym200,
   DisableTax200,
   DiscountCode,
   DismissIntervention200,
@@ -941,6 +942,258 @@ export const useUpdateGym = <
   TContext
 > => {
   return useMutation(getUpdateGymMutationOptions(options));
+};
+
+/**
+ * @summary Permanently delete a gym and all associated data (owner only)
+ */
+export const getDeleteGymUrl = (gymId: number) => {
+  return `/api/gyms/${gymId}`;
+};
+
+export const deleteGym = async (
+  gymId: number,
+  options?: RequestInit,
+): Promise<DeleteGym200> => {
+  return customFetch<DeleteGym200>(getDeleteGymUrl(gymId), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getDeleteGymMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteGym>>,
+    TError,
+    { gymId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteGym>>,
+  TError,
+  { gymId: number },
+  TContext
+> => {
+  const mutationKey = ["deleteGym"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteGym>>,
+    { gymId: number }
+  > = (props) => {
+    const { gymId } = props ?? {};
+
+    return deleteGym(gymId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteGymMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteGym>>
+>;
+
+export type DeleteGymMutationError = ErrorType<void>;
+
+/**
+ * @summary Permanently delete a gym and all associated data (owner only)
+ */
+export const useDeleteGym = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteGym>>,
+    TError,
+    { gymId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof deleteGym>>,
+  TError,
+  { gymId: number },
+  TContext
+> => {
+  return useMutation(getDeleteGymMutationOptions(options));
+};
+
+/**
+ * @summary Deactivate a gym (owner only)
+ */
+export const getDeactivateGymUrl = (gymId: number) => {
+  return `/api/gyms/${gymId}/deactivate`;
+};
+
+export const deactivateGym = async (
+  gymId: number,
+  options?: RequestInit,
+): Promise<Gym> => {
+  return customFetch<Gym>(getDeactivateGymUrl(gymId), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getDeactivateGymMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deactivateGym>>,
+    TError,
+    { gymId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deactivateGym>>,
+  TError,
+  { gymId: number },
+  TContext
+> => {
+  const mutationKey = ["deactivateGym"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deactivateGym>>,
+    { gymId: number }
+  > = (props) => {
+    const { gymId } = props ?? {};
+
+    return deactivateGym(gymId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeactivateGymMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deactivateGym>>
+>;
+
+export type DeactivateGymMutationError = ErrorType<void>;
+
+/**
+ * @summary Deactivate a gym (owner only)
+ */
+export const useDeactivateGym = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deactivateGym>>,
+    TError,
+    { gymId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof deactivateGym>>,
+  TError,
+  { gymId: number },
+  TContext
+> => {
+  return useMutation(getDeactivateGymMutationOptions(options));
+};
+
+/**
+ * @summary Reactivate a deactivated gym (owner only)
+ */
+export const getReactivateGymUrl = (gymId: number) => {
+  return `/api/gyms/${gymId}/reactivate`;
+};
+
+export const reactivateGym = async (
+  gymId: number,
+  options?: RequestInit,
+): Promise<Gym> => {
+  return customFetch<Gym>(getReactivateGymUrl(gymId), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getReactivateGymMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof reactivateGym>>,
+    TError,
+    { gymId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof reactivateGym>>,
+  TError,
+  { gymId: number },
+  TContext
+> => {
+  const mutationKey = ["reactivateGym"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof reactivateGym>>,
+    { gymId: number }
+  > = (props) => {
+    const { gymId } = props ?? {};
+
+    return reactivateGym(gymId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ReactivateGymMutationResult = NonNullable<
+  Awaited<ReturnType<typeof reactivateGym>>
+>;
+
+export type ReactivateGymMutationError = ErrorType<void>;
+
+/**
+ * @summary Reactivate a deactivated gym (owner only)
+ */
+export const useReactivateGym = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof reactivateGym>>,
+    TError,
+    { gymId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof reactivateGym>>,
+  TError,
+  { gymId: number },
+  TContext
+> => {
+  return useMutation(getReactivateGymMutationOptions(options));
 };
 
 /**

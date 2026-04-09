@@ -60,6 +60,9 @@ export interface Gym {
   smsEnabled?: boolean;
   /** @nullable */
   twilioPhoneNumber?: string | null;
+  isActive: boolean;
+  /** @nullable */
+  deactivatedAt?: string | null;
   memberCount: number;
   activeCount: number;
   createdAt: string;
@@ -2512,6 +2515,10 @@ export interface UpdateAppointmentBody {
 export interface ErrorEnvelope {
   error: string;
 }
+
+export type DeleteGym200 = {
+  success: boolean;
+};
 
 export type ListMembersParams = {
   status?: string;
