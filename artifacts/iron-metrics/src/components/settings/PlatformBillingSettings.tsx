@@ -25,6 +25,7 @@ interface PlatformBillingInfo {
     name: string;
     price: number;
     description: string;
+    features?: string[];
   }>;
 }
 
@@ -162,22 +163,39 @@ export function PlatformBillingSettings() {
         </motion.div>
       )}
 
-      {data.isBetaAccess && (
-        <motion.div
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="bg-card border border-primary/30 rounded-2xl p-6 shadow-sm"
-        >
-          <div className="flex items-center gap-3 mb-2">
-            <CheckCircle2 className="h-5 w-5 text-primary" />
-            <h3 className="text-lg font-semibold text-foreground">Beta Access — Full Pro</h3>
-            <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20">Beta</Badge>
-          </div>
-          <p className="text-sm text-muted-foreground">
-            Your gym has complimentary beta access with full Pro-tier features. No payment required.
-          </p>
-        </motion.div>
-      )}
+      {data.isBetaAccess && (() => {
+        const proTier = data.tiers.find(t => t.id === "pro");
+        return (
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="bg-card border border-primary/30 rounded-2xl p-6 shadow-sm"
+          >
+            <div className="flex items-center gap-3 mb-2">
+              <CheckCircle2 className="h-5 w-5 text-primary" />
+              <h3 className="text-lg font-semibold text-foreground">Beta Access — Full Pro</h3>
+              <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20">Beta</Badge>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Your gym has complimentary beta access with full Pro-tier features. No payment required.
+            </p>
+
+            {proTier?.features && proTier.features.length > 0 && (
+              <div className="mt-5 pt-4 border-t border-border">
+                <p className="text-sm font-medium text-foreground mb-3">Included in your access:</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {proTier.features.map((feature) => (
+                    <div key={feature} className="flex items-center gap-2">
+                      <CheckCircle2 className="h-3.5 w-3.5 text-primary shrink-0" />
+                      <span className="text-sm text-muted-foreground">{feature}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </motion.div>
+        );
+      })()}
 
       {!isNone && !data.isBetaAccess && data.tierDefinition && (
         <motion.div
@@ -271,7 +289,7 @@ export function PlatformBillingSettings() {
         </motion.div>
       )}
 
-      {!isNone && !data.isBetaAccess && (
+      {(!isNone || data.isBetaAccess) && (
         <motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
@@ -283,13 +301,15 @@ export function PlatformBillingSettings() {
             <h3 className="text-base font-semibold text-foreground">Available Plans</h3>
           </div>
           <p className="text-sm text-muted-foreground mb-4">
-            Use the billing portal above to upgrade or downgrade between plans.
+            {data.isBetaAccess
+              ? "ForgeOS offers three tiers. Your beta access includes full Pro features."
+              : "Use the billing portal above to upgrade or downgrade between plans."}
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {data.tiers.map((tier) => {
               const Icon = TIER_ICONS[tier.id] || Zap;
               const color = TIER_COLORS[tier.id] || "text-primary";
-              const isCurrentTier = tier.id === data.subscriptionTier;
+              const isCurrentTier = data.isBetaAccess ? tier.id === "pro" : tier.id === data.subscriptionTier;
               return (
                 <div
                   key={tier.id}
@@ -302,7 +322,11 @@ export function PlatformBillingSettings() {
                   <div className="flex items-center gap-2 mb-1">
                     <Icon className={`h-4 w-4 ${color}`} />
                     <span className="text-sm font-semibold text-foreground">{tier.name}</span>
-                    {isCurrentTier && <Badge variant="outline" className="text-xs bg-primary/10 text-primary border-primary/20 ml-auto">Current</Badge>}
+                    {isCurrentTier && (
+                      <Badge variant="outline" className="text-xs bg-primary/10 text-primary border-primary/20 ml-auto">
+                        {data.isBetaAccess ? "Your Access" : "Current"}
+                      </Badge>
+                    )}
                   </div>
                   <p className="text-lg font-bold text-foreground">${tier.price}<span className="text-xs text-muted-foreground font-normal">/mo</span></p>
                 </div>
