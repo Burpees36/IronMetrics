@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from "react";
+import React, { useState, useCallback, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Share2,
@@ -10,6 +10,8 @@ import {
   ExternalLink,
   Mail,
   Clock,
+  Share,
+  AlertCircle,
 } from "lucide-react";
 import {
   Dialog,
@@ -33,6 +35,13 @@ function getStoredCooldownRemaining(gymId: number, dayDate?: string): number {
   if (isNaN(ts)) return 0;
   const remaining = COOLDOWN_MS - (Date.now() - ts);
   return remaining > 0 ? remaining : 0;
+}
+
+function useWebShareSupported() {
+  return useMemo(() => {
+    if (typeof navigator === "undefined") return false;
+    return !!navigator.share;
+  }, []);
 }
 
 interface ShareWorkoutDialogProps {
@@ -59,6 +68,7 @@ export function ShareWorkoutDialog({
   const [notifyCount, setNotifyCount] = useState(0);
   const [notifyError, setNotifyError] = useState("");
   const [cooldownMinutes, setCooldownMinutes] = useState(0);
+  const webShareSupported = useWebShareSupported();
 
   useEffect(() => {
     if (!open) return;
@@ -70,11 +80,21 @@ export function ShareWorkoutDialog({
     }
   }, [open, gymId, dayDate]);
 
+  useEffect(() => {
+    if (notifyState === "success") {
+      const timer = setTimeout(() => {
+        setNotifyState("idle");
+        setNotifyCount(0);
+      }, 4000);
+      return () => clearTimeout(timer);
+    }
+  }, [notifyState]);
+
   const handleCopyLink = useCallback(async () => {
     try {
       await navigator.clipboard.writeText(publicUrl);
       setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      setTimeout(() => setCopied(false), 2500);
     } catch {
       const input = document.createElement("input");
       input.value = publicUrl;
@@ -83,9 +103,22 @@ export function ShareWorkoutDialog({
       document.execCommand("copy");
       document.body.removeChild(input);
       setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      setTimeout(() => setCopied(false), 2500);
     }
   }, [publicUrl]);
+
+  const handleNativeShare = useCallback(async () => {
+    try {
+      await navigator.share({
+        title: dayTitle ? `Workout: ${dayTitle}` : "Today's Programming",
+        text: dayTitle
+          ? `Check out "${dayTitle}" — today's workout programming`
+          : "Check out today's workout programming",
+        url: publicUrl,
+      });
+    } catch {
+    }
+  }, [publicUrl, dayTitle]);
 
   const handleNotifyMembers = useCallback(async () => {
     setNotifyState("loading");
@@ -140,7 +173,7 @@ export function ShareWorkoutDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="w-[calc(100%-2rem)] sm:max-w-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Share2 className="h-5 w-5 text-primary" />
@@ -153,65 +186,96 @@ export function ShareWorkoutDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-5 pt-2">
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-foreground">Public Programming Link</label>
-            <div className="flex items-center gap-2">
-              <div className="flex-1 rounded-lg border border-border bg-muted/50 px-3 py-2.5 text-sm text-foreground truncate font-mono">
-                {publicUrl}
-              </div>
+        <div className="space-y-4 pt-1">
+          <div className="rounded-xl border border-primary/20 bg-primary/5 p-4 space-y-3">
+            <label className="text-sm font-semibold text-foreground flex items-center gap-1.5">
+              <ExternalLink className="h-3.5 w-3.5 text-primary" />
+              Public Programming Link
+            </label>
+            <div
+              className="rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-foreground font-mono break-all select-all leading-relaxed cursor-text"
+              title={publicUrl}
+            >
+              {publicUrl}
+            </div>
+            <div className="flex flex-col gap-2">
               <button
                 onClick={handleCopyLink}
-                className="shrink-0 h-10 w-10 flex items-center justify-center rounded-lg border border-border bg-background hover:bg-accent transition-colors"
-                title="Copy link"
+                className="w-full flex items-center justify-center gap-2 h-10 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 font-medium text-sm transition-all active:scale-[0.98]"
               >
-                <AnimatePresence mode="wait">
+                <AnimatePresence mode="wait" initial={false}>
                   {copied ? (
-                    <motion.div
-                      key="check"
-                      initial={{ scale: 0 }}
-                      animate={{ scale: 1 }}
-                      exit={{ scale: 0 }}
+                    <motion.span
+                      key="copied"
+                      className="flex items-center gap-2"
+                      initial={{ opacity: 0, y: 4 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -4 }}
+                      transition={{ duration: 0.15 }}
                     >
-                      <Check className="h-4 w-4 text-emerald-500" />
-                    </motion.div>
+                      <Check className="h-4 w-4" />
+                      Copied!
+                    </motion.span>
                   ) : (
-                    <motion.div
+                    <motion.span
                       key="copy"
-                      initial={{ scale: 0 }}
-                      animate={{ scale: 1 }}
-                      exit={{ scale: 0 }}
+                      className="flex items-center gap-2"
+                      initial={{ opacity: 0, y: 4 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -4 }}
+                      transition={{ duration: 0.15 }}
                     >
-                      <Copy className="h-4 w-4 text-muted-foreground" />
-                    </motion.div>
+                      <Copy className="h-4 w-4" />
+                      Copy Link
+                    </motion.span>
                   )}
                 </AnimatePresence>
               </button>
+              <div className="flex items-center gap-2">
+                {webShareSupported && (
+                  <button
+                    onClick={handleNativeShare}
+                    className="flex-1 flex items-center justify-center gap-2 h-9 rounded-lg border border-border bg-background hover:bg-accent font-medium text-sm transition-all active:scale-[0.98]"
+                  >
+                    <Share className="h-4 w-4" />
+                    Share
+                  </button>
+                )}
+                <a
+                  href={publicUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex-1 flex items-center justify-center gap-2 h-9 rounded-lg border border-border bg-background hover:bg-accent transition-colors text-sm text-muted-foreground hover:text-foreground"
+                  title="Open in new tab"
+                >
+                  <ExternalLink className="h-4 w-4" />
+                  <span>Open</span>
+                </a>
+              </div>
             </div>
-            <a
-              href={publicUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
-            >
-              Open in new tab
-              <ExternalLink className="h-3 w-3" />
-            </a>
           </div>
 
-          <div className="border-t border-border pt-4 space-y-3">
+          <div className="relative flex items-center py-1">
+            <div className="flex-1 border-t border-border" />
+            <span className="px-3 text-xs text-muted-foreground font-medium uppercase tracking-wider">
+              or notify via email
+            </span>
+            <div className="flex-1 border-t border-border" />
+          </div>
+
+          <div className="space-y-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Mail className="h-4 w-4 text-muted-foreground" />
-                <span className="text-sm font-medium text-foreground">Notify Members</span>
+                <span className="text-sm font-medium text-foreground">Email Members</span>
               </div>
-              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground bg-muted/50 px-2 py-1 rounded-full">
                 <Users className="h-3.5 w-3.5" />
                 <span>{activeMemberCount} active</span>
               </div>
             </div>
 
-            <p className="text-xs text-muted-foreground">
+            <p className="text-xs text-muted-foreground leading-relaxed">
               {dayTitle
                 ? `Send an email to all active members with a link to "${dayTitle}".`
                 : "Send an email to all active members with a link to your published programming."}
@@ -221,12 +285,13 @@ export function ShareWorkoutDialog({
               {notifyState === "idle" && (
                 <motion.button
                   key="send"
-                  initial={{ opacity: 0, y: 5 }}
+                  initial={{ opacity: 0, y: 4 }}
                   animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -5 }}
+                  exit={{ opacity: 0, y: -4 }}
+                  transition={{ duration: 0.15 }}
                   onClick={handleNotifyMembers}
                   disabled={activeMemberCount === 0}
-                  className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-primary text-primary-foreground hover:bg-primary/90 rounded-lg font-medium text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-full flex items-center justify-center gap-2 px-4 py-2.5 border border-border bg-background hover:bg-accent rounded-lg font-medium text-sm transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Send className="h-4 w-4" />
                   Notify {activeMemberCount} Member{activeMemberCount !== 1 ? "s" : ""}
@@ -236,10 +301,11 @@ export function ShareWorkoutDialog({
               {notifyState === "loading" && (
                 <motion.div
                   key="loading"
-                  initial={{ opacity: 0, y: 5 }}
+                  initial={{ opacity: 0, y: 4 }}
                   animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -5 }}
-                  className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-primary/80 text-primary-foreground rounded-lg font-medium text-sm"
+                  exit={{ opacity: 0, y: -4 }}
+                  transition={{ duration: 0.15 }}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-muted/50 text-muted-foreground rounded-lg font-medium text-sm border border-border"
                 >
                   <Loader2 className="h-4 w-4 animate-spin" />
                   Sending notifications...
@@ -252,9 +318,16 @@ export function ShareWorkoutDialog({
                   initial={{ opacity: 0, scale: 0.95 }}
                   animate={{ opacity: 1, scale: 1 }}
                   exit={{ opacity: 0, scale: 0.95 }}
+                  transition={{ duration: 0.2 }}
                   className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 rounded-lg font-medium text-sm"
                 >
-                  <Check className="h-4 w-4" />
+                  <motion.div
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1 }}
+                    transition={{ type: "spring", stiffness: 300, damping: 15, delay: 0.1 }}
+                  >
+                    <Check className="h-4 w-4" />
+                  </motion.div>
                   {notifyCount} member{notifyCount !== 1 ? "s" : ""} notified
                 </motion.div>
               )}
@@ -262,32 +335,33 @@ export function ShareWorkoutDialog({
               {notifyState === "cooldown" && (
                 <motion.div
                   key="cooldown"
-                  initial={{ opacity: 0, y: 5 }}
+                  initial={{ opacity: 0, y: 4 }}
                   animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -5 }}
-                  className="w-full space-y-2"
+                  exit={{ opacity: 0, y: -4 }}
+                  transition={{ duration: 0.15 }}
+                  className="flex items-start gap-2.5 px-3.5 py-2.5 bg-amber-500/10 text-amber-700 dark:text-amber-500 border border-amber-500/20 rounded-lg text-sm leading-relaxed"
                 >
-                  <div className="flex items-center gap-2 px-4 py-2.5 bg-amber-500/10 text-amber-600 border border-amber-500/20 rounded-lg text-sm">
-                    <Clock className="h-4 w-4 shrink-0" />
-                    <span>{notifyError}</span>
-                  </div>
+                  <Clock className="h-4 w-4 shrink-0 mt-0.5" />
+                  <span>{notifyError}</span>
                 </motion.div>
               )}
 
               {notifyState === "error" && (
                 <motion.div
                   key="error"
-                  initial={{ opacity: 0, y: 5 }}
+                  initial={{ opacity: 0, y: 4 }}
                   animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -5 }}
+                  exit={{ opacity: 0, y: -4 }}
+                  transition={{ duration: 0.15 }}
                   className="w-full space-y-2"
                 >
-                  <div className="px-4 py-2.5 bg-destructive/10 text-destructive border border-destructive/20 rounded-lg text-sm">
-                    {notifyError}
+                  <div className="flex items-start gap-2.5 px-3.5 py-2.5 bg-destructive/10 text-destructive border border-destructive/20 rounded-lg text-sm leading-relaxed">
+                    <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+                    <span>{notifyError}</span>
                   </div>
                   <button
                     onClick={handleNotifyMembers}
-                    className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-primary text-primary-foreground hover:bg-primary/90 rounded-lg font-medium text-sm transition-colors"
+                    className="w-full flex items-center justify-center gap-2 px-4 py-2.5 border border-border bg-background hover:bg-accent rounded-lg font-medium text-sm transition-all active:scale-[0.98]"
                   >
                     <Send className="h-4 w-4" />
                     Try Again
