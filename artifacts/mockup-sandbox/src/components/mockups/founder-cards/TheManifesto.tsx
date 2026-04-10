@@ -8,7 +8,7 @@ export function TheManifesto() {
           <div className="absolute top-0 right-0 w-80 h-80 bg-orange-500/10 rounded-full blur-[100px] -translate-y-1/2 translate-x-1/4"></div>
           <div className="relative z-10 flex items-center gap-6 mb-10">
             <div className="w-20 h-20 md:w-24 md:h-24 rounded-2xl overflow-hidden border-2 border-orange-500/30 shrink-0">
-              <img src="/__mockup/images/landing/founder-hunter.png" alt="Hunter Brashears" className="w-full h-full object-cover" />
+              <img src="/__mockup/images/landing/founder-hunter.jpg" alt="Hunter Brashears" className="w-full h-full object-cover" />
             </div>
             <div>
               <h3 className="text-2xl md:text-3xl font-extrabold tracking-tight">Hunter Brashears</h3>

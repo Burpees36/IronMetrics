@@ -7,7 +7,7 @@ export function TheJourney() {
         <div className="grid md:grid-cols-[280px_1fr] gap-6">
           <div className="bg-white rounded-3xl p-8 shadow-sm border border-slate-100 flex flex-col items-center text-center space-y-5">
             <div className="w-36 h-36 rounded-2xl overflow-hidden border-4 border-orange-100">
-              <img src="/__mockup/images/landing/founder-hunter.png" alt="Hunter Brashears" className="w-full h-full object-cover" />
+              <img src="/__mockup/images/landing/founder-hunter.jpg" alt="Hunter Brashears" className="w-full h-full object-cover" />
             </div>
             <div>
               <h3 className="text-xl font-bold text-slate-900">Hunter Brashears</h3>

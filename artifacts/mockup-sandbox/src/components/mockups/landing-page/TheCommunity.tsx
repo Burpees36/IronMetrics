@@ -256,7 +256,7 @@ export function TheCommunity() {
             <div className="grid md:grid-cols-[1fr_2fr] gap-12 relative z-10">
               <div className="space-y-6">
                 <div className="w-32 h-32 md:w-full md:aspect-square rounded-2xl overflow-hidden bg-slate-200">
-                  <img src="/__mockup/images/landing/founder-hunter.png" alt="Hunter Brashears, Founder of ForgeOS" className="w-full h-full object-cover" />
+                  <img src="/__mockup/images/landing/founder-hunter.jpg" alt="Hunter Brashears, Founder of ForgeOS" className="w-full h-full object-cover" />
                 </div>
                 <div>
                   <h4 className="font-bold text-xl text-slate-900">Hunter Brashears</h4>
