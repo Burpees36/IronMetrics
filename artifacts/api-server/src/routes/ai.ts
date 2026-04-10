@@ -179,7 +179,7 @@ router.post("/gyms/:gymId/ai/generate-brief", async (req, res): Promise<void> =>
   const { computeBlendedEngagement } = await import("../blendedMetrics");
 
   const metrics = await getGymMetrics(gymId);
-  const rsiResult = computeRSI(metrics.churnRate, metrics.avgRev, metrics.netGrowth, metrics.avgTenure);
+  const rsiResult = computeRSI(metrics.churnRate, metrics.avgRev, metrics.netGrowth, metrics.avgTenure, metrics.total);
   const rsi = rsiResult.score ?? 0;
   const rsiBand = rsiResult.band;
   const risks = await getRiskProfiles(gymId);

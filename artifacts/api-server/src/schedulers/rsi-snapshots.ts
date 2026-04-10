@@ -41,7 +41,7 @@ async function takeRsiSnapshotsForAllGyms(): Promise<void> {
       }
 
       const metrics = await getGymMetrics(gym.id);
-      const rsi = computeRSI(metrics.churnRate, metrics.avgRev, metrics.netGrowth, metrics.avgTenure);
+      const rsi = computeRSI(metrics.churnRate, metrics.avgRev, metrics.netGrowth, metrics.avgTenure, metrics.total);
 
       if (rsi.score === null) {
         console.log(`[rsi-snapshots] Skipping gym ${gym.id} — no data (0 members)`);

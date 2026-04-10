@@ -68,7 +68,7 @@ router.get("/gyms/:gymId/reports/dashboard", async (req, res): Promise<void> => 
     ? Math.round(((blended.activeBillableMembers - atRiskCount) / blended.activeBillableMembers) * 1000) / 10
     : 100;
 
-  const rsiResult = computeRSI(blended.churnRate, blended.avgRevPerMember, blended.netGrowth, blended.avgTenure);
+  const rsiResult = computeRSI(blended.churnRate, blended.avgRevPerMember, blended.netGrowth, blended.avgTenure, blended.totalMembers);
 
   const paidInvoices = await db.select().from(invoicesTable).where(and(eq(invoicesTable.gymId, gymId), eq(invoicesTable.status, "paid")));
   const allInvoices = await db.select().from(invoicesTable).where(eq(invoicesTable.gymId, gymId));

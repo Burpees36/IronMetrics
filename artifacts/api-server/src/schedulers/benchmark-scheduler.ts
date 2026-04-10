@@ -54,7 +54,7 @@ export async function computeBenchmarks(): Promise<void> {
     try {
       const blended = await getBlendedGymMetrics(gym.id);
       const engagement = await computeBlendedEngagement(gym.id);
-      const rsi = computeRSI(blended.churnRate, blended.avgRevPerMember, blended.netGrowth, blended.avgTenure);
+      const rsi = computeRSI(blended.churnRate, blended.avgRevPerMember, blended.netGrowth, blended.avgTenure, blended.totalMembers);
 
       gymMetrics.push({
         rsiScore: rsi.score,

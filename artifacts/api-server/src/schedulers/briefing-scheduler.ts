@@ -16,7 +16,7 @@ async function getMorningBriefingData(gymId: number): Promise<any> {
     const { leadsTable, subscriptionsTable, classesTable } = await import("@workspace/db");
 
     const metrics = await getGymMetrics(gymId);
-    const rsi = computeRSI(metrics.churnRate, metrics.avgRev, metrics.netGrowth, metrics.avgTenure);
+    const rsi = computeRSI(metrics.churnRate, metrics.avgRev, metrics.netGrowth, metrics.avgTenure, metrics.total);
     const risks = await getRiskProfiles(gymId);
 
     const criticalRisks = risks.filter((r: any) => r.riskTier === "critical");
