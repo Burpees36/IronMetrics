@@ -80,7 +80,7 @@ const OUTCOME_CONFIG: Record<string, { label: string; color: string; icon: React
 };
 
 const CATEGORY_ROUTE_MAP: Record<string, { route: string; label: string }> = {
-  retention: { route: "/retention", label: "Retention" },
+  retention: { route: "/members?filter=at-risk", label: "At-Risk Members" },
   billing: { route: "/billing", label: "Billing" },
   leads: { route: "/leads", label: "Leads Pipeline" },
   onboarding: { route: "/members", label: "Members" },

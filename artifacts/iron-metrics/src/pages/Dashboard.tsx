@@ -451,7 +451,7 @@ export function Dashboard() {
   const positiveItems = actionItems.filter(i => i.category === "positive");
 
   const criticalCount = criticalItems.length + warningItems.length;
-  const mrrFormatted = `$${(stats.mrr / 1000).toFixed(1)}k`;
+  const mrrFormatted = stats.mrr >= 1000 ? `$${(stats.mrr / 1000).toFixed(1)}k` : `$${Math.round(stats.mrr)}`;
   const mrrChange = stats.mrrGrowth != null ? `${stats.mrrGrowth >= 0 ? "+" : ""}${stats.mrrGrowth.toFixed(1)}%` : null;
 
   return (

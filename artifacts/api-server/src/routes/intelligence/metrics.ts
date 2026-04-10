@@ -36,9 +36,20 @@ export async function getRiskProfiles(gymId: number) {
 
   return members.map((m) => {
     const now = new Date();
-    const daysSinceLastVisit = m.lastVisitDate ? Math.floor((now.getTime() - new Date(m.lastVisitDate).getTime()) / (1000 * 60 * 60 * 24)) : 999;
+    const joinDate = m.joinDate || m.createdAt;
+    const daysSinceJoin = joinDate ? Math.floor((now.getTime() - new Date(joinDate).getTime()) / (1000 * 60 * 60 * 24)) : 999;
+
+    let daysSinceLastVisit: number;
+    if (m.lastVisitDate) {
+      daysSinceLastVisit = Math.floor((now.getTime() - new Date(m.lastVisitDate).getTime()) / (1000 * 60 * 60 * 24));
+    } else if (daysSinceJoin <= 7) {
+      daysSinceLastVisit = 0;
+    } else {
+      daysSinceLastVisit = 999;
+    }
+
     const attendanceDecay = Math.min(1, daysSinceLastVisit / 30);
-    const riskScore = calculateRiskScore(daysSinceLastVisit, m.attendanceCount30d, m.riskScore);
+    const riskScore = daysSinceJoin <= 3 ? 0 : calculateRiskScore(daysSinceLastVisit, m.attendanceCount30d, m.riskScore);
     const riskTier = getRiskTier(riskScore);
 
     const signals: string[] = [];

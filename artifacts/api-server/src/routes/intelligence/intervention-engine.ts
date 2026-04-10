@@ -90,6 +90,7 @@ const retentionIntervention: InterventionBuilder = (ctx) => {
     score,
     expectedRevenue: Math.round(ctx.atRiskRevenue * 100) / 100,
     affectedMembers: ctx.atRiskCount,
+    affectedMemberIds: ctx.atRiskMembers.map(m => m.id),
     actions: [
       "Open the risk radar — sort by critical tier first",
       "Call or text each critical member today",

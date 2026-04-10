@@ -386,10 +386,19 @@ async function refreshRiskScores(gymId: number): Promise<void> {
 
   for (const m of members) {
     const now = new Date();
-    const daysSinceLastVisit = m.lastVisitDate
-      ? Math.floor((now.getTime() - new Date(m.lastVisitDate).getTime()) / (1000 * 60 * 60 * 24))
-      : (m.daysSinceLastAttendance ?? 999);
-    const freshScore = calculateRiskScore(daysSinceLastVisit, m.attendanceCount30d);
+    const memberJoinDate = m.joinDate || m.createdAt;
+    const daysSinceJoin = memberJoinDate ? Math.floor((now.getTime() - new Date(memberJoinDate).getTime()) / (1000 * 60 * 60 * 24)) : 999;
+
+    let daysSinceLastVisit: number;
+    if (m.lastVisitDate) {
+      daysSinceLastVisit = Math.floor((now.getTime() - new Date(m.lastVisitDate).getTime()) / (1000 * 60 * 60 * 24));
+    } else if (daysSinceJoin <= 7) {
+      daysSinceLastVisit = 0;
+    } else {
+      daysSinceLastVisit = m.daysSinceLastAttendance ?? 999;
+    }
+
+    const freshScore = daysSinceJoin <= 3 ? 0 : calculateRiskScore(daysSinceLastVisit, m.attendanceCount30d);
     const freshTier = getRiskTier(freshScore);
 
     const storedScore = m.riskScore ? parseFloat(m.riskScore) : null;
