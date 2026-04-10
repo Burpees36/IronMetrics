@@ -180,7 +180,7 @@ router.post("/gyms/:gymId/ai/generate-brief", async (req, res): Promise<void> =>
 
   const metrics = await getGymMetrics(gymId);
   const rsiResult = computeRSI(metrics.churnRate, metrics.avgRev, metrics.netGrowth, metrics.avgTenure);
-  const rsi = rsiResult.score;
+  const rsi = rsiResult.score ?? 0;
   const rsiBand = rsiResult.band;
   const risks = await getRiskProfiles(gymId);
   const criticalRisks = risks.filter(r => r.riskTier === "critical");

@@ -1,10 +1,9 @@
 import {
-  Database, Building2, Rocket, CreditCard, Mail,
+  Database, Building2, Rocket, Mail,
 } from "lucide-react";
 
 export const STEPS = [
   { id: "gym_details", label: "Business Details", icon: Building2, description: "Your business profile" },
-  { id: "connect_billing", label: "Connect Billing", icon: CreditCard, description: "Set up Stripe" },
   { id: "connect_data", label: "Import Members", icon: Database, description: "Import your members" },
   { id: "email_branding", label: "Email Branding", icon: Mail, description: "Outbound email setup" },
   { id: "finish", label: "Launch", icon: Rocket, description: "You're ready to go" },

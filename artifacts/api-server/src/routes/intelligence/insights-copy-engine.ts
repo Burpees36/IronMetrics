@@ -16,7 +16,7 @@ interface RSIBreakdownItem {
 }
 
 interface RSIData {
-  score: number;
+  score: number | null;
   band: string;
   breakdown: RSIBreakdownItem[];
   components: {
@@ -53,7 +53,7 @@ interface BenchmarkComparison {
 interface BriefingSnapshot {
   activeMembers: number;
   mrr: number;
-  rsiScore: number;
+  rsiScore: number | null;
   rsiBand: string;
   atRiskMembers: number;
   atRiskCritical: number;
@@ -178,6 +178,11 @@ function _generateRSIComponentInsight(item: RSIBreakdownItem, components: RSIDat
 
 export function generateRSIOverallInsight(rsi: RSIData): string {
   const { score, band } = rsi;
+
+  if (score === null || band === "No Data") {
+    return "RSI: No data yet. You have zero members. Get your first member in the door — everything starts there. No score to calculate until you have people to retain.";
+  }
+
   const weakest = rsi.breakdown.reduce((min, b) => b.normalized < min.normalized ? b : min, rsi.breakdown[0]);
   let result: string;
 
@@ -453,6 +458,15 @@ function _generateConversationalBriefingItem(
 }
 
 export function generateConversationalSummary(snapshot: BriefingSnapshot): string {
+  if (snapshot.activeMembers === 0 && snapshot.mrr === 0) {
+    const rsiStr = snapshot.rsiScore === null ? "No Data" : `${snapshot.rsiScore.toFixed(1)} (${snapshot.rsiBand})`;
+    return `Zero members. Zero revenue. RSI: ${rsiStr}. This is day one — and day one is where every great gym starts. But a gym with no members is just a room with equipment. Get out there. Run a free community workout. Post it everywhere. DM 10 people you know who need this. The software is ready. Your gym is ready. Now go fill it.`;
+  }
+
+  if (snapshot.engagementRate === 0 && snapshot.activeMembers > 0) {
+    return `${snapshot.activeMembers} members on the books but 0% engagement. That means nobody is showing up. That's not a slow month — that's an emergency. Call your top 5 members right now. Text them personally. Run a "bring a friend" class this week. If people aren't walking through the door, nothing else matters. ${fmtDollars(snapshot.mrr)} MRR is at risk if this continues.`;
+  }
+
   const parts: string[] = [];
 
   if (snapshot.atRiskCritical > 0) {
@@ -468,7 +482,8 @@ export function generateConversationalSummary(snapshot: BriefingSnapshot): strin
   }
 
   if (parts.length === 0) {
-    return `Nothing urgent. ${fmtDollars(snapshot.mrr)} MRR, ${snapshot.activeMembers} active members, RSI ${snapshot.rsiScore.toFixed(1)} (${snapshot.rsiBand}). Use today to build — the fires are out.`;
+    const rsiStr = snapshot.rsiScore !== null ? `RSI ${snapshot.rsiScore.toFixed(1)} (${snapshot.rsiBand})` : "RSI: No Data";
+    return `Nothing urgent. ${fmtDollars(snapshot.mrr)} MRR, ${snapshot.activeMembers} active members, ${rsiStr}. Use today to build — the fires are out.`;
   }
 
   const actionPart = parts.join(". ");

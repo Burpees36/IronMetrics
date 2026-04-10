@@ -140,9 +140,10 @@ router.get("/gyms/:gymId/reports/dashboard", async (req, res): Promise<void> => 
     retentionRate,
     failedPayments: failedSubs.length,
     collectionRate,
-    rsiScore: Math.round(rsiResult.score * 10) / 10,
+    rsiScore: rsiResult.score !== null ? Math.round(rsiResult.score * 10) / 10 : null,
     rsiBand: rsiResult.band,
     ...await (async () => {
+      if (rsiResult.score === null) return { rsiTrend30d: null, rsiTrendInsufficient: true };
       const snapshots = await db.select()
         .from(rsiSnapshotsTable)
         .where(eq(rsiSnapshotsTable.gymId, gymId))

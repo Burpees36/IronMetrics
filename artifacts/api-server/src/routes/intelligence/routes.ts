@@ -22,7 +22,7 @@ function parseGymId(params: any): number | null {
   return isNaN(id) ? null : id;
 }
 
-async function getRsiTrendsFromSnapshots(gymId: number, currentScore: number) {
+async function getRsiTrendsFromSnapshots(gymId: number, currentScore: number | null) {
   const now = new Date();
   const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
   const ninetyDaysAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
@@ -36,7 +36,7 @@ async function getRsiTrendsFromSnapshots(gymId: number, currentScore: number) {
   let trend90d: number | null = null;
   let trendInsufficient = false;
 
-  if (allSnapshots.length < 7) {
+  if (currentScore === null || allSnapshots.length < 7) {
     trendInsufficient = true;
     return { trend30d, trend90d, trendInsufficient };
   }
@@ -68,7 +68,7 @@ router.get("/gyms/:gymId/intelligence/rsi", async (req, res): Promise<void> => {
 
   try {
     const metrics = await getGymMetrics(gymId);
-    const rsi = computeRSI(metrics.churnRate, metrics.avgRev, metrics.netGrowth, metrics.avgTenure);
+    const rsi = computeRSI(metrics.churnRate, metrics.avgRev, metrics.netGrowth, metrics.avgTenure, metrics.total);
 
     const { trend30d, trend90d, trendInsufficient } = await getRsiTrendsFromSnapshots(gymId, rsi.score);
 
@@ -315,7 +315,7 @@ router.get("/gyms/:gymId/intelligence/overview", async (req, res): Promise<void>
 
   try {
     const metrics = await getGymMetrics(gymId);
-    const rsi = computeRSI(metrics.churnRate, metrics.avgRev, metrics.netGrowth, metrics.avgTenure);
+    const rsi = computeRSI(metrics.churnRate, metrics.avgRev, metrics.netGrowth, metrics.avgTenure, metrics.total);
     const { trend30d, trend90d, trendInsufficient } = await getRsiTrendsFromSnapshots(gymId, rsi.score);
     const rsiOverallInsight = generateRSIOverallInsight(rsi);
     const rsiComponentInsights = rsi.breakdown.map((item) => ({
@@ -368,7 +368,7 @@ router.get("/gyms/:gymId/intelligence/morning-briefing", async (req, res): Promi
 
   try {
     const metrics = await getGymMetrics(gymId);
-    const rsi = computeRSI(metrics.churnRate, metrics.avgRev, metrics.netGrowth, metrics.avgTenure);
+    const rsi = computeRSI(metrics.churnRate, metrics.avgRev, metrics.netGrowth, metrics.avgTenure, metrics.total);
     const risks = await getRiskProfiles(gymId);
 
     const criticalRisks = risks.filter(r => r.riskTier === "critical");
@@ -628,7 +628,7 @@ router.get("/gyms/:gymId/intelligence/benchmarks", async (req, res): Promise<voi
 
   try {
     const metrics = await getGymMetrics(gymId);
-    const rsi = computeRSI(metrics.churnRate, metrics.avgRev, metrics.netGrowth, metrics.avgTenure);
+    const rsi = computeRSI(metrics.churnRate, metrics.avgRev, metrics.netGrowth, metrics.avgTenure, metrics.total);
     const engagement = await computeBlendedEngagement(gymId);
 
     const activeMemberCount = metrics.active;
@@ -779,11 +779,13 @@ function buildBriefingSummary(
   }
 
   if (parts.length === 0) {
-    return `All clear — your gym is running smoothly. RSI: ${rsi.score.toFixed(1)} (${rsi.band}), MRR: $${mrr.toLocaleString()}.`;
+    const rsiStr = rsi.score !== null ? `RSI: ${rsi.score.toFixed(1)} (${rsi.band})` : "RSI: No Data";
+    return `All clear — your gym is running smoothly. ${rsiStr}, MRR: $${mrr.toLocaleString()}.`;
   }
 
   const actionPart = parts.join(", ");
-  return `${actionPart.charAt(0).toUpperCase() + actionPart.slice(1)}. MRR: $${Math.round(mrr).toLocaleString()}, RSI: ${rsi.score.toFixed(1)} (${rsi.band}).`;
+  const rsiStr = rsi.score !== null ? `RSI: ${rsi.score.toFixed(1)} (${rsi.band})` : "RSI: No Data";
+  return `${actionPart.charAt(0).toUpperCase() + actionPart.slice(1)}. MRR: $${Math.round(mrr).toLocaleString()}, ${rsiStr}.`;
 }
 
 export default router;

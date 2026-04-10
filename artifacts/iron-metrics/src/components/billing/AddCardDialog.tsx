@@ -131,6 +131,11 @@ export function AddCardDialog({ open, onOpenChange, clientSecret, onSuccess }: A
         elements,
         confirmParams: {
           return_url: window.location.href,
+          payment_method_data: {
+            billing_details: {
+              address: { country: "US" },
+            },
+          },
         },
         redirect: "if_required",
       });

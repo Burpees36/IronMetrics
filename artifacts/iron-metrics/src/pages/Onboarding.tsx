@@ -7,7 +7,6 @@ import { useToast } from "@/hooks/use-toast";
 import { STEPS, apiFetch } from "./onboarding/types";
 import type { StepId, OnboardingState } from "./onboarding/types";
 import { BasicsStep } from "./onboarding/BasicsStep";
-import { ConnectBillingStep } from "./onboarding/ConnectBillingStep";
 import { ConnectDataStep } from "./onboarding/ConnectDataStep";
 import { EmailBrandingStep } from "./onboarding/EmailBrandingStep";
 import { FinishStep } from "./onboarding/FinishStep";
@@ -191,15 +190,6 @@ export function Onboarding() {
                 onComplete={() => handleComplete("gym_details")}
                 onSkip={() => handleSkip("gym_details")}
                 isComplete={isStepComplete("gym_details")}
-              />
-            )}
-            {activeStep === "connect_billing" && (
-              <ConnectBillingStep
-                gymId={activeGymId}
-                onComplete={() => handleComplete("connect_billing")}
-                onSkip={() => handleSkip("connect_billing")}
-                onBack={handleBack}
-                isComplete={isStepComplete("connect_billing")}
               />
             )}
             {activeStep === "connect_data" && (
