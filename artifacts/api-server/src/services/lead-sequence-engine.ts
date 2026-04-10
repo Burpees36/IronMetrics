@@ -163,20 +163,24 @@ export async function processLeadSequences(): Promise<{ processed: number; sent:
 export async function enrollLeadInSequence(
   leadId: number,
   gymId: number,
-  triggerStage: string
+  triggerStage: string,
+  onlySequenceId?: number
 ): Promise<number> {
   let enrolled = 0;
+
+  const conditions = [
+    eq(leadSequencesTable.gymId, gymId),
+    eq(leadSequencesTable.isEnabled, true),
+    eq(leadSequencesTable.triggerStage, triggerStage),
+  ];
+  if (onlySequenceId !== undefined) {
+    conditions.push(eq(leadSequencesTable.id, onlySequenceId));
+  }
 
   const sequences = await db
     .select()
     .from(leadSequencesTable)
-    .where(
-      and(
-        eq(leadSequencesTable.gymId, gymId),
-        eq(leadSequencesTable.isEnabled, true),
-        eq(leadSequencesTable.triggerStage, triggerStage)
-      )
-    );
+    .where(and(...conditions));
 
   for (const sequence of sequences) {
     const existing = await db

@@ -480,6 +480,30 @@ router.put("/gyms/:gymId/lead-sequences/:sequenceId", async (req, res): Promise<
     }
 
     res.json(updated);
+
+    if (isEnabled === true && !existing.isEnabled) {
+      const effectiveTriggerStage = updated.triggerStage;
+      if (effectiveTriggerStage) {
+        (async () => {
+          try {
+            const matchingLeads = await db.select({ id: leadsTable.id })
+              .from(leadsTable)
+              .where(and(
+                eq(leadsTable.gymId, gymId),
+                eq(leadsTable.stage, effectiveTriggerStage)
+              ));
+
+            let totalEnrolled = 0;
+            for (const lead of matchingLeads) {
+              totalEnrolled += await enrollLeadInSequence(lead.id, gymId, effectiveTriggerStage, sequenceId);
+            }
+            console.log(`[lead-sequences] Immediate enrollment scan: ${totalEnrolled} leads enrolled in sequence ${sequenceId}`);
+          } catch (err: any) {
+            console.error("[lead-sequences] Immediate enrollment scan failed:", err.message);
+          }
+        })();
+      }
+    }
   } catch (err: any) {
     console.error("[lead-sequences] PUT sequence error:", err.message);
     res.status(500).json({ error: "Failed to update sequence" });

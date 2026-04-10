@@ -19,12 +19,16 @@ interface TriggerConfig {
   inactiveDays?: number;
 }
 
-async function evaluateTriggersForGym(gymId: number): Promise<void> {
+async function evaluateTriggersForGym(gymId: number, onlySequenceId?: number): Promise<void> {
+  const conditions = [
+    eq(retentionSequencesTable.gymId, gymId),
+    eq(retentionSequencesTable.isEnabled, true),
+  ];
+  if (onlySequenceId !== undefined) {
+    conditions.push(eq(retentionSequencesTable.id, onlySequenceId));
+  }
   const sequences = await db.select().from(retentionSequencesTable)
-    .where(and(
-      eq(retentionSequencesTable.gymId, gymId),
-      eq(retentionSequencesTable.isEnabled, true)
-    ));
+    .where(and(...conditions));
 
   if (sequences.length === 0) return;
 
@@ -398,4 +402,4 @@ export function stopRetentionEngineScheduler(): void {
   }
 }
 
-export { runRetentionForAllGyms, evaluateTrigger, renderTemplate, RETENTION_INTERVAL_MS };
+export { runRetentionForAllGyms, evaluateTriggersForGym, evaluateTrigger, renderTemplate, RETENTION_INTERVAL_MS };

@@ -6,6 +6,7 @@ import {
   membersTable
 } from "@workspace/db";
 import { requireGymAccess } from "../middlewares/requireGymAccess";
+import { evaluateTriggersForGym } from "../schedulers/retention-engine";
 
 const router: IRouter = Router();
 
@@ -446,6 +447,12 @@ router.put("/gyms/:gymId/retention/sequences/:sequenceId", async (req, res): Pro
     }
 
     res.json(updated);
+
+    if (isEnabled === true && !existing.isEnabled) {
+      evaluateTriggersForGym(gymId, sequenceId).catch((err) => {
+        console.error("[retention] Immediate enrollment scan failed:", err.message);
+      });
+    }
   } catch (err: any) {
     console.error("[retention] PUT sequence error:", err.message);
     res.status(500).json({ error: "Failed to update sequence" });
