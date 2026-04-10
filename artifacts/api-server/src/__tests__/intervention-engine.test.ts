@@ -136,16 +136,27 @@ describe("onboardingIntervention", () => {
   });
 
   it("returns intervention when new members have low attendance", () => {
+    const fiveDaysAgo = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000);
     const ctx = makeContext({
       newMembers: [
-        { id: 1, joinDate: new Date().toISOString().slice(0, 10), createdAt: new Date(), attendanceCount30d: 1 },
-        { id: 2, joinDate: new Date().toISOString().slice(0, 10), createdAt: new Date(), attendanceCount30d: 0 },
+        { id: 1, joinDate: fiveDaysAgo.toISOString().slice(0, 10), createdAt: fiveDaysAgo, attendanceCount30d: 0 },
+        { id: 2, joinDate: fiveDaysAgo.toISOString().slice(0, 10), createdAt: fiveDaysAgo, attendanceCount30d: 0 },
       ],
     });
     const result = builder(ctx)!;
     expect(result).not.toBeNull();
     expect(result.category).toBe("onboarding");
     expect(result.affectedMembers).toBe(2);
+  });
+
+  it("returns null for members within 3-day grace period", () => {
+    const today = new Date();
+    const ctx = makeContext({
+      newMembers: [
+        { id: 1, joinDate: today.toISOString().slice(0, 10), createdAt: today, attendanceCount30d: 0 },
+      ],
+    });
+    expect(builder(ctx)).toBeNull();
   });
 });
 
