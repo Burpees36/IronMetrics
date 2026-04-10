@@ -157,6 +157,25 @@ router.post("/gyms/:gymId/members", async (req, res): Promise<void> => {
     }
   }
 
+  let planMonthlyAmount: string | null = null;
+  if (planId) {
+    const [plan] = await db
+      .select({ price: membershipPlansTable.price, billingInterval: membershipPlansTable.billingInterval })
+      .from(membershipPlansTable)
+      .where(and(eq(membershipPlansTable.id, planId), eq(membershipPlansTable.gymId, gymId)))
+      .limit(1);
+    if (plan) {
+      const rawPrice = parseFloat(plan.price);
+      if (isFinite(rawPrice) && rawPrice > 0) {
+        if (plan.billingInterval === "yearly" || plan.billingInterval === "annual") {
+          planMonthlyAmount = (rawPrice / 12).toFixed(2);
+        } else {
+          planMonthlyAmount = rawPrice.toFixed(2);
+        }
+      }
+    }
+  }
+
   let verifiedCustomerId: string | null = null;
   let verifiedPaymentMethodId: string | null = null;
 
@@ -202,6 +221,7 @@ router.post("/gyms/:gymId/members", async (req, res): Promise<void> => {
       joinDate: today,
       tags: parsed.data.tags || [],
       ...(verifiedCustomerId ? { stripeCustomerId: verifiedCustomerId } : {}),
+      ...(planMonthlyAmount ? { monthlyRevenue: planMonthlyAmount } : {}),
     })
     .returning();
 

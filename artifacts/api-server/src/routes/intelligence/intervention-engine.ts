@@ -140,7 +140,11 @@ const onboardingIntervention: InterventionBuilder = (ctx) => {
   if (ctx.newMembers.length === 0) return null;
 
   const needAttention = ctx.newMembers.filter(m => {
-    return (m.attendanceCount30d ?? 0) < 4;
+    const joinDate = new Date(m.joinDate || m.createdAt!);
+    const daysSinceJoin = Math.max(1, Math.floor((Date.now() - joinDate.getTime()) / (1000 * 60 * 60 * 24)));
+    if (daysSinceJoin <= 3) return false;
+    const expectedVisits = Math.max(1, Math.ceil((4 / 30) * daysSinceJoin));
+    return (m.attendanceCount30d ?? 0) < expectedVisits;
   });
 
   if (needAttention.length === 0) return null;
@@ -340,7 +344,10 @@ const newMemberRampUpIntervention: InterventionBuilder = (ctx) => {
     if (!m.joinDate && !m.createdAt) return false;
     const joinDate = new Date(m.joinDate || m.createdAt!);
     const daysSinceJoin = Math.floor((Date.now() - joinDate.getTime()) / (1000 * 60 * 60 * 24));
-    return daysSinceJoin <= 14 && (m.attendanceCount30d ?? 0) < 2;
+    if (daysSinceJoin <= 3) return false;
+    const expectedVisitsPerDay = 2 / 14;
+    const expectedVisits = Math.max(1, Math.round(expectedVisitsPerDay * daysSinceJoin));
+    return daysSinceJoin <= 14 && (m.attendanceCount30d ?? 0) < expectedVisits;
   });
 
   if (veryNew.length === 0) return null;
