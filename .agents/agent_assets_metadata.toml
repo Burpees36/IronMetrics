@@ -18,6 +18,12 @@ uri = "file://artifacts/mockup-sandbox/public/images/landing/hero-community.png"
 type = "image"
 title = "generated_image"
 
+[[generated]]
+id = "XlEDMy2zbsdRmAcyZn3E6"
+uri = "file://artifacts/mockup-sandbox/public/images/landing/founder-hunter.png"
+type = "image"
+title = "generated_image"
+
 [[outputs]]
 id = "yniQHRatN8Rov3SdKQZ-w"
 uri = "file://IRON_METRICS_ANALYSIS.md"

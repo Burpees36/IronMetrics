@@ -1,7 +1,7 @@
 import React from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Check, Flame, Heart, Users, Shield, ArrowRight, Star } from "lucide-react";
+import { Check, Flame, Heart, Users, Shield, ArrowRight } from "lucide-react";
 
 export function TheCommunity() {
   return (
@@ -256,75 +256,31 @@ export function TheCommunity() {
             <div className="grid md:grid-cols-[1fr_2fr] gap-12 relative z-10">
               <div className="space-y-6">
                 <div className="w-32 h-32 md:w-full md:aspect-square rounded-2xl overflow-hidden bg-slate-200">
-                  <img src="https://images.unsplash.com/photo-1594381898411-846e7d193883?q=80&w=400&auto=format&fit=crop" alt="Founder" className="w-full h-full object-cover grayscale hover:grayscale-0 transition-all duration-500" />
+                  <img src="/__mockup/images/landing/founder-hunter.png" alt="Hunter Brashears, Founder of ForgeOS" className="w-full h-full object-cover" />
                 </div>
                 <div>
-                  <h4 className="font-bold text-xl text-slate-900">Alex Rivers</h4>
+                  <h4 className="font-bold text-xl text-slate-900">Hunter Brashears</h4>
                   <p className="text-orange-600 font-medium">Founder, ForgeOS</p>
                 </div>
               </div>
               
               <div className="space-y-6 text-lg text-slate-700 leading-relaxed">
-                <h3 className="text-3xl font-bold text-slate-900 mb-8">"CrossFit has been my anchor since I found it."</h3>
+                <h3 className="text-3xl font-bold text-slate-900 mb-8">Why ForgeOS Exists</h3>
                 
                 <p>
-                  Community is the soul of the gym. It's welcoming, accepting, lifelong friendships, all while getting jacked. It changed my life.
+                  I realized that if you want to make a bigger impact, you can't just coach one class at a time. You have to make the gyms themselves better. Because when a gym improves, every single member inside it benefits.
                 </p>
                 <p>
-                  But I look around and I see a sick world. I want to break the cycle. I want to make gyms good enough that I'd feel comfortable sending my mom there. That's my "mom test."
+                  ForgeOS is a system designed to help gym owners understand who is at risk of leaving, where revenue is being lost, what actions actually move the needle — and most importantly, what to do next.
                 </p>
                 <p>
-                  ForgeOS exists to make gyms better so they can create the change this world needs. It's so much bigger than me. I just want to make a product so damn good that it elevates the gyms who use it.
+                  This isn't about software. It's about raising the standard of gyms. It's about creating places where someone could walk in for the first time, nervous and unsure, and feel like they belong.
+                </p>
+                <p className="font-semibold text-slate-900">
+                  Make gyms better. Because better gyms create better people. And better people create a better world.
                 </p>
               </div>
             </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Testimonials */}
-      <section className="py-24 px-4">
-        <div className="container mx-auto max-w-6xl">
-          <h2 className="text-3xl md:text-4xl font-bold text-center text-slate-900 mb-16">
-            Trusted by communities across the world
-          </h2>
-          
-          <div className="grid md:grid-cols-3 gap-8">
-            {[
-              {
-                quote: "I used to spend 15 hours a week just managing memberships and emails. Now I spend that time on the floor, coaching and connecting. My community has never been stronger.",
-                name: "Sarah Jenkins",
-                gym: "Iron & Oak CrossFit"
-              },
-              {
-                quote: "The member insights feature is like having a superpower. I know exactly who needs a high-five and who needs a check-in text before I even walk into the gym.",
-                name: "David Chen",
-                gym: "Apex Functional Fitness"
-              },
-              {
-                quote: "ForgeOS feels different. It doesn't feel like cold, corporate software. It feels like it was built by someone who actually knows what it's like to run a class of 20 people.",
-                name: "Elena Rodriguez",
-                gym: "Community Barbell"
-              }
-            ].map((t, i) => (
-              <div key={i} className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100 flex flex-col justify-between">
-                <div className="space-y-4">
-                  <div className="flex gap-1 text-orange-400">
-                    {[1, 2, 3, 4, 5].map(star => <Star key={star} className="w-5 h-5 fill-current" />)}
-                  </div>
-                  <p className="text-slate-700 italic leading-relaxed text-lg">"{t.quote}"</p>
-                </div>
-                <div className="pt-8 mt-auto border-t border-slate-50 flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-slate-200 flex-shrink-0">
-                    <img src={`https://i.pravatar.cc/100?img=${i + 30}`} alt={t.name} className="w-full h-full rounded-full" />
-                  </div>
-                  <div>
-                    <div className="font-bold text-slate-900">{t.name}</div>
-                    <div className="text-sm text-slate-500">{t.gym}</div>
-                  </div>
-                </div>
-              </div>
-            ))}
           </div>
         </div>
       </section>
