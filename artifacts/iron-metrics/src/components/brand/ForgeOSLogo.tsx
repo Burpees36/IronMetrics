@@ -74,7 +74,7 @@ export function ForgeOSLogo({ size = "md", variant = "full", className = "" }: F
   return (
     <div className={`flex items-center ${s.gap} ${className}`}>
       <FlameIcon size={s.icon * 0.75} id={id} />
-      <span className={`font-display font-bold ${s.text} tracking-tight text-foreground`}>
+      <span className={`font-display font-bold ${s.text} tracking-tight text-slate-900 dark:text-slate-100`}>
         FORGE<span className="text-orange-500">OS</span>
       </span>
     </div>
