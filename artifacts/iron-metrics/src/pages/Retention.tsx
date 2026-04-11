@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useGym } from "@/store/GymContext";
 import { useToast } from "@/hooks/use-toast";
 import { motion, AnimatePresence } from "framer-motion";
@@ -8,10 +8,16 @@ import {
   UserMinus, ArrowLeft, AlertCircle, CheckCircle2, XCircle,
   Zap, Shield, Heart, Sparkles, Settings2, Activity,
   HelpCircle, X, Info, PauseCircle, UserPlus,
-  ChevronDown, ExternalLink, AlertTriangle
+  ChevronDown, ChevronUp, ArrowUp, ArrowDown, Eye, EyeOff,
+  ExternalLink, AlertTriangle
 } from "lucide-react";
 import { Link } from "wouter";
 import { EnrollMemberDialog } from "@/components/EnrollMemberDialog";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { useGetGym } from "@workspace/api-client-react";
 
 const API_BASE = import.meta.env.VITE_API_URL || "";
 
@@ -777,8 +783,90 @@ function isFailureEventType(type: string): boolean {
   return type === "email_failed" || type === "email_skipped" || type === "step_error";
 }
 
+const TEMPLATE_VARIABLES = [
+  { label: "first_name", value: "{{first_name}}" },
+  { label: "last_name", value: "{{last_name}}" },
+  { label: "gym_name", value: "{{gym_name}}" },
+  { label: "member_email", value: "{{member_email}}" },
+];
+
+function getSampleData(gymName?: string): Record<string, string> {
+  return {
+    "{{first_name}}": "Sarah",
+    "{{last_name}}": "Johnson",
+    "{{gym_name}}": gymName || "Your Gym",
+    "{{member_email}}": "sarah@example.com",
+  };
+}
+
+function insertAtCursor(ref: React.RefObject<HTMLTextAreaElement | null>, value: string, currentValue: string, onChange: (val: string) => void) {
+  const el = ref.current;
+  if (!el) {
+    onChange(currentValue + value);
+    return;
+  }
+  const start = el.selectionStart;
+  const end = el.selectionEnd;
+  const newValue = currentValue.substring(0, start) + value + currentValue.substring(end);
+  onChange(newValue);
+  requestAnimationFrame(() => {
+    el.focus();
+    el.selectionStart = el.selectionEnd = start + value.length;
+  });
+}
+
+function VariableChips({ textareaRef, currentValue, onChange }: {
+  textareaRef: React.RefObject<HTMLTextAreaElement | null>;
+  currentValue: string;
+  onChange: (val: string) => void;
+}) {
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {TEMPLATE_VARIABLES.map((v) => (
+        <button
+          key={v.label}
+          type="button"
+          onClick={() => insertAtCursor(textareaRef, v.value, currentValue, onChange)}
+          className="px-2 py-0.5 rounded-md bg-primary/10 text-primary text-xs font-mono hover:bg-primary/20 transition-colors"
+        >
+          {v.value}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function renderPreview(text: string, gymName?: string): string {
+  let result = text;
+  for (const [key, val] of Object.entries(getSampleData(gymName))) {
+    result = result.split(key).join(val);
+  }
+  return result;
+}
+
+function EmailPreview({ subject, body, gymName }: { subject: string; body: string; gymName?: string }) {
+  return (
+    <div className="bg-muted/30 border border-border rounded-lg p-4 space-y-2">
+      <div className="flex items-center gap-2 mb-2">
+        <Eye className="h-3.5 w-3.5 text-muted-foreground" />
+        <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Preview with sample data</span>
+      </div>
+      {subject && (
+        <div className="pb-2 border-b border-border/50">
+          <span className="text-xs text-muted-foreground">Subject: </span>
+          <span className="text-sm font-medium text-foreground">{renderPreview(subject, gymName)}</span>
+        </div>
+      )}
+      <div className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">
+        {renderPreview(body, gymName) || <span className="text-muted-foreground italic">No body content</span>}
+      </div>
+    </div>
+  );
+}
+
 function CreateSequenceForm({ gymId, onBack }: { gymId: number; onBack: () => void }) {
   const { toast } = useToast();
+  const { data: gym } = useGetGym(gymId, { query: { enabled: !!gymId } });
   const [saving, setSaving] = useState(false);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -792,6 +880,10 @@ function CreateSequenceForm({ gymId, onBack }: { gymId: number; onBack: () => vo
     { actionType: "email", delayDays: 0, config: { subject: "", body: "" } },
   ]);
 
+  const bodyRefs = useRef<Record<number, HTMLTextAreaElement | null>>({});
+  const descRefs = useRef<Record<number, HTMLTextAreaElement | null>>({});
+  const [previewStepIndex, setPreviewStepIndex] = useState<number | null>(null);
+
   const addStep = (type: string) => {
     setSteps(prev => [...prev, {
       actionType: type,
@@ -802,6 +894,18 @@ function CreateSequenceForm({ gymId, onBack }: { gymId: number; onBack: () => vo
 
   const removeStep = (index: number) => {
     setSteps(prev => prev.filter((_, i) => i !== index));
+    if (previewStepIndex === index) setPreviewStepIndex(null);
+    else if (previewStepIndex !== null && previewStepIndex > index) setPreviewStepIndex(previewStepIndex - 1);
+  };
+
+  const swapSteps = (a: number, b: number) => {
+    setSteps(prev => {
+      const next = [...prev];
+      [next[a], next[b]] = [next[b], next[a]];
+      return next;
+    });
+    if (previewStepIndex === a) setPreviewStepIndex(b);
+    else if (previewStepIndex === b) setPreviewStepIndex(a);
   };
 
   const handleCreate = async () => {
@@ -930,25 +1034,35 @@ function CreateSequenceForm({ gymId, onBack }: { gymId: number; onBack: () => vo
         <div className="bg-card border border-border rounded-xl p-4 space-y-3">
           <div>
             <h3 className="text-sm font-medium text-foreground">Steps</h3>
-            <p className="text-[10px] text-muted-foreground mt-0.5">
-              Build the sequence of actions. Use {"{{first_name}}"}, {"{{last_name}}"}, {"{{gym_name}}"} — these are replaced with real values when sent.
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Build the sequence of actions. Use the variable chips below each field to insert placeholders.
             </p>
           </div>
           {steps.map((step, i) => (
-            <div key={i} className="border border-border rounded-lg p-3 space-y-2">
+            <div key={i} className="border border-border rounded-lg p-3 space-y-2.5">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-medium text-foreground flex items-center gap-1.5">
+                <span className="text-sm font-medium text-foreground flex items-center gap-1.5">
                   {step.actionType === "email" ? <Mail className="h-3.5 w-3.5 text-blue-500" /> : <ClipboardList className="h-3.5 w-3.5 text-amber-500" />}
                   Step {i + 1}: {step.actionType === "email" ? "Send Email" : "Create Staff Task"}
                 </span>
                 <div className="flex items-center gap-2">
-                  <label className="text-[10px] text-muted-foreground">Wait:</label>
+                  {i > 0 && (
+                    <button type="button" onClick={() => swapSteps(i, i - 1)} className="p-1 rounded hover:bg-muted/50 text-muted-foreground hover:text-foreground transition-colors" title="Move up">
+                      <ArrowUp className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                  {i < steps.length - 1 && (
+                    <button type="button" onClick={() => swapSteps(i, i + 1)} className="p-1 rounded hover:bg-muted/50 text-muted-foreground hover:text-foreground transition-colors" title="Move down">
+                      <ArrowDown className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                  <label className="text-xs text-muted-foreground">Delay:</label>
                   <input type="number" value={step.delayDays}
                     onChange={(e) => setSteps(prev => prev.map((s, idx) => idx === i ? { ...s, delayDays: Number(e.target.value) } : s))}
-                    className="w-14 px-2 py-1 bg-background border border-border rounded text-xs text-center focus:outline-none focus:ring-1 focus:ring-primary" />
-                  <span className="text-[10px] text-muted-foreground">days</span>
+                    className="w-14 px-2 py-1 bg-background border border-border rounded text-sm text-center focus:outline-none focus:ring-1 focus:ring-primary" />
+                  <span className="text-xs text-muted-foreground">days</span>
                   <button onClick={() => removeStep(i)} className="p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors">
-                    <Trash2 className="h-3 w-3" />
+                    <Trash2 className="h-3.5 w-3.5" />
                   </button>
                 </div>
               </div>
@@ -956,20 +1070,45 @@ function CreateSequenceForm({ gymId, onBack }: { gymId: number; onBack: () => vo
                 <>
                   <input value={step.config.subject || ""} onChange={(e) => {
                     const newSteps = [...steps]; newSteps[i] = { ...step, config: { ...step.config, subject: e.target.value } }; setSteps(newSteps);
-                  }} placeholder="Email subject line" className="w-full px-2 py-1.5 bg-background border border-border rounded text-xs focus:outline-none focus:ring-1 focus:ring-primary" />
-                  <textarea value={step.config.body || ""} onChange={(e) => {
-                    const newSteps = [...steps]; newSteps[i] = { ...step, config: { ...step.config, body: e.target.value } }; setSteps(newSteps);
-                  }} rows={4} placeholder="Hey {{first_name}}, we've missed seeing you at {{gym_name}}..."
-                    className="w-full px-2 py-1.5 bg-background border border-border rounded text-xs focus:outline-none focus:ring-1 focus:ring-primary resize-none" />
+                  }} placeholder="Email subject line" className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary" />
+                  <textarea
+                    ref={(el) => { bodyRefs.current[i] = el; }}
+                    value={step.config.body || ""} onChange={(e) => {
+                      const newSteps = [...steps]; newSteps[i] = { ...step, config: { ...step.config, body: e.target.value } }; setSteps(newSteps);
+                    }} rows={8} placeholder="Hey {{first_name}}, we've missed seeing you at {{gym_name}}..."
+                    className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm leading-relaxed focus:outline-none focus:ring-1 focus:ring-primary resize-y min-h-[160px]" />
+                  <VariableChips
+                    textareaRef={{ current: bodyRefs.current[i] ?? null }}
+                    currentValue={step.config.body || ""}
+                    onChange={(val) => { const newSteps = [...steps]; newSteps[i] = { ...step, config: { ...step.config, body: val } }; setSteps(newSteps); }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setPreviewStepIndex(previewStepIndex === i ? null : i)}
+                    className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    {previewStepIndex === i ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                    {previewStepIndex === i ? "Hide Preview" : "Preview"}
+                  </button>
+                  {previewStepIndex === i && (
+                    <EmailPreview subject={step.config.subject || ""} body={step.config.body || ""} gymName={gym?.name} />
+                  )}
                 </>
               ) : (
                 <>
                   <input value={step.config.title || ""} onChange={(e) => {
                     const newSteps = [...steps]; newSteps[i] = { ...step, config: { ...step.config, title: e.target.value } }; setSteps(newSteps);
-                  }} placeholder="Task title for your staff" className="w-full px-2 py-1.5 bg-background border border-border rounded text-xs focus:outline-none focus:ring-1 focus:ring-primary" />
-                  <textarea value={step.config.description || ""} onChange={(e) => {
-                    const newSteps = [...steps]; newSteps[i] = { ...step, config: { ...step.config, description: e.target.value } }; setSteps(newSteps);
-                  }} rows={2} placeholder="What should the staff do?" className="w-full px-2 py-1.5 bg-background border border-border rounded text-xs focus:outline-none focus:ring-1 focus:ring-primary resize-none" />
+                  }} placeholder="Task title for your staff" className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary" />
+                  <textarea
+                    ref={(el) => { descRefs.current[i] = el; }}
+                    value={step.config.description || ""} onChange={(e) => {
+                      const newSteps = [...steps]; newSteps[i] = { ...step, config: { ...step.config, description: e.target.value } }; setSteps(newSteps);
+                    }} rows={5} placeholder="What should the staff do?" className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm leading-relaxed focus:outline-none focus:ring-1 focus:ring-primary resize-y min-h-[100px]" />
+                  <VariableChips
+                    textareaRef={{ current: descRefs.current[i] ?? null }}
+                    currentValue={step.config.description || ""}
+                    onChange={(val) => { const newSteps = [...steps]; newSteps[i] = { ...step, config: { ...step.config, description: val } }; setSteps(newSteps); }}
+                  />
                 </>
               )}
             </div>
@@ -998,18 +1137,33 @@ function CreateSequenceForm({ gymId, onBack }: { gymId: number; onBack: () => vo
 
 function SequenceDetail({ sequence, onBack, gymId }: { sequence: Sequence; onBack: () => void; gymId: number }) {
   const { toast } = useToast();
+  const { data: gym } = useGetGym(gymId, { query: { enabled: !!gymId } });
   const [editMode, setEditMode] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [name, setName] = useState(sequence.name);
   const [description, setDescription] = useState(sequence.description || "");
   const [triggerConfig, setTriggerConfig] = useState<TriggerConfig>(sequence.triggerConfig as TriggerConfig);
   const [cooldownDays, setCooldownDays] = useState(sequence.cooldownDays);
   const [steps, setSteps] = useState<SequenceStep[]>(sequence.steps || []);
   const [showEnrollDialog, setShowEnrollDialog] = useState(false);
+  const editBodyRefs = useRef<Record<number, HTMLTextAreaElement | null>>({});
+  const editDescRefs = useRef<Record<number, HTMLTextAreaElement | null>>({});
+  const [editPreviewIndex, setEditPreviewIndex] = useState<number | null>(null);
 
   const Icon = TYPE_ICONS[sequence.type] || Settings2;
   const colorClass = TYPE_COLORS[sequence.type] || TYPE_COLORS.custom;
+
+  const swapEditSteps = (a: number, b: number) => {
+    setSteps(prev => {
+      const next = [...prev];
+      [next[a], next[b]] = [next[b], next[a]];
+      return next.map((s, idx) => ({ ...s, stepOrder: idx }));
+    });
+    if (editPreviewIndex === a) setEditPreviewIndex(b);
+    else if (editPreviewIndex === b) setEditPreviewIndex(a);
+  };
 
   const handleSave = async () => {
     setSaving(true);
@@ -1073,7 +1227,7 @@ function SequenceDetail({ sequence, onBack, gymId }: { sequence: Sequence; onBac
                 Enroll
               </button>
               <button
-                onClick={handleDelete}
+                onClick={() => setShowDeleteConfirm(true)}
                 disabled={deleting}
                 className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
                 title="Delete sequence"
@@ -1096,7 +1250,7 @@ function SequenceDetail({ sequence, onBack, gymId }: { sequence: Sequence; onBac
       {editMode ? (
         <div className="space-y-4">
           <TabHint>
-            Edit your sequence settings below. The {"{{first_name}}"}, {"{{last_name}}"}, and {"{{gym_name}}"} placeholders will be replaced with real values when emails are sent — you don't need to type actual names.
+            Edit your sequence settings below. Use the variable chips below each field to insert placeholders — they'll be replaced with real values when sent.
           </TabHint>
 
           <div className="bg-card border border-border rounded-xl p-4 space-y-3">
@@ -1163,36 +1317,72 @@ function SequenceDetail({ sequence, onBack, gymId }: { sequence: Sequence; onBac
           <div className="bg-card border border-border rounded-xl p-4 space-y-3">
             <div>
               <h3 className="text-sm font-medium text-foreground">Steps ({steps.length})</h3>
-              <p className="text-[10px] text-muted-foreground mt-0.5">Available placeholders: {"{{first_name}}"}, {"{{last_name}}"}, {"{{gym_name}}"}, {"{{member_email}}"}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Use the variable chips below each field to insert placeholders.</p>
             </div>
             {steps.map((step, i) => (
-              <div key={i} className="border border-border rounded-lg p-3 space-y-2">
+              <div key={i} className="border border-border rounded-lg p-3 space-y-2.5">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-medium text-foreground flex items-center gap-1.5">
+                  <span className="text-sm font-medium text-foreground flex items-center gap-1.5">
                     {step.actionType === "email" ? <Mail className="h-3.5 w-3.5 text-blue-500" /> : <ClipboardList className="h-3.5 w-3.5 text-amber-500" />}
                     Step {i + 1}: {step.actionType === "email" ? "Send Email" : "Create Task"}
                   </span>
                   <div className="flex items-center gap-2">
-                    <label className="text-[10px] text-muted-foreground">Delay:</label>
+                    {i > 0 && (
+                      <button type="button" onClick={() => swapEditSteps(i, i - 1)} className="p-1 rounded hover:bg-muted/50 text-muted-foreground hover:text-foreground transition-colors" title="Move up">
+                        <ArrowUp className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                    {i < steps.length - 1 && (
+                      <button type="button" onClick={() => swapEditSteps(i, i + 1)} className="p-1 rounded hover:bg-muted/50 text-muted-foreground hover:text-foreground transition-colors" title="Move down">
+                        <ArrowDown className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                    <label className="text-xs text-muted-foreground">Delay:</label>
                     <input type="number" value={step.delayDays} onChange={(e) => setSteps(prev => prev.map((s, idx) => idx === i ? { ...s, delayDays: Number(e.target.value) } : s))}
-                      className="w-14 px-2 py-1 bg-background border border-border rounded text-xs text-center focus:outline-none focus:ring-1 focus:ring-primary" />
-                    <span className="text-[10px] text-muted-foreground">days</span>
+                      className="w-14 px-2 py-1 bg-background border border-border rounded text-sm text-center focus:outline-none focus:ring-1 focus:ring-primary" />
+                    <span className="text-xs text-muted-foreground">days</span>
                   </div>
                 </div>
                 {step.actionType === "email" && (
                   <>
                     <input value={step.config.subject || ""} onChange={(e) => updateStepConfig(i, "subject", e.target.value)}
-                      placeholder="Subject" className="w-full px-2 py-1.5 bg-background border border-border rounded text-xs focus:outline-none focus:ring-1 focus:ring-primary" />
-                    <textarea value={step.config.body || ""} onChange={(e) => updateStepConfig(i, "body", e.target.value)}
-                      rows={4} placeholder="Hey {{first_name}}, we've missed seeing you at {{gym_name}}..." className="w-full px-2 py-1.5 bg-background border border-border rounded text-xs focus:outline-none focus:ring-1 focus:ring-primary resize-none" />
+                      placeholder="Subject" className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary" />
+                    <textarea
+                      ref={(el) => { editBodyRefs.current[i] = el; }}
+                      value={step.config.body || ""} onChange={(e) => updateStepConfig(i, "body", e.target.value)}
+                      rows={8} placeholder="Hey {{first_name}}, we've missed seeing you at {{gym_name}}..."
+                      className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm leading-relaxed focus:outline-none focus:ring-1 focus:ring-primary resize-y min-h-[160px]" />
+                    <VariableChips
+                      textareaRef={{ current: editBodyRefs.current[i] ?? null }}
+                      currentValue={step.config.body || ""}
+                      onChange={(val) => updateStepConfig(i, "body", val)}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setEditPreviewIndex(editPreviewIndex === i ? null : i)}
+                      className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      {editPreviewIndex === i ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                      {editPreviewIndex === i ? "Hide Preview" : "Preview"}
+                    </button>
+                    {editPreviewIndex === i && (
+                      <EmailPreview subject={step.config.subject || ""} body={step.config.body || ""} gymName={gym?.name} />
+                    )}
                   </>
                 )}
                 {step.actionType === "task" && (
                   <>
                     <input value={step.config.title || ""} onChange={(e) => updateStepConfig(i, "title", e.target.value)}
-                      placeholder="Task title" className="w-full px-2 py-1.5 bg-background border border-border rounded text-xs focus:outline-none focus:ring-1 focus:ring-primary" />
-                    <textarea value={step.config.description || ""} onChange={(e) => updateStepConfig(i, "description", e.target.value)}
-                      rows={2} placeholder="Task description" className="w-full px-2 py-1.5 bg-background border border-border rounded text-xs focus:outline-none focus:ring-1 focus:ring-primary resize-none" />
+                      placeholder="Task title" className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary" />
+                    <textarea
+                      ref={(el) => { editDescRefs.current[i] = el; }}
+                      value={step.config.description || ""} onChange={(e) => updateStepConfig(i, "description", e.target.value)}
+                      rows={5} placeholder="Task description" className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm leading-relaxed focus:outline-none focus:ring-1 focus:ring-primary resize-y min-h-[100px]" />
+                    <VariableChips
+                      textareaRef={{ current: editDescRefs.current[i] ?? null }}
+                      currentValue={step.config.description || ""}
+                      onChange={(val) => updateStepConfig(i, "description", val)}
+                    />
                   </>
                 )}
               </div>
@@ -1215,27 +1405,9 @@ function SequenceDetail({ sequence, onBack, gymId }: { sequence: Sequence; onBac
 
           <div className="bg-card border border-border rounded-xl p-4">
             <h3 className="text-sm font-medium text-foreground mb-3">Steps ({steps.length})</h3>
-            <div className="space-y-3">
+            <div className="space-y-0">
               {steps.map((step, i) => (
-                <div key={i} className="flex items-start gap-3">
-                  <div className="flex flex-col items-center">
-                    <div className={`h-7 w-7 rounded-lg flex items-center justify-center ${
-                      step.actionType === "email" ? "bg-blue-500/15 text-blue-500" : "bg-amber-500/15 text-amber-500"
-                    }`}>
-                      {step.actionType === "email" ? <Mail className="h-3.5 w-3.5" /> : <ClipboardList className="h-3.5 w-3.5" />}
-                    </div>
-                    {i < steps.length - 1 && <div className="w-px h-8 bg-border mt-1" />}
-                  </div>
-                  <div>
-                    <p className="text-xs font-medium text-foreground">
-                      {step.actionType === "email" ? "Send Email" : "Create Staff Task"}
-                      {step.delayDays > 0 && <span className="text-muted-foreground font-normal"> (after {step.delayDays} days)</span>}
-                    </p>
-                    <p className="text-xs text-muted-foreground mt-0.5 truncate max-w-md">
-                      {step.config.subject || step.config.title || ""}
-                    </p>
-                  </div>
-                </div>
+                <RetentionStepDetailCard key={i} step={step} index={i} isLast={i === steps.length - 1} gymName={gym?.name} />
               ))}
             </div>
           </div>
@@ -1261,6 +1433,27 @@ function SequenceDetail({ sequence, onBack, gymId }: { sequence: Sequence; onBac
         </div>
       )}
 
+      <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this sequence?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Members currently enrolled will be removed. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDelete}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleting ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <EnrollMemberDialog
         open={showEnrollDialog}
         onClose={() => setShowEnrollDialog(false)}
@@ -1272,6 +1465,82 @@ function SequenceDetail({ sequence, onBack, gymId }: { sequence: Sequence; onBac
           onBack();
         }}
       />
+    </div>
+  );
+}
+
+function RetentionStepDetailCard({ step, index, isLast, gymName }: { step: SequenceStep; index: number; isLast: boolean; gymName?: string }) {
+  const [expanded, setExpanded] = useState(true);
+  const [showPreview, setShowPreview] = useState(false);
+  const isEmail = step.actionType === "email";
+  const body = isEmail ? (step.config.body || "") : (step.config.description || "");
+  const subject = isEmail ? (step.config.subject || "") : (step.config.title || "");
+  const isLongMessage = body.split("\n").length > 6 || body.length > 400;
+  const colorClass = isEmail ? "bg-blue-500/15 text-blue-600" : "bg-amber-500/15 text-amber-600";
+
+  return (
+    <div className="relative">
+      <div className="flex gap-4">
+        <div className="flex flex-col items-center shrink-0">
+          <div className={`h-8 w-8 rounded-full flex items-center justify-center text-xs font-bold ${colorClass}`}>
+            {index + 1}
+          </div>
+          {!isLast && <div className="w-px flex-1 bg-border mt-1" />}
+        </div>
+
+        <div className="flex-1 min-w-0 pb-4">
+          <div className="bg-muted/20 border border-border rounded-xl p-4">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <span className={`px-2 py-0.5 rounded-md text-xs font-medium uppercase ${colorClass}`}>
+                  {isEmail ? "email" : "task"}
+                </span>
+                <span className="text-xs text-muted-foreground flex items-center gap-1">
+                  <Clock className="h-3.5 w-3.5" />
+                  {index === 0 ? (step.delayDays > 0 ? `After ${step.delayDays} days` : "Immediately") : `+${step.delayDays} days`}
+                </span>
+              </div>
+              <div className="flex items-center gap-1">
+                {isEmail && (
+                  <button
+                    onClick={() => setShowPreview(!showPreview)}
+                    className="flex items-center gap-1 px-2 py-1 rounded-md text-xs text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+                  >
+                    {showPreview ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                    {showPreview ? "Hide Preview" : "Preview"}
+                  </button>
+                )}
+                {isLongMessage && (
+                  <button
+                    onClick={() => setExpanded(!expanded)}
+                    className="flex items-center gap-1 px-2 py-1 rounded-md text-xs text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+                  >
+                    {expanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                    {expanded ? "Collapse" : "Expand"}
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {subject && (
+              <div className="mb-2 pb-2 border-b border-border/50">
+                <span className="text-xs text-muted-foreground">{isEmail ? "Subject: " : "Title: "}</span>
+                <span className="text-sm font-medium text-foreground">{subject}</span>
+              </div>
+            )}
+
+            {showPreview && isEmail ? (
+              <EmailPreview subject={subject} body={body} gymName={gymName} />
+            ) : (
+              <div className={`text-sm text-muted-foreground whitespace-pre-wrap leading-relaxed ${
+                !expanded ? "line-clamp-6" : ""
+              }`}>
+                {body || <span className="italic">No content</span>}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
