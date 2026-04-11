@@ -256,7 +256,7 @@ export function Workouts() {
   const [overwriteConfirm, setOverwriteConfirm] = useState<{ date: string } | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
-  const [shareDialogDay, setShareDialogDay] = useState<{ title?: string; date?: string } | null>(null);
+  const [shareDialogDay, setShareDialogDay] = useState<{ title?: string; date?: string; track?: string } | null>(null);
   const [selectedTrack, setSelectedTrack] = useState("default");
   const [trackDropdownOpen, setTrackDropdownOpen] = useState(false);
 
@@ -320,6 +320,12 @@ export function Workouts() {
   const activeMemberCount = useMemo(() => {
     return allMembers.filter((m) => m.status === "active").length;
   }, [allMembers]);
+
+  const getTrackMemberCount = useCallback((track: string | null | undefined): number => {
+    if (!track || track === "default") return activeMemberCount;
+    const trackTag = `track:${track}`;
+    return allMembers.filter((m) => m.status === "active" && (m.tags as string[] | null)?.includes(trackTag)).length;
+  }, [allMembers, activeMemberCount]);
 
   const currentMemberId = useMemo(() => {
     if (!currentUser?.email || allMembers.length === 0) return null;
@@ -549,7 +555,7 @@ export function Workouts() {
           description: `Programming for ${new Date(day.date + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })} has been ${wasPublishing ? "published" : "unpublished"}.`,
         });
         if (wasPublishing && publicWodUrl) {
-          setShareDialogDay({ title: day.title, date: day.date });
+          setShareDialogDay({ title: day.title, date: day.date, track: day.track || "default" });
           setShareDialogOpen(true);
         }
       } catch (error: any) {
@@ -886,6 +892,10 @@ export function Workouts() {
                     onDuplicate={() => handleDuplicate(day)}
                     onTogglePublish={() => handleTogglePublish(day)}
                     onDelete={() => setDeleteConfirmDay(day)}
+                    onNotify={() => {
+                      setShareDialogDay({ title: day.title, date: day.date, track: day.track || "default" });
+                      setShareDialogOpen(true);
+                    }}
                     publicWodUrl={publicWodUrl}
                     onCopyLink={(msg) => toast({ title: "Link Copied", description: msg })}
                   />
@@ -997,6 +1007,10 @@ export function Workouts() {
                 onDuplicate={() => handleDuplicate(day)}
                 onTogglePublish={() => handleTogglePublish(day)}
                 onDelete={() => setDeleteConfirmDay(day)}
+                onNotify={() => {
+                  setShareDialogDay({ title: day.title, date: day.date, track: day.track || "default" });
+                  setShareDialogOpen(true);
+                }}
                 publicWodUrl={publicWodUrl}
                 onCopyLink={(msg) => toast({ title: "Link Copied", description: msg })}
               />
@@ -1078,6 +1092,8 @@ export function Workouts() {
           activeMemberCount={activeMemberCount}
           dayTitle={shareDialogDay?.title}
           dayDate={shareDialogDay?.date}
+          dayTrack={shareDialogDay?.track}
+          trackMemberCount={shareDialogDay?.track ? getTrackMemberCount(shareDialogDay.track) : undefined}
         />
       )}
     </div>

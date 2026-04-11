@@ -12,6 +12,7 @@ import {
   ChevronUp,
   Share2,
   Check,
+  Send,
 } from "lucide-react";
 import { getSectionTypeInfo, SectionData, type SectionType } from "./SectionEditor";
 import type { ProgrammingDayWithSections } from "@workspace/api-client-react";
@@ -25,6 +26,7 @@ interface DayCardProps {
   onDuplicate?: () => void;
   onTogglePublish?: () => void;
   onDelete?: () => void;
+  onNotify?: () => void;
   publicWodUrl?: string;
   onCopyLink?: (message: string) => void;
   isStaff: boolean;
@@ -51,6 +53,7 @@ export function DayCard({
   onDuplicate,
   onTogglePublish,
   onDelete,
+  onNotify,
   publicWodUrl,
   onCopyLink,
   isStaff,
@@ -119,6 +122,15 @@ export function DayCard({
           </div>
           {isStaff && (
             <div className="flex items-center gap-1 shrink-0 ml-2">
+              {day.status === "published" && onNotify && (
+                <button
+                  onClick={onNotify}
+                  className="h-8 w-8 flex items-center justify-center rounded-lg hover:bg-primary/10 transition-colors"
+                  title="Notify members"
+                >
+                  <Send className="h-4 w-4 text-primary" />
+                </button>
+              )}
               {day.status === "published" && publicWodUrl && (
                 <button
                   onClick={handleShareCopy}
