@@ -11,6 +11,8 @@ import {
   useGetMemberLinkedBilling, useLinkMemberBilling, useUnlinkMemberBilling,
   getListPaymentMethodsQueryKey, getGetMemberLinkedBillingQueryKey,
   useListMembers, useListClasses, useCheckInToClass,
+  useSendMemberSms,
+  useListAppointments,
 } from "@workspace/api-client-react";
 import type { GymClass } from "@workspace/api-client-react";
 import type { ApiError } from "@workspace/api-client-react/custom-fetch";
@@ -22,7 +24,7 @@ import {
   Loader2, ArrowLeft, UserCircle, Mail, Phone, Calendar, Shield,
   MapPin, StickyNote, Clock, Edit, Pause, XCircle, Play, AlertTriangle,
   Activity, CreditCard, Plus, DollarSign, Receipt, RefreshCw,
-  Send, Copy, Star, Trash2, Link2, Unlink, Search, Users, CheckCircle
+  Send, Copy, Star, Trash2, Link2, Unlink, Search, Users, CheckCircle, MessageSquare
 } from "lucide-react";
 import { Link } from "wouter";
 import { Textarea } from "@/components/ui/textarea";
@@ -41,7 +43,7 @@ export function MemberDetail() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const [activeTab, setActiveTab] = useState<"overview" | "notes" | "timeline" | "billing">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "notes" | "timeline" | "billing" | "appointments">("overview");
   const [editOpen, setEditOpen] = useState(false);
   const [statusAction, setStatusAction] = useState<"hold" | "cancelled" | "active" | null>(null);
   const [noteContent, setNoteContent] = useState("");
@@ -53,6 +55,8 @@ export function MemberDetail() {
   const [cancelReason, setCancelReason] = useState("");
   const [cancelAtPeriodEnd, setCancelAtPeriodEnd] = useState(true);
   const [changePlanSub, setChangePlanSub] = useState<any>(null);
+  const [smsOpen, setSmsOpen] = useState(false);
+  const [smsMessage, setSmsMessage] = useState("");
 
   const [editForm, setEditForm] = useState({
     firstName: "",
@@ -82,6 +86,10 @@ export function MemberDetail() {
   const updateMutation = useUpdateMember();
   const addNoteMutation = useAddMemberNote();
 
+  const { data: memberAppointments } = useListAppointments(activeGymId as number, { memberId: memberId }, {
+    query: { enabled: !!activeGymId && !!memberId && activeTab === "appointments" },
+  });
+
   const billingEnabled = !!activeGymId && !!memberId && activeTab === "billing";
   const { data: billingHistory } = useGetMemberBillingHistory(activeGymId as number, memberId, {
     query: { enabled: billingEnabled },
@@ -110,6 +118,7 @@ export function MemberDetail() {
   const linkBillingMutation = useLinkMemberBilling();
   const unlinkBillingMutation = useUnlinkMemberBilling();
   const createSetupIntentMutation = useCreateSetupIntent();
+  const sendSmsMutation = useSendMemberSms();
 
   const [addCardOpen, setAddCardOpen] = useState(false);
   const [removePmConfirm, setRemovePmConfirm] = useState<string | null>(null);
@@ -146,7 +155,8 @@ export function MemberDetail() {
         },
         onError: (err: unknown) => {
           const apiErr = err as ApiError | undefined;
-          const msg = apiErr?.data?.error || apiErr?.message || "Check-in failed";
+          const errData = apiErr?.data as { error?: string } | null | undefined;
+          const msg = errData?.error || apiErr?.message || "Check-in failed";
           toast({ title: "Check-in failed", description: msg, variant: "destructive" });
         },
       }
@@ -224,6 +234,25 @@ export function MemberDetail() {
     } catch {
       toast({ title: "Failed to generate link", variant: "destructive" });
     }
+  };
+
+  const handleSendSms = () => {
+    if (!activeGymId || !memberId || !smsMessage.trim()) return;
+    sendSmsMutation.mutate(
+      { gymId: activeGymId, memberId, data: { message: smsMessage.trim() } },
+      {
+        onSuccess: (data) => {
+          toast({ title: "Text Sent", description: `Text sent to ${(data as any).recipientName} (${(data as any).recipientPhone}).` });
+          setSmsOpen(false);
+          setSmsMessage("");
+          queryClient.invalidateQueries({ queryKey: getGetMemberTimelineQueryKey(activeGymId, memberId) });
+        },
+        onError: (err: unknown) => {
+          const error = err as { response?: { data?: { error?: string } } };
+          toast({ title: "Failed to Send", description: error?.response?.data?.error || "Could not send text.", variant: "destructive" });
+        },
+      }
+    );
   };
 
   const isBillingMutating = createChargeMutation.isPending || createStripeSubMutation.isPending || cancelSubMutation.isPending || pauseSubMutation.isPending || resumeSubMutation.isPending || setDefaultPmMutation.isPending || removePmMutation.isPending || linkBillingMutation.isPending || unlinkBillingMutation.isPending;
@@ -511,6 +540,7 @@ export function MemberDetail() {
     { key: "billing" as const, label: "Billing", icon: CreditCard },
     { key: "notes" as const, label: "Notes", icon: StickyNote },
     { key: "timeline" as const, label: "Timeline", icon: Clock },
+    { key: "appointments" as const, label: "Appointments", icon: Calendar },
   ];
 
   const billingData = billingHistory as any;
@@ -605,6 +635,14 @@ export function MemberDetail() {
             >
               <Edit className="h-4 w-4" /> Edit
             </button>
+            {member.phone && (
+              <button
+                onClick={() => { setSmsOpen(true); setSmsMessage(""); }}
+                className="flex items-center gap-2 px-3 py-2 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-sm font-medium text-emerald-600 hover:bg-emerald-500/20 transition-colors"
+              >
+                <MessageSquare className="h-4 w-4" /> Send Text
+              </button>
+            )}
             {member.status === "active" && (
               <>
                 <button
@@ -1183,6 +1221,91 @@ export function MemberDetail() {
               </div>
             </div>
           )}
+        </motion.div>
+      )}
+
+      {smsOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setSmsOpen(false)}>
+          <div className="bg-card border border-border rounded-2xl shadow-xl w-full max-w-md mx-4 p-6" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-2 rounded-lg bg-emerald-500/10">
+                <MessageSquare className="h-5 w-5 text-emerald-600" />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-foreground">Send Text Message</h3>
+                <p className="text-xs text-muted-foreground">To {member.firstName} {member.lastName} ({member.phone})</p>
+              </div>
+            </div>
+            <Textarea
+              value={smsMessage}
+              onChange={(e) => setSmsMessage(e.target.value)}
+              placeholder="Type your message..."
+              className="mb-2 min-h-[100px]"
+              maxLength={1600}
+            />
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-muted-foreground">{smsMessage.length}/1600</span>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setSmsOpen(false)}
+                  className="px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSendSms}
+                  disabled={!smsMessage.trim() || sendSmsMutation.isPending}
+                  className="flex items-center gap-2 px-4 py-1.5 bg-emerald-600 text-white rounded-lg text-sm font-medium hover:bg-emerald-700 transition-colors disabled:opacity-50"
+                >
+                  {sendSmsMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+                  Send
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activeTab === "appointments" && (
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
+          <div className="bg-card border border-border rounded-2xl p-6 shadow-sm">
+            <h3 className="text-lg font-semibold text-foreground flex items-center gap-2 mb-4">
+              <Calendar className="h-5 w-5 text-primary" /> Appointment History
+            </h3>
+            {!memberAppointments || memberAppointments.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-6">No appointments found for this member.</p>
+            ) : (
+              <div className="space-y-3">
+                {memberAppointments.map((appt: any) => {
+                  const start = new Date(appt.startTime);
+                  const end = new Date(appt.endTime);
+                  const statusColors: Record<string, string> = {
+                    scheduled: "bg-sky-500/10 text-sky-500 border-sky-500/20",
+                    completed: "bg-green-500/10 text-green-500 border-green-500/20",
+                    cancelled: "bg-zinc-500/10 text-zinc-500 border-zinc-500/20",
+                    no_show: "bg-red-500/10 text-red-500 border-red-500/20",
+                  };
+                  return (
+                    <div key={appt.id} className="flex items-center justify-between p-3 rounded-xl border border-border bg-muted/20">
+                      <div className="flex flex-col gap-0.5">
+                        <span className="text-sm font-medium text-foreground">
+                          {start.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                          {" · "}
+                          {start.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })} – {end.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          {appt.coachName || "No coach"}{appt.notes ? ` · ${appt.notes}` : ""}
+                        </span>
+                      </div>
+                      <span className={`text-xs font-medium px-2 py-0.5 rounded-full border ${statusColors[appt.status] || statusColors.scheduled}`}>
+                        {appt.status === "no_show" ? "No Show" : appt.status.charAt(0).toUpperCase() + appt.status.slice(1)}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </motion.div>
       )}
 

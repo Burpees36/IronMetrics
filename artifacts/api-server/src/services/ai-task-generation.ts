@@ -1,5 +1,5 @@
 import { eq, and, sql } from "drizzle-orm";
-import { db, aiTasksTable, membersTable, leadsTable, subscriptionsTable } from "@workspace/db";
+import { db, aiTasksTable, membersTable, leadsTable, subscriptionsTable, gymsTable } from "@workspace/db";
 import { calculateRiskScore, getRiskTier } from "../routes/intelligence/computations";
 import {
   assembleMemberContext,
@@ -10,6 +10,348 @@ import {
   type LeadContext,
 } from "./personalization-context";
 import { processAutopilotTasks } from "./autopilot-sender";
+import { assertVoiceCompliance } from "./iron-metrics-voice";
+import { detectMilestones } from "./milestone-detection";
+import { buildCelebrationContent } from "./celebration-content";
+
+export interface CommunicationStyle {
+  tone: string;
+  rules: string[];
+  samples: string[];
+}
+
+const TONE_SIGN_OFFS: Record<string, string[]> = {
+  casual_friendly: [
+    "See you in the gym!",
+    "Looking forward to hearing from you!",
+    "Hope to see you soon!",
+    "Talk soon!",
+  ],
+  professional: [
+    "Best regards,",
+    "Looking forward to connecting,",
+    "Thank you for your time,",
+    "Sincerely,",
+  ],
+  motivational_coach: [
+    "Let's crush it!",
+    "Your best is yet to come!",
+    "Let's get after it!",
+    "Stay strong!",
+  ],
+};
+
+const TONE_GREETINGS: Record<string, string[]> = {
+  casual_friendly: ["Hi", "Hey", "Hi there"],
+  professional: ["Dear", "Hello", "Good day"],
+  motivational_coach: ["Hey", "What's up", "Hey there"],
+};
+
+function getRandomElement<T>(arr: T[]): T {
+  return arr[Math.floor(Math.random() * arr.length)];
+}
+
+export function extractStylePatterns(samples: string[]): { avgSentenceLength: "short" | "medium" | "long"; usesExclamation: boolean; usesEmoji: boolean; commonClosing: string | null } {
+  if (samples.length === 0) {
+    return { avgSentenceLength: "medium", usesExclamation: false, usesEmoji: false, commonClosing: null };
+  }
+
+  let totalSentences = 0;
+  let totalWords = 0;
+  let exclamationCount = 0;
+  let emojiCount = 0;
+  const closings: string[] = [];
+
+  for (const sample of samples) {
+    const sentences = sample.split(/[.!?]+/).filter(s => s.trim().length > 0);
+    totalSentences += sentences.length;
+    totalWords += sample.split(/\s+/).length;
+    if (sample.includes("!")) exclamationCount++;
+    if (/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}]/u.test(sample)) emojiCount++;
+
+    const lines = sample.trim().split("\n").filter(l => l.trim().length > 0);
+    if (lines.length > 0) {
+      closings.push(lines[lines.length - 1].trim());
+    }
+  }
+
+  const avgWords = totalSentences > 0 ? totalWords / totalSentences : 10;
+  const avgSentenceLength = avgWords < 8 ? "short" : avgWords > 15 ? "long" : "medium";
+  const usesExclamation = exclamationCount >= samples.length / 2;
+  const usesEmoji = emojiCount >= samples.length / 2;
+
+  const closingCounts: Record<string, number> = {};
+  for (const c of closings) {
+    closingCounts[c] = (closingCounts[c] || 0) + 1;
+  }
+  const mostCommonClosing = Object.entries(closingCounts).sort((a, b) => b[1] - a[1])[0];
+  const commonClosing = mostCommonClosing && mostCommonClosing[1] >= 2 ? mostCommonClosing[0] : null;
+
+  return { avgSentenceLength, usesExclamation, usesEmoji, commonClosing };
+}
+
+export interface VoiceValidationResult {
+  bannedPhrasesFound: string[];
+  signOffPresent: boolean;
+  sampleLeakageDetected: string[];
+  isValid: boolean;
+}
+
+function detectContradictoryRules(rules: string[]): Array<{ ruleA: string; ruleB: string }> {
+  const contradictions: Array<{ ruleA: string; ruleB: string }> = [];
+  const parsed: Array<{ find: string; replacement: string; original: string }> = [];
+
+  for (const rule of rules) {
+    const match = rule.match(/^(?:never\s+say|replace)\s+['"](.+?)['"]\s*(?:,?\s*(?:say|with)\s+['"](.+?)['"])?$/i);
+    if (match) {
+      parsed.push({ find: match[1].toLowerCase(), replacement: (match[2] || "").toLowerCase(), original: rule });
+    }
+  }
+
+  for (let i = 0; i < parsed.length; i++) {
+    for (let j = i + 1; j < parsed.length; j++) {
+      if (parsed[i].find === parsed[j].replacement && parsed[j].find === parsed[i].replacement) {
+        contradictions.push({ ruleA: parsed[i].original, ruleB: parsed[j].original });
+      }
+    }
+  }
+
+  return contradictions;
+}
+
+function extractSamplePrivateContent(samples: string[]): string[] {
+  const privatePatterns: string[] = [];
+  for (const sample of samples) {
+    const nameMatches = sample.match(/\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)+\b/g);
+    if (nameMatches) {
+      for (const name of nameMatches) {
+        if (!["Looking forward", "Best regards", "Dear Sir", "Dear Madam", "Good day", "Hi there", "Hey there"].some(common => name === common)) {
+          privatePatterns.push(name);
+        }
+      }
+    }
+    const phoneMatches = sample.match(/\b\d{3}[-.]?\d{3}[-.]?\d{4}\b/g);
+    if (phoneMatches) privatePatterns.push(...phoneMatches);
+    const emailMatches = sample.match(/\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/g);
+    if (emailMatches) privatePatterns.push(...emailMatches);
+  }
+  return [...new Set(privatePatterns)];
+}
+
+function applyWordBoundaryReplacement(text: string, find: string, replacement: string): string {
+  const escaped = find.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const regex = new RegExp(`\\b${escaped}\\b`, "gi");
+  return text.replace(regex, replacement);
+}
+
+function detectSignOffBlock(text: string): { beforeSignOff: string; signOffLine: string } | null {
+  const lines = text.trimEnd().split("\n");
+
+  let lastNonEmptyIdx = -1;
+  for (let i = lines.length - 1; i >= 0; i--) {
+    if (lines[i].trim() !== "") {
+      lastNonEmptyIdx = i;
+      break;
+    }
+  }
+  if (lastNonEmptyIdx < 1) return null;
+
+  let signOffStartIdx = lastNonEmptyIdx;
+
+  for (let i = lastNonEmptyIdx; i >= 0; i--) {
+    const line = lines[i].trim();
+    if (line === "") {
+      signOffStartIdx = i + 1;
+      break;
+    }
+    if (i === 0) {
+      return null;
+    }
+  }
+
+  const signOffLines = lines.slice(signOffStartIdx, lastNonEmptyIdx + 1).map(l => l.trim());
+  const signOffText = signOffLines.join("\n");
+
+  if (signOffLines.length > 3) return null;
+
+  const firstSignOffLine = signOffLines[0];
+  const isKnownSignOff = Object.values(TONE_SIGN_OFFS).flat().some(s => firstSignOffLine === s) ||
+    /^(?:best|regards|sincerely|cheers|thanks|thank you|warm|warmly|kind regards|take care|yours|cordially|respectfully|looking forward|hope to|see you|talk soon|let's|stay|your best|wishing)/i.test(firstSignOffLine);
+
+  const isStructuralSignOff =
+    signOffLines.length <= 3 &&
+    signOffLines.every(l => l.split(/\s+/).length <= 8) &&
+    signOffStartIdx > 0 &&
+    lines.slice(0, signOffStartIdx).some(l => l.trim() !== "");
+
+  if (isKnownSignOff || isStructuralSignOff) {
+    const beforeLines = lines.slice(0, signOffStartIdx);
+    while (beforeLines.length > 0 && beforeLines[beforeLines.length - 1].trim() === "") {
+      beforeLines.pop();
+    }
+    return { beforeSignOff: beforeLines.join("\n"), signOffLine: signOffText };
+  }
+
+  return null;
+}
+
+export function validateVoiceOutput(
+  output: string,
+  style: CommunicationStyle,
+  bannedPhrases: string[]
+): VoiceValidationResult {
+  const result: VoiceValidationResult = {
+    bannedPhrasesFound: [],
+    signOffPresent: false,
+    sampleLeakageDetected: [],
+    isValid: true,
+  };
+
+  for (const phrase of bannedPhrases) {
+    const regex = new RegExp(`\\b${phrase.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "gi");
+    if (regex.test(output)) {
+      result.bannedPhrasesFound.push(phrase);
+    }
+  }
+
+  let expectedSignOff: string | null = null;
+  for (const rule of style.rules) {
+    const signOffMatch = rule.match(/^(?:always\s+)?sign\s+off\s+with\s+['"](.+?)['"]$/i);
+    if (signOffMatch) expectedSignOff = signOffMatch[1];
+  }
+  if (expectedSignOff) {
+    result.signOffPresent = output.includes(expectedSignOff);
+  } else {
+    const allSignOffs = Object.values(TONE_SIGN_OFFS).flat();
+    result.signOffPresent = allSignOffs.some(s => output.includes(s));
+  }
+
+  const privateContent = extractSamplePrivateContent(style.samples);
+  for (const pc of privateContent) {
+    if (output.includes(pc)) {
+      result.sampleLeakageDetected.push(pc);
+    }
+  }
+
+  result.isValid = result.bannedPhrasesFound.length === 0 &&
+    result.signOffPresent &&
+    result.sampleLeakageDetected.length === 0;
+
+  return result;
+}
+
+export function applyOwnerVoice(content: string, subject: string, style: CommunicationStyle): { content: string; subject: string; warnings?: string[] } {
+  let processed = content;
+  let processedSubject = subject;
+  const warnings: string[] = [];
+
+  const greetings = TONE_GREETINGS[style.tone] || TONE_GREETINGS.casual_friendly;
+  processed = processed.replace(/^Hi /, `${getRandomElement(greetings)} `);
+
+  let customSignOff: string | null = null;
+  const bannedPhrases: string[] = [];
+
+  const contradictions = detectContradictoryRules(style.rules);
+  for (const c of contradictions) {
+    warnings.push(`Contradictory rules detected: "${c.ruleA}" conflicts with "${c.ruleB}"`);
+  }
+
+  const contradictoryFinds = new Set(
+    contradictions.flatMap(c => {
+      const matchA = c.ruleA.match(/^(?:never\s+say|replace)\s+['"](.+?)['"]/i);
+      const matchB = c.ruleB.match(/^(?:never\s+say|replace)\s+['"](.+?)['"]/i);
+      return [matchA?.[1]?.toLowerCase(), matchB?.[1]?.toLowerCase()].filter(Boolean) as string[];
+    })
+  );
+
+  for (const rule of style.rules) {
+    const match = rule.match(/^(?:never\s+say|replace)\s+['"](.+?)['"]\s*(?:,?\s*(?:say|with)\s+['"](.+?)['"])?$/i);
+    if (match) {
+      const find = match[1];
+      const replacement = match[2] || "";
+
+      if (contradictoryFinds.has(find.toLowerCase())) {
+        continue;
+      }
+
+      bannedPhrases.push(find);
+      processed = applyWordBoundaryReplacement(processed, find, replacement);
+      processedSubject = applyWordBoundaryReplacement(processedSubject, find, replacement);
+    }
+
+    const signOffMatch = rule.match(/^(?:always\s+)?sign\s+off\s+with\s+['"](.+?)['"]$/i);
+    if (signOffMatch) {
+      customSignOff = signOffMatch[1];
+    }
+  }
+
+  const signOff = customSignOff || getRandomElement(TONE_SIGN_OFFS[style.tone] || TONE_SIGN_OFFS.casual_friendly);
+
+  const signOffBlock = detectSignOffBlock(processed);
+  if (signOffBlock) {
+    processed = signOffBlock.beforeSignOff + "\n\n" + signOff;
+  } else {
+    const knownSignOffRegex = /\n\n(?:Looking forward to hearing from you!|Hope to see you soon!|Talk soon!|Best regards,|Sincerely,|See you in the gym!|Let me know what works for you!|Let me know what day works best!)$/;
+    if (knownSignOffRegex.test(processed)) {
+      processed = processed.replace(knownSignOffRegex, `\n\n${signOff}`);
+    } else {
+      processed = processed.trimEnd() + "\n\n" + signOff;
+    }
+  }
+
+  const samplePatterns = extractStylePatterns(style.samples);
+
+  if (samplePatterns.commonClosing && !customSignOff) {
+    const finalSignOffBlock = detectSignOffBlock(processed);
+    if (finalSignOffBlock) {
+      processed = finalSignOffBlock.beforeSignOff + "\n\n" + samplePatterns.commonClosing;
+    }
+  }
+
+  if (samplePatterns.usesExclamation && style.tone === "motivational_coach") {
+    processed = processed.replace(/\.\n/g, "!\n");
+  }
+
+  const validation = validateVoiceOutput(processed, style, bannedPhrases);
+  if (validation.bannedPhrasesFound.length > 0) {
+    for (const phrase of validation.bannedPhrasesFound) {
+      processed = applyWordBoundaryReplacement(processed, phrase, "");
+      processedSubject = applyWordBoundaryReplacement(processedSubject, phrase, "");
+    }
+    warnings.push(`Post-validation caught banned phrases: ${validation.bannedPhrasesFound.join(", ")}`);
+  }
+  const sampleClosingUsed = samplePatterns.commonClosing && !customSignOff && processed.includes(samplePatterns.commonClosing);
+  if (!validation.signOffPresent && !sampleClosingUsed) {
+    const expectedSignOff = customSignOff || signOff;
+    if (!processed.trimEnd().endsWith(expectedSignOff)) {
+      processed = processed.trimEnd() + "\n\n" + expectedSignOff;
+      warnings.push(`Post-validation re-applied missing sign-off: "${expectedSignOff}"`);
+    }
+  }
+  if (validation.sampleLeakageDetected.length > 0) {
+    warnings.push(`Sample content leakage detected: ${validation.sampleLeakageDetected.join(", ")}`);
+  }
+
+  return { content: processed, subject: processedSubject, ...(warnings.length > 0 ? { warnings } : {}) };
+}
+
+async function fetchCommunicationStyle(gymId: number): Promise<CommunicationStyle> {
+  const [gym] = await db.select({
+    tone: gymsTable.communicationStyleTone,
+    rules: gymsTable.communicationStyleRules,
+    samples: gymsTable.communicationStyleSamples,
+  }).from(gymsTable).where(eq(gymsTable.id, gymId));
+
+  if (!gym) {
+    return { tone: "casual_friendly", rules: [], samples: [] };
+  }
+
+  return {
+    tone: gym.tone || "casual_friendly",
+    rules: gym.rules || [],
+    samples: gym.samples || [],
+  };
+}
 
 const MAX_PENDING_TASKS = 5;
 
@@ -18,11 +360,13 @@ const PRIORITY_ORDER: Record<string, number> = {
   high_outreach: 1,
   billing: 2,
   leads: 3,
+  celebration: 4,
 };
 
 interface GeneratedTask {
   gymId: number;
   type: string;
+  subtype?: string;
   title: string;
   description: string;
   priority: string;
@@ -42,10 +386,19 @@ async function refreshRiskScores(gymId: number): Promise<void> {
 
   for (const m of members) {
     const now = new Date();
-    const daysSinceLastVisit = m.lastVisitDate
-      ? Math.floor((now.getTime() - new Date(m.lastVisitDate).getTime()) / (1000 * 60 * 60 * 24))
-      : (m.daysSinceLastAttendance ?? 999);
-    const freshScore = calculateRiskScore(daysSinceLastVisit, m.attendanceCount30d);
+    const memberJoinDate = m.joinDate || m.createdAt;
+    const daysSinceJoin = memberJoinDate ? Math.floor((now.getTime() - new Date(memberJoinDate).getTime()) / (1000 * 60 * 60 * 24)) : 999;
+
+    let daysSinceLastVisit: number;
+    if (m.lastVisitDate) {
+      daysSinceLastVisit = Math.floor((now.getTime() - new Date(m.lastVisitDate).getTime()) / (1000 * 60 * 60 * 24));
+    } else if (daysSinceJoin <= 7) {
+      daysSinceLastVisit = 0;
+    } else {
+      daysSinceLastVisit = m.daysSinceLastAttendance ?? 999;
+    }
+
+    const freshScore = daysSinceJoin <= 3 ? 0 : calculateRiskScore(daysSinceLastVisit, m.attendanceCount30d);
     const freshTier = getRiskTier(freshScore);
 
     const storedScore = m.riskScore ? parseFloat(m.riskScore) : null;
@@ -62,28 +415,28 @@ function buildCriticalOutreachContent(ctx: MemberContext): { content: string; su
 
   if (ctx.favoriteClassName) {
     variants.push((c) => ({
-      subject: `The ${c.favoriteClassName} crew misses you, ${c.firstName}`,
-      content: `Hi ${c.firstName},\n\nI wanted to reach out personally — the ${c.favoriteClassName}${c.favoriteTimeSlot ? ` ${c.favoriteTimeSlot}` : ""} crew has been asking about you.${c.lastCoachName ? ` Coach ${c.lastCoachName} mentioned it the other day.` : ""}\n\nYou've been part of our community for ${c.tenureMonths} month${c.tenureMonths !== 1 ? "s" : ""} and we genuinely miss having you around. We've got some exciting new programming coming up that I think you'd love.\n\nI'd love to set up a quick 15-minute catch-up — no pressure at all, just a chance to reconnect and see how we can help.\n\nWould you be free for a coffee or a quick chat this week? I'll buy the coffee.\n\nLooking forward to hearing from you!`,
+      subject: `${c.favoriteClassName} isn't the same without you, ${c.firstName}`,
+      content: `Hi ${c.firstName},\n\nStraight up — the ${c.favoriteClassName}${c.favoriteTimeSlot ? ` ${c.favoriteTimeSlot}` : ""} crew noticed you've been gone.${c.lastCoachName ? ` Coach ${c.lastCoachName} brought it up.` : ""}\n\nYou've been here ${c.tenureMonths} month${c.tenureMonths !== 1 ? "s" : ""}. That's not nothing. Whatever pulled you away, let's figure it out.\n\n15 minutes. Coffee on me. This week. What day works?`,
     }));
   }
 
   if (ctx.lastCoachName) {
     variants.push((c) => ({
-      subject: `Coach ${c.lastCoachName} was asking about you, ${c.firstName}`,
-      content: `Hi ${c.firstName},\n\nCoach ${c.lastCoachName} was asking about you the other day, and it got me thinking — we should reconnect.\n\nYou've been with us for ${c.tenureMonths} month${c.tenureMonths !== 1 ? "s" : ""}${c.favoriteClassName ? ` and we know how much you loved ${c.favoriteClassName}` : ""}. We'd hate to see you drift away.\n\nI'd love to set up a quick goal review — just 15 minutes to catch up, see where you're at, and figure out a plan that works for your schedule. Zero pressure.\n\nWould any day this week work for a quick coffee or chat at the gym?\n\nHope to see you soon!`,
+      subject: `Coach ${c.lastCoachName} asked about you, ${c.firstName}`,
+      content: `Hi ${c.firstName},\n\nCoach ${c.lastCoachName} was asking about you. That says something.\n\nYou've been with us ${c.tenureMonths} month${c.tenureMonths !== 1 ? "s" : ""}${c.favoriteClassName ? ` and ${c.favoriteClassName} is still going strong` : ""}. I don't want you to drift away without us at least having a conversation.\n\n15-minute check-in. No pitch, no pressure. Just want to see where you're at and if there's anything we can do differently.\n\nWhat day this week works for you?`,
     }));
   }
 
   if (ctx.recentPRs.length > 0) {
     variants.push((c) => ({
-      subject: `Don't lose your momentum, ${c.firstName}`,
-      content: `Hi ${c.firstName},\n\nI was looking back at your recent results and wanted to remind you — you hit ${c.recentPRs.length} PR${c.recentPRs.length !== 1 ? "s" : ""} in the last few months${c.recentPRs[0] ? ` (including ${c.recentPRs[0].workoutTitle})` : ""}. That's real progress.\n\nI'd hate to see that momentum fade.${c.favoriteClassName ? ` ${c.favoriteClassName} is still going strong` : ""}${c.lastCoachName ? ` and Coach ${c.lastCoachName} would love to help you build on those gains.` : "."}\n\nLet's set up a quick 15-minute session to map out your next goals. No pressure — just a chance to reconnect.\n\nWhat day works best for you this week?`,
+      subject: `You were making real progress, ${c.firstName}`,
+      content: `Hi ${c.firstName},\n\nI pulled up your numbers — ${c.recentPRs.length} PR${c.recentPRs.length !== 1 ? "s" : ""} in the last few months${c.recentPRs[0] ? ` (${c.recentPRs[0].workoutTitle} included)` : ""}. That's real work.\n\nDon't let that momentum die.${c.favoriteClassName ? ` ${c.favoriteClassName} is still running` : ""}${c.lastCoachName ? ` and Coach ${c.lastCoachName} wants to help you build on it.` : "."}\n\n15 minutes this week. We map out your next targets.\n\nWhat day works?`,
     }));
   }
 
   variants.push((c) => ({
-    subject: `We'd love to reconnect, ${c.firstName}`,
-    content: `Hi ${c.firstName},\n\nI was thinking about you and wanted to reach out personally.${c.tenureMonths > 0 ? ` You've been part of our community for ${c.tenureMonths} month${c.tenureMonths !== 1 ? "s" : ""}, and that means a lot to us.` : ""}\n\nWe've got some exciting new programming and challenges coming up that I think you'd really enjoy.${c.favoriteClassName ? ` Especially if you loved ${c.favoriteClassName} — there's more of that energy coming.` : ""}\n\nI'd love to set up a quick goal review session — just 15 minutes to catch up, see where you're at, and map out a plan that fits your schedule. No pressure at all.\n\nWould you be free for a coffee or a quick chat at the gym this week? I'll buy the coffee.\n\nLooking forward to hearing from you!`,
+    subject: `Checking in, ${c.firstName}`,
+    content: `Hi ${c.firstName},\n\nReaching out.${c.tenureMonths > 0 ? ` You've been here ${c.tenureMonths} month${c.tenureMonths !== 1 ? "s" : ""} — that's real commitment.` : ""}\n\nNew programming just dropped that fits what you've been doing.${c.favoriteClassName ? ` Especially if you liked ${c.favoriteClassName}.` : ""}\n\n15 minutes. We review your goals and adjust the plan.\n\nWhat day this week?`,
   }));
 
   const idx = Math.floor(Math.random() * variants.length);
@@ -95,28 +448,28 @@ function buildHighRiskOutreachContent(ctx: MemberContext): { content: string; su
 
   if (ctx.attendanceTrend === "declining" && ctx.attendancePrior30d > 0) {
     variants.push((c) => ({
-      subject: `Everything okay, ${c.firstName}?`,
-      content: `Hi ${c.firstName},\n\nJust wanted to check in — we noticed you've gone from ${c.attendancePrior30d}x to ${c.attendanceLast30d}x in the last month. Everything okay?\n\nLife gets busy, and we totally get it.${c.favoriteClassName ? ` Your ${c.favoriteClassName} crew is still going strong and would love to see you back.` : ""}\n\nI'd love to schedule a quick 10-minute goal review — just to check in on your progress and make sure we're helping you hit your targets. We also have some awesome upcoming events and challenges that might be right up your alley.\n\nWant to grab a quick coffee or chat this week? Let me know what works!`,
+      subject: `Everything good, ${c.firstName}?`,
+      content: `Hi ${c.firstName},\n\nNoticed your visits dropped from ${c.attendancePrior30d}x to ${c.attendanceLast30d}x this month. No judgment — life happens.${c.favoriteClassName ? ` Your ${c.favoriteClassName} crew is still at it and would be glad to see you back.` : ""}\n\nLet's do a quick 10-minute check-in. See where you're at, adjust the plan if needed. No pitch, just a conversation.\n\nWhat day works this week?`,
     }));
   }
 
   if (ctx.favoriteTimeSlot) {
     variants.push((c) => ({
-      subject: `Checking in, ${c.firstName}`,
-      content: `Hi ${c.firstName},\n\nJust wanted to reach out and see how things are going! It's been a little while since we've seen you${c.favoriteTimeSlot ? ` at the ${c.favoriteTimeSlot} sessions` : ""}, and we genuinely miss having you around.${c.tenureMonths > 0 ? `\n\nYou've been with us for ${c.tenureMonths} month${c.tenureMonths !== 1 ? "s" : ""} — that kind of commitment is impressive.` : ""}\n\nI'd love to schedule a quick goal review — even just 10 minutes to check in on your progress.${c.lastCoachName ? ` Coach ${c.lastCoachName} can work with you on a refreshed plan.` : ""}\n\nWant to grab a quick coffee or chat at the gym this week? Let me know what works for you!`,
+      subject: `Haven't seen you, ${c.firstName}`,
+      content: `Hi ${c.firstName},\n\nIt's been a while since you've been in${c.favoriteTimeSlot ? ` for the ${c.favoriteTimeSlot} sessions` : ""}.${c.tenureMonths > 0 ? ` You've been here ${c.tenureMonths} month${c.tenureMonths !== 1 ? "s" : ""} — I don't want to see that go to waste.` : ""}\n\n10-minute goal review. Quick check-in on where you're at.${c.lastCoachName ? ` Coach ${c.lastCoachName} can help reset your plan.` : ""}\n\nWhat day this week works?`,
     }));
   }
 
   if (ctx.recentPRs.length > 0) {
     variants.push((c) => ({
-      subject: `Keep the streak going, ${c.firstName}!`,
-      content: `Hi ${c.firstName},\n\nHey, congrats on those recent PRs! ${c.recentPRs[0] ? `Crushing ${c.recentPRs[0].workoutTitle}` : "That progress"} is no joke.\n\nWe've noticed things have slowed down a bit lately, and we want to make sure we're still helping you hit your goals.${c.favoriteClassName ? ` ${c.favoriteClassName} sessions are a great way to keep building on that momentum.` : ""}\n\nWant to come in for a quick goal review this week? 10 minutes, zero pressure. Just want to make sure you've got a plan that works.\n\nLet me know what day works best!`,
+      subject: `Don't lose the momentum, ${c.firstName}`,
+      content: `Hi ${c.firstName},\n\nThose recent PRs were legit — ${c.recentPRs[0] ? `${c.recentPRs[0].workoutTitle}` : "that progress"} was real work.\n\nThings have slowed down though. I want to make sure we're still helping you move forward.${c.favoriteClassName ? ` ${c.favoriteClassName} is a good way to get back in rhythm.` : ""}\n\n10 minutes this week. Quick goal review, no pressure. Just want to make sure you have a plan.\n\nWhat day works?`,
     }));
   }
 
   variants.push((c) => ({
     subject: `Checking in, ${c.firstName}`,
-    content: `Hi ${c.firstName},\n\nJust wanted to reach out and see how things are going! It's been a little while since we've seen you, and we genuinely miss having you around.${c.tenureMonths > 0 ? `\n\nYou've been part of our community for ${c.tenureMonths} month${c.tenureMonths !== 1 ? "s" : ""}, and we value that.` : ""}\n\nI'd love to schedule a quick goal review — even just 10 minutes to check in on your progress and make sure we're helping you hit your targets. We also have some awesome upcoming events and challenges that might be right up your alley.\n\nWant to grab a quick coffee or chat at the gym this week? Let me know what works for you!`,
+    content: `Hi ${c.firstName},\n\nBeen a while.${c.tenureMonths > 0 ? ` You've been here ${c.tenureMonths} month${c.tenureMonths !== 1 ? "s" : ""} — that's not nothing.` : ""}\n\n10-minute check-in. We look at where things stand, make sure the plan still fits your schedule.\n\nWhat day this week works?`,
   }));
 
   const idx = Math.floor(Math.random() * variants.length);
@@ -163,10 +516,10 @@ async function generateAtRiskMemberTasks(gymId: number): Promise<GeneratedTask[]
       }
     } else {
       content = isCritical
-        ? `Hi ${member.firstName},\n\nI was thinking about you and wanted to reach out personally. We've got some exciting new programming and challenges coming up that I think you'd really enjoy.\n\nI'd love to set up a quick goal review session — just 15 minutes to catch up, see where you're at, and map out a plan that fits your schedule. No pressure at all, just a chance to reconnect.\n\nWould you be free for a coffee or a quick chat at the gym this week? I'll buy the coffee.\n\nLooking forward to hearing from you!`
-        : `Hi ${member.firstName},\n\nJust wanted to reach out and see how things are going! It's been a little while since we've seen you, and we genuinely miss having you around.\n\nI'd love to schedule a quick goal review — even just 10 minutes to check in on your progress and make sure we're helping you hit your targets. We also have some awesome upcoming events and challenges that might be right up your alley.\n\nWant to grab a quick coffee or chat at the gym this week? Let me know what works for you!`;
+        ? `Hi ${member.firstName},\n\nNew programming just dropped — it fits what you've been doing.\n\n15 minutes. We review your goals and adjust the plan.\n\nWhat day this week works?`
+        : `Hi ${member.firstName},\n\nBeen a while. 10-minute check-in — we look at where things stand, make sure the plan still fits.\n\nWhat day this week works?`;
       subject = isCritical
-        ? `We'd love to reconnect, ${member.firstName}`
+        ? `Let's get back on track, ${member.firstName}`
         : `Checking in, ${member.firstName}`;
     }
 
@@ -177,7 +530,7 @@ async function generateAtRiskMemberTasks(gymId: number): Promise<GeneratedTask[]
       if (ctx.lastCoachName) descParts.push(`Last coach: ${ctx.lastCoachName}.`);
       if (ctx.tenureMonths > 0) descParts.push(`Member for ${ctx.tenureMonths} month${ctx.tenureMonths !== 1 ? "s" : ""}.`);
     }
-    descParts.push(isCritical ? "Reach out with a personal invitation to reconnect." : "Schedule a goal review or casual catch-up.");
+    descParts.push(isCritical ? "Call them. Personal outreach — not a mass message." : "Text or call. Quick check-in before they drift further.");
 
     tasks.push({
       gymId,
@@ -202,21 +555,21 @@ function buildStaleLeadContent(ctx: LeadContext): { content: string; subject: st
 
   if (ctx.source) {
     variants.push((c) => ({
-      subject: `Following up from ${c.source}, ${c.firstName}`,
-      content: `Hi ${c.firstName},\n\nI wanted to follow up since you reached out through ${c.source} about ${c.daysSinceCreated} day${c.daysSinceCreated !== 1 ? "s" : ""} ago.${c.notes ? ` I see you were interested in ${c.notes} — we'd love to tell you more about that.` : ""}\n\nWe'd love to have you in for a No Sweat Intro — it's a free, no-pressure consultation where we sit down, learn about your goals, and show you around the gym. It takes about 20 minutes, and there's zero obligation.\n\nWould any of these times work for you this week?\n- [Morning option]\n- [Afternoon option]\n- [Evening option]\n\nJust let me know, and I'll get you on the calendar!`,
+      subject: `Following up, ${c.firstName}`,
+      content: `Hi ${c.firstName},\n\nYou reached out through ${c.source} ${c.daysSinceCreated} day${c.daysSinceCreated !== 1 ? "s" : ""} ago.${c.notes ? ` You mentioned ${c.notes} — that's exactly what we do well.` : ""}\n\nNo Sweat Intro — 20 minutes. We learn your goals, show you the gym, you decide if it fits.\n\nPick a time this week:\n- [Morning option]\n- [Afternoon option]\n- [Evening option]\n\nLet me know and I'll lock it in.`,
     }));
   }
 
   if (ctx.notes) {
     variants.push((c) => ({
-      subject: `Still interested in checking us out, ${c.firstName}?`,
-      content: `Hi ${c.firstName},\n\nI saw that you mentioned interest in ${c.notes} when you first reached out${c.source ? ` via ${c.source}` : ""}. That's awesome — it's one of the things our members love most about training here.\n\nIt's been ${c.daysSinceCreated} day${c.daysSinceCreated !== 1 ? "s" : ""} since then, and I just wanted to make sure you didn't slip through the cracks. We'd love to set up a No Sweat Intro — a free, 20-minute consultation to learn about your goals and show you around.\n\nNo workout required (unless you want to!). What day this week works best for you?`,
+      subject: `Quick follow-up, ${c.firstName}`,
+      content: `Hi ${c.firstName},\n\nYou mentioned ${c.notes} when you reached out${c.source ? ` via ${c.source}` : ""}. It's been ${c.daysSinceCreated} day${c.daysSinceCreated !== 1 ? "s" : ""} — don't let this slip.\n\nNo Sweat Intro. 20 minutes. We talk goals and show you around.\n\nWhat day this week works?`,
     }));
   }
 
   variants.push((c) => ({
     subject: `Let's connect, ${c.firstName}`,
-    content: `Hi ${c.firstName},\n\nI wanted to follow up and see if you're still interested in checking us out!${c.source ? ` It's been ${c.daysSinceCreated} day${c.daysSinceCreated !== 1 ? "s" : ""} since you reached out through ${c.source}.` : ` It's been ${c.daysSinceCreated} day${c.daysSinceCreated !== 1 ? "s" : ""} since you inquired.`}\n\nWe'd love to have you in for a No Sweat Intro — it's a free, no-pressure consultation where we sit down, learn about your goals, and show you around the gym. It's completely casual, takes about 20 minutes, and there's zero obligation.\n\nWe find it's the best way for people to see if we're the right fit. No workout required (unless you want to!).\n\nWould any of these times work for you this week?\n- [Morning option]\n- [Afternoon option]\n- [Evening option]\n\nJust let me know, and I'll get you on the calendar!`,
+    content: `Hi ${c.firstName},\n\n${c.source ? `It's been ${c.daysSinceCreated} day${c.daysSinceCreated !== 1 ? "s" : ""} since you reached out through ${c.source}.` : `It's been ${c.daysSinceCreated} day${c.daysSinceCreated !== 1 ? "s" : ""} since you inquired.`} Let's connect.\n\nNo Sweat Intro — 20 minutes. We learn your goals and you see if it fits.\n\nPick a time this week:\n- [Morning option]\n- [Afternoon option]\n- [Evening option]\n\nLet me know and I'll get you on the calendar.`,
   }));
 
   const idx = Math.floor(Math.random() * variants.length);
@@ -256,12 +609,12 @@ async function generateStaleLeadTasks(gymId: number): Promise<GeneratedTask[]> {
       descParts.push(`${ctx.daysSinceCreated} day${ctx.daysSinceCreated !== 1 ? "s" : ""} ago`);
       descParts.push(`but hasn't booked yet (stage: ${ctx.stage}).`);
       if (ctx.notes) descParts.push(`Interest: ${ctx.notes}.`);
-      descParts.push("Invite them to a No Sweat Intro before the lead goes cold.");
+      descParts.push("Follow up now — every hour you wait drops the close rate.");
       description = descParts.join(" ");
     } else {
-      content = `Hi ${lead.firstName},\n\nI wanted to follow up and see if you're still interested in checking us out!\n\nWe'd love to have you in for a No Sweat Intro — it's a free, no-pressure consultation where we sit down, learn about your goals, and show you around the gym. It's completely casual, takes about 20 minutes, and there's zero obligation.\n\nWe find it's the best way for people to see if we're the right fit. No workout required (unless you want to!).\n\nWould any of these times work for you this week?\n- [Morning option]\n- [Afternoon option]\n- [Evening option]\n\nJust let me know, and I'll get you on the calendar!`;
+      content = `Hi ${lead.firstName},\n\nFollowing up on your inquiry. No Sweat Intro — 20 minutes. We learn your goals and you see if it fits.\n\nPick a time this week:\n- [Morning option]\n- [Afternoon option]\n- [Evening option]\n\nLet me know and I'll lock it in.`;
       subject = `Let's connect, ${lead.firstName}`;
-      description = `${lead.firstName} ${lead.lastName} was contacted via ${lead.source} but hasn't booked yet. Invite them to a No Sweat Intro before the lead goes cold.`;
+      description = `${lead.firstName} ${lead.lastName} reached out via ${lead.source} but hasn't booked. Follow up now — every hour you wait drops the close rate.`;
     }
 
     tasks.push({
@@ -287,14 +640,14 @@ function buildBillingContent(ctx: MemberContext, sub: { planName: string; amount
 
   if (ctx.tenureMonths >= 6) {
     variants.push((c) => ({
-      subject: `Quick heads-up about your account, ${c.firstName}`,
-      content: `Hi ${c.firstName},\n\nYou've been with us for ${c.tenureMonths} months now, and we truly appreciate your commitment. I wanted to give you a personal heads-up — it looks like there's a small hiccup with the payment method on file for your ${sub.planName} membership.\n\nThese things happen all the time (expired cards, bank updates, etc.), and it's super easy to fix. We just want to make sure everything stays smooth so you don't miss any sessions${c.favoriteClassName ? ` — especially ${c.favoriteClassName}` : ""}.\n\nYou can update your info anytime, or just give us a call and we'll sort it out together in 2 minutes.\n\nThanks so much for being a valued member!`,
+      subject: `Heads up on your account, ${c.firstName}`,
+      content: `Hi ${c.firstName},\n\nYou've been here ${c.tenureMonths} months — I appreciate that. Quick heads up: your payment for ${sub.planName} didn't go through.\n\nUsually an expired card. Takes 2 minutes to fix — update online or call us and we'll handle it together.${c.favoriteClassName ? ` Don't want you missing ${c.favoriteClassName}.` : ""}\n\nThanks for taking care of it.`,
     }));
   }
 
   variants.push((c) => ({
-    subject: `Quick heads-up about your account, ${c.firstName}`,
-    content: `Hi ${c.firstName},\n\nHope you're doing well! I wanted to give you a quick heads-up — it looks like there might be a small hiccup with the payment method on file for your ${sub.planName} membership.\n\nThese things happen all the time (expired cards, bank updates, etc.), and it's super easy to fix. We just want to make sure everything stays smooth so you don't miss any sessions.\n\nYou can update your info anytime, or just give us a call and we'll sort it out together in 2 minutes.${c.tenureMonths > 0 ? `\n\nYou've been with us for ${c.tenureMonths} month${c.tenureMonths !== 1 ? "s" : ""} — we want to keep it going!` : ""}\n\nThanks so much, and see you in class!`,
+    subject: `Heads up on your account, ${c.firstName}`,
+    content: `Hi ${c.firstName},\n\nQuick heads up — your payment for ${sub.planName} didn't go through. Usually just an expired card.\n\nUpdate your info online or give us a call — takes 2 minutes.${c.tenureMonths > 0 ? ` You've been here ${c.tenureMonths} month${c.tenureMonths !== 1 ? "s" : ""} — let's keep it going.` : ""}\n\nThanks for taking care of it.`,
   }));
 
   const idx = Math.floor(Math.random() * variants.length);
@@ -330,15 +683,15 @@ async function generateFailedPaymentTasks(gymId: number): Promise<GeneratedTask[
       content = generated.content;
       subject = generated.subject;
     } else {
-      content = `Hi ${member.firstName},\n\nHope you're doing well! I wanted to give you a quick heads-up — it looks like there might be a small hiccup with the payment method on file for your membership.\n\nThese things happen all the time (expired cards, bank updates, etc.), and it's super easy to fix. We just want to make sure everything stays smooth so you don't miss any sessions.\n\nYou can update your info anytime, or just give us a call and we'll sort it out together in 2 minutes.\n\nThanks so much, and see you in class!`;
-      subject = `Quick heads-up about your account, ${member.firstName}`;
+      content = `Hi ${member.firstName},\n\nQuick heads up — your payment didn't go through. Usually just an expired card.\n\nUpdate your info online or give us a call — takes 2 minutes. Want to make sure you don't miss any sessions.\n\nThanks for taking care of it.`;
+      subject = `Heads up on your account, ${member.firstName}`;
     }
 
     tasks.push({
       gymId,
       type: "billing",
       title: `Payment issue: ${member.firstName} ${member.lastName}`,
-      description: `${member.firstName} ${member.lastName}'s subscription (${sub.planName}) has a payment issue.${ctx && ctx.tenureMonths > 0 ? ` Member for ${ctx.tenureMonths} month${ctx.tenureMonths !== 1 ? "s" : ""}.` : ""} Reach out warmly to resolve and keep them active.`,
+      description: `${member.firstName} ${member.lastName}'s ${sub.planName} payment failed.${ctx && ctx.tenureMonths > 0 ? ` Member for ${ctx.tenureMonths} month${ctx.tenureMonths !== 1 ? "s" : ""}.` : ""} Send the update link today — most fix it within 48 hours.`,
       priority: "high",
       status: "pending",
       targetId: member.id,
@@ -352,19 +705,92 @@ async function generateFailedPaymentTasks(gymId: number): Promise<GeneratedTask[
   return tasks;
 }
 
+async function generateCelebrationTasks(gymId: number, cooldownDays: number): Promise<GeneratedTask[]> {
+  const [gym] = await db.select({ name: gymsTable.name }).from(gymsTable).where(eq(gymsTable.id, gymId));
+  const gymName = gym?.name || "Your Gym";
+
+  const milestones = await detectMilestones(gymId, cooldownDays);
+  const tasks: GeneratedTask[] = [];
+
+  for (const milestone of milestones) {
+    const ctx = await assembleMemberContext(milestone.memberId, gymId);
+    const celebContent = buildCelebrationContent(
+      milestone.milestoneType,
+      milestone.detail,
+      milestone.memberFirstName,
+      milestone.memberLastName,
+      milestone.value,
+      ctx,
+      gymName
+    );
+
+    let personalizationMeta: string | undefined;
+    if (ctx) {
+      const meta = buildMemberPersonalizationMeta(ctx);
+      meta.dataPoints.push(`Milestone: ${milestone.detail}`);
+      meta.hooks.push("celebration");
+      personalizationMeta = JSON.stringify(meta);
+    }
+
+    tasks.push({
+      gymId,
+      type: "celebration",
+      subtype: milestone.milestoneType,
+      title: celebContent.title,
+      description: celebContent.description,
+      priority: "low",
+      status: "pending",
+      targetId: milestone.memberId,
+      targetType: "member",
+      aiContent: celebContent.content,
+      subject: celebContent.subject,
+      personalizationMeta,
+      _sortKey: PRIORITY_ORDER.celebration,
+    });
+  }
+
+  return tasks;
+}
+
 export async function generateAiTasks(gymId: number): Promise<{ created: number; tasks: any[] }> {
   await refreshRiskScores(gymId);
 
-  const [atRiskTasks, leadTasks, billingTasks] = await Promise.all([
+  const [atRiskTasks, leadTasks, billingTasks, commStyle] = await Promise.all([
     generateAtRiskMemberTasks(gymId),
     generateStaleLeadTasks(gymId),
     generateFailedPaymentTasks(gymId),
+    fetchCommunicationStyle(gymId),
   ]);
 
-  const allCandidates = [...atRiskTasks, ...leadTasks, ...billingTasks];
+  let celebrationTasks: GeneratedTask[] = [];
+  try {
+    const { aiOperatorSettingsTable } = await import("@workspace/db");
+    const [settings] = await db.select().from(aiOperatorSettingsTable).where(eq(aiOperatorSettingsTable.gymId, gymId));
+    const cooldownCelebrations = settings?.cooldownCelebrations ?? 90;
+    celebrationTasks = await generateCelebrationTasks(gymId, cooldownCelebrations);
+  } catch (err: any) {
+    console.error(`[ai-task-generation] Celebration task generation error for gym ${gymId}:`, err.message);
+  }
+
+  const allCandidates = [...atRiskTasks, ...leadTasks, ...billingTasks, ...celebrationTasks];
+
+  if (commStyle.rules.length > 0 || commStyle.tone !== "casual_friendly") {
+    for (const task of allCandidates) {
+      if (task.aiContent && task.subject) {
+        const voiceApplied = applyOwnerVoice(task.aiContent, task.subject, commStyle);
+        task.aiContent = voiceApplied.content;
+        task.subject = voiceApplied.subject;
+      }
+    }
+  }
 
   if (allCandidates.length === 0) {
-    return { created: 0, tasks: [] };
+    const checkedCategories = ["at-risk member outreach", "stale lead follow-up", "failed payment recovery", "member celebrations"];
+    return {
+      created: 0,
+      tasks: [],
+      reason: `Checked ${checkedCategories.join(", ")} — nothing flagged. Metrics look clean. Use the time to build.`,
+    };
   }
 
   allCandidates.sort((a, b) => (a._sortKey ?? 99) - (b._sortKey ?? 99));
@@ -377,7 +803,11 @@ export async function generateAiTasks(gymId: number): Promise<{ created: number;
   const slotsAvailable = Math.max(0, MAX_PENDING_TASKS - currentPending);
 
   if (slotsAvailable === 0) {
-    return { created: 0, tasks: [] };
+    return {
+      created: 0,
+      tasks: [],
+      reason: `${currentPending} tasks already pending. Handle those first before generating new ones.`,
+    };
   }
 
   const toInsert = allCandidates.slice(0, slotsAvailable).map(({ _sortKey, ...task }) => task);
@@ -403,6 +833,11 @@ export async function generateAiTasks(gymId: number): Promise<{ created: number;
       sql`${aiTasksTable.id} IN (${sql.join(inserted.map(t => sql`${t.id}`), sql`, `)})`
     )
   );
+
+  for (const t of finalTasks) {
+    if (t.description) assertVoiceCompliance(t.description);
+    if (t.aiContent) assertVoiceCompliance(t.aiContent);
+  }
 
   return { created: inserted.length, tasks: finalTasks };
 }

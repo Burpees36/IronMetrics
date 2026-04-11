@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { OccupancyBadge, getClassColors, HOUR_HEIGHT, CALENDAR_START_HOUR, CALENDAR_END_HOUR, TYPE_LABELS, WEEKDAY_NAMES, to24Hour, from24Hour } from "./schedule/helpers";
 import { ScheduleDialogs } from "./schedule/ScheduleDialogs";
+import { AppointmentsPanel } from "./schedule/AppointmentsPanel";
 
 export function Schedule() {
   const { activeGymId } = useGym();
@@ -56,6 +57,7 @@ export function Schedule() {
   const [memberSearch, setMemberSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [coachFilter, setCoachFilter] = useState<string>("all");
+  const [scheduleView, setScheduleView] = useState<"classes" | "appointments">("classes");
 
   const [formData, setFormData] = useState({
     name: "",
@@ -637,8 +639,22 @@ export function Schedule() {
           <button onClick={goToday} className="px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary text-xs font-semibold hover:bg-primary/20 transition-colors">
             Today
           </button>
+          <div className="flex items-center gap-0.5 bg-muted/30 rounded-lg p-0.5 ml-2">
+            <button
+              onClick={() => setScheduleView("classes")}
+              className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${scheduleView === "classes" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+            >
+              Classes
+            </button>
+            <button
+              onClick={() => setScheduleView("appointments")}
+              className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${scheduleView === "appointments" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+            >
+              Appointments
+            </button>
+          </div>
         </div>
-        <div className="flex items-center gap-2 w-full sm:w-auto">
+        {scheduleView === "classes" && <div className="flex items-center gap-2 w-full sm:w-auto">
           {usedTypes.length > 0 && (
             <div className="hidden lg:flex items-center gap-3 mr-3">
               {usedTypes.map((type) => {
@@ -732,9 +748,17 @@ export function Schedule() {
               <span>New Class</span>
             </button>
           )}
-        </div>
+        </div>}
       </header>
 
+      {scheduleView === "appointments" ? (
+        <AppointmentsPanel
+          weekOffset={weekOffset}
+          currentWeekStart={currentWeekStart}
+          canManage={canManage}
+          canOperate={canOperate}
+        />
+      ) : (<>
       <div className="flex-1 bg-card/50 border border-border/40 rounded-2xl overflow-hidden flex flex-col min-h-0 backdrop-blur-sm">
         <div className="grid shrink-0 border-b border-border/40" style={{ gridTemplateColumns: '52px repeat(7, 1fr)' }}>
           <div className="border-r border-border/30" />
@@ -995,6 +1019,7 @@ export function Schedule() {
         applyTemplatePending={applyTemplateMutation.isPending}
         days={days}
       />
+      </>)}
     </div>
   );
 }

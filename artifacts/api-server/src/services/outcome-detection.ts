@@ -102,6 +102,62 @@ async function detectLeadOutcome(task: any): Promise<OutcomeResult | null> {
   return null;
 }
 
+const CELEBRATION_OBSERVATION_DAYS = 7;
+
+async function detectCelebrationOutcome(task: any): Promise<OutcomeResult | null> {
+  if (!task.targetId || task.targetType !== "member") return null;
+
+  const [member] = await db.select().from(membersTable).where(
+    and(eq(membersTable.id, task.targetId), eq(membersTable.gymId, task.gymId))
+  );
+  if (!member) {
+    return { taskId: task.id, outcome: "no_change", revenueImpact: null };
+  }
+
+  const actionedAt = new Date(task.actionedAt);
+  const now = new Date();
+  const daysSinceAction = Math.floor((now.getTime() - actionedAt.getTime()) / (1000 * 60 * 60 * 24));
+  const windowEnd = new Date(actionedAt.getTime() + CELEBRATION_OBSERVATION_DAYS * 24 * 60 * 60 * 1000);
+
+  if (member.lastVisitDate) {
+    const lastVisit = new Date(member.lastVisitDate);
+    if (lastVisit > actionedAt && lastVisit <= windowEnd) {
+      return {
+        taskId: task.id,
+        outcome: "positive_engagement",
+        revenueImpact: null,
+      };
+    }
+  }
+
+  const activeSubs = await db.select().from(subscriptionsTable).where(
+    and(
+      eq(subscriptionsTable.memberId, task.targetId),
+      eq(subscriptionsTable.gymId, task.gymId),
+      eq(subscriptionsTable.status, "active")
+    )
+  );
+  const renewed = activeSubs.find(s => {
+    if (!s.updatedAt) return false;
+    const updatedAt = new Date(s.updatedAt);
+    return updatedAt > actionedAt && updatedAt <= windowEnd;
+  });
+  if (renewed) {
+    const amount = parseFloat(renewed.amount);
+    return {
+      taskId: task.id,
+      outcome: "positive_engagement",
+      revenueImpact: amount > 0 ? String(amount) : null,
+    };
+  }
+
+  if (daysSinceAction >= CELEBRATION_OBSERVATION_DAYS) {
+    return { taskId: task.id, outcome: "no_change", revenueImpact: null };
+  }
+
+  return null;
+}
+
 export async function runOutcomeDetection(): Promise<{ evaluated: number; updated: number }> {
   const pendingTasks = await db.select().from(aiTasksTable).where(
     and(
@@ -122,6 +178,8 @@ export async function runOutcomeDetection(): Promise<{ evaluated: number; update
         result = await detectBillingOutcome(task);
       } else if (task.type === "leads") {
         result = await detectLeadOutcome(task);
+      } else if (task.type === "celebration") {
+        result = await detectCelebrationOutcome(task);
       } else {
         const actionedAt = new Date(task.actionedAt!);
         const daysSinceAction = Math.floor((Date.now() - actionedAt.getTime()) / (1000 * 60 * 60 * 24));

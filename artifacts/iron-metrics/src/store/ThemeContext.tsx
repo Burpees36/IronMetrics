@@ -11,7 +11,7 @@ interface ThemeContextValue {
 const ThemeContext = createContext<ThemeContextValue | undefined>(undefined);
 
 function getInitialTheme(): Theme {
-  const stored = localStorage.getItem("iron-metrics-theme");
+  const stored = localStorage.getItem("forgeos-theme");
   if (stored === "light" || stored === "dark") return stored;
   if (window.matchMedia("(prefers-color-scheme: light)").matches) return "light";
   return "dark";
@@ -27,7 +27,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     } else {
       root.classList.remove("dark");
     }
-    localStorage.setItem("iron-metrics-theme", theme);
+    localStorage.setItem("forgeos-theme", theme);
   }, [theme]);
 
   const toggleTheme = () => setThemeState((t) => (t === "dark" ? "light" : "dark"));

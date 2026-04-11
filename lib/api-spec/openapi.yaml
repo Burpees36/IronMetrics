@@ -2,7 +2,7 @@ openapi: 3.1.0
 info:
   title: Api
   version: 0.1.0
-  description: Iron Metrics Gym Management Platform API
+  description: ForgeOS Gym Management Platform API
 servers:
   - url: /api
     description: Base API path
@@ -36,11 +36,13 @@ tags:
   - name: documents
     description: Documents and waivers
   - name: intelligence
-    description: Iron Metrics intelligence engine
+    description: Iron Metrics intelligence engine (powered by ForgeOS)
   - name: ai-operator
     description: AI operator tools
   - name: reporting
     description: Reports and dashboards
+  - name: appointments
+    description: Personal training and appointment scheduling
   - name: Storage
     description: Object storage upload and serving endpoints.
 
@@ -234,6 +236,78 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Gym"
+    delete:
+      operationId: deleteGym
+      tags: [gyms]
+      summary: Permanently delete a gym and all associated data (owner only)
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Gym deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                required:
+                  - success
+        "403":
+          description: Forbidden - owner only
+        "404":
+          description: Not found
+
+  /gyms/{gymId}/deactivate:
+    post:
+      operationId: deactivateGym
+      tags: [gyms]
+      summary: Deactivate a gym (owner only)
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Deactivated gym
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Gym"
+        "403":
+          description: Forbidden - owner only
+        "404":
+          description: Not found
+
+  /gyms/{gymId}/reactivate:
+    post:
+      operationId: reactivateGym
+      tags: [gyms]
+      summary: Reactivate a deactivated gym (owner only)
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Reactivated gym
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Gym"
+        "403":
+          description: Forbidden - owner only
+        "404":
+          description: Not found
 
   # MEMBERS
   /gyms/{gymId}/members:
@@ -263,6 +337,11 @@ paths:
           in: query
           schema:
             type: integer
+        - name: ids
+          in: query
+          schema:
+            type: string
+          description: Comma-separated list of member IDs to filter by
       responses:
         "200":
           description: List of members
@@ -452,6 +531,41 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/TimelineEvent"
+
+  /gyms/{gymId}/members/{memberId}/send-sms:
+    post:
+      operationId: sendMemberSms
+      tags: [members]
+      summary: Send an SMS text message to a member
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: memberId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - message
+              properties:
+                message:
+                  type: string
+      responses:
+        "200":
+          description: SMS sent successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SendSmsResponse"
 
   # LEADS / CRM
   /gyms/{gymId}/leads:
@@ -675,6 +789,41 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/LeadActivity"
+
+  /gyms/{gymId}/leads/{leadId}/send-sms:
+    post:
+      operationId: sendLeadSms
+      tags: [leads]
+      summary: Send an SMS text message to a lead
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: leadId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - message
+              properties:
+                message:
+                  type: string
+      responses:
+        "200":
+          description: SMS sent successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SendSmsResponse"
 
   # STAFF
   /gyms/{gymId}/staff:
@@ -2780,6 +2929,161 @@ paths:
               schema:
                 $ref: "#/components/schemas/WorkoutResult"
 
+  /gyms/{gymId}/programming/preferences:
+    get:
+      operationId: getProgrammingPreferences
+      tags: [programming]
+      summary: Get programming preferences for a gym
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Programming preferences
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProgrammingPreferences"
+    put:
+      operationId: updateProgrammingPreferences
+      tags: [programming]
+      summary: Update programming preferences for a gym
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateProgrammingPreferencesBody"
+      responses:
+        "200":
+          description: Updated programming preferences
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProgrammingPreferences"
+        "201":
+          description: Created programming preferences
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProgrammingPreferences"
+
+  /gyms/{gymId}/programming/generate-day:
+    post:
+      operationId: generateProgrammingDay
+      tags: [programming]
+      summary: AI-generate a single day of programming
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [date]
+              properties:
+                date:
+                  type: string
+                  format: date
+                overwrite:
+                  type: boolean
+                  default: false
+      responses:
+        "201":
+          description: Generated programming day
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProgrammingDayWithSections"
+        "409":
+          description: Day already exists (set overwrite to replace)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "500":
+          description: Generation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
+  /gyms/{gymId}/programming/generate-week:
+    post:
+      operationId: generateProgrammingWeek
+      tags: [programming]
+      summary: AI-generate a full week of programming
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [startDate]
+              properties:
+                startDate:
+                  type: string
+                  format: date
+      responses:
+        "201":
+          description: Generated week of programming
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenerateWeekResponse"
+        "500":
+          description: Generation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
+  /gyms/{gymId}/programming/auto-publish:
+    post:
+      operationId: triggerAutoPublish
+      tags: [programming]
+      summary: Trigger auto-publish for upcoming draft programming
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Auto-publish result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  published:
+                    type: integer
+                  targetDate:
+                    type: string
+                  message:
+                    type: string
+
   # COMMUNICATIONS
   /gyms/{gymId}/announcements:
     get:
@@ -2931,6 +3235,85 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/Intervention"
+
+  /gyms/{gymId}/intelligence/dismissed-interventions:
+    get:
+      operationId: getDismissedInterventions
+      tags: [intelligence]
+      summary: Get dismissed intervention IDs for a gym
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of dismissed intervention IDs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string
+    post:
+      operationId: dismissIntervention
+      tags: [intelligence]
+      summary: Dismiss a recommended intervention
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                interventionId:
+                  type: string
+              required:
+                - interventionId
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+
+  /gyms/{gymId}/intelligence/dismissed-interventions/{interventionId}:
+    delete:
+      operationId: restoreIntervention
+      tags: [intelligence]
+      summary: Restore a previously dismissed intervention
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: interventionId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
 
   /gyms/{gymId}/intelligence/cohorts:
     get:
@@ -3199,6 +3582,74 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/SendEmailResponse"
+
+  /gyms/{gymId}/ai/tasks/{taskId}/send-sms:
+    post:
+      operationId: sendAiTaskSms
+      tags: [ai-operator]
+      summary: Send the AI task content as a text message to the target member or lead
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: SMS sent successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SendSmsResponse"
+
+  /gyms/{gymId}/sms/test:
+    post:
+      operationId: sendTestSms
+      tags: [gyms]
+      summary: Send a test SMS to verify Twilio configuration
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SendTestSmsBody"
+      responses:
+        "200":
+          description: Test SMS sent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SendSmsResponse"
+
+  /gyms/{gymId}/sms/status:
+    get:
+      operationId: getSmsStatus
+      tags: [gyms]
+      summary: Check if SMS sending is configured for this gym
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: SMS configuration status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SmsStatusResponse"
 
   /gyms/{gymId}/ai/impact:
     get:
@@ -3932,6 +4383,300 @@ paths:
               schema:
                 $ref: "#/components/schemas/CheckinStatus"
 
+  /gyms/{gymId}/appointment-types:
+    get:
+      operationId: listAppointmentTypes
+      tags: [appointments]
+      summary: List appointment types for a gym
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of appointment types
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AppointmentType"
+    post:
+      operationId: createAppointmentType
+      tags: [appointments]
+      summary: Create an appointment type
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateAppointmentTypeBody"
+      responses:
+        "201":
+          description: Created appointment type
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AppointmentType"
+
+  /gyms/{gymId}/appointment-types/{typeId}:
+    patch:
+      operationId: updateAppointmentType
+      tags: [appointments]
+      summary: Update an appointment type
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: typeId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateAppointmentTypeBody"
+      responses:
+        "200":
+          description: Updated appointment type
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AppointmentType"
+    delete:
+      operationId: deleteAppointmentType
+      tags: [appointments]
+      summary: Delete an appointment type
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: typeId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /gyms/{gymId}/coach-availability:
+    get:
+      operationId: listCoachAvailability
+      tags: [appointments]
+      summary: List coach availability slots
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: coachId
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of availability slots
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CoachAvailabilitySlot"
+    post:
+      operationId: createCoachAvailability
+      tags: [appointments]
+      summary: Create a coach availability slot
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCoachAvailabilityBody"
+      responses:
+        "201":
+          description: Created availability slot
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CoachAvailabilitySlot"
+
+  /gyms/{gymId}/coach-availability/{slotId}:
+    delete:
+      operationId: deleteCoachAvailability
+      tags: [appointments]
+      summary: Delete a coach availability slot
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: slotId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /gyms/{gymId}/appointments:
+    get:
+      operationId: listAppointments
+      tags: [appointments]
+      summary: List appointments
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: startDate
+          in: query
+          schema:
+            type: string
+        - name: endDate
+          in: query
+          schema:
+            type: string
+        - name: coachId
+          in: query
+          schema:
+            type: integer
+        - name: memberId
+          in: query
+          schema:
+            type: integer
+        - name: status
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of appointments
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Appointment"
+    post:
+      operationId: createAppointment
+      tags: [appointments]
+      summary: Book an appointment
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateAppointmentBody"
+      responses:
+        "201":
+          description: Created appointment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Appointment"
+
+  /gyms/{gymId}/appointments/{appointmentId}:
+    get:
+      operationId: getAppointment
+      tags: [appointments]
+      summary: Get appointment details
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: appointmentId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Appointment details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Appointment"
+    patch:
+      operationId: updateAppointment
+      tags: [appointments]
+      summary: Update an appointment
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: appointmentId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateAppointmentBody"
+      responses:
+        "200":
+          description: Updated appointment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Appointment"
+    delete:
+      operationId: deleteAppointment
+      tags: [appointments]
+      summary: Delete an appointment
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: appointmentId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
 components:
   schemas:
     HealthStatus:
@@ -4002,6 +4747,25 @@ components:
           type: boolean
         autoSuspendBufferDays:
           type: integer
+        communicationStyleTone:
+          type: string
+        communicationStyleRules:
+          type: array
+          items:
+            type: string
+        communicationStyleSamples:
+          type: array
+          items:
+            type: string
+        smsEnabled:
+          type: boolean
+        twilioPhoneNumber:
+          type: ["string", "null"]
+        isActive:
+          type: boolean
+        deactivatedAt:
+          type: ["string", "null"]
+          format: date-time
         memberCount:
           type: integer
         activeCount:
@@ -4017,6 +4781,7 @@ components:
         - memberCount
         - activeCount
         - createdAt
+        - isActive
 
     CreateGymBody:
       type: object
@@ -4076,6 +4841,24 @@ components:
           type: boolean
         autoSuspendBufferDays:
           type: integer
+        communicationStyleTone:
+          type: string
+        communicationStyleRules:
+          type: array
+          items:
+            type: string
+        communicationStyleSamples:
+          type: array
+          items:
+            type: string
+        smsEnabled:
+          type: boolean
+        twilioAccountSid:
+          type: ["string", "null"]
+        twilioAuthToken:
+          type: ["string", "null"]
+        twilioPhoneNumber:
+          type: ["string", "null"]
 
     Member:
       type: object
@@ -5714,6 +6497,89 @@ components:
       required:
         - sectionIds
 
+    ProgrammingPreferences:
+      type: object
+      properties:
+        id:
+          type: integer
+        gymId:
+          type: integer
+        methodology:
+          type: string
+        structureTemplate:
+          type: array
+          items:
+            type: string
+        equipment:
+          type: array
+          items:
+            type: string
+        constraints:
+          type: ["string", "null"]
+        defaultTimeDomains:
+          type: object
+          additionalProperties:
+            type: string
+        autoPublishEnabled:
+          type: boolean
+        autoPublishTime:
+          type: ["string", "null"]
+        autoPublishLeadDays:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - gymId
+        - methodology
+        - structureTemplate
+        - equipment
+
+    UpdateProgrammingPreferencesBody:
+      type: object
+      properties:
+        methodology:
+          type: string
+        structureTemplate:
+          type: array
+          items:
+            type: string
+        equipment:
+          type: array
+          items:
+            type: string
+        constraints:
+          type: ["string", "null"]
+        defaultTimeDomains:
+          type: object
+          additionalProperties:
+            type: string
+        autoPublishEnabled:
+          type: boolean
+        autoPublishTime:
+          type: ["string", "null"]
+        autoPublishLeadDays:
+          type: integer
+
+    GenerateWeekResponse:
+      type: object
+      properties:
+        days:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProgrammingDayWithSections"
+        generated:
+          type: integer
+        skipped:
+          type: integer
+      required:
+        - days
+        - generated
+        - skipped
+
     Announcement:
       type: object
       properties:
@@ -5997,6 +6863,11 @@ components:
           type: ["number", "null"]
         affectedMembers:
           type: ["integer", "null"]
+        affectedMemberIds:
+          type: array
+          nullable: true
+          items:
+            type: integer
         actions:
           type: array
           items:
@@ -6277,6 +7148,9 @@ components:
         actionedAt:
           type: ["string", "null"]
           format: date-time
+        channel:
+          type: string
+          enum: [email, sms, both]
         autoSent:
           type: boolean
         createdAt:
@@ -6337,6 +7211,8 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/AiTask"
+        reason:
+          type: string
       required:
         - created
         - tasks
@@ -6428,17 +7304,57 @@ components:
           type: boolean
         autopilotLeads:
           type: boolean
+        autopilotCelebrations:
+          type: boolean
+        channelOutreach:
+          type: string
+          enum: [email, sms, both]
+        channelBilling:
+          type: string
+          enum: [email, sms, both]
+        channelLeads:
+          type: string
+          enum: [email, sms, both]
+        channelCelebrations:
+          type: string
+          enum: [email, sms, both]
         cooldownDays:
+          type: integer
+        cooldownOutreach:
+          type: integer
+        cooldownBilling:
+          type: integer
+        cooldownLeads:
+          type: integer
+        cooldownCelebrations:
           type: integer
         digestFrequency:
           type: string
           enum: [daily, weekly, disabled]
+        briefingEmailEnabled:
+          type: boolean
+        briefingDeliveryHour:
+          type: integer
+        briefingSmsEnabled:
+          type: boolean
       required:
         - autopilotOutreach
         - autopilotBilling
         - autopilotLeads
+        - autopilotCelebrations
+        - channelOutreach
+        - channelBilling
+        - channelLeads
+        - channelCelebrations
         - cooldownDays
+        - cooldownOutreach
+        - cooldownBilling
+        - cooldownLeads
+        - cooldownCelebrations
         - digestFrequency
+        - briefingEmailEnabled
+        - briefingDeliveryHour
+        - briefingSmsEnabled
 
     UpdateAutopilotSettingsBody:
       type: object
@@ -6449,13 +7365,51 @@ components:
           type: boolean
         autopilotLeads:
           type: boolean
+        autopilotCelebrations:
+          type: boolean
+        channelOutreach:
+          type: string
+          enum: [email, sms, both]
+        channelBilling:
+          type: string
+          enum: [email, sms, both]
+        channelLeads:
+          type: string
+          enum: [email, sms, both]
+        channelCelebrations:
+          type: string
+          enum: [email, sms, both]
         cooldownDays:
           type: integer
           minimum: 1
           maximum: 90
+        cooldownOutreach:
+          type: integer
+          minimum: 1
+          maximum: 90
+        cooldownBilling:
+          type: integer
+          minimum: 1
+          maximum: 90
+        cooldownLeads:
+          type: integer
+          minimum: 1
+          maximum: 90
+        cooldownCelebrations:
+          type: integer
+          minimum: 1
+          maximum: 365
         digestFrequency:
           type: string
           enum: [daily, weekly, disabled]
+        briefingEmailEnabled:
+          type: boolean
+        briefingDeliveryHour:
+          type: integer
+          minimum: 4
+          maximum: 10
+        briefingSmsEnabled:
+          type: boolean
 
     AiLastScanResponse:
       type: object
@@ -7221,6 +8175,241 @@ components:
           type: string
         metadata:
           $ref: '#/components/schemas/UploadUrlRequest'
+    SendSmsResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        messageSid:
+          type: ["string", "null"]
+        recipientPhone:
+          type: string
+        recipientName:
+          type: string
+      required:
+        - success
+        - recipientPhone
+        - recipientName
+
+    SendTestSmsBody:
+      type: object
+      properties:
+        to:
+          type: string
+      required:
+        - to
+
+    SmsStatusResponse:
+      type: object
+      properties:
+        configured:
+          type: boolean
+        smsEnabled:
+          type: boolean
+        twilioPhoneNumber:
+          type: ["string", "null"]
+      required:
+        - configured
+        - smsEnabled
+
+    AppointmentType:
+      type: object
+      properties:
+        id:
+          type: integer
+        gymId:
+          type: integer
+        name:
+          type: string
+        description:
+          type: ["string", "null"]
+        durationMinutes:
+          type: integer
+        color:
+          type: string
+        isFree:
+          type: boolean
+        price:
+          type: ["integer", "null"]
+        isActive:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - gymId
+        - name
+        - durationMinutes
+        - color
+        - isFree
+        - isActive
+        - createdAt
+
+    CreateAppointmentTypeBody:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: ["string", "null"]
+        durationMinutes:
+          type: integer
+        color:
+          type: string
+        isFree:
+          type: boolean
+        price:
+          type: ["integer", "null"]
+      required:
+        - name
+
+    UpdateAppointmentTypeBody:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: ["string", "null"]
+        durationMinutes:
+          type: integer
+        color:
+          type: string
+        isFree:
+          type: boolean
+        price:
+          type: ["integer", "null"]
+        isActive:
+          type: boolean
+
+    CoachAvailabilitySlot:
+      type: object
+      properties:
+        id:
+          type: integer
+        gymId:
+          type: integer
+        coachId:
+          type: integer
+        dayOfWeek:
+          type: integer
+        startTime:
+          type: string
+        endTime:
+          type: string
+        isActive:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - gymId
+        - coachId
+        - dayOfWeek
+        - startTime
+        - endTime
+        - isActive
+        - createdAt
+
+    CreateCoachAvailabilityBody:
+      type: object
+      properties:
+        coachId:
+          type: integer
+        dayOfWeek:
+          type: integer
+        startTime:
+          type: string
+        endTime:
+          type: string
+      required:
+        - coachId
+        - dayOfWeek
+        - startTime
+        - endTime
+
+    Appointment:
+      type: object
+      properties:
+        id:
+          type: integer
+        gymId:
+          type: integer
+        appointmentTypeId:
+          type: integer
+        coachId:
+          type: integer
+        coachName:
+          type: ["string", "null"]
+        memberId:
+          type: ["integer", "null"]
+        memberName:
+          type: ["string", "null"]
+        leadId:
+          type: ["integer", "null"]
+        leadName:
+          type: ["string", "null"]
+        startTime:
+          type: string
+          format: date-time
+        endTime:
+          type: string
+          format: date-time
+        status:
+          type: string
+          enum: [scheduled, completed, cancelled, no_show]
+        notes:
+          type: ["string", "null"]
+        reminderSent24h:
+          type: boolean
+        reminderSent1h:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - gymId
+        - appointmentTypeId
+        - coachId
+        - startTime
+        - endTime
+        - status
+        - createdAt
+
+    CreateAppointmentBody:
+      type: object
+      properties:
+        appointmentTypeId:
+          type: integer
+        coachId:
+          type: ["integer", "null"]
+        memberId:
+          type: ["integer", "null"]
+        leadId:
+          type: ["integer", "null"]
+        startTime:
+          type: string
+          format: date-time
+        notes:
+          type: ["string", "null"]
+      required:
+        - appointmentTypeId
+        - startTime
+
+    UpdateAppointmentBody:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [scheduled, completed, cancelled, no_show]
+        notes:
+          type: ["string", "null"]
+        startTime:
+          type: string
+          format: date-time
+
     ErrorEnvelope:
       type: object
       required: [error]

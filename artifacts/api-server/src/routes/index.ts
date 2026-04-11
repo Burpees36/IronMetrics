@@ -48,9 +48,13 @@ import knowledgeRouter from "./knowledge";
 import onboardingRouter from "./onboarding";
 import leadCaptureConfigRouter from "./lead-capture-config";
 import retentionRouter from "./retention";
+import leadSequencesRouter from "./lead-sequences";
 import platformBillingRouter from "./platform-billing";
 import adminRouter from "./admin";
 import wodifyRouter from "./integrations/wodify";
+import financesRouter from "./finances";
+import appointmentsRouter from "./appointments";
+import notifyWorkoutRouter from "./notify-workout";
 
 const router: IRouter = Router();
 
@@ -81,6 +85,7 @@ router.use(wodifyRouter);
 
 // Insights-tier access gates — block zero-subscription gyms from paid features.
 // These must come before the corresponding routers.
+router.use("/gyms/:gymId/finances", requireTierAccess("billing"));
 router.use("/gyms/:gymId/billing", requireTierAccess("billing"));
 router.use("/gyms/:gymId/plans", requireTierAccess("billing"));
 router.use("/gyms/:gymId/subscriptions", requireTierAccess("billing"));
@@ -97,6 +102,7 @@ router.use("/gyms/:gymId/announcements", requireTierAccess("communications"));
 router.use("/gyms/:gymId/stripe", requireTierAccess("billing"));
 
 // Insights-tier routers
+router.use(financesRouter);
 router.use(billingRouter);
 router.use(billingRecoveryRouter);
 router.use(retailRouter);
@@ -112,10 +118,15 @@ router.use(communicationsRouter);
 // Growth-tier access gates — must come before the routers that handle those paths
 router.use("/gyms/:gymId/members", requireTierAccess("members"));
 router.use("/gyms/:gymId/leads", requireTierAccess("leads"));
+router.use("/gyms/:gymId/lead-sequences", requireTierAccess("leads"));
 router.use("/gyms/:gymId/classes", requireTierAccess("schedule"));
+router.use("/gyms/:gymId/appointment-types", requireTierAccess("schedule"));
+router.use("/gyms/:gymId/coach-availability", requireTierAccess("schedule"));
+router.use("/gyms/:gymId/appointments", requireTierAccess("schedule"));
 router.use("/gyms/:gymId/attendance", requireTierAccess("attendance"));
 router.use("/gyms/:gymId/workouts", requireTierAccess("workouts"));
 router.use("/gyms/:gymId/programming", requireTierAccess("programming"));
+router.use("/gyms/:gymId/notify-workout", requireTierAccess("programming"));
 router.use("/gyms/:gymId/staff", requireTierAccess("staff"));
 
 // Pro-tier access gates — must come before the corresponding routers
@@ -124,11 +135,14 @@ router.use("/gyms/:gymId/class-templates", requireTierAccess("class-templates"))
 // Growth-tier routers
 router.use(membersRouter);
 router.use(leadsRouter);
+router.use(leadSequencesRouter);
 router.use(staffRouter);
 router.use(classesRouter);
 router.use(classTemplatesRouter);
 router.use(attendanceRouter);
+router.use(appointmentsRouter);
 router.use(workoutsRouter);
 router.use(programmingRouter);
+router.use(notifyWorkoutRouter);
 
 export default router;

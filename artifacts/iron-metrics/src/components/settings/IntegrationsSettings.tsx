@@ -1,8 +1,9 @@
 import React from "react";
 import { motion } from "framer-motion";
 import { Badge } from "@/components/ui/badge";
-import { Puzzle, CheckCircle2, Circle } from "lucide-react";
+import { Puzzle, CheckCircle2, Circle, MessageSquare, ExternalLink, ArrowRight } from "lucide-react";
 import { WodifyConnectionCard } from "./WodifyConnectionCard";
+import { useGetGym } from "@workspace/api-client-react";
 
 const STATIC_INTEGRATIONS = [
   {
@@ -10,22 +11,32 @@ const STATIC_INTEGRATIONS = [
     desc: "Payment processing, subscriptions, and billing.",
     status: "connected" as const,
     statusText: "Connected",
+    managedLabel: "Managed by ForgeOS",
+    linkLabel: "Go to Platform Subscription",
+    linkSection: "platform-billing",
   },
   {
     name: "Resend",
     desc: "Transactional email delivery for member communications.",
     status: "connected" as const,
     statusText: "Connected",
-  },
-  {
-    name: "SMS Provider",
-    desc: "Send text messages for reminders and notifications.",
-    status: "available" as const,
-    statusText: "Coming Soon",
+    managedLabel: "Managed by ForgeOS",
+    linkLabel: "Go to Email Settings",
+    linkSection: "email",
   },
 ];
 
-export function IntegrationsSettings() {
+interface Props {
+  gymId?: number;
+  onNavigateToSection?: (sectionId: string) => void;
+}
+
+export function IntegrationsSettings({ gymId, onNavigateToSection }: Props) {
+  const { data: gym } = useGetGym(gymId as number, { query: { enabled: !!gymId } });
+
+  const gymData = gym as Record<string, unknown> | undefined;
+  const smsConfigured = !!(gymData?.twilioAccountSid && gymData?.twilioAuthToken && gymData?.twilioPhoneNumber);
+
   return (
     <div className="space-y-6">
       <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
@@ -57,16 +68,48 @@ export function IntegrationsSettings() {
                     {integration.statusText}
                   </Badge>
                 </div>
-                <button className={`w-full px-4 py-2 text-sm font-medium rounded-xl border transition-colors ${
-                  isConnected
-                    ? "border-border text-muted-foreground hover:bg-secondary"
-                    : "border-primary/30 text-primary hover:bg-primary/10"
-                }`}>
-                  {isConnected ? "Manage" : "Connect"}
+                <p className="text-xs text-muted-foreground mb-2">{integration.managedLabel}</p>
+                <button
+                  type="button"
+                  onClick={() => onNavigateToSection?.(integration.linkSection)}
+                  className="w-full px-4 py-2 text-sm font-medium rounded-xl border transition-colors border-border text-muted-foreground hover:bg-secondary hover:text-foreground flex items-center justify-center gap-2"
+                >
+                  {integration.linkLabel}
+                  <ArrowRight className="h-3.5 w-3.5" />
                 </button>
               </motion.div>
             );
           })}
+
+          <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.15 }}
+            onClick={() => onNavigateToSection?.("sms")}
+            className="bg-card border border-border rounded-2xl p-5 shadow-sm cursor-pointer hover:border-primary/30 transition-colors"
+          >
+            <div className="flex items-start justify-between mb-3">
+              <div>
+                <div className="flex items-center gap-1.5">
+                  <MessageSquare className="h-4 w-4 text-muted-foreground" />
+                  <h4 className="font-semibold text-foreground">SMS / Twilio</h4>
+                </div>
+                <p className="text-xs text-muted-foreground mt-0.5">Send text messages for reminders and outreach.</p>
+              </div>
+              <Badge variant="outline" className={smsConfigured ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" : "bg-muted text-muted-foreground border-border"}>
+                {smsConfigured ? <CheckCircle2 className="h-3 w-3 mr-1" /> : <Circle className="h-3 w-3 mr-1" />}
+                {smsConfigured ? "Connected" : "Not Configured"}
+              </Badge>
+            </div>
+            <div className={`w-full px-4 py-2 text-sm font-medium rounded-xl border transition-colors flex items-center justify-center gap-2 ${
+              smsConfigured
+                ? "border-border text-muted-foreground"
+                : "border-primary/30 text-primary"
+            }`}>
+              {smsConfigured ? "Manage" : "Configure"}
+              <ExternalLink className="h-3.5 w-3.5" />
+            </div>
+          </motion.div>
         </div>
       </motion.div>
     </div>

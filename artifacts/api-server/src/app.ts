@@ -29,6 +29,7 @@ import { WebhookHandlers } from "./webhookHandlers";
 import router from "./routes";
 import paymentUpdatePublicRouter from "./routes/payment-update-public";
 import leadCaptureRouter from "./routes/lead-capture";
+import publicWodRouter from "./routes/public-wod";
 
 const app: Express = express();
 
@@ -71,9 +72,16 @@ app.post(
 );
 
 // --- Global middleware ---
-const allowedOrigins = process.env.ALLOWED_ORIGINS
+const allowedOrigins: (string | RegExp)[] = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(",").map((o) => o.trim())
-  : [/\.replit\.dev$/, /localhost/];
+  : process.env.NODE_ENV === "production"
+    ? [
+        "https://iron-metrics.app",
+        "https://www.iron-metrics.app",
+        "https://forgeos.app",
+        "https://www.forgeos.app",
+      ]
+    : [/\.replit\.dev$/, /\.replit\.app$/, /localhost/];
 
 app.use(cors({
   credentials: true,
@@ -131,6 +139,10 @@ const leadCaptureLimiter = rateLimit({
   validate: { ip: false, trustProxy: false },
 } as Partial<Options>);
 
+// Health check — mounted before rate limiters and auth so deployment probes always succeed
+import healthRouter from "./routes/health";
+app.use("/api", healthRouter);
+
 // Apply rate limiters to their respective route prefixes
 app.use("/api/login", authLimiter);
 app.use("/api/callback", authLimiter);
@@ -138,9 +150,10 @@ app.use("/api/payment-update", paymentUpdateLimiter);
 app.use("/api/lead-capture", leadCaptureLimiter);
 app.use("/api", apiLimiter);
 
-// Public routes that do not require authentication (e.g., payment update links, lead capture)
+// Public routes that do not require authentication (e.g., payment update links, lead capture, public WOD)
 app.use("/api", paymentUpdatePublicRouter);
 app.use("/api", leadCaptureRouter);
+app.use("/api", publicWodRouter);
 
 // Dev-only preview bypass — must run before authMiddleware
 app.use(previewMiddleware);

@@ -9,6 +9,7 @@ import {
   useGetDashboardStats,
   getListAiTasksQueryKey,
   useSendAiTaskEmail,
+  useSendAiTaskSms,
   useGetAiEmailStatus,
   useGetAiLastScan,
   useGetAiImpact,
@@ -16,6 +17,11 @@ import {
   useUpdateAutopilotSettings,
   getGetAutopilotSettingsQueryKey,
   useGetInterventions,
+  useGetDismissedInterventions,
+  getGetDismissedInterventionsQueryKey,
+  useDismissIntervention,
+  useRestoreIntervention,
+  getGetInterventionsQueryKey,
 } from "@workspace/api-client-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
@@ -31,7 +37,7 @@ import {
 } from "@/components/ui/dialog";
 import {
   BrainCircuit, Sparkles, Send, CheckCircle2, Clock, Loader2,
-  FileText, X, Filter, Users, CreditCard,
+  FileText, X, Filter, Users, CreditCard, MessageSquare,
   Target, Megaphone, BarChart3, Edit2, RefreshCw,
   History, Mail, MailCheck, AlertCircle, Info, TrendingUp, TrendingDown, DollarSign,
   UserCheck, Eye, ArrowUpRight, ArrowDownRight, ArrowRight,
@@ -45,7 +51,7 @@ import { useGymTier } from "@/hooks/useGymTier";
 const BASE_URL = import.meta.env.BASE_URL || "/";
 const API_BASE = `${BASE_URL}api`.replace(/\/+/g, "/");
 
-const EMAIL_TASK_TYPES = new Set(["outreach", "leads", "billing"]);
+const EMAIL_TASK_TYPES = new Set(["outreach", "leads", "billing", "celebration"]);
 
 const TYPE_CONFIG: Record<string, { label: string; icon: React.ElementType; color: string }> = {
   outreach: { label: "Outreach", icon: Send, color: "bg-blue-500/10 text-blue-500" },
@@ -54,6 +60,7 @@ const TYPE_CONFIG: Record<string, { label: string; icon: React.ElementType; colo
   leads: { label: "Leads", icon: Target, color: "bg-cyan-500/10 text-cyan-500" },
   campaign: { label: "Campaign", icon: Megaphone, color: "bg-pink-500/10 text-pink-500" },
   analysis: { label: "Analysis", icon: BarChart3, color: "bg-orange-500/10 text-orange-500" },
+  celebration: { label: "Celebration", icon: Sparkles, color: "bg-violet-500/10 text-violet-500" },
 };
 
 const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
@@ -67,12 +74,13 @@ const OUTCOME_CONFIG: Record<string, { label: string; color: string; icon: React
   won_back: { label: "Member returned", color: "bg-emerald-500/10 text-emerald-500 border-emerald-500/20", icon: UserCheck },
   reactivated: { label: "Reactivated", color: "bg-emerald-500/10 text-emerald-500 border-emerald-500/20", icon: ArrowUpRight },
   converted: { label: "Converted", color: "bg-primary/10 text-primary border-primary/20", icon: TrendingUp },
+  positive_engagement: { label: "Engaged", color: "bg-violet-500/10 text-violet-500 border-violet-500/20", icon: Sparkles },
   no_change: { label: "No change", color: "bg-muted text-muted-foreground border-border", icon: ArrowDownRight },
   pending_observation: { label: "Observing", color: "bg-amber-500/10 text-amber-500 border-amber-500/20", icon: Eye },
 };
 
 const CATEGORY_ROUTE_MAP: Record<string, { route: string; label: string }> = {
-  retention: { route: "/retention", label: "Retention" },
+  retention: { route: "/members?filter=at-risk", label: "At-Risk Members" },
   billing: { route: "/billing", label: "Billing" },
   leads: { route: "/leads", label: "Leads Pipeline" },
   onboarding: { route: "/members", label: "Members" },
@@ -80,20 +88,23 @@ const CATEGORY_ROUTE_MAP: Record<string, { route: string; label: string }> = {
   pricing: { route: "/billing", label: "Billing" },
   coaching: { route: "/members", label: "Members" },
   engagement: { route: "/retention", label: "Retention" },
+  winback: { route: "/retention", label: "Retention" },
 };
 
 const CATEGORY_CONFIG: Record<string, { icon: React.ElementType; color: string; bgColor: string; borderColor: string }> = {
-  retention: { icon: Users, color: "text-purple-600", bgColor: "bg-purple-50", borderColor: "border-purple-200" },
-  billing: { icon: CreditCard, color: "text-amber-600", bgColor: "bg-amber-50", borderColor: "border-amber-200" },
-  onboarding: { icon: UserCheck, color: "text-blue-600", bgColor: "bg-blue-50", borderColor: "border-blue-200" },
-  leads: { icon: Target, color: "text-cyan-600", bgColor: "bg-cyan-50", borderColor: "border-cyan-200" },
-  campaign: { icon: Megaphone, color: "text-pink-600", bgColor: "bg-pink-50", borderColor: "border-pink-200" },
+  retention: { icon: Users, color: "text-purple-600 dark:text-purple-400", bgColor: "bg-purple-50 dark:bg-purple-950/40", borderColor: "border-purple-200 dark:border-purple-800" },
+  billing: { icon: CreditCard, color: "text-amber-600 dark:text-amber-400", bgColor: "bg-amber-50 dark:bg-amber-950/40", borderColor: "border-amber-200 dark:border-amber-800" },
+  onboarding: { icon: UserCheck, color: "text-blue-600 dark:text-blue-400", bgColor: "bg-blue-50 dark:bg-blue-950/40", borderColor: "border-blue-200 dark:border-blue-800" },
+  leads: { icon: Target, color: "text-cyan-600 dark:text-cyan-400", bgColor: "bg-cyan-50 dark:bg-cyan-950/40", borderColor: "border-cyan-200 dark:border-cyan-800" },
+  campaign: { icon: Megaphone, color: "text-pink-600 dark:text-pink-400", bgColor: "bg-pink-50 dark:bg-pink-950/40", borderColor: "border-pink-200 dark:border-pink-800" },
+  pricing: { icon: DollarSign, color: "text-emerald-600 dark:text-emerald-400", bgColor: "bg-emerald-50 dark:bg-emerald-950/40", borderColor: "border-emerald-200 dark:border-emerald-800" },
+  engagement: { icon: Activity, color: "text-orange-600 dark:text-orange-400", bgColor: "bg-orange-50 dark:bg-orange-950/40", borderColor: "border-orange-200 dark:border-orange-800" },
 };
 
 const URGENCY_CONFIG: Record<string, { label: string; color: string; dotColor: string }> = {
-  immediate: { label: "Immediate", color: "bg-red-100 text-red-700 border-red-200", dotColor: "bg-red-500" },
-  this_week: { label: "This Week", color: "bg-amber-100 text-amber-700 border-amber-200", dotColor: "bg-amber-500" },
-  this_month: { label: "This Month", color: "bg-blue-100 text-blue-700 border-blue-200", dotColor: "bg-blue-500" },
+  immediate: { label: "Immediate", color: "bg-red-100 dark:bg-red-950/40 text-red-700 dark:text-red-400 border-red-200 dark:border-red-800", dotColor: "bg-red-500" },
+  this_week: { label: "This Week", color: "bg-amber-100 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800", dotColor: "bg-amber-500" },
+  this_month: { label: "This Month", color: "bg-blue-100 dark:bg-blue-950/40 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-800", dotColor: "bg-blue-500" },
 };
 
 function getTypeConfig(type: string) {
@@ -106,6 +117,19 @@ function isEmailType(type: string) {
 
 function hasTarget(task: { targetId?: number | null; targetType?: string | null }) {
   return task.targetId && task.targetType;
+}
+
+function useBenchmarks(gymId: number | null) {
+  return useQuery({
+    queryKey: ["benchmarks", gymId],
+    queryFn: async () => {
+      const res = await fetch(`${API_BASE}/gyms/${gymId}/intelligence/benchmarks`, { credentials: "include" });
+      if (!res.ok) return null;
+      return res.json();
+    },
+    enabled: !!gymId,
+    staleTime: 60000,
+  });
 }
 
 function useRsiHistory(gymId: number | null, window: string) {
@@ -141,10 +165,74 @@ function ToggleSwitch({ checked, onChange, disabled }: { checked: boolean; onCha
   );
 }
 
+const SMART_ACTION_CATEGORIES = [
+  {
+    key: "autopilotOutreach",
+    channelKey: "channelOutreach",
+    cooldownKey: "cooldownOutreach",
+    label: "Member Re-engagement",
+    subtitle: "Win back members showing signs of leaving",
+    icon: Send,
+    color: "bg-blue-500/10 text-blue-600",
+    borderActive: "border-blue-300",
+    explanation: "When a member goes dark — missed classes, declining visits — Iron Metrics flags them and drafts a personal message using their name, favorite class, and activity data. You review it or it sends automatically.",
+    timing: "Sent after a member misses their typical attendance pattern — usually 7–14 days of inactivity.",
+    defaultCooldown: 14,
+    cooldownLabel: "days between re-engagement messages",
+    exampleMessage: `"Hey Sarah — we noticed you haven't been to the 6am WOD in a couple weeks. Coach Mike was asking about you! We've got a great partner workout Thursday if you're looking for a reason to get back in. 💪"`,
+  },
+  {
+    key: "autopilotBilling",
+    channelKey: "channelBilling",
+    cooldownKey: "cooldownBilling",
+    label: "Failed Payment Recovery",
+    subtitle: "Friendly follow-ups when payments don't go through",
+    icon: CreditCard,
+    color: "bg-amber-500/10 text-amber-600",
+    borderActive: "border-amber-300",
+    explanation: "When a payment fails — expired card, insufficient funds — Iron Metrics sends a direct, non-threatening nudge to update their info. Most fix it within 48 hours.",
+    timing: "Sent after the first failed payment attempt, with a follow-up if not resolved.",
+    defaultCooldown: 1,
+    cooldownLabel: "days between payment reminders",
+    exampleMessage: `"Hi Jake — your payment didn't go through. Usually just an expired card. Update it online or call us — takes 2 minutes."`,
+  },
+  {
+    key: "autopilotLeads",
+    channelKey: "channelLeads",
+    cooldownKey: "cooldownLeads",
+    label: "Lead Follow-up",
+    subtitle: "Keep warm leads from going cold",
+    icon: Target,
+    color: "bg-cyan-500/10 text-cyan-600",
+    borderActive: "border-cyan-300",
+    explanation: "When a lead reaches out but doesn't book, Iron Metrics follows up with a direct, personalized message based on their source and interest. Speed wins with leads.",
+    timing: "Sent when a lead goes stale — typically 24–72 hours after initial contact with no booking.",
+    defaultCooldown: 3,
+    cooldownLabel: "days between lead follow-ups",
+    exampleMessage: `"Hey Taylor — you asked about CrossFit. The No Sweat Intro is 15 minutes, free, and we'll map out a plan that fits your schedule. Pick a time this week."`,
+  },
+  {
+    key: "autopilotCelebrations",
+    channelKey: "channelCelebrations",
+    cooldownKey: "cooldownCelebrations",
+    label: "Member Celebrations",
+    subtitle: "Birthdays, anniversaries, streaks, and milestones",
+    icon: Sparkles,
+    color: "bg-violet-500/10 text-violet-600",
+    borderActive: "border-violet-300",
+    explanation: "Iron Metrics detects member milestones — birthdays, membership anniversaries, attendance streaks, class milestones, and comebacks after time away. Each celebration gets a warm, personalized message that strengthens the relationship.",
+    timing: "Sent on the day of the milestone. Cooldown prevents repeats for the same milestone type.",
+    defaultCooldown: 90,
+    cooldownLabel: "days between celebration messages per milestone type",
+    exampleMessage: `"Happy birthday, Sarah! 2 years at the gym — that's real commitment. From the 6am WOD crew to everything else, you've put in the work. Here's to the next year."`,
+  },
+] as const;
+
 function SmartActionsModal({ gymId, open, onOpenChange }: { gymId: number; open: boolean; onOpenChange: (v: boolean) => void }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const settingsQueryKey = getGetAutopilotSettingsQueryKey(gymId);
+  const [expandedCard, setExpandedCard] = useState<string | null>(null);
 
   const { data: settings, isLoading } = useGetAutopilotSettings(gymId, {
     query: { enabled: !!gymId },
@@ -163,7 +251,6 @@ function SmartActionsModal({ gymId, open, onOpenChange }: { gymId: number; open:
       },
       onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: settingsQueryKey });
-        toast({ title: "Smart Actions Updated", description: "Settings saved successfully." });
       },
       onError: (_err: unknown, _vars: unknown, context: unknown) => {
         const ctx = context as { previous?: unknown } | undefined;
@@ -175,128 +262,250 @@ function SmartActionsModal({ gymId, open, onOpenChange }: { gymId: number; open:
     },
   });
 
-  const handleToggle = (key: string, value: boolean) => {
-    updateSettings.mutate({ gymId, data: { [key]: value } as Record<string, unknown> });
+  const handleUpdate = (updates: Record<string, unknown>) => {
+    updateSettings.mutate({ gymId, data: updates as Record<string, unknown> });
   };
 
-  const handleCooldown = (days: number) => {
-    updateSettings.mutate({ gymId, data: { cooldownDays: days } as Record<string, unknown> });
-  };
-
-  const handleDigestFrequency = (freq: string) => {
-    updateSettings.mutate({ gymId, data: { digestFrequency: freq } as Record<string, unknown> });
-  };
-
-  const anyEnabled = settings?.autopilotOutreach || settings?.autopilotBilling || settings?.autopilotLeads;
+  const s = settings as unknown as Record<string, unknown> | undefined;
+  const anyEnabled = !!(settings?.autopilotOutreach || settings?.autopilotBilling || settings?.autopilotLeads || (s && s["autopilotCelebrations"]));
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Zap className="h-5 w-5 text-primary" />
+          <DialogTitle className="flex items-center gap-2 text-lg">
+            <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
+              <Zap className="h-4 w-4 text-primary" />
+            </div>
             Smart Actions
           </DialogTitle>
-          <DialogDescription>
-            Enable Smart Actions to let the AI send emails automatically. You'll stay informed through digest summaries.
+          <DialogDescription className="text-sm leading-relaxed">
+            Smart Actions scans your data, spots problems, and drafts personalized messages — attendance drops, failed payments, stale leads. Every message is built from real behavior, not templates. You control what sends and when.
           </DialogDescription>
         </DialogHeader>
 
         {isLoading ? (
-          <div className="flex justify-center py-8">
+          <div className="flex justify-center py-12">
             <Loader2 className="h-6 w-6 animate-spin text-primary" />
           </div>
         ) : settings ? (
-          <div className="space-y-6">
-            <div className="space-y-4">
-              <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
-                <ShieldCheck className="h-4 w-4 text-primary" />
-                Auto-Send Categories
-              </h3>
-              <div className="space-y-3">
-                {([
-                  { key: "autopilotOutreach", label: "Outreach", desc: "At-risk member re-engagement", icon: Send, color: "bg-blue-500/10 text-blue-500" },
-                  { key: "autopilotBilling", label: "Billing", desc: "Failed payment follow-ups", icon: CreditCard, color: "bg-amber-500/10 text-amber-500" },
-                  { key: "autopilotLeads", label: "Leads", desc: "Stale lead follow-ups", icon: Target, color: "bg-cyan-500/10 text-cyan-500" },
-                ] as const).map((cat) => (
-                  <div key={cat.key} className="flex items-center justify-between p-3 rounded-lg bg-secondary/50 border border-border">
-                    <div className="flex items-center gap-3">
-                      <div className={`h-8 w-8 rounded-full flex items-center justify-center ${cat.color}`}>
-                        <cat.icon className="h-4 w-4" />
+          <div className="space-y-4 mt-2">
+            <div className="flex items-start gap-2.5 p-3 rounded-lg bg-secondary/50 border border-border">
+              <ShieldCheck className="h-4 w-4 text-primary shrink-0 mt-0.5" />
+              <div className="text-xs text-muted-foreground leading-relaxed">
+                <span className="font-medium text-foreground">How it works:</span> Iron Metrics scans your data daily, drafts outreach based on real behavior, and sends it automatically when enabled. Everything that goes out shows up in your task history. No message is ever sent without valid contact info.
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              {SMART_ACTION_CATEGORIES.map((cat) => {
+                const isEnabled = !!(s && s[cat.key]);
+                const isExpanded = expandedCard === cat.key;
+                const currentChannel = s ? (s[cat.channelKey] as string) : "email";
+                const currentCooldown = s ? (s[cat.cooldownKey] as number) : cat.defaultCooldown;
+
+                return (
+                  <div key={cat.key} className={`rounded-xl border transition-all ${isEnabled ? `bg-card ${cat.borderActive} shadow-sm` : "bg-secondary/30 border-border"}`}>
+                    <div className="p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <button
+                          className="flex items-start gap-3 text-left flex-1 min-w-0"
+                          onClick={() => setExpandedCard(isExpanded ? null : cat.key)}
+                        >
+                          <div className={`h-9 w-9 rounded-lg flex items-center justify-center shrink-0 ${cat.color}`}>
+                            <cat.icon className="h-4.5 w-4.5" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-sm font-semibold text-foreground">{cat.label}</p>
+                            <p className="text-xs text-muted-foreground mt-0.5">{cat.subtitle}</p>
+                          </div>
+                        </button>
+                        <div className="flex items-center gap-2 shrink-0 pt-0.5">
+                          <span className={`text-[10px] font-semibold uppercase tracking-wider ${isEnabled ? "text-primary" : "text-muted-foreground"}`}>
+                            {isEnabled ? "On" : "Off"}
+                          </span>
+                          <ToggleSwitch
+                            checked={isEnabled}
+                            onChange={(v) => handleUpdate({ [cat.key]: v })}
+                            disabled={updateSettings.isPending}
+                          />
+                        </div>
                       </div>
-                      <div>
-                        <p className="text-sm font-medium text-foreground">{cat.label}</p>
-                        <p className="text-xs text-muted-foreground">{cat.desc}</p>
-                      </div>
+
+                      <AnimatePresence>
+                        {(isExpanded || isEnabled) && (
+                          <motion.div
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: "auto", opacity: 1 }}
+                            exit={{ height: 0, opacity: 0 }}
+                            className="overflow-hidden"
+                          >
+                            <div className="mt-3 space-y-3 pl-12">
+                              {isExpanded && (
+                                <>
+                                  <p className="text-xs text-muted-foreground leading-relaxed">{cat.explanation}</p>
+                                  <div className="flex items-start gap-2 text-xs">
+                                    <Clock className="h-3.5 w-3.5 text-primary shrink-0 mt-0.5" />
+                                    <span className="text-muted-foreground"><span className="font-medium text-foreground">Timing:</span> {cat.timing}</span>
+                                  </div>
+                                  <div className="p-3 rounded-lg bg-muted/50 border border-border">
+                                    <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1.5 flex items-center gap-1">
+                                      <MessageSquare className="h-3 w-3" /> Example message
+                                    </p>
+                                    <p className="text-xs text-foreground/80 italic leading-relaxed">{cat.exampleMessage}</p>
+                                  </div>
+                                </>
+                              )}
+                              {isEnabled && (
+                                <div className="space-y-3">
+                                  <div>
+                                    <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1.5">Send via</p>
+                                    <div className="flex gap-1.5">
+                                      {(["email", "sms", "both"] as const).map((ch) => (
+                                        <button
+                                          key={ch}
+                                          onClick={() => handleUpdate({ [cat.channelKey]: ch })}
+                                          disabled={updateSettings.isPending}
+                                          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all border ${
+                                            currentChannel === ch
+                                              ? "bg-primary text-primary-foreground border-primary shadow-sm"
+                                              : "bg-background text-muted-foreground border-border hover:border-primary/40"
+                                          }`}
+                                        >
+                                          {ch === "email" ? "📧 Email" : ch === "sms" ? "💬 SMS" : "📧💬 Both"}
+                                        </button>
+                                      ))}
+                                    </div>
+                                  </div>
+                                  <div>
+                                    <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1.5">
+                                      Wait at least
+                                    </p>
+                                    <div className="flex items-center gap-2">
+                                      <input
+                                        type="range"
+                                        min={1}
+                                        max={cat.key === "autopilotBilling" ? 14 : cat.key === "autopilotCelebrations" ? 365 : 60}
+                                        value={currentCooldown}
+                                        onChange={(e) => handleUpdate({ [cat.cooldownKey]: parseInt(e.target.value, 10) })}
+                                        disabled={updateSettings.isPending}
+                                        className="flex-1 accent-primary h-1"
+                                      />
+                                      <span className="text-xs font-mono font-semibold text-foreground w-20 text-right">
+                                        {currentCooldown} day{currentCooldown !== 1 ? "s" : ""}
+                                      </span>
+                                    </div>
+                                    <p className="text-[10px] text-muted-foreground mt-0.5">{cat.cooldownLabel}</p>
+                                  </div>
+                                </div>
+                              )}
+                              {!isExpanded && (
+                                <button
+                                  onClick={() => setExpandedCard(cat.key)}
+                                  className="text-[10px] text-primary hover:text-primary/80 font-medium flex items-center gap-1"
+                                >
+                                  Learn more <ChevronDown className="h-3 w-3" />
+                                </button>
+                              )}
+                            </div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
                     </div>
-                    <ToggleSwitch
-                      checked={(settings as Record<string, unknown>)[cat.key] as boolean}
-                      onChange={(v) => handleToggle(cat.key, v)}
-                      disabled={updateSettings.isPending}
-                    />
                   </div>
-                ))}
-              </div>
+                );
+              })}
             </div>
 
-            <div className="space-y-3">
-              <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
-                <Clock className="h-4 w-4 text-primary" />
-                Cooldown Period
+            <div className="border-t border-border pt-4 space-y-3">
+              <h3 className="text-xs font-semibold text-foreground flex items-center gap-2">
+                <CalendarDays className="h-3.5 w-3.5 text-primary" />
+                Action Digest
               </h3>
               <p className="text-xs text-muted-foreground">
-                Minimum days between auto-emails to the same person.
-              </p>
-              <div className="flex items-center gap-3">
-                <input
-                  type="range"
-                  min={1}
-                  max={90}
-                  value={settings.cooldownDays}
-                  onChange={(e) => handleCooldown(parseInt(e.target.value, 10))}
-                  disabled={updateSettings.isPending}
-                  className="flex-1 accent-primary"
-                />
-                <span className="text-sm font-mono font-medium text-foreground w-16 text-right">
-                  {settings.cooldownDays} day{settings.cooldownDays !== 1 ? "s" : ""}
-                </span>
-              </div>
-            </div>
-
-            <div className="space-y-3">
-              <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
-                <CalendarDays className="h-4 w-4 text-primary" />
-                Digest Frequency
-              </h3>
-              <p className="text-xs text-muted-foreground">
-                How often you receive a summary of automated actions.
+                Get a summary of all automated actions sent on your behalf.
               </p>
               <div className="flex gap-2">
                 {(["daily", "weekly", "disabled"] as const).map((freq) => (
                   <button
                     key={freq}
-                    onClick={() => handleDigestFrequency(freq)}
+                    onClick={() => handleUpdate({ digestFrequency: freq })}
                     disabled={updateSettings.isPending}
-                    className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-all border ${
+                    className={`flex-1 px-3 py-2 rounded-lg text-xs font-medium transition-all border ${
                       settings.digestFrequency === freq
                         ? "bg-primary text-primary-foreground border-primary shadow-sm"
-                        : "bg-muted/50 text-muted-foreground border-border hover:border-primary/40 hover:text-foreground"
+                        : "bg-background text-muted-foreground border-border hover:border-primary/40 hover:text-foreground"
                     }`}
                   >
-                    {freq.charAt(0).toUpperCase() + freq.slice(1)}
+                    {freq === "daily" ? "📬 Daily" : freq === "weekly" ? "📅 Weekly" : "Off"}
                   </button>
                 ))}
               </div>
             </div>
 
+            <div className="border-t border-border pt-4 space-y-3">
+              <h3 className="text-xs font-semibold text-foreground flex items-center gap-2">
+                <Mail className="h-3.5 w-3.5 text-primary" />
+                Morning Briefing
+              </h3>
+              <p className="text-xs text-muted-foreground">
+                Get a daily snapshot of your gym delivered to your inbox every morning — metrics, overnight actions, and member milestones.
+              </p>
+
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Mail className="h-3.5 w-3.5 text-muted-foreground" />
+                    <span className="text-xs font-medium text-foreground">Email briefing</span>
+                  </div>
+                  <ToggleSwitch
+                    checked={!!(s && s["briefingEmailEnabled"])}
+                    onChange={(v) => handleUpdate({ briefingEmailEnabled: v })}
+                    disabled={updateSettings.isPending}
+                  />
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <MessageSquare className="h-3.5 w-3.5 text-muted-foreground" />
+                    <span className="text-xs font-medium text-foreground">SMS summary</span>
+                  </div>
+                  <ToggleSwitch
+                    checked={!!(s && s["briefingSmsEnabled"])}
+                    onChange={(v) => handleUpdate({ briefingSmsEnabled: v })}
+                    disabled={updateSettings.isPending}
+                  />
+                </div>
+
+                {!!(s && (s["briefingEmailEnabled"] || s["briefingSmsEnabled"])) && (
+                  <div>
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1.5">
+                      Delivery time
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="range"
+                        min={4}
+                        max={10}
+                        value={(s["briefingDeliveryHour"] as number) ?? 6}
+                        onChange={(e) => handleUpdate({ briefingDeliveryHour: parseInt(e.target.value, 10) })}
+                        disabled={updateSettings.isPending}
+                        className="flex-1 accent-primary h-1"
+                      />
+                      <span className="text-xs font-mono font-semibold text-foreground w-16 text-right">
+                        {(s["briefingDeliveryHour"] as number) ?? 6}:00 AM
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
             {anyEnabled && (
-              <div className="flex items-start gap-2 p-3 rounded-lg bg-primary/5 border border-primary/20 text-xs text-muted-foreground">
-                <Info className="h-4 w-4 text-primary shrink-0 mt-0.5" />
-                <div>
-                  <p className="font-medium text-foreground">Safety guardrails active</p>
-                  <p className="mt-0.5">
-                    Smart Actions only sends to contacts with valid email addresses and respects a {settings.cooldownDays}-day cooldown per person.
-                  </p>
+              <div className="flex items-start gap-2.5 p-3 rounded-lg bg-emerald-500/5 border border-emerald-500/20 text-xs text-muted-foreground">
+                <ShieldCheck className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />
+                <div className="leading-relaxed">
+                  <span className="font-medium text-foreground">Your guardrails are active.</span> Every auto-sent message appears in your task history. Messages only go to people with valid contact info, and each person is protected by the cooldown timers you set above.
                 </div>
               </div>
             )}
@@ -304,6 +513,208 @@ function SmartActionsModal({ gymId, open, onOpenChange }: { gymId: number; open:
         ) : null}
       </DialogContent>
     </Dialog>
+  );
+}
+
+function formatBenchmarkValue(value: number, format: string): string {
+  if (format === "currency") return `$${Math.round(value).toLocaleString()}`;
+  if (format === "percent") return `${value.toFixed(1)}%`;
+  if (format === "months") return `${value.toFixed(1)} mo`;
+  return value.toFixed(1);
+}
+
+interface BenchmarkInsight {
+  conversational: string;
+  recommendation: string;
+  ctaLabel: string;
+  ctaRoute: string;
+}
+
+function BenchmarkBar({ comparison }: { comparison: { gymValue: number; industryMedian: number | null; p25: number; p75: number; percentileRank: number | null; percentileLabel: string | null; label: string; format: string; lowerIsBetter?: boolean; insight?: BenchmarkInsight } }) {
+  const [, setLocation] = useLocation();
+  const [showInsight, setShowInsight] = useState(false);
+  const { gymValue, industryMedian, p25, p75, percentileRank, percentileLabel, label, format, insight } = comparison;
+
+  const hasData = industryMedian !== null;
+  const allValues = hasData ? [p25, industryMedian, p75, gymValue] : [gymValue];
+  const min = Math.min(...allValues) * 0.8;
+  const max = Math.max(...allValues) * 1.2 || 1;
+  const range = max - min || 1;
+
+  const gymPos = ((gymValue - min) / range) * 100;
+  const medianPos = hasData ? (((industryMedian as number) - min) / range) * 100 : 0;
+
+  const badgeColor = percentileRank === null ? "bg-muted text-muted-foreground" :
+    percentileRank >= 75 ? "bg-emerald-100 text-emerald-700" :
+    percentileRank >= 50 ? "bg-blue-100 text-blue-700" :
+    percentileRank >= 25 ? "bg-yellow-100 text-yellow-700" :
+    "bg-red-100 text-red-700";
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="bg-card border border-border rounded-xl p-4"
+    >
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
+        <div>
+          <h4 className="text-sm font-semibold text-foreground">{label}</h4>
+          <div className="flex items-center gap-2 mt-0.5">
+            <span className="text-lg font-bold text-foreground">{formatBenchmarkValue(gymValue, format)}</span>
+            {hasData && (
+              <span className="text-xs text-muted-foreground">
+                vs {formatBenchmarkValue(industryMedian as number, format)} median
+              </span>
+            )}
+          </div>
+        </div>
+        {percentileLabel && (
+          <span className={`px-3 py-1 rounded-full text-xs font-bold ${badgeColor} whitespace-nowrap`}>
+            {percentileLabel}
+          </span>
+        )}
+      </div>
+
+      {hasData ? (
+        <div className="relative h-8">
+          <div className="absolute inset-x-0 top-3 h-2 bg-muted rounded-full overflow-hidden">
+            <div
+              className="absolute h-full bg-muted-foreground/20 rounded-full"
+              style={{
+                left: `${Math.max(0, ((p25 - min) / range) * 100)}%`,
+                width: `${Math.max(1, ((p75 - p25) / range) * 100)}%`,
+              }}
+            />
+          </div>
+          <div
+            className="absolute top-1 w-0.5 h-6 bg-muted-foreground/40"
+            style={{ left: `${Math.max(2, Math.min(98, medianPos))}%` }}
+          />
+          <motion.div
+            initial={{ scale: 0 }}
+            animate={{ scale: 1 }}
+            transition={{ delay: 0.2 }}
+            className="absolute top-1.5 w-4 h-4 rounded-full bg-primary border-2 border-background shadow-md -ml-2"
+            style={{ left: `${Math.max(2, Math.min(98, gymPos))}%` }}
+          />
+        </div>
+      ) : (
+        <div className="h-8 flex items-center">
+          <div className="w-full h-2 bg-muted rounded-full" />
+        </div>
+      )}
+
+      {hasData && (
+        <div className="flex justify-between text-[10px] text-muted-foreground mt-1">
+          <span>P25: {formatBenchmarkValue(p25, format)}</span>
+          <span>P75: {formatBenchmarkValue(p75, format)}</span>
+        </div>
+      )}
+
+      {insight && (
+        <div className="mt-3 border-t border-border pt-3">
+          <p className="text-[11px] text-muted-foreground leading-relaxed">{insight.conversational}</p>
+          <button
+            onClick={() => setShowInsight(!showInsight)}
+            className="mt-1.5 text-[10px] font-medium text-primary hover:text-primary/80 transition-colors flex items-center gap-1"
+          >
+            {showInsight ? "Hide advice" : "What should I do?"}
+            {showInsight ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+          </button>
+          <AnimatePresence>
+            {showInsight && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: "auto", opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.15 }}
+                className="overflow-hidden"
+              >
+                <div className="mt-2 p-2.5 rounded-lg bg-primary/5 border border-primary/10">
+                  <p className="text-[11px] text-foreground leading-relaxed mb-2">{insight.recommendation}</p>
+                  <button
+                    onClick={() => setLocation(insight.ctaRoute)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-primary-foreground rounded-md text-[10px] font-semibold hover:bg-primary/90 transition-colors shadow-sm"
+                  >
+                    {insight.ctaLabel}
+                    <ArrowRight className="h-3 w-3" />
+                  </button>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+      )}
+    </motion.div>
+  );
+}
+
+function BenchmarkSection({ data }: { data: { insufficientData?: boolean; insufficientMessage?: string; sizeLabel?: string; sampleCount?: number; comparisons?: Array<{ metric: string; gymValue: number; industryMedian: number | null; p25: number; p75: number; percentileRank: number | null; percentileLabel: string | null; label: string; format: string }>; computedAt?: string } | null }) {
+  if (!data) {
+    return (
+      <div className="text-center py-8">
+        <BarChart3 className="h-10 w-10 text-muted-foreground/50 mx-auto mb-3" />
+        <h3 className="text-base font-semibold text-foreground">Benchmarks Loading</h3>
+        <p className="text-xs text-muted-foreground mt-1">Industry benchmarks are being computed...</p>
+      </div>
+    );
+  }
+
+  if (data.insufficientData) {
+    return (
+      <div className="space-y-4">
+        <div className="bg-card border border-border rounded-xl p-6 text-center">
+          <Info className="h-10 w-10 text-muted-foreground/50 mx-auto mb-3" />
+          <h3 className="text-base font-semibold text-foreground mb-2">Not Enough Data Yet</h3>
+          <p className="text-xs text-muted-foreground max-w-md mx-auto">{data.insufficientMessage}</p>
+          <div className="mt-3 inline-flex items-center gap-2 px-3 py-1.5 bg-muted rounded-lg text-xs text-muted-foreground">
+            <span>Your size: <strong className="text-foreground">{data.sizeLabel}</strong></span>
+            <span>&middot;</span>
+            <span>{data.sampleCount} gym{data.sampleCount !== 1 ? "s" : ""} in segment</span>
+          </div>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+          {(data.comparisons || []).map((c) => (
+            <div key={c.metric} className="bg-card border border-border rounded-xl p-3">
+              <h4 className="text-xs font-medium text-muted-foreground mb-1">{c.label}</h4>
+              <p className="text-lg font-bold text-foreground">{formatBenchmarkValue(c.gymValue, c.format)}</p>
+              <p className="text-[10px] text-muted-foreground mt-0.5">Benchmark comparison pending</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <h3 className="text-base font-semibold text-foreground">Industry Benchmarks</h3>
+          <p className="text-xs text-muted-foreground">
+            Compared against {data.sampleCount} gyms in the <strong>{data.sizeLabel}</strong> segment.
+          </p>
+        </div>
+        {data.computedAt && (
+          <span className="text-[10px] text-muted-foreground bg-muted px-3 py-1 rounded-lg">
+            Updated {new Date(data.computedAt).toLocaleDateString()}
+          </span>
+        )}
+      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+        {(data.comparisons || []).map((comparison) => (
+          <BenchmarkBar key={comparison.metric} comparison={comparison} />
+        ))}
+      </div>
+      <div className="bg-muted/50 border border-border rounded-xl p-3 flex items-start gap-3">
+        <Info className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
+        <p className="text-[11px] text-muted-foreground">
+          Benchmarks are computed from anonymized, aggregated data across all gyms on the platform.
+          No individual gym data is ever exposed. Percentile rankings show where your gym falls
+          relative to others of similar size.
+        </p>
+      </div>
+    </div>
   );
 }
 
@@ -317,6 +728,7 @@ interface Intervention {
   score: number;
   expectedRevenue: number | null;
   affectedMembers: number | null;
+  affectedMemberIds?: number[] | null;
   actions: string[];
   status: string;
 }
@@ -376,10 +788,10 @@ function InterventionCard({
 
         <div className="flex items-center gap-3 mb-3 flex-wrap">
           {intervention.expectedRevenue != null && intervention.expectedRevenue > 0 && (
-            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-50 border border-emerald-200">
-              <DollarSign className="h-3.5 w-3.5 text-emerald-600" />
-              <span className="text-xs font-semibold text-emerald-700">${Math.round(intervention.expectedRevenue).toLocaleString()}</span>
-              <span className="text-[10px] text-emerald-600/70">/mo at stake</span>
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800">
+              <DollarSign className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+              <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-300">${Math.round(intervention.expectedRevenue).toLocaleString()}</span>
+              <span className="text-[10px] text-emerald-600/70 dark:text-emerald-400/70">/mo at stake</span>
             </div>
           )}
           {intervention.affectedMembers != null && intervention.affectedMembers > 0 && (
@@ -390,8 +802,8 @@ function InterventionCard({
             </div>
           )}
           <span className={`text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded ${
-            intervention.impact === "high" ? "bg-red-50 text-red-600 border border-red-200" :
-            intervention.impact === "medium" ? "bg-amber-50 text-amber-600 border border-amber-200" :
+            intervention.impact === "high" ? "bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800" :
+            intervention.impact === "medium" ? "bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-800" :
             "bg-secondary text-muted-foreground border border-border"
           }`}>
             {intervention.impact} impact
@@ -438,7 +850,13 @@ function InterventionCard({
             Not now
           </button>
           <button
-            onClick={() => setLocation(routeInfo?.route || "/dashboard")}
+            onClick={() => {
+              if (intervention.affectedMemberIds && intervention.affectedMemberIds.length > 0) {
+                setLocation(`/members?ids=${intervention.affectedMemberIds.join(",")}&source=${encodeURIComponent(intervention.title)}`);
+              } else {
+                setLocation(routeInfo?.route || "/dashboard");
+              }
+            }}
             className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground hover:bg-primary/90 rounded-lg text-xs font-semibold shadow-sm shadow-primary/20 transition-all group"
           >
             Execute Smart Action
@@ -450,38 +868,179 @@ function InterventionCard({
   );
 }
 
-function RsiGauge({ rsi }: { rsi: { score: number; band: string; insight: string; trend30d?: number | null } }) {
+interface RSIComponentInsight {
+  metric: string;
+  value: number;
+  normalized: number;
+  weight: number;
+  contribution: number;
+  explanation: string;
+  lever: string;
+  ctaLabel: string;
+  ctaRoute: string;
+}
+
+function RsiGauge({ rsi }: { rsi: { score: number; band: string; insight: string; trend30d?: number | null; componentInsights?: RSIComponentInsight[] } }) {
+  const [, setLocation] = useLocation();
+  const [showBreakdown, setShowBreakdown] = useState(false);
   const bandColor = rsi.band === "Strong" || rsi.band === "Excellent" ? "text-emerald-500" :
     rsi.band === "Moderate" ? "text-yellow-500" : "text-destructive";
   const bandBg = rsi.band === "Strong" || rsi.band === "Excellent" ? "bg-emerald-50" :
     rsi.band === "Moderate" ? "bg-yellow-50" : "bg-red-50";
 
   return (
-    <div className="bg-card border border-border rounded-xl p-5 text-center">
-      <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Retention Stability Index</h3>
-      <div className="relative inline-block">
-        <svg className="w-32 h-32 transform -rotate-90" viewBox="0 0 128 128">
-          <circle cx="64" cy="64" r="52" stroke="currentColor" strokeWidth="6" fill="transparent" className="text-muted" />
-          <circle cx="64" cy="64" r="52" stroke="currentColor" strokeWidth="8" fill="transparent"
-            strokeDasharray={`${(rsi.score / 100) * 327} 327`}
-            className={bandColor}
-            strokeLinecap="round"
-          />
-        </svg>
-        <div className="absolute inset-0 flex items-center justify-center flex-col">
-          <span className="text-3xl font-bold text-foreground">{Math.round(rsi.score)}</span>
-          <span className={`text-[10px] font-bold mt-0.5 px-2 py-0.5 rounded-full ${bandBg} ${bandColor}`}>{rsi.band}</span>
+    <div className="bg-card border border-border rounded-xl p-5">
+      <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3 text-center">Retention Stability Index</h3>
+      <div className="text-center">
+        <div className="relative inline-block">
+          <svg className="w-32 h-32 transform -rotate-90" viewBox="0 0 128 128">
+            <circle cx="64" cy="64" r="52" stroke="currentColor" strokeWidth="6" fill="transparent" className="text-muted" />
+            <circle cx="64" cy="64" r="52" stroke="currentColor" strokeWidth="8" fill="transparent"
+              strokeDasharray={`${(rsi.score / 100) * 327} 327`}
+              className={bandColor}
+              strokeLinecap="round"
+            />
+          </svg>
+          <div className="absolute inset-0 flex items-center justify-center flex-col">
+            <span className="text-3xl font-bold text-foreground">{Math.round(rsi.score)}</span>
+            <span className={`text-[10px] font-bold mt-0.5 px-2 py-0.5 rounded-full ${bandBg} ${bandColor}`}>{rsi.band}</span>
+          </div>
         </div>
+        {rsi.trend30d != null && (
+          <div className="mt-2 flex items-center justify-center gap-1">
+            {rsi.trend30d >= 0 ? <TrendingUp className="h-3 w-3 text-emerald-500" /> : <TrendingDown className="h-3 w-3 text-destructive" />}
+            <span className={`text-xs font-medium ${rsi.trend30d >= 0 ? "text-emerald-600" : "text-destructive"}`}>
+              {rsi.trend30d >= 0 ? "+" : ""}{rsi.trend30d} pts (30d)
+            </span>
+          </div>
+        )}
       </div>
-      {rsi.trend30d != null && (
-        <div className="mt-2 flex items-center justify-center gap-1">
-          {rsi.trend30d >= 0 ? <TrendingUp className="h-3 w-3 text-emerald-500" /> : <TrendingDown className="h-3 w-3 text-destructive" />}
-          <span className={`text-xs font-medium ${rsi.trend30d >= 0 ? "text-emerald-600" : "text-destructive"}`}>
-            {rsi.trend30d >= 0 ? "+" : ""}{rsi.trend30d} pts (30d)
-          </span>
+      <p className="mt-3 text-[11px] text-muted-foreground leading-relaxed text-center">{rsi.insight}</p>
+
+      {rsi.componentInsights && rsi.componentInsights.length > 0 && (
+        <div className="mt-3">
+          <button
+            onClick={() => setShowBreakdown(!showBreakdown)}
+            className="w-full flex items-center justify-center gap-1.5 text-xs font-medium text-primary hover:text-primary/80 transition-colors py-1"
+          >
+            {showBreakdown ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+            {showBreakdown ? "Hide" : "What's driving this score?"}
+          </button>
+          <AnimatePresence>
+            {showBreakdown && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: "auto", opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.2 }}
+                className="overflow-hidden"
+              >
+                <div className="mt-2 space-y-3">
+                  {rsi.componentInsights.map((ci) => {
+                    const barColor = ci.normalized >= 70 ? "bg-emerald-500" : ci.normalized >= 45 ? "bg-yellow-500" : "bg-red-500";
+                    return (
+                      <div key={ci.metric} className="p-3 rounded-lg bg-secondary/50 border border-border">
+                        <div className="flex items-center justify-between mb-1.5">
+                          <span className="text-xs font-semibold text-foreground">{ci.metric}</span>
+                          <span className="text-[10px] font-mono text-muted-foreground">{ci.weight}% weight</span>
+                        </div>
+                        <div className="w-full h-1.5 bg-muted rounded-full mb-2">
+                          <div className={`h-full rounded-full ${barColor}`} style={{ width: `${ci.normalized}%` }} />
+                        </div>
+                        <p className="text-[11px] text-muted-foreground leading-relaxed mb-1">{ci.explanation}</p>
+                        <p className="text-[11px] text-foreground font-medium leading-relaxed mb-2">{ci.lever}</p>
+                        <button
+                          onClick={() => setLocation(ci.ctaRoute)}
+                          className="flex items-center gap-1.5 text-[10px] font-semibold text-primary hover:text-primary/80 transition-colors"
+                        >
+                          {ci.ctaLabel}
+                          <ArrowRight className="h-3 w-3" />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       )}
-      <p className="mt-2 text-[11px] text-muted-foreground leading-relaxed">{rsi.insight}</p>
+    </div>
+  );
+}
+
+interface ForecastInsight {
+  headline: string;
+  currentPace: string;
+  leadScenario: string | null;
+  churnScenario: string | null;
+  ctaLabel: string;
+  ctaRoute: string;
+}
+
+function RevenueForecastCard({ forecast }: { forecast: { currentMrr: number; expectedMrr3m: number; expectedMrr6m: number; insight?: ForecastInsight } | null }) {
+  const [, setLocation] = useLocation();
+  const [expanded, setExpanded] = useState(false);
+
+  if (!forecast || !forecast.insight) return null;
+  const { insight } = forecast;
+
+  return (
+    <div className="bg-card border border-border rounded-xl overflow-hidden">
+      <div className="p-4">
+        <h3 className="text-xs font-semibold text-foreground flex items-center gap-2 mb-2">
+          <DollarSign className="h-3.5 w-3.5 text-emerald-500" />
+          Revenue Outlook
+        </h3>
+        <p className="text-[11px] text-muted-foreground leading-relaxed mb-2">{insight.headline}</p>
+        <p className="text-[11px] text-foreground leading-relaxed font-medium">{insight.currentPace}</p>
+
+        <button
+          onClick={() => setExpanded(!expanded)}
+          className="mt-2 text-[10px] font-medium text-primary hover:text-primary/80 transition-colors flex items-center gap-1"
+        >
+          {expanded ? "Hide scenarios" : "What if I..."}
+          {expanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+        </button>
+
+        <AnimatePresence>
+          {expanded && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.15 }}
+              className="overflow-hidden"
+            >
+              <div className="mt-2 space-y-2">
+                {insight.leadScenario && (
+                  <div className="p-2.5 rounded-lg bg-emerald-50 border border-emerald-200">
+                    <div className="flex items-start gap-2">
+                      <Target className="h-3.5 w-3.5 text-emerald-600 mt-0.5 shrink-0" />
+                      <p className="text-[11px] text-emerald-800 leading-relaxed">{insight.leadScenario}</p>
+                    </div>
+                  </div>
+                )}
+                {insight.churnScenario && (
+                  <div className="p-2.5 rounded-lg bg-blue-50 border border-blue-200">
+                    <div className="flex items-start gap-2">
+                      <Users className="h-3.5 w-3.5 text-blue-600 mt-0.5 shrink-0" />
+                      <p className="text-[11px] text-blue-800 leading-relaxed">{insight.churnScenario}</p>
+                    </div>
+                  </div>
+                )}
+                <button
+                  onClick={() => setLocation(insight.ctaRoute)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-primary-foreground rounded-md text-[10px] font-semibold hover:bg-primary/90 transition-colors shadow-sm"
+                >
+                  {insight.ctaLabel}
+                  <ArrowRight className="h-3 w-3" />
+                </button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
     </div>
   );
 }
@@ -520,7 +1079,6 @@ export function AiInsights() {
   const [sendingTaskId, setSendingTaskId] = useState<number | null>(null);
   const [historyAutoFilter, setHistoryAutoFilter] = useState<"all" | "auto" | "manual">("all");
   const [expandedInterventions, setExpandedInterventions] = useState<Set<string>>(new Set());
-  const [dismissedInterventions, setDismissedInterventions] = useState<Set<string>>(new Set());
   const [showDismissed, setShowDismissed] = useState(false);
   const [trendWindow, setTrendWindow] = useState<"30d" | "90d" | "all">("90d");
   const [showRsiTrend, setShowRsiTrend] = useState(false);
@@ -533,7 +1091,30 @@ export function AiInsights() {
     query: { enabled: !!activeGymId, staleTime: 30000 }
   });
 
+  const { data: dismissedInterventionIds } = useGetDismissedInterventions(activeGymId as number, {
+    query: { enabled: !!activeGymId }
+  });
+
+  const dismissedInterventions = useMemo(() => new Set(dismissedInterventionIds ?? []), [dismissedInterventionIds]);
+
+  const dismissMutation = useDismissIntervention({
+    mutation: {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: getGetDismissedInterventionsQueryKey(activeGymId as number) });
+      },
+    },
+  });
+
+  const restoreMutation = useRestoreIntervention({
+    mutation: {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: getGetDismissedInterventionsQueryKey(activeGymId as number) });
+      },
+    },
+  });
+
   const { data: rsiHistory } = useRsiHistory(activeGymId, trendWindow);
+  const { data: benchmarkData } = useBenchmarks(activeGymId);
 
   const { data: tasks, isLoading: tasksLoading, isError: tasksError } = useListAiTasks(activeGymId as number, {
     query: { enabled: !!activeGymId }
@@ -562,8 +1143,8 @@ export function AiInsights() {
   const generateBrief = useGenerateOwnerBrief({
     mutation: {
       onMutate: () => setIsGeneratingBrief(true),
-      onSuccess: (data: Record<string, unknown>) => {
-        setBriefContent(data.content as string);
+      onSuccess: (data) => {
+        setBriefContent((data as unknown as Record<string, unknown>).content as string);
         setBriefOpen(true);
         toast({ title: "Owner Brief Generated", description: "Your weekly brief is ready to review." });
       },
@@ -608,13 +1189,15 @@ export function AiInsights() {
 
   const sendEmail = useSendAiTaskEmail({
     mutation: {
-      onSuccess: (data: Record<string, unknown>, variables: Record<string, unknown>) => {
+      onSuccess: (data, variables) => {
+        const d = data as unknown as Record<string, unknown>;
+        const v = variables as unknown as Record<string, unknown>;
         queryClient.setQueryData(queryKey, (old: Array<Record<string, unknown>> | undefined) => {
           if (!old) return old;
-          return old.map((t) => t.id === variables.taskId ? { ...t, status: 'sent', updatedAt: new Date().toISOString() } : t);
+          return old.map((t) => t.id === v.taskId ? { ...t, status: 'sent', channel: 'email', updatedAt: new Date().toISOString() } : t);
         });
         queryClient.invalidateQueries({ queryKey });
-        toast({ title: "Email Sent", description: `Email sent to ${data.recipientName} (${data.recipientEmail}).` });
+        toast({ title: "Email Sent", description: `Email sent to ${d.recipientName} (${d.recipientEmail}).` });
         setSendingTaskId(null);
       },
       onError: (err: unknown) => {
@@ -625,12 +1208,39 @@ export function AiInsights() {
     }
   });
 
+  const sendSms = useSendAiTaskSms({
+    mutation: {
+      onSuccess: (data, variables) => {
+        const d = data as unknown as Record<string, unknown>;
+        const v = variables as unknown as Record<string, unknown>;
+        queryClient.setQueryData(queryKey, (old: Array<Record<string, unknown>> | undefined) => {
+          if (!old) return old;
+          return old.map((t) => t.id === v.taskId ? { ...t, status: 'sent', channel: 'sms', updatedAt: new Date().toISOString() } : t);
+        });
+        queryClient.invalidateQueries({ queryKey });
+        toast({ title: "Text Sent", description: `Text sent to ${d.recipientName} (${d.recipientPhone}).` });
+        setSendingTaskId(null);
+      },
+      onError: (err: unknown) => {
+        const error = err as { response?: { data?: { error?: string } } };
+        toast({ title: "Failed to Send", description: error?.response?.data?.error || "Could not send text. Please try again.", variant: "destructive" });
+        setSendingTaskId(null);
+      },
+    }
+  });
+
   const generateTasksMutation = useGenerateAiTasks({
     mutation: {
-      onSuccess: (data: Record<string, unknown>) => {
+      onSuccess: (data) => {
         queryClient.invalidateQueries({ queryKey });
-        const created = data.created as number;
-        toast({ title: "Tasks Generated", description: `${created} new task${created !== 1 ? 's' : ''} created from gym data.` });
+        queryClient.invalidateQueries({ queryKey: getGetInterventionsQueryKey(activeGymId as number) });
+        const result = data as unknown as Record<string, unknown>;
+        const created = result.created as number;
+        if (created === 0 && result.reason) {
+          toast({ title: "Scan Complete", description: result.reason as string });
+        } else {
+          toast({ title: "Tasks Generated", description: `${created} new task${created !== 1 ? 's' : ''} created from gym data.` });
+        }
       },
       onError: () => {
         toast({ title: "Error", description: "Failed to generate tasks.", variant: "destructive" });
@@ -640,12 +1250,12 @@ export function AiInsights() {
 
   const pendingTasks = useMemo(() => {
     if (!tasks) return [];
-    return (tasks as Array<Record<string, unknown>>).filter((t) => t.status === 'pending');
+    return (tasks as unknown as Array<Record<string, unknown>>).filter((t) => t.status === 'pending');
   }, [tasks]);
 
   const historyTasks = useMemo(() => {
     if (!tasks) return [];
-    return (tasks as Array<Record<string, unknown>>).filter((t) => ['sent', 'completed', 'dismissed', 'approved'].includes(t.status as string));
+    return (tasks as unknown as Array<Record<string, unknown>>).filter((t) => ['sent', 'completed', 'dismissed', 'approved'].includes(t.status as string));
   }, [tasks]);
 
   const filteredPendingTasks = useMemo(() => {
@@ -702,25 +1312,21 @@ export function AiInsights() {
   }, [interventions, dismissedInterventions]);
 
   const handleDismissIntervention = useCallback((id: string) => {
-    setDismissedInterventions(prev => new Set(prev).add(id));
+    dismissMutation.mutate({ gymId: activeGymId as number, data: { interventionId: id } });
     const intervention = (interventions as Intervention[])?.find(i => i.id === id);
     toast({
       title: "Recommendation dismissed",
       description: intervention ? `"${intervention.title}" moved to dismissed.` : "Item dismissed.",
       action: (
         <button
-          onClick={() => setDismissedInterventions(prev => {
-            const next = new Set(prev);
-            next.delete(id);
-            return next;
-          })}
+          onClick={() => restoreMutation.mutate({ gymId: activeGymId as number, interventionId: id })}
           className="flex items-center gap-1 text-xs font-medium text-primary hover:text-primary/80"
         >
           <Undo2 className="h-3 w-3" /> Undo
         </button>
       ),
     });
-  }, [interventions, toast]);
+  }, [interventions, toast, dismissMutation, restoreMutation, activeGymId]);
 
   const handleToggleExpand = useCallback((id: string) => {
     setExpandedInterventions(prev => {
@@ -748,6 +1354,11 @@ export function AiInsights() {
   function handleSendEmail(task: Record<string, unknown>) {
     setSendingTaskId(task.id as number);
     sendEmail.mutate({ gymId: activeGymId as number, taskId: task.id as number });
+  }
+
+  function handleSendSms(task: Record<string, unknown>) {
+    setSendingTaskId(task.id as number);
+    sendSms.mutate({ gymId: activeGymId as number, taskId: task.id as number });
   }
 
   function handleDismiss(task: Record<string, unknown>) {
@@ -839,7 +1450,7 @@ export function AiInsights() {
     );
   }
 
-  const { rsi, topRisks } = intel;
+  const { rsi, topRisks, revenueForecast } = intel;
   const atRiskMembers = stats?.atRiskMembers ?? 0;
 
   return (
@@ -942,14 +1553,16 @@ export function AiInsights() {
                   <motion.div
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
-                    className="bg-card border border-border rounded-xl p-8 text-center"
+                    className="bg-card border border-emerald-200 rounded-xl p-8 text-center"
                   >
-                    <CheckCircle2 className="h-10 w-10 text-emerald-500/50 mx-auto mb-3" />
-                    <h3 className="font-semibold text-foreground">All caught up</h3>
-                    <p className="text-sm text-muted-foreground mt-1">
+                    <div className="h-14 w-14 rounded-2xl bg-emerald-50 flex items-center justify-center mx-auto mb-4">
+                      <CheckCircle2 className="h-8 w-8 text-emerald-500" />
+                    </div>
+                    <h3 className="font-semibold text-foreground text-lg">Nothing flagged</h3>
+                    <p className="text-sm text-muted-foreground mt-2 max-w-md mx-auto leading-relaxed">
                       {dismissedInterventions.size > 0
-                        ? "All recommendations have been addressed or dismissed."
-                        : "No new recommendations at this time. Run a scan to check for updates."}
+                        ? "Every recommendation handled. Metrics are clean — use the time to build."
+                        : "No issues detected. Metrics look clean. Use the time to build."}
                     </p>
                   </motion.div>
                 )}
@@ -988,11 +1601,7 @@ export function AiInsights() {
                               <span className="text-sm text-foreground">{intervention.title}</span>
                             </div>
                             <button
-                              onClick={() => setDismissedInterventions(prev => {
-                                const next = new Set(prev);
-                                next.delete(intervention.id);
-                                return next;
-                              })}
+                              onClick={() => restoreMutation.mutate({ gymId: activeGymId as number, interventionId: intervention.id })}
                               className="text-xs text-primary hover:text-primary/80 font-medium flex items-center gap-1"
                             >
                               <Undo2 className="h-3 w-3" /> Restore
@@ -1037,6 +1646,8 @@ export function AiInsights() {
             />
           </div>
 
+          <RevenueForecastCard forecast={revenueForecast} />
+
           <div className="bg-card border border-border rounded-xl overflow-hidden">
             <div className="p-3 border-b border-border flex items-center justify-between">
               <h3 className="text-xs font-semibold text-foreground flex items-center gap-2">
@@ -1044,7 +1655,7 @@ export function AiInsights() {
                 Risk Radar
               </h3>
               <button
-                onClick={() => setLocation("/retention")}
+                onClick={() => setLocation("/members?filter=at-risk")}
                 className="text-[10px] text-primary hover:text-primary/80 font-medium flex items-center gap-1"
               >
                 View all <ExternalLink className="h-3 w-3" />
@@ -1057,15 +1668,20 @@ export function AiInsights() {
                     <div className="flex items-center justify-between mb-1">
                       <span className="font-medium text-foreground text-xs truncate">{risk.memberName}</span>
                       <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase ${
-                        risk.riskTier === 'critical' ? 'bg-red-100 text-red-600' :
-                        risk.riskTier === 'high' ? 'bg-orange-100 text-orange-600' :
-                        'bg-yellow-100 text-yellow-600'
+                        risk.riskTier === 'critical' ? 'bg-red-100 dark:bg-red-950/40 text-red-600 dark:text-red-400' :
+                        risk.riskTier === 'high' ? 'bg-orange-100 dark:bg-orange-950/40 text-orange-600 dark:text-orange-400' :
+                        'bg-yellow-100 dark:bg-yellow-950/40 text-yellow-600 dark:text-yellow-400'
                       }`}>{risk.riskTier}</span>
                     </div>
                     <div className="flex items-center justify-between text-[10px]">
                       <div className="flex items-center gap-1.5">
                         <div className="w-12 h-1.5 bg-muted rounded-full overflow-hidden">
-                          <div className="h-full bg-destructive rounded-full" style={{ width: `${risk.riskScore}%` }} />
+                          <div className={`h-full rounded-full ${
+                            risk.riskScore >= 81 ? 'bg-red-500' :
+                            risk.riskScore >= 61 ? 'bg-orange-500' :
+                            risk.riskScore >= 31 ? 'bg-yellow-500' :
+                            'bg-green-500'
+                          }`} style={{ width: `${risk.riskScore}%` }} />
                         </div>
                         <span className="font-mono text-muted-foreground">{risk.riskScore}</span>
                       </div>
@@ -1190,9 +1806,9 @@ export function AiInsights() {
             <div>
               <h2 className="text-base font-semibold text-foreground flex items-center gap-2">
                 <BrainCircuit className="h-4 w-4 text-primary" />
-                AI Task Inbox
+                AI Action Center
               </h2>
-              <p className="text-xs text-muted-foreground mt-0.5">AI-generated tasks that need your review</p>
+              <p className="text-xs text-muted-foreground mt-0.5">AI-suggested outreach and follow-ups for your review</p>
             </div>
             <div className="flex gap-1 bg-muted/50 rounded-lg p-1">
               <button
@@ -1377,7 +1993,7 @@ export function AiInsights() {
 
                       <p className="text-xs text-muted-foreground mb-2">{task.description as string}</p>
 
-                      {task.personalizationMeta && (() => {
+                      {task.personalizationMeta ? (() => {
                         try {
                           const meta = JSON.parse(task.personalizationMeta as string);
                           if (meta.dataPoints && meta.dataPoints.length > 0) {
@@ -1398,16 +2014,16 @@ export function AiInsights() {
                         } catch {
                           return null;
                         }
-                      })()}
+                      })() : null}
 
-                      {task.aiContent && (
+                      {task.aiContent ? (
                         <div className="mb-2 p-3 rounded-lg bg-secondary border border-border text-xs font-mono text-foreground/80 relative whitespace-pre-wrap max-h-32 overflow-y-auto">
                           <div className="absolute -top-3 left-3 bg-background px-2 text-[10px] text-primary uppercase font-bold flex items-center gap-1">
                             <Sparkles className="h-3 w-3" /> Draft
                           </div>
                           {task.aiContent as string}
                         </div>
-                      )}
+                      ) : null}
 
                       <div className="flex flex-wrap justify-end gap-2 pt-1">
                         <button
@@ -1426,14 +2042,24 @@ export function AiInsights() {
                           Edit
                         </button>
                         {canEmail && isPro && (
-                          <button
-                            onClick={() => emailReady ? handleSendEmail(task) : undefined}
-                            disabled={!emailReady || isSending || sendEmail.isPending}
-                            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors min-h-[36px] disabled:opacity-50 disabled:cursor-not-allowed ${emailReady ? "text-blue-600 hover:text-blue-500 border border-blue-200 hover:border-blue-300" : "text-muted-foreground border border-border"}`}
-                          >
-                            {isSending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Mail className="h-3.5 w-3.5" />}
-                            Send
-                          </button>
+                          <>
+                            <button
+                              onClick={() => emailReady ? handleSendEmail(task) : undefined}
+                              disabled={!emailReady || isSending || sendEmail.isPending}
+                              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors min-h-[36px] disabled:opacity-50 disabled:cursor-not-allowed ${emailReady ? "text-blue-600 hover:text-blue-500 border border-blue-200 hover:border-blue-300" : "text-muted-foreground border border-border"}`}
+                            >
+                              {isSending && sendingTaskId === (task.id as number) && !sendSms.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Mail className="h-3.5 w-3.5" />}
+                              Email
+                            </button>
+                            <button
+                              onClick={() => handleSendSms(task)}
+                              disabled={isSending || sendSms.isPending}
+                              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors min-h-[36px] disabled:opacity-50 disabled:cursor-not-allowed text-emerald-600 hover:text-emerald-500 border border-emerald-200 hover:border-emerald-300"
+                            >
+                              {isSending && sendingTaskId === (task.id as number) && sendSms.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <MessageSquare className="h-3.5 w-3.5" />}
+                              Text
+                            </button>
+                          </>
                         )}
                         <button
                           onClick={() => handleApprove(task)}
@@ -1477,12 +2103,12 @@ export function AiInsights() {
                           <div className="min-w-0">
                             <h4 className="font-semibold text-foreground text-sm flex items-center gap-2">
                               {task.title as string}
-                              {task.autoSent && (
+                              {task.autoSent ? (
                                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-primary/10 text-primary border border-primary/20">
                                   <Zap className="h-3 w-3" />
                                   Auto
                                 </span>
-                              )}
+                              ) : null}
                             </h4>
                             <p className="text-[10px] text-muted-foreground flex items-center gap-1 mt-0.5">
                               <Clock className="h-3 w-3" /> {task.updatedAt ? new Date(task.updatedAt as string).toLocaleDateString() : task.createdAt ? new Date(task.createdAt as string).toLocaleDateString() : 'Unknown'}
@@ -1498,7 +2124,7 @@ export function AiInsights() {
                             {task.status === 'dismissed' && <X className="h-3 w-3" />}
                             {statusCfg.label}
                           </span>
-                          {task.outcome && task.outcome !== "none" && OUTCOME_CONFIG[task.outcome as string] && (() => {
+                          {task.outcome && task.outcome !== "none" && OUTCOME_CONFIG[task.outcome as string] ? (() => {
                             const outcomeCfg = OUTCOME_CONFIG[task.outcome as string];
                             const OutcomeIcon = outcomeCfg.icon;
                             return (
@@ -1507,18 +2133,18 @@ export function AiInsights() {
                                 {outcomeCfg.label}
                               </span>
                             );
-                          })()}
+                          })() : null}
                         </div>
                       </div>
 
                       <p className="text-xs text-muted-foreground mb-2">{task.description as string}</p>
 
-                      {task.revenueImpact && parseFloat(task.revenueImpact as string) > 0 && (
+                      {task.revenueImpact && parseFloat(task.revenueImpact as string) > 0 ? (
                         <div className="flex items-center gap-1.5 mb-2 text-xs text-emerald-600">
                           <DollarSign className="h-3 w-3" />
                           <span className="font-medium">${parseFloat(task.revenueImpact as string).toFixed(2)}/mo</span>
                         </div>
-                      )}
+                      ) : null}
                     </div>
                   );
                 })}
@@ -1548,6 +2174,14 @@ export function AiInsights() {
           </p>
         </div>
       )}
+
+      <div className="bg-card border border-border rounded-xl shadow-sm overflow-hidden p-4 md:p-6">
+        <div className="flex items-center gap-2 mb-4">
+          <BarChart3 className="h-4 w-4 text-primary" />
+          <h2 className="text-base font-semibold text-foreground">Industry Benchmarks</h2>
+        </div>
+        <BenchmarkSection data={benchmarkData} />
+      </div>
 
       <SmartActionsModal gymId={activeGymId} open={smartActionsOpen} onOpenChange={setSmartActionsOpen} />
 

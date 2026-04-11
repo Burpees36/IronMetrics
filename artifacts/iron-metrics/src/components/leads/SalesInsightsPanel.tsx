@@ -20,17 +20,17 @@ export function SalesInsightsPanel({ gymId }: SalesInsightsPanelProps) {
   const callouts: string[] = [];
   if (insights.bottleneckStage && insights.bottleneckCount > 0) {
     const label = STAGE_CONFIG[insights.bottleneckStage]?.label || insights.bottleneckStage;
-    callouts.push(`Most leads are stuck at "${label}"`);
+    callouts.push(`${insights.bottleneckCount} leads jammed at "${label}" — unblock that stage`);
   }
   if (insights.staleCount > 0) {
-    callouts.push(`${insights.staleCount} lead${insights.staleCount > 1 ? "s" : ""} need${insights.staleCount === 1 ? "s" : ""} attention`);
+    callouts.push(`${insights.staleCount} stale lead${insights.staleCount > 1 ? "s" : ""} — reach out or cut them`);
   }
   if (insights.needsFollowUp > 0) {
-    callouts.push(`${insights.needsFollowUp} follow-up${insights.needsFollowUp > 1 ? "s" : ""} due today`);
+    callouts.push(`${insights.needsFollowUp} follow-up${insights.needsFollowUp > 1 ? "s" : ""} due today — do them now`);
   }
   const topSource = insights.sourcePerformance?.find((s: any) => s.rate > 0);
   if (topSource) {
-    callouts.push(`${topSource.source?.replace("_", " ") ?? "Unknown"} converts best (${topSource.rate}%)`);
+    callouts.push(`${topSource.source?.replace("_", " ") ?? "Unknown"} is your best channel at ${topSource.rate}% — double down`);
   }
 
   return (

@@ -24,7 +24,7 @@ function computePercentile(sorted: number[], p: number): number {
 }
 
 interface GymMetricValues {
-  rsiScore: number;
+  rsiScore: number | null;
   churnRate: number;
   avgRevPerMember: number;
   avgTenure: number;
@@ -54,7 +54,7 @@ export async function computeBenchmarks(): Promise<void> {
     try {
       const blended = await getBlendedGymMetrics(gym.id);
       const engagement = await computeBlendedEngagement(gym.id);
-      const rsi = computeRSI(blended.churnRate, blended.avgRevPerMember, blended.netGrowth, blended.avgTenure);
+      const rsi = computeRSI(blended.churnRate, blended.avgRevPerMember, blended.netGrowth, blended.avgTenure, blended.totalMembers);
 
       gymMetrics.push({
         rsiScore: rsi.score,
@@ -78,7 +78,7 @@ export async function computeBenchmarks(): Promise<void> {
     const sampleCount = segmentGyms.length;
 
     for (const metric of METRICS) {
-      const values = segmentGyms.map(g => g[metric]).sort((a, b) => a - b);
+      const values = segmentGyms.map(g => g[metric]).filter((v): v is number => v !== null).sort((a, b) => a - b);
 
       const row = {
         metric,

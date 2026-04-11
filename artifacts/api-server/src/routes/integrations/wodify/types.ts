@@ -3,7 +3,7 @@
  *
  * These types model the VERIFIED shape of Wodify API responses (probed
  * 2026-03-25 against api.wodify.com/v1 with a live API key) and the
- * internal normalized forms used by Iron Metrics.
+ * internal normalized forms used by ForgeOS.
  *
  * API uses snake_case field names. Response wrappers use plural entity
  * names: { "clients": [...] }, { "memberships": [...] }, etc.

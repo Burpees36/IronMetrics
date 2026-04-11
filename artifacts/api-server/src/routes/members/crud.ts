@@ -1,10 +1,12 @@
 import { Router, type IRouter } from "express";
 import { eq, and, ilike, or, count, desc, ne, sql, inArray } from "drizzle-orm";
-import { db, membersTable, memberNotesTable, timelineEventsTable, subscriptionsTable, attendanceTable, membershipPlansTable } from "@workspace/db";
+import { db, membersTable, memberNotesTable, timelineEventsTable, subscriptionsTable, attendanceTable, membershipPlansTable, gymsTable } from "@workspace/db";
 import { stripeService } from "../../stripeService";
 import { getStripeClient } from "../../stripeClient";
+import { sendMemberSms } from "../../services/member-sms";
 import { CreateMemberBody, UpdateMemberBody } from "@workspace/api-zod";
 import { parseGymId, parseMemberId, EMAIL_REGEX } from "./helpers";
+import { exitMemberSequences } from "../../schedulers/retention-engine";
 
 const router: IRouter = Router();
 
@@ -14,10 +16,19 @@ router.get("/gyms/:gymId/members", async (req, res): Promise<void> => {
 
   const status = req.query.status as string | undefined;
   const search = req.query.search as string | undefined;
+  const idsParam = req.query.ids as string | undefined;
+  const planIdParam = req.query.planId as string | undefined;
+  const planId = planIdParam ? parseInt(planIdParam, 10) : null;
   const limit = Math.min(parseInt(req.query.limit as string) || 50, 200);
   const offset = parseInt(req.query.offset as string) || 0;
 
   let conditions = [eq(membersTable.gymId, gymId)];
+  if (idsParam) {
+    const ids = idsParam.split(",").map(id => parseInt(id.trim(), 10)).filter(id => !isNaN(id));
+    if (ids.length > 0) {
+      conditions.push(inArray(membersTable.id, ids));
+    }
+  }
   if (status) conditions.push(eq(membersTable.status, status));
   if (search) {
     conditions.push(
@@ -27,6 +38,18 @@ router.get("/gyms/:gymId/members", async (req, res): Promise<void> => {
         ilike(membersTable.email, `%${search}%`)
       )!
     );
+  }
+
+  if (planId && !isNaN(planId)) {
+    const memberIdsWithPlan = db
+      .select({ memberId: subscriptionsTable.memberId })
+      .from(subscriptionsTable)
+      .where(and(
+        eq(subscriptionsTable.gymId, gymId),
+        eq(subscriptionsTable.planId, planId),
+        inArray(subscriptionsTable.status, ["active", "past_due", "on_hold", "paused", "cancel_at_period_end"])
+      ));
+    conditions.push(inArray(membersTable.id, memberIdsWithPlan));
   }
 
   const where = conditions.length === 1 ? conditions[0] : and(...conditions);
@@ -135,6 +158,25 @@ router.post("/gyms/:gymId/members", async (req, res): Promise<void> => {
     }
   }
 
+  let planMonthlyAmount: string | null = null;
+  if (planId) {
+    const [plan] = await db
+      .select({ price: membershipPlansTable.price, billingInterval: membershipPlansTable.billingInterval })
+      .from(membershipPlansTable)
+      .where(and(eq(membershipPlansTable.id, planId), eq(membershipPlansTable.gymId, gymId)))
+      .limit(1);
+    if (plan) {
+      const rawPrice = parseFloat(plan.price);
+      if (isFinite(rawPrice) && rawPrice > 0) {
+        if (plan.billingInterval === "yearly" || plan.billingInterval === "annual") {
+          planMonthlyAmount = (rawPrice / 12).toFixed(2);
+        } else {
+          planMonthlyAmount = rawPrice.toFixed(2);
+        }
+      }
+    }
+  }
+
   let verifiedCustomerId: string | null = null;
   let verifiedPaymentMethodId: string | null = null;
 
@@ -180,6 +222,7 @@ router.post("/gyms/:gymId/members", async (req, res): Promise<void> => {
       joinDate: today,
       tags: parsed.data.tags || [],
       ...(verifiedCustomerId ? { stripeCustomerId: verifiedCustomerId } : {}),
+      ...(planMonthlyAmount ? { monthlyRevenue: planMonthlyAmount } : {}),
     })
     .returning();
 
@@ -349,12 +392,77 @@ router.patch("/gyms/:gymId/members/:memberId", async (req, res): Promise<void> =
         eq(subscriptionsTable.gymId, gymId),
         inArray(subscriptionsTable.status, ["active", "past_due", "cancel_at_period_end"]),
       ));
+    try {
+      await exitMemberSequences(memberId, gymId, "member_inactive");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`[members] Failed to exit sequences for cancelled member ${memberId}:`, msg);
+    }
+  }
+
+  if (data.status === "hold") {
+    try {
+      await exitMemberSequences(memberId, gymId, "member_inactive");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`[members] Failed to exit sequences for held member ${memberId}:`, msg);
+    }
   }
 
   res.json({
     ...member,
     riskScore: member.riskScore ? parseFloat(member.riskScore) : null,
   });
+});
+
+router.post("/gyms/:gymId/members/:memberId/send-sms", async (req, res): Promise<void> => {
+  const gymId = parseGymId(req.params);
+  const memberId = parseMemberId(req.params);
+  if (!gymId || !memberId) { res.status(400).json({ error: "Invalid gym or member ID" }); return; }
+
+  const { message } = req.body as { message?: string };
+  if (!message || typeof message !== "string" || message.trim().length === 0) {
+    res.status(400).json({ error: "Message is required" }); return;
+  }
+
+  try {
+    const [member] = await db.select().from(membersTable).where(and(eq(membersTable.id, memberId), eq(membersTable.gymId, gymId)));
+    if (!member) { res.status(404).json({ error: "Member not found" }); return; }
+    if (!member.phone) { res.status(400).json({ error: "Member has no phone number on file" }); return; }
+
+    const [gym] = await db.select().from(gymsTable).where(eq(gymsTable.id, gymId));
+    if (!gym) { res.status(404).json({ error: "Gym not found" }); return; }
+    if (!gym.smsEnabled) { res.status(400).json({ error: "SMS is not enabled for this gym" }); return; }
+
+    const result = await sendMemberSms({
+      memberId,
+      gymId,
+      to: member.phone,
+      body: message.trim(),
+      smsType: "manual",
+      timelineTitle: "Text Message Sent",
+      gymConfig: {
+        smsEnabled: gym.smsEnabled ?? false,
+        twilioAccountSid: gym.twilioAccountSid,
+        twilioAuthToken: gym.twilioAuthToken,
+        twilioPhoneNumber: gym.twilioPhoneNumber,
+      },
+    });
+
+    if (!result.success) {
+      res.status(500).json({ error: result.error || "Failed to send SMS" }); return;
+    }
+
+    res.json({
+      success: true,
+      recipientName: `${member.firstName} ${member.lastName}`,
+      recipientPhone: member.phone,
+      messageSid: result.messageSid,
+    });
+  } catch (err) {
+    console.error("Error sending member SMS:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
 });
 
 export default router;

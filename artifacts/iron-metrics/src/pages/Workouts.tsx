@@ -13,7 +13,10 @@ import {
   useReorderProgrammingSections,
   useLogSectionResult,
   useListMembers,
+  useGenerateProgrammingDay,
+  useGenerateProgrammingWeek,
   getListProgrammingDaysQueryKey,
+  useGetGym,
 } from "@workspace/api-client-react";
 import type { ProgrammingDayWithSections, SectionType as ApiSectionType } from "@workspace/api-client-react";
 import { useAuth } from "@workspace/replit-auth-web";
@@ -28,6 +31,9 @@ import {
   CalendarDays,
   Dumbbell,
   Eye,
+  Sparkles,
+  Wand2,
+  Share2,
 } from "lucide-react";
 
 import { DateNavigation } from "@/components/programming/DateNavigation";
@@ -50,6 +56,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ShareWorkoutDialog } from "@/components/programming/ShareWorkoutDialog";
 
 function toDateString(d: Date): string {
   return d.toISOString().split("T")[0];
@@ -237,7 +244,16 @@ export function Workouts() {
   const [panelOpen, setPanelOpen] = useState(false);
   const [editData, setEditData] = useState<ProgrammingDayData | null>(null);
   const [deleteConfirmDay, setDeleteConfirmDay] = useState<ProgrammingDayWithSections | null>(null);
+  const [overwriteConfirm, setOverwriteConfirm] = useState<{ date: string } | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [shareDialogOpen, setShareDialogOpen] = useState(false);
+  const [shareDialogDay, setShareDialogDay] = useState<{ title?: string; date?: string } | null>(null);
+
+  const { data: gym } = useGetGym(activeGymId as number, { query: { enabled: !!activeGymId } });
+  const gymSlug = (gym as { slug?: string } | undefined)?.slug;
+  const publicWodUrl = gymSlug
+    ? `${window.location.origin}${import.meta.env.BASE_URL.replace(/\/$/, "")}/wod/${gymSlug}`
+    : "";
 
   const dateStr = toDateString(selectedDate);
   const weekDates = useMemo(() => getWeekDates(selectedDate), [dateStr]);
@@ -279,6 +295,10 @@ export function Workouts() {
     return Array.isArray(raw) ? (raw as import("@workspace/api-client-react").Member[]) : [];
   }, [membersList]);
 
+  const activeMemberCount = useMemo(() => {
+    return allMembers.filter((m) => m.status === "active").length;
+  }, [allMembers]);
+
   const currentMemberId = useMemo(() => {
     if (!currentUser?.email || allMembers.length === 0) return null;
     const match = allMembers.find((m) => m.email === currentUser.email);
@@ -295,6 +315,9 @@ export function Workouts() {
   const deleteSectionMutation = useDeleteProgrammingSection();
   const reorderSectionsMutation = useReorderProgrammingSections();
   const logSectionResultMutation = useLogSectionResult();
+  const generateDayMutation = useGenerateProgrammingDay();
+  const generateWeekMutation = useGenerateProgrammingWeek();
+  const [isGenerating, setIsGenerating] = useState(false);
 
   const invalidateProgramming = useCallback(() => {
     if (activeGymId) {
@@ -303,6 +326,81 @@ export function Workouts() {
       });
     }
   }, [activeGymId, queryClient]);
+
+  const handleGenerateDay = useCallback(
+    async (targetDate?: string, overwrite?: boolean) => {
+      if (!activeGymId) return;
+      setIsGenerating(true);
+      try {
+        await generateDayMutation.mutateAsync({
+          gymId: activeGymId,
+          data: { date: targetDate || dateStr, overwrite: overwrite ?? false },
+        });
+        invalidateProgramming();
+        toast({
+          title: overwrite ? "Day Regenerated" : "Day Generated",
+          description: "AI-generated programming has been created as a draft. Review and edit before publishing.",
+        });
+      } catch (error: unknown) {
+        const err = error as { status?: number; data?: { error?: string }; message?: string };
+        if (err.status === 409 && !overwrite) {
+          setOverwriteConfirm({ date: targetDate || dateStr });
+          setIsGenerating(false);
+          return;
+        }
+        toast({
+          title: "Generation Failed",
+          description: err?.data?.error || err?.message || "Failed to generate programming. Please try again.",
+          variant: "destructive",
+        });
+      } finally {
+        setIsGenerating(false);
+      }
+    },
+    [activeGymId, dateStr, generateDayMutation, invalidateProgramming, toast]
+  );
+
+  const handleGenerateWeek = useCallback(
+    async () => {
+      if (!activeGymId) return;
+      setIsGenerating(true);
+      try {
+        const result = await generateWeekMutation.mutateAsync({
+          gymId: activeGymId,
+          data: { startDate: weekDates[0] },
+        });
+        invalidateProgramming();
+        const resultData = result as { generated?: number; skipped?: number };
+        const generated = resultData?.generated ?? 0;
+        const skipped = resultData?.skipped ?? 0;
+        if (generated === 0 && skipped > 0) {
+          toast({
+            title: "No Days Generated",
+            description: `All ${skipped} days already have programming. Delete existing days first to regenerate.`,
+          });
+        } else {
+          toast({
+            title: "Week Generated",
+            description: `${generated} days created${skipped > 0 ? `, ${skipped} days skipped (already exist)` : ""}. Review and edit before publishing.`,
+          });
+          if (generated > 0 && publicWodUrl) {
+            setShareDialogDay(null);
+            setShareDialogOpen(true);
+          }
+        }
+      } catch (error: unknown) {
+        const err = error as { data?: { error?: string }; message?: string };
+        toast({
+          title: "Generation Failed",
+          description: err?.data?.error || err?.message || "Failed to generate week. Please try again.",
+          variant: "destructive",
+        });
+      } finally {
+        setIsGenerating(false);
+      }
+    },
+    [activeGymId, weekDates, generateWeekMutation, invalidateProgramming, toast, publicWodUrl]
+  );
 
   const daysByDate = useMemo(() => {
     const map: Record<string, ProgrammingDayWithSections> = {};
@@ -418,10 +516,15 @@ export function Workouts() {
           dayId: day.id,
         });
         invalidateProgramming();
+        const wasPublishing = day.status !== "published";
         toast({
-          title: day.status === "published" ? "Unpublished" : "Published",
-          description: `Programming for ${new Date(day.date + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })} has been ${day.status === "published" ? "unpublished" : "published"}.`,
+          title: wasPublishing ? "Published" : "Unpublished",
+          description: `Programming for ${new Date(day.date + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })} has been ${wasPublishing ? "published" : "unpublished"}.`,
         });
+        if (wasPublishing && publicWodUrl) {
+          setShareDialogDay({ title: day.title, date: day.date });
+          setShareDialogOpen(true);
+        }
       } catch (error: any) {
         toast({
           title: "Error",
@@ -430,7 +533,7 @@ export function Workouts() {
         });
       }
     },
-    [activeGymId, togglePublishMutation, invalidateProgramming, toast]
+    [activeGymId, togglePublishMutation, invalidateProgramming, toast, publicWodUrl]
   );
 
   const handleDelete = useCallback(
@@ -626,16 +729,53 @@ export function Workouts() {
             Build and publish daily programming for your athletes.
           </p>
         </div>
-        <button
-          onClick={() => {
-            setEditData(null);
-            setPanelOpen(true);
-          }}
-          className="flex items-center gap-2 px-4 py-2.5 bg-primary text-primary-foreground hover:bg-primary/90 rounded-xl font-medium transition-colors shadow-lg shadow-primary/20"
-        >
-          <Plus className="h-5 w-5" />
-          <span>New Day</span>
-        </button>
+        <div className="flex items-center gap-2 flex-wrap">
+          {isGenerating && (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground animate-pulse">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              <span>Generating...</span>
+            </div>
+          )}
+          {publicWodUrl && (
+            <button
+              onClick={() => {
+                setShareDialogDay(null);
+                setShareDialogOpen(true);
+              }}
+              className="flex items-center gap-2 px-4 py-2.5 border border-border bg-background hover:bg-accent rounded-xl font-medium transition-colors text-foreground"
+              title="Share programming"
+            >
+              <Share2 className="h-4 w-4" />
+              <span className="hidden sm:inline">Share</span>
+            </button>
+          )}
+          <button
+            onClick={() => handleGenerateDay()}
+            disabled={isGenerating}
+            className="flex items-center gap-2 px-4 py-2.5 bg-violet-600 text-white hover:bg-violet-700 rounded-xl font-medium transition-colors shadow-lg shadow-violet-600/20 disabled:opacity-50"
+          >
+            <Wand2 className="h-4 w-4" />
+            <span className="hidden sm:inline">Generate Day</span>
+          </button>
+          <button
+            onClick={handleGenerateWeek}
+            disabled={isGenerating}
+            className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-violet-600 to-purple-600 text-white hover:from-violet-700 hover:to-purple-700 rounded-xl font-medium transition-colors shadow-lg shadow-purple-600/20 disabled:opacity-50"
+          >
+            <Sparkles className="h-4 w-4" />
+            <span className="hidden sm:inline">Generate Week</span>
+          </button>
+          <button
+            onClick={() => {
+              setEditData(null);
+              setPanelOpen(true);
+            }}
+            className="flex items-center gap-2 px-4 py-2.5 bg-primary text-primary-foreground hover:bg-primary/90 rounded-xl font-medium transition-colors shadow-lg shadow-primary/20"
+          >
+            <Plus className="h-5 w-5" />
+            <span>New Day</span>
+          </button>
+        </div>
       </header>
 
       <DateNavigation
@@ -670,6 +810,8 @@ export function Workouts() {
                     onDuplicate={() => handleDuplicate(day)}
                     onTogglePublish={() => handleTogglePublish(day)}
                     onDelete={() => setDeleteConfirmDay(day)}
+                    publicWodUrl={publicWodUrl}
+                    onCopyLink={(msg) => toast({ title: "Link Copied", description: msg })}
                   />
                   {hasTrackableSections && (
                     <MemberProgrammingView
@@ -706,16 +848,26 @@ export function Workouts() {
                   day: "numeric",
                 })}
               </p>
-              <button
-                onClick={() => {
-                  setEditData(null);
-                  setPanelOpen(true);
-                }}
-                className="mt-4 inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
-              >
-                <Plus className="h-4 w-4" />
-                Create Programming
-              </button>
+              <div className="flex items-center justify-center gap-2 mt-4">
+                <button
+                  onClick={() => handleGenerateDay()}
+                  disabled={isGenerating}
+                  className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg bg-violet-600 text-white hover:bg-violet-700 transition-colors disabled:opacity-50"
+                >
+                  {isGenerating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />}
+                  AI Generate
+                </button>
+                <button
+                  onClick={() => {
+                    setEditData(null);
+                    setPanelOpen(true);
+                  }}
+                  className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+                >
+                  <Plus className="h-4 w-4" />
+                  Create Manually
+                </button>
+              </div>
             </motion.div>
           )}
         </div>
@@ -769,6 +921,8 @@ export function Workouts() {
                 onDuplicate={() => handleDuplicate(day)}
                 onTogglePublish={() => handleTogglePublish(day)}
                 onDelete={() => setDeleteConfirmDay(day)}
+                publicWodUrl={publicWodUrl}
+                onCopyLink={(msg) => toast({ title: "Link Copied", description: msg })}
               />
             );
           })}
@@ -809,6 +963,45 @@ export function Workouts() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <AlertDialog
+        open={!!overwriteConfirm}
+        onOpenChange={(open) => !open && setOverwriteConfirm(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Replace Existing Programming?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Programming already exists for this date. Do you want to replace it with a new AI-generated workout?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (overwriteConfirm) {
+                  handleGenerateDay(overwriteConfirm.date, true);
+                  setOverwriteConfirm(null);
+                }
+              }}
+            >
+              Replace
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {publicWodUrl && activeGymId && (
+        <ShareWorkoutDialog
+          open={shareDialogOpen}
+          onOpenChange={setShareDialogOpen}
+          publicUrl={publicWodUrl}
+          gymId={activeGymId}
+          activeMemberCount={activeMemberCount}
+          dayTitle={shareDialogDay?.title}
+          dayDate={shareDialogDay?.date}
+        />
+      )}
     </div>
   );
 }

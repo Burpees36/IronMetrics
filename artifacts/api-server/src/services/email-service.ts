@@ -31,7 +31,7 @@ class ResendEmailService implements EmailService {
       } else if (params.fromEmail) {
         from = params.fromEmail;
       } else {
-        from = "Iron Metrics <onboarding@resend.dev>";
+        from = "ForgeOS <onboarding@resend.dev>";
       }
 
       const response = await fetch("https://api.resend.com/emails", {
@@ -79,7 +79,7 @@ class SendGridEmailService implements EmailService {
   async sendEmail(params: EmailParams): Promise<{ success: boolean; messageId?: string; error?: string }> {
     try {
       const fromObj: { email: string; name?: string } = {
-        email: params.fromEmail || "noreply@ironmetrics.app",
+        email: params.fromEmail || "noreply@forgeos.app",
       };
       if (params.fromName) {
         fromObj.name = params.fromName;

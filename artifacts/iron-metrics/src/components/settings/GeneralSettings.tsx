@@ -128,21 +128,21 @@ export function GeneralSettings({ gymId }: Props) {
   return (
     <div className="space-y-6">
       <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="bg-card border border-border rounded-2xl p-6 shadow-sm">
-        <h3 className="text-lg font-semibold text-foreground mb-1">Gym Identity</h3>
-        <p className="text-sm text-muted-foreground mb-5">Your gym's name and branding as it appears across the platform.</p>
+        <h3 className="text-lg font-semibold text-foreground mb-1">Business Identity</h3>
+        <p className="text-sm text-muted-foreground mb-5">Your business name and branding as it appears across the platform.</p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="space-y-2">
-            <Label htmlFor="gym-name">Gym Name *</Label>
-            <Input id="gym-name" value={form.name} onChange={e => update("name", e.target.value)} placeholder="Iron Haven CrossFit" />
+            <Label htmlFor="gym-name">Business Name *</Label>
+            <Input id="gym-name" value={form.name} onChange={e => update("name", e.target.value)} placeholder="Iron Haven Athletics" />
           </div>
           <div className="space-y-2">
             <Label htmlFor="business-name">Legal / Business Name</Label>
             <Input id="business-name" value={form.businessName} onChange={e => update("businessName", e.target.value)} placeholder="Iron Haven Fitness LLC" />
-            <p className="text-xs text-muted-foreground">If different from your gym name.</p>
+            <p className="text-xs text-muted-foreground">If different from your business name.</p>
           </div>
           <div className="space-y-2 md:col-span-2">
             <Label htmlFor="gym-desc">Description</Label>
-            <Textarea id="gym-desc" value={form.description} onChange={e => update("description", e.target.value)} placeholder="A brief description of your gym..." rows={3} className="resize-none" />
+            <Textarea id="gym-desc" value={form.description} onChange={e => update("description", e.target.value)} placeholder="A brief description of your business..." rows={3} className="resize-none" />
           </div>
           <div className="space-y-2">
             <Label htmlFor="gym-website">Website</Label>
@@ -153,7 +153,7 @@ export function GeneralSettings({ gymId }: Props) {
 
       <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }} className="bg-card border border-border rounded-2xl p-6 shadow-sm">
         <h3 className="text-lg font-semibold text-foreground mb-1">Contact & Location</h3>
-        <p className="text-sm text-muted-foreground mb-5">Address and contact details for your gym.</p>
+        <p className="text-sm text-muted-foreground mb-5">Address and contact details for your business.</p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="space-y-2">
             <Label htmlFor="gym-email">Contact Email</Label>

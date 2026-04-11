@@ -70,29 +70,29 @@ export function buildPaymentFailedEmail(params: {
     : "";
 
   const body = `
-    <h2 style="margin:0 0 8px;font-size:18px;font-weight:600;color:#111827;">Payment Issue</h2>
+    <h2 style="margin:0 0 8px;font-size:18px;font-weight:600;color:#111827;">Quick heads-up about your account</h2>
     <p style="margin:0 0 16px;font-size:15px;color:#374151;">Hi ${memberName},</p>
     <p style="margin:0 0 16px;font-size:15px;color:#374151;">
-      We were unable to process your payment of <strong>$${amountDue.toFixed(2)}</strong> for your membership at ${branding.name}.
+      Hope you're doing well! I wanted to let you know that your recent payment of <strong>$${amountDue.toFixed(2)}</strong> didn't go through. These things happen all the time — expired cards, bank updates, you name it.
     </p>
     ${cardInfo}
     <p style="margin:0 0 24px;font-size:15px;color:#374151;">
-      Please update your payment method to keep your membership active. Click the button below to securely update your card:
+      It's super easy to fix — just tap the button below to update your card info, and you'll be all set. Takes about 2 minutes.
     </p>
     <div style="text-align:center;margin:24px 0;">
       <a href="${updateLink}" style="display:inline-block;padding:14px 32px;background:#10B981;color:#ffffff;font-size:15px;font-weight:600;text-decoration:none;border-radius:8px;">
-        Update Payment Method
+        Update Payment Info
       </a>
     </div>
     <p style="margin:24px 0 0;font-size:13px;color:#9ca3af;">
-      This link expires in 72 hours. If you have questions, please contact us directly.
+      If you have any questions or need a hand, just reply to this email or give us a call. We're happy to help!
     </p>
   `;
 
-  const text = `Hi ${memberName},\n\nWe were unable to process your payment of $${amountDue.toFixed(2)} for your membership at ${branding.name}.\n\nPlease update your payment method: ${updateLink}\n\nThis link expires in 72 hours.\n\n${branding.name}`;
+  const text = `Hi ${memberName},\n\nHope you're doing well! I wanted to let you know that your recent payment of $${amountDue.toFixed(2)} didn't go through. These things happen — expired cards, bank updates, etc.\n\nYou can fix it in about 2 minutes here: ${updateLink}\n\nIf you need any help, just reply to this email or give us a call!\n\n${branding.name}`;
 
   return {
-    subject: `Action Required: Payment failed for your ${branding.name} membership`,
+    subject: `Quick heads-up about your account, ${memberName}`,
     html: wrapEmail(params.branding, body),
     text,
   };
@@ -107,10 +107,10 @@ export function buildPaymentUpdatedEmail(params: {
   const { memberName, cardLast4, cardBrand, branding } = params;
 
   const body = `
-    <h2 style="margin:0 0 8px;font-size:18px;font-weight:600;color:#111827;">Payment Method Updated</h2>
+    <h2 style="margin:0 0 8px;font-size:18px;font-weight:600;color:#111827;">You're all set!</h2>
     <p style="margin:0 0 16px;font-size:15px;color:#374151;">Hi ${memberName},</p>
     <p style="margin:0 0 16px;font-size:15px;color:#374151;">
-      Your payment method has been successfully updated for your membership at ${branding.name}.
+      Thanks for updating your payment info — you're all good to go! Your membership at ${branding.name} is active and ready.
     </p>
     <div style="padding:16px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;margin:16px 0;">
       <p style="margin:0;font-size:15px;color:#166534;">
@@ -118,14 +118,14 @@ export function buildPaymentUpdatedEmail(params: {
       </p>
     </div>
     <p style="margin:16px 0 0;font-size:15px;color:#374151;">
-      Your membership is now active and future payments will be charged to this card. No further action is needed.
+      Future payments will be charged to this card. Nothing else to do — see you in the gym!
     </p>
   `;
 
-  const text = `Hi ${memberName},\n\nYour payment method has been successfully updated for your membership at ${branding.name}.\n\nNew card: ${cardBrand} ending in ${cardLast4}\n\nYour membership is now active.\n\n${branding.name}`;
+  const text = `Hi ${memberName},\n\nThanks for updating your payment info — you're all good to go! Your membership at ${branding.name} is active and ready.\n\nNew card: ${cardBrand} ending in ${cardLast4}\n\nNothing else to do — see you in the gym!\n\n${branding.name}`;
 
   return {
-    subject: `Payment method updated - ${branding.name}`,
+    subject: `You're all set, ${memberName}!`,
     html: wrapEmail(params.branding, body),
     text,
   };
@@ -140,30 +140,33 @@ export function buildGraceExpiredEmail(params: {
   const { memberName, amountDue, updateLink, branding } = params;
 
   const body = `
-    <h2 style="margin:0 0 8px;font-size:18px;font-weight:600;color:#991b1b;">Final Notice: Payment Required</h2>
+    <h2 style="margin:0 0 8px;font-size:18px;font-weight:600;color:#111827;">We want to keep you in the gym</h2>
     <p style="margin:0 0 16px;font-size:15px;color:#374151;">Hi ${memberName},</p>
-    <div style="padding:16px;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;margin:0 0 16px;">
-      <p style="margin:0;font-size:15px;color:#991b1b;">
-        Your payment of <strong>$${amountDue.toFixed(2)}</strong> is now significantly overdue. Your membership at ${branding.name} may be suspended if this is not resolved promptly.
+    <p style="margin:0 0 16px;font-size:15px;color:#374151;">
+      I wanted to reach out one more time about the payment of <strong>$${amountDue.toFixed(2)}</strong> for your membership. I know life gets hectic, and these things can slip through the cracks.
+    </p>
+    <div style="padding:16px;background:#fef3c7;border:1px solid #fde68a;border-radius:8px;margin:0 0 16px;">
+      <p style="margin:0;font-size:15px;color:#92400e;">
+        To keep your membership active and make sure you don't lose access, we just need your payment info updated. It only takes a couple of minutes.
       </p>
     </div>
     <p style="margin:0 0 24px;font-size:15px;color:#374151;">
-      Please update your payment method immediately to keep your membership active:
+      If something's going on or you need to chat about your options, just reach out — we're always happy to work with you.
     </p>
     <div style="text-align:center;margin:24px 0;">
-      <a href="${updateLink}" style="display:inline-block;padding:14px 32px;background:#dc2626;color:#ffffff;font-size:15px;font-weight:600;text-decoration:none;border-radius:8px;">
-        Update Payment Method Now
+      <a href="${updateLink}" style="display:inline-block;padding:14px 32px;background:#10B981;color:#ffffff;font-size:15px;font-weight:600;text-decoration:none;border-radius:8px;">
+        Update Payment Info
       </a>
     </div>
     <p style="margin:24px 0 0;font-size:13px;color:#9ca3af;">
-      This link expires in 72 hours. If you have questions or need assistance, please contact us directly.
+      If you have any questions, just reply to this email or give us a call. We're here to help!
     </p>
   `;
 
-  const text = `FINAL NOTICE: Hi ${memberName},\n\nYour payment of $${amountDue.toFixed(2)} for your membership at ${branding.name} is significantly overdue. Your membership may be suspended.\n\nUpdate your payment method now: ${updateLink}\n\nThis link expires in 72 hours.\n\n${branding.name}`;
+  const text = `Hi ${memberName},\n\nI wanted to reach out one more time about the payment of $${amountDue.toFixed(2)} for your membership. I know life gets hectic, and these things can slip through the cracks.\n\nTo keep your membership active, we just need your payment info updated: ${updateLink}\n\nIf something's going on or you need to chat about your options, just reach out — we're always happy to work with you.\n\n${branding.name}`;
 
   return {
-    subject: `FINAL NOTICE: Payment overdue for your ${branding.name} membership`,
+    subject: `We want to keep you in the gym, ${memberName}`,
     html: wrapEmail(params.branding, body),
     text,
   };

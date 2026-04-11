@@ -51,21 +51,21 @@ export function MemberBalance({ memberId }: Props) {
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between">
-        <h4 className="text-sm font-medium text-white/70 flex items-center gap-2">
-          <Wallet className="w-4 h-4" /> Account Credit
+        <h4 className="text-sm font-medium text-foreground flex items-center gap-2">
+          <Wallet className="w-4 h-4 text-primary" /> Account Credit
         </h4>
         <button onClick={() => setAdjustOpen(true)} className="text-xs text-primary hover:text-primary/80 flex items-center gap-1">
           <Plus className="w-3 h-3" /> Adjust
         </button>
       </div>
 
-      <div className="p-3 rounded-lg bg-white/5 border border-white/10">
+      <div className="p-3 rounded-lg bg-muted/20 border border-border">
         {isLoading ? (
-          <Loader2 className="w-4 h-4 animate-spin text-white/30" />
+          <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
         ) : (
           <div className="flex items-center justify-between">
-            <span className="text-white/50 text-sm">Balance</span>
-            <span className={`text-lg font-semibold ${balance > 0 ? "text-green-400" : balance < 0 ? "text-red-400" : "text-white/50"}`}>
+            <span className="text-muted-foreground text-sm">Balance</span>
+            <span className={`text-lg font-semibold ${balance > 0 ? "text-emerald-600" : balance < 0 ? "text-destructive" : "text-muted-foreground"}`}>
               ${balance.toFixed(2)}
             </span>
           </div>
@@ -73,7 +73,7 @@ export function MemberBalance({ memberId }: Props) {
       </div>
 
       <Dialog open={adjustOpen} onOpenChange={setAdjustOpen}>
-        <DialogContent className="sm:max-w-sm bg-[hsl(220,20%,12%)] border-white/10 text-white">
+        <DialogContent className="sm:max-w-sm">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Wallet className="w-5 h-5 text-primary" /> Adjust Credit
@@ -83,36 +83,36 @@ export function MemberBalance({ memberId }: Props) {
             <div className="flex gap-2">
               <button
                 onClick={() => setForm(f => ({ ...f, type: "add" }))}
-                className={`flex-1 py-2 rounded-lg text-sm flex items-center justify-center gap-1 ${
-                  form.type === "add" ? "bg-green-500/20 text-green-400 border border-green-500/30" : "bg-white/5 text-white/50 border border-white/10"
+                className={`flex-1 py-2 rounded-lg text-sm flex items-center justify-center gap-1 border ${
+                  form.type === "add" ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/30" : "bg-muted/20 text-muted-foreground border-border"
                 }`}
               >
                 <Plus className="w-3 h-3" /> Add Credit
               </button>
               <button
                 onClick={() => setForm(f => ({ ...f, type: "remove" }))}
-                className={`flex-1 py-2 rounded-lg text-sm flex items-center justify-center gap-1 ${
-                  form.type === "remove" ? "bg-red-500/20 text-red-400 border border-red-500/30" : "bg-white/5 text-white/50 border border-white/10"
+                className={`flex-1 py-2 rounded-lg text-sm flex items-center justify-center gap-1 border ${
+                  form.type === "remove" ? "bg-destructive/10 text-destructive border-destructive/30" : "bg-muted/20 text-muted-foreground border-border"
                 }`}
               >
                 <Minus className="w-3 h-3" /> Remove
               </button>
             </div>
             <div>
-              <Label className="text-white/70">Amount ($)</Label>
+              <Label>Amount ($)</Label>
               <Input type="number" min="0.01" step="0.01" value={form.amount}
                 onChange={e => setForm(f => ({ ...f, amount: e.target.value }))}
-                className="bg-white/5 border-white/10 text-white mt-1" placeholder="25.00" />
+                className="mt-1" placeholder="25.00" />
             </div>
             <div>
-              <Label className="text-white/70">Description</Label>
+              <Label>Description</Label>
               <Input value={form.description}
                 onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
-                className="bg-white/5 border-white/10 text-white mt-1" placeholder="Referral bonus, comp class, etc." />
+                className="mt-1" placeholder="Referral bonus, comp class, etc." />
             </div>
           </div>
           <DialogFooter>
-            <button onClick={() => setAdjustOpen(false)} className="px-4 py-2 text-sm text-white/60 hover:text-white">Cancel</button>
+            <button onClick={() => setAdjustOpen(false)} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors">Cancel</button>
             <button onClick={handleAdjust} disabled={!form.amount || !form.description || adjustMutation.isPending}
               className="px-4 py-2 text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 flex items-center gap-2">
               {adjustMutation.isPending && <Loader2 className="w-4 h-4 animate-spin" />}

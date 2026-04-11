@@ -1,20 +1,21 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useGym } from "@/store/GymContext";
-import { useListMembers, useUpdateMember, useAddMemberNote, getListMembersQueryKey } from "@workspace/api-client-react";
+import { useListMembers, useUpdateMember, useAddMemberNote, getListMembersQueryKey, useListMembershipPlans } from "@workspace/api-client-react";
 import type { ApiError } from "@workspace/api-client-react/custom-fetch";
 import { useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
-import { Loader2, Search, Plus, Filter, MoreHorizontal, UserCircle, Upload, FileSpreadsheet } from "lucide-react";
+import { Loader2, Search, Plus, Filter, MoreHorizontal, UserCircle, Upload, FileSpreadsheet, ShieldAlert, Users, X as XIcon, ChevronLeft, ChevronRight } from "lucide-react";
 import { ImportMembersDialog } from "@/components/members/ImportMembersDialog";
 import { SyncStatusBanner } from "@/components/members/SyncStatusBanner";
 import { AddMemberWizard } from "@/components/members/AddMemberWizard";
-import { Link, useLocation } from "wouter";
+import { Link, useLocation, useSearch } from "wouter";
 import { useIsMobile } from "@/hooks/useMobile";
 import { useToast } from "@/hooks/use-toast";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogAction, AlertDialogCancel } from "@/components/ui/alert-dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -30,6 +31,8 @@ type MemberFromList = {
   profileImageUrl?: string | null;
   riskTier?: string | null;
   riskScore?: number | null;
+  lastVisitDate?: string | null;
+  monthlyRevenue?: string | number | null;
   tags: string[];
   birthDate?: string | null;
   address?: string | null;
@@ -38,7 +41,15 @@ type MemberFromList = {
   emergencyContactName?: string | null;
   emergencyContactPhone?: string | null;
   waiverSigned?: boolean;
+  updatedAt?: string | null;
 };
+
+function daysSince(dateStr: string | null | undefined): number | null {
+  if (!dateStr) return null;
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return null;
+  return Math.max(0, Math.floor((Date.now() - d.getTime()) / (1000 * 60 * 60 * 24)));
+}
 
 const STATUS_OPTIONS = [
   { value: "active", label: "Active" },
@@ -73,6 +84,34 @@ export function Members() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [, navigate] = useLocation();
+  const searchString = useSearch();
+  const urlParams = new URLSearchParams(searchString);
+  const urlFilter = urlParams.get("filter");
+  const urlIds = urlParams.get("ids");
+  const urlSource = urlParams.get("source");
+  const urlPlan = urlParams.get("plan");
+  const [idsFilter, setIdsFilter] = useState<string | null>(urlIds);
+  const [idsSource, setIdsSource] = useState<string | null>(urlSource);
+  const [riskViewActive, setRiskViewActive] = useState(urlFilter === "at-risk");
+
+  useEffect(() => {
+    if (urlFilter === "at-risk") {
+      setRiskViewActive(true);
+      setStatusFilter(["active"]);
+    } else if (urlFilter === "cancelled") {
+      setRiskViewActive(false);
+      setStatusFilter(["cancelled"]);
+    }
+  }, [urlFilter]);
+
+  useEffect(() => {
+    setIdsFilter(urlIds);
+    setIdsSource(urlSource);
+  }, [urlIds, urlSource]);
+
+  useEffect(() => {
+    setPlanFilter(urlPlan || "");
+  }, [urlPlan]);
 
   const [addOpen, setAddOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
@@ -96,14 +135,42 @@ export function Members() {
 
   const [tempStatusFilter, setTempStatusFilter] = useState<string[]>([]);
   const [tempRiskFilter, setTempRiskFilter] = useState<string[]>([]);
+  const [riskFilter, setRiskFilter] = useState<string[]>([]);
+  const [planFilter, setPlanFilter] = useState<string>(urlPlan || "");
+  const [tempPlanFilter, setTempPlanFilter] = useState<string>(urlPlan || "");
 
-  const filterParams: Record<string, string> = {};
+  const { data: plans } = useListMembershipPlans(activeGymId as number, {
+    query: { enabled: !!activeGymId }
+  });
+
+  const PAGE_SIZE = 50;
+  const [currentPage, setCurrentPage] = useState(1);
+
+  const filterParams: Record<string, string | number> = {};
   if (search) filterParams.search = search;
+  if (idsFilter) filterParams.ids = idsFilter;
   if (statusFilter.length === 1) filterParams.status = statusFilter[0];
+  if (planFilter) filterParams.planId = parseInt(planFilter, 10);
+  if (riskViewActive) {
+    filterParams.limit = 200;
+    filterParams.offset = 0;
+  } else if (idsFilter) {
+    filterParams.limit = 200;
+    filterParams.offset = 0;
+  } else {
+    filterParams.limit = PAGE_SIZE;
+    filterParams.offset = (currentPage - 1) * PAGE_SIZE;
+  }
 
-  const { data, isLoading } = useListMembers(activeGymId as number, filterParams, {
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, statusFilter, planFilter]);
+
+  const { data, isLoading } = useListMembers(activeGymId as number, filterParams as any, {
     query: { enabled: !!activeGymId, placeholderData: (prev: any) => prev } as any
   });
+
+  const totalPages = data ? Math.ceil(data.total / PAGE_SIZE) : 1;
 
   const updateMemberMutation = useUpdateMember();
   const addNoteMutation = useAddMemberNote();
@@ -239,20 +306,40 @@ export function Members() {
 
   const openFilter = () => {
     setTempStatusFilter([...statusFilter]);
-    setTempRiskFilter([]);
+    setTempRiskFilter([...riskFilter]);
+    setTempPlanFilter(planFilter);
     setFilterOpen(true);
   };
 
   const applyFilters = () => {
     setStatusFilter(tempStatusFilter);
+    setRiskFilter(tempRiskFilter);
+    setPlanFilter(tempPlanFilter);
+    if (tempRiskFilter.length > 0) {
+      setRiskViewActive(true);
+    } else if (riskViewActive && tempRiskFilter.length === 0) {
+      setRiskViewActive(false);
+    }
     setFilterOpen(false);
+    const params = new URLSearchParams(searchString);
+    if (tempPlanFilter) { params.set("plan", tempPlanFilter); } else { params.delete("plan"); }
+    if (tempRiskFilter.length > 0) { params.set("filter", "at-risk"); } else { params.delete("filter"); }
+    const qs = params.toString();
+    navigate(qs ? `/members?${qs}` : "/members");
   };
 
   const clearFilters = () => {
     setTempStatusFilter([]);
     setTempRiskFilter([]);
+    setTempPlanFilter("");
     setStatusFilter([]);
+    setRiskFilter([]);
+    setPlanFilter("");
+    setRiskViewActive(false);
+    setIdsFilter(null);
+    setIdsSource(null);
     setFilterOpen(false);
+    navigate("/members");
   };
 
   const toggleTempStatus = (val: string) => {
@@ -284,6 +371,15 @@ export function Members() {
     if (member.status !== 'cancelled') actions.push({ label: "Cancel Membership", status: "cancelled" });
     return actions;
   };
+
+  const displayMembers = React.useMemo(() => {
+    const members = data?.members ?? [];
+    if (!riskViewActive) return members;
+    const tiers = riskFilter.length > 0 ? riskFilter : ["critical", "high", "moderate"];
+    return members
+      .filter((m: any) => tiers.includes(m.riskTier))
+      .sort((a: any, b: any) => (b.riskScore ?? 0) - (a.riskScore ?? 0));
+  }, [data?.members, riskViewActive, riskFilter]);
 
   const RowActions = ({ member }: { member: MemberFromList }) => (
     <DropdownMenu>
@@ -318,16 +414,16 @@ export function Members() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl md:text-3xl font-display font-bold text-foreground">Directory</h1>
-            <p className="text-sm md:text-base text-muted-foreground mt-1">Manage your gym's member base.</p>
+            <p className="text-sm md:text-base text-muted-foreground mt-1">Manage your member base.</p>
           </div>
           <div className="flex items-center gap-2 md:gap-3">
             <button
               onClick={openFilter}
-              className={`p-2.5 bg-card border border-border rounded-xl hover:bg-muted transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center ${statusFilter.length > 0 ? 'border-primary text-primary' : ''}`}
+              className={`p-2.5 bg-card border border-border rounded-xl hover:bg-muted transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center ${(statusFilter.length > 0 || planFilter) ? 'border-primary text-primary' : ''}`}
               aria-label="Filter members"
             >
               <Filter className="h-5 w-5 text-muted-foreground" />
-              {statusFilter.length > 0 && <span className="ml-1 text-xs font-medium text-primary">{statusFilter.length}</span>}
+              {(statusFilter.length > 0 || planFilter) && <span className="ml-1 text-xs font-medium text-primary">{statusFilter.length + (planFilter ? 1 : 0)}</span>}
             </button>
             <button
               onClick={() => setImportOpen(true)}
@@ -360,6 +456,54 @@ export function Members() {
 
       <SyncStatusBanner key={syncRefreshKey} onImport={() => setImportOpen(true)} memberCount={data?.total ?? 0} />
 
+      {riskViewActive && (
+        <div className="flex items-center gap-3 px-4 py-3 bg-destructive/5 border border-destructive/20 rounded-xl">
+          <ShieldAlert className="h-5 w-5 text-destructive shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-foreground">At-Risk Members</p>
+            <p className="text-xs text-muted-foreground">
+              {displayMembers.length} member{displayMembers.length !== 1 ? "s" : ""} with elevated churn risk — sorted by score.
+              {(() => {
+                const totalRev = displayMembers.reduce((sum: number, m: MemberFromList) => sum + (m.monthlyRevenue ? parseFloat(String(m.monthlyRevenue)) : 0), 0);
+                return totalRev > 0 ? ` $${Math.round(totalRev).toLocaleString()}/mo at stake.` : "";
+              })()}
+            </p>
+          </div>
+          <button
+            onClick={() => { setRiskViewActive(false); setStatusFilter([]); setRiskFilter([]); navigate("/members"); }}
+            className="p-1.5 hover:bg-destructive/10 rounded-lg transition-colors"
+            aria-label="Clear at-risk filter"
+          >
+            <XIcon className="h-4 w-4 text-muted-foreground" />
+          </button>
+        </div>
+      )}
+
+      {idsFilter && (
+        <div className="flex items-center gap-3 px-4 py-3 bg-primary/5 border border-primary/20 rounded-xl">
+          <Users className="h-5 w-5 text-primary shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-foreground">
+              {displayMembers.length} recently cancelled member{displayMembers.length !== 1 ? "s" : ""} — {idsSource || "Win-back targets"}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Showing members flagged by AI for outreach.
+              {(() => {
+                const totalRev = displayMembers.reduce((sum: number, m: MemberFromList) => sum + (m.monthlyRevenue ? parseFloat(String(m.monthlyRevenue)) : 0), 0);
+                return totalRev > 0 ? ` $${Math.round(totalRev).toLocaleString()}/mo revenue lost.` : "";
+              })()}
+            </p>
+          </div>
+          <button
+            onClick={() => { setIdsFilter(null); setIdsSource(null); navigate("/members"); }}
+            className="p-1.5 hover:bg-primary/10 rounded-lg transition-colors"
+            aria-label="Clear member filter"
+          >
+            <XIcon className="h-4 w-4 text-muted-foreground" />
+          </button>
+        </div>
+      )}
+
       <div className="flex-1 bg-card border border-border rounded-2xl shadow-sm overflow-hidden flex flex-col">
         {isLoading && !data ? (
           <div className="flex-1 flex items-center justify-center">
@@ -367,7 +511,7 @@ export function Members() {
           </div>
         ) : isMobile ? (
           <div className="flex-1 overflow-y-auto custom-scrollbar divide-y divide-border">
-            {data?.members.map((member: any, i: number) => (
+            {displayMembers.map((member: any, i: number) => (
               <motion.div
                 key={member.id}
                 initial={{ opacity: 0, y: 10 }}
@@ -399,13 +543,50 @@ export function Members() {
                         </span>
                       ) : null}
                     </div>
+                    {idsFilter && (
+                      <div className="flex items-center gap-3 mt-1.5 text-[10px]">
+                        {member.updatedAt && (
+                          <span className="text-muted-foreground">
+                            Cancelled {new Date(member.updatedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                          </span>
+                        )}
+                        {member.membershipType && (
+                          <span className="text-muted-foreground">{member.membershipType}</span>
+                        )}
+                        {member.monthlyRevenue ? (
+                          <span className="font-semibold text-destructive">${parseFloat(String(member.monthlyRevenue)).toFixed(0)}/mo lost</span>
+                        ) : null}
+                      </div>
+                    )}
+                    {riskViewActive && !idsFilter && member.riskTier && (
+                      <div className="flex items-center gap-3 mt-1.5 text-[10px]">
+                        <div className="flex items-center gap-1.5">
+                          <div className="w-10 h-1.5 bg-muted rounded-full overflow-hidden">
+                            <div className="h-full bg-destructive rounded-full" style={{ width: `${member.riskScore ?? 0}%` }} />
+                          </div>
+                          <span className="font-mono text-muted-foreground">{member.riskScore ?? 0}</span>
+                        </div>
+                        {(() => {
+                          const days = daysSince(member.lastVisitDate);
+                          if (days === null) return <span className="text-muted-foreground">No visits</span>;
+                          return (
+                            <span className={`font-medium ${days > 30 ? "text-destructive" : days > 14 ? "text-orange-500" : "text-muted-foreground"}`}>
+                              {days === 0 ? "Today" : days === 1 ? "1d ago" : `${days}d ago`}
+                            </span>
+                          );
+                        })()}
+                        {member.monthlyRevenue ? (
+                          <span className="font-semibold text-foreground">${parseFloat(String(member.monthlyRevenue)).toFixed(0)}/mo</span>
+                        ) : null}
+                      </div>
+                    )}
                   </Link>
                   <RowActions member={member} />
                 </div>
               </motion.div>
             ))}
-            {data?.members.length === 0 && (
-              <EmptyMemberState hasSearch={!!search || statusFilter.length > 0} onImport={() => setImportOpen(true)} onAdd={() => setAddOpen(true)} />
+            {displayMembers.length === 0 && data && (
+              <EmptyMemberState hasSearch={!!search || statusFilter.length > 0 || !!planFilter || riskViewActive || !!idsFilter} onImport={() => setImportOpen(true)} onAdd={() => setAddOpen(true)} />
             )}
           </div>
         ) : (
@@ -415,13 +596,29 @@ export function Members() {
                 <tr>
                   <th className="px-6 py-4 font-semibold">Member</th>
                   <th className="px-6 py-4 font-semibold">Status</th>
-                  <th className="px-6 py-4 font-semibold">Membership</th>
-                  <th className="px-6 py-4 font-semibold">Risk Tier</th>
+                  {idsFilter ? (
+                    <>
+                      <th className="px-6 py-4 font-semibold">Cancelled</th>
+                      <th className="px-6 py-4 font-semibold">Plan</th>
+                      <th className="px-6 py-4 font-semibold">Revenue Lost</th>
+                    </>
+                  ) : riskViewActive ? (
+                    <>
+                      <th className="px-6 py-4 font-semibold">Risk</th>
+                      <th className="px-6 py-4 font-semibold">Last Visit</th>
+                      <th className="px-6 py-4 font-semibold">Revenue</th>
+                    </>
+                  ) : (
+                    <>
+                      <th className="px-6 py-4 font-semibold">Membership</th>
+                      <th className="px-6 py-4 font-semibold">Risk Tier</th>
+                    </>
+                  )}
                   <th className="px-6 py-4 font-semibold text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {data?.members.map((member: any, i: number) => (
+                {displayMembers.map((member: any, i: number) => (
                   <motion.tr
                     key={member.id}
                     initial={{ opacity: 0, y: 10 }}
@@ -450,17 +647,79 @@ export function Members() {
                         {member.status.charAt(0).toUpperCase() + member.status.slice(1)}
                       </span>
                     </td>
-                    <td className="px-6 py-4 text-muted-foreground">
-                      {member.membershipType || "None"}
-                    </td>
-                    <td className="px-6 py-4">
-                       {member.riskTier ? (
-                         <span className={`flex items-center gap-1.5 text-xs font-semibold ${riskColor(member.riskTier)}`}>
-                           <div className={`h-2 w-2 rounded-full bg-current`} />
-                           {member.riskTier.toUpperCase()}
-                         </span>
-                       ) : <span className="text-muted-foreground">-</span>}
-                    </td>
+                    {idsFilter ? (
+                      <>
+                        <td className="px-6 py-4">
+                          {member.updatedAt ? (
+                            <span className="text-xs text-foreground">
+                              {new Date(member.updatedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                              {(() => {
+                                const days = daysSince(member.updatedAt);
+                                return days !== null ? <span className="text-muted-foreground ml-1">({days}d ago)</span> : null;
+                              })()}
+                            </span>
+                          ) : <span className="text-muted-foreground">-</span>}
+                        </td>
+                        <td className="px-6 py-4 text-muted-foreground">
+                          {member.membershipType || "—"}
+                        </td>
+                        <td className="px-6 py-4">
+                          {member.monthlyRevenue ? (
+                            <span className="text-xs font-semibold text-destructive">${parseFloat(String(member.monthlyRevenue)).toFixed(0)}/mo</span>
+                          ) : <span className="text-muted-foreground">-</span>}
+                        </td>
+                      </>
+                    ) : riskViewActive ? (
+                      <>
+                        <td className="px-6 py-4">
+                          {member.riskTier ? (
+                            <div className="flex items-center gap-2">
+                              <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold uppercase ${
+                                member.riskTier === "critical" ? "bg-destructive/10 text-destructive" :
+                                member.riskTier === "high" ? "bg-orange-500/10 text-orange-500" :
+                                "bg-amber-500/10 text-amber-500"
+                              }`}>{member.riskTier}</span>
+                              <div className="flex items-center gap-1.5">
+                                <div className="w-10 h-1.5 bg-muted rounded-full overflow-hidden">
+                                  <div className="h-full bg-destructive rounded-full" style={{ width: `${member.riskScore ?? 0}%` }} />
+                                </div>
+                                <span className="text-[10px] font-mono text-muted-foreground">{member.riskScore ?? 0}</span>
+                              </div>
+                            </div>
+                          ) : <span className="text-muted-foreground">-</span>}
+                        </td>
+                        <td className="px-6 py-4">
+                          {(() => {
+                            const days = daysSince(member.lastVisitDate);
+                            if (days === null) return <span className="text-muted-foreground">No visits</span>;
+                            return (
+                              <span className={`text-xs font-medium ${days > 30 ? "text-destructive" : days > 14 ? "text-orange-500" : "text-foreground"}`}>
+                                {days === 0 ? "Today" : days === 1 ? "Yesterday" : `${days} days ago`}
+                              </span>
+                            );
+                          })()}
+                        </td>
+                        <td className="px-6 py-4">
+                          {member.monthlyRevenue ? (
+                            <span className="text-xs font-semibold text-foreground">${parseFloat(String(member.monthlyRevenue)).toFixed(0)}/mo</span>
+                          ) : <span className="text-muted-foreground">-</span>}
+                        </td>
+                      </>
+                    ) : (
+                      <>
+                        <td className="px-6 py-4 text-muted-foreground">
+                          {member.membershipType || "None"}
+                        </td>
+                        <td className="px-6 py-4">
+                          {member.riskTier ? (
+                            <span className={`flex items-center gap-1.5 text-xs font-semibold ${riskColor(member.riskTier)}`}>
+                              <div className="h-2 w-2 rounded-full bg-current" />
+                              {member.riskTier.toUpperCase()}
+                            </span>
+                          ) : <span className="text-muted-foreground">-</span>}
+                        </td>
+                      </>
+                    )}
                     <td className="px-6 py-4 text-right">
                       <div className="opacity-0 group-hover:opacity-100">
                         <RowActions member={member} />
@@ -468,10 +727,10 @@ export function Members() {
                     </td>
                   </motion.tr>
                 ))}
-                {data?.members.length === 0 && (
+                {displayMembers.length === 0 && data && (
                   <tr>
-                    <td colSpan={5}>
-                      <EmptyMemberState hasSearch={!!search || statusFilter.length > 0} onImport={() => setImportOpen(true)} onAdd={() => setAddOpen(true)} />
+                    <td colSpan={idsFilter || riskViewActive ? 6 : 5}>
+                      <EmptyMemberState hasSearch={!!search || statusFilter.length > 0 || !!planFilter || riskViewActive || !!idsFilter} onImport={() => setImportOpen(true)} onAdd={() => setAddOpen(true)} />
                     </td>
                   </tr>
                 )}
@@ -481,7 +740,52 @@ export function Members() {
         )}
         {data && (
           <div className="p-3 md:p-4 border-t border-border bg-muted/10 text-xs text-muted-foreground flex justify-between items-center shrink-0">
-            <span>Showing {data.members.length} of {data.total} members</span>
+            <span>{idsFilter ? `Showing ${data.total} filtered member${data.total !== 1 ? "s" : ""}` : riskViewActive ? `Showing ${displayMembers.length} at-risk of ${data.total} members` : `Showing ${Math.min((currentPage - 1) * PAGE_SIZE + 1, data.total)}–${Math.min(currentPage * PAGE_SIZE, data.total)} of ${data.total} members`}</span>
+            {totalPages > 1 && !riskViewActive && !idsFilter && (
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                  className="p-1.5 rounded-lg hover:bg-muted disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                  aria-label="Previous page"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </button>
+                {Array.from({ length: Math.min(totalPages, 7) }, (_, i) => {
+                  let pageNum: number;
+                  if (totalPages <= 7) {
+                    pageNum = i + 1;
+                  } else if (currentPage <= 4) {
+                    pageNum = i + 1;
+                  } else if (currentPage >= totalPages - 3) {
+                    pageNum = totalPages - 6 + i;
+                  } else {
+                    pageNum = currentPage - 3 + i;
+                  }
+                  return (
+                    <button
+                      key={pageNum}
+                      onClick={() => setCurrentPage(pageNum)}
+                      className={`min-w-[28px] h-7 rounded-lg text-xs font-medium transition-colors ${
+                        currentPage === pageNum
+                          ? "bg-primary text-primary-foreground"
+                          : "hover:bg-muted text-muted-foreground"
+                      }`}
+                    >
+                      {pageNum}
+                    </button>
+                  );
+                })}
+                <button
+                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                  disabled={currentPage === totalPages}
+                  className="p-1.5 rounded-lg hover:bg-muted disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                  aria-label="Next page"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -638,6 +942,22 @@ export function Members() {
                 ))}
               </div>
             </div>
+            {plans && plans.length > 0 && (
+              <div>
+                <h3 className="text-sm font-semibold text-foreground mb-3">Membership Plan</h3>
+                <Select value={tempPlanFilter || "all"} onValueChange={(v) => setTempPlanFilter(v === "all" ? "" : v)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="All plans" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All plans</SelectItem>
+                    {plans.filter((p: { isActive: boolean }) => p.isActive).map((plan: { id: number; name: string }) => (
+                      <SelectItem key={plan.id} value={String(plan.id)}>{plan.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             <div>
               <h3 className="text-sm font-semibold text-foreground mb-3">Risk Tier</h3>
               <div className="space-y-2">

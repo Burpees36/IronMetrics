@@ -19,14 +19,44 @@ interface TriggerConfig {
   inactiveDays?: number;
 }
 
-async function evaluateTriggersForGym(gymId: number): Promise<void> {
+interface EvaluateTriggerOptions {
+  onlySequenceId?: number;
+  onlyMemberId?: number;
+  onlySequenceType?: string;
+}
+
+async function evaluateTriggersForGym(gymId: number, opts?: number | EvaluateTriggerOptions): Promise<void> {
+  let onlySequenceId: number | undefined;
+  let onlyMemberId: number | undefined;
+  let onlySequenceType: string | undefined;
+
+  if (typeof opts === "number") {
+    onlySequenceId = opts;
+  } else if (opts) {
+    onlySequenceId = opts.onlySequenceId;
+    onlyMemberId = opts.onlyMemberId;
+    onlySequenceType = opts.onlySequenceType;
+  }
+
+  const conditions = [
+    eq(retentionSequencesTable.gymId, gymId),
+    eq(retentionSequencesTable.isEnabled, true),
+  ];
+  if (onlySequenceId !== undefined) {
+    conditions.push(eq(retentionSequencesTable.id, onlySequenceId));
+  }
+  if (onlySequenceType !== undefined) {
+    conditions.push(eq(retentionSequencesTable.type, onlySequenceType));
+  }
   const sequences = await db.select().from(retentionSequencesTable)
-    .where(and(
-      eq(retentionSequencesTable.gymId, gymId),
-      eq(retentionSequencesTable.isEnabled, true)
-    ));
+    .where(and(...conditions));
 
   if (sequences.length === 0) return;
+
+  const memberConditions = [eq(membersTable.gymId, gymId), eq(membersTable.status, "active")];
+  if (onlyMemberId !== undefined) {
+    memberConditions.push(eq(membersTable.id, onlyMemberId));
+  }
 
   const activeMembers = await db.select({
     id: membersTable.id,
@@ -40,7 +70,7 @@ async function evaluateTriggersForGym(gymId: number): Promise<void> {
     createdAt: membersTable.createdAt,
     status: membersTable.status,
   }).from(membersTable)
-    .where(and(eq(membersTable.gymId, gymId), eq(membersTable.status, "active")));
+    .where(and(...memberConditions));
 
   for (const sequence of sequences) {
     const trigger = sequence.triggerConfig as TriggerConfig;
@@ -398,4 +428,24 @@ export function stopRetentionEngineScheduler(): void {
   }
 }
 
-export { runRetentionForAllGyms, evaluateTrigger, renderTemplate, RETENTION_INTERVAL_MS };
+async function exitMemberSequences(memberId: number, gymId: number, reason: string): Promise<number> {
+  const activeEnrollments = await db.select()
+    .from(memberSequenceEnrollmentsTable)
+    .where(and(
+      eq(memberSequenceEnrollmentsTable.memberId, memberId),
+      eq(memberSequenceEnrollmentsTable.gymId, gymId),
+      eq(memberSequenceEnrollmentsTable.status, "active")
+    ));
+
+  for (const enrollment of activeEnrollments) {
+    await exitEnrollment(enrollment.id, gymId, memberId, enrollment.sequenceId, enrollment.currentStepIndex, reason);
+  }
+
+  if (activeEnrollments.length > 0) {
+    console.log(`[retention-engine] Exited ${activeEnrollments.length} enrollment(s) for member ${memberId} (reason: ${reason})`);
+  }
+
+  return activeEnrollments.length;
+}
+
+export { runRetentionForAllGyms, evaluateTriggersForGym, evaluateTrigger, renderTemplate, exitMemberSequences, RETENTION_INTERVAL_MS };

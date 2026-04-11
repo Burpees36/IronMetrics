@@ -56,7 +56,7 @@ export function GymSelect() {
       <div className="relative z-10 w-full max-w-4xl">
         <div className="text-center mb-8 md:mb-12">
           <h1 className="text-3xl md:text-5xl font-display font-bold text-foreground mb-3 md:mb-4">Select Workspace</h1>
-          <p className="text-muted-foreground text-base md:text-lg">Choose a gym to manage or create a new one.</p>
+          <p className="text-muted-foreground text-base md:text-lg">Choose a business to manage or create a new one.</p>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
@@ -90,13 +90,13 @@ export function GymSelect() {
               transition={{ delay: (gyms?.length || 0) * 0.1 }}
               onClick={() => setShowCreate(true)}
               className="bg-background border-2 border-dashed border-border rounded-2xl p-5 md:p-6 flex flex-col items-center justify-center cursor-pointer hover:border-primary/50 hover:bg-primary/5 transition-all duration-300 min-h-[180px] md:min-h-[200px] active:scale-[0.98] w-full focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
-              aria-label="Create My Gym"
+              aria-label="Create My Business"
             >
               <div className="h-12 w-12 bg-muted rounded-full flex items-center justify-center mb-4">
                 <Plus className="h-6 w-6 text-muted-foreground" />
               </div>
-              <h3 className="text-lg font-semibold text-foreground">Create My Gym</h3>
-              <p className="text-sm text-muted-foreground mt-2 text-center">Set up a new workspace for your gym.</p>
+              <h3 className="text-lg font-semibold text-foreground">Create My Business</h3>
+              <p className="text-sm text-muted-foreground mt-2 text-center">Set up a new workspace for your business.</p>
             </motion.button>
           ) : (
             <motion.div
@@ -104,14 +104,14 @@ export function GymSelect() {
               animate={{ opacity: 1, y: 0 }}
               className="bg-card border border-primary/30 rounded-2xl p-5 md:p-6 sm:col-span-2 lg:col-span-2"
             >
-              <h3 className="text-lg font-semibold text-foreground mb-4">Create My Gym</h3>
+              <h3 className="text-lg font-semibold text-foreground mb-4">Create My Business</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <Label>Gym Name *</Label>
+                  <Label>Business Name *</Label>
                   <Input
                     value={gymName}
                     onChange={(e) => setGymName(e.target.value)}
-                    placeholder="CrossFit Iron Forge"
+                    placeholder="Iron Forge Athletics"
                     autoFocus
                     onKeyDown={(e) => e.key === "Enter" && handleCreateGym()}
                   />

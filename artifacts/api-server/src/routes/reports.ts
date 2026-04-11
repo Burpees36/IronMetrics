@@ -68,7 +68,7 @@ router.get("/gyms/:gymId/reports/dashboard", async (req, res): Promise<void> => 
     ? Math.round(((blended.activeBillableMembers - atRiskCount) / blended.activeBillableMembers) * 1000) / 10
     : 100;
 
-  const rsiResult = computeRSI(blended.churnRate, blended.avgRevPerMember, blended.netGrowth, blended.avgTenure);
+  const rsiResult = computeRSI(blended.churnRate, blended.avgRevPerMember, blended.netGrowth, blended.avgTenure, blended.totalMembers);
 
   const paidInvoices = await db.select().from(invoicesTable).where(and(eq(invoicesTable.gymId, gymId), eq(invoicesTable.status, "paid")));
   const allInvoices = await db.select().from(invoicesTable).where(eq(invoicesTable.gymId, gymId));
@@ -140,9 +140,10 @@ router.get("/gyms/:gymId/reports/dashboard", async (req, res): Promise<void> => 
     retentionRate,
     failedPayments: failedSubs.length,
     collectionRate,
-    rsiScore: Math.round(rsiResult.score * 10) / 10,
+    rsiScore: rsiResult.score !== null ? Math.round(rsiResult.score * 10) / 10 : null,
     rsiBand: rsiResult.band,
     ...await (async () => {
+      if (rsiResult.score === null) return { rsiTrend30d: null, rsiTrendInsufficient: true };
       const snapshots = await db.select()
         .from(rsiSnapshotsTable)
         .where(eq(rsiSnapshotsTable.gymId, gymId))

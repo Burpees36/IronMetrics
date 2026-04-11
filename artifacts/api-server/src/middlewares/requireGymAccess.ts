@@ -29,20 +29,24 @@ import { eq, and } from "drizzle-orm";
  * Checks ownership first (single query), then falls back to the gym_staff
  * table for staff-level roles. Only active staff records are considered.
  */
-async function resolveGymRole(userId: string, gymId: number): Promise<{ role: string | null; gymExists: boolean }> {
+async function resolveGymRole(userId: string, gymId: number): Promise<{ role: string | null; gymExists: boolean; gymDeactivated: boolean }> {
   const [gym] = await db.select().from(gymsTable).where(eq(gymsTable.id, gymId));
-  if (!gym) return { role: null, gymExists: false };
+  if (!gym) return { role: null, gymExists: false, gymDeactivated: false };
 
-  // Gym owner always has full access
-  if (gym.ownerId === userId) return { role: "owner", gymExists: true };
+  const isOwner = gym.ownerId === userId;
 
-  // Check staff table — only active staff records grant access
+  if (!gym.isActive && !isOwner) {
+    return { role: null, gymExists: true, gymDeactivated: true };
+  }
+
+  if (isOwner) return { role: "owner", gymExists: true, gymDeactivated: !gym.isActive };
+
   const [staff] = await db
     .select()
     .from(gymStaffTable)
     .where(and(eq(gymStaffTable.gymId, gymId), eq(gymStaffTable.userId, userId), eq(gymStaffTable.isActive, true)));
 
-  return { role: staff?.role || null, gymExists: true };
+  return { role: staff?.role || null, gymExists: true, gymDeactivated: false };
 }
 
 /**
@@ -68,10 +72,16 @@ export function requireGymAccess(req: Request, res: Response, next: NextFunction
 
   const userId = req.user!.id;
 
-  resolveGymRole(userId, gymId).then(({ role, gymExists }) => {
+  resolveGymRole(userId, gymId).then(({ role, gymExists, gymDeactivated }) => {
     if (!gymExists) {
       console.warn(`[GYM ACCESS DENIED] User ${userId} requested non-existent gym ${gymId}`);
       res.status(404).json({ error: "Gym not found" });
+      return;
+    }
+
+    if (gymDeactivated && !role) {
+      console.warn(`[GYM ACCESS DENIED] User ${userId} tried to access deactivated gym ${gymId}`);
+      res.status(403).json({ error: "This business has been deactivated by the owner.", code: "GYM_DEACTIVATED" });
       return;
     }
 

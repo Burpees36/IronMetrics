@@ -1,9 +1,18 @@
 import { Router, type IRouter } from "express";
 import { eq, and, count, sql, gte, desc, asc } from "drizzle-orm";
-import { db, membersTable, subscriptionsTable, attendanceTable, leadsTable, classesTable, rsiSnapshotsTable, benchmarksTable, billingAuditLogsTable } from "@workspace/db";
+import { db, membersTable, subscriptionsTable, attendanceTable, leadsTable, classesTable, rsiSnapshotsTable, benchmarksTable, billingAuditLogsTable, dismissedInterventionsTable, aiOperatorSettingsTable } from "@workspace/db";
+import { detectMilestonesForBriefing } from "../../services/milestone-detection";
 import { computeRSI } from "./computations";
 import { getGymMetrics, getRiskProfiles, getInterventions, computeRevenueForecast } from "./metrics";
 import { computeBlendedMRR, computeBlendedEngagement, isActiveBillableMember } from "../../blendedMetrics";
+import {
+  generateRSIComponentInsight,
+  generateRSIOverallInsight,
+  generateRevenueForecastInsight,
+  generateBenchmarkInsight,
+  generateConversationalBriefingItem,
+  generateConversationalSummary,
+} from "./insights-copy-engine";
 
 const router: IRouter = Router();
 
@@ -13,7 +22,7 @@ function parseGymId(params: any): number | null {
   return isNaN(id) ? null : id;
 }
 
-async function getRsiTrendsFromSnapshots(gymId: number, currentScore: number) {
+async function getRsiTrendsFromSnapshots(gymId: number, currentScore: number | null) {
   const now = new Date();
   const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
   const ninetyDaysAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
@@ -27,7 +36,7 @@ async function getRsiTrendsFromSnapshots(gymId: number, currentScore: number) {
   let trend90d: number | null = null;
   let trendInsufficient = false;
 
-  if (allSnapshots.length < 7) {
+  if (currentScore === null || allSnapshots.length < 7) {
     trendInsufficient = true;
     return { trend30d, trend90d, trendInsufficient };
   }
@@ -59,9 +68,15 @@ router.get("/gyms/:gymId/intelligence/rsi", async (req, res): Promise<void> => {
 
   try {
     const metrics = await getGymMetrics(gymId);
-    const rsi = computeRSI(metrics.churnRate, metrics.avgRev, metrics.netGrowth, metrics.avgTenure);
+    const rsi = computeRSI(metrics.churnRate, metrics.avgRev, metrics.netGrowth, metrics.avgTenure, metrics.total);
 
     const { trend30d, trend90d, trendInsufficient } = await getRsiTrendsFromSnapshots(gymId, rsi.score);
+
+    const rsiOverallInsight = generateRSIOverallInsight(rsi);
+    const rsiComponentInsights = rsi.breakdown.map((item) => ({
+      ...item,
+      ...generateRSIComponentInsight(item, rsi.components),
+    }));
 
     res.json({
       ...rsi,
@@ -71,11 +86,8 @@ router.get("/gyms/:gymId/intelligence/rsi", async (req, res): Promise<void> => {
       revenueSource: metrics.revenueSource,
       attendanceSource: metrics.attendanceSource,
       hasSubscriptionData: metrics.hasSubscriptionData,
-      insight: rsi.band === "Strong"
-        ? "Your gym is showing strong retention. Keep focus on onboarding quality."
-        : rsi.band === "Moderate"
-        ? "Some retention pressure building. Review at-risk members and recent cancellation patterns."
-        : "Retention is fragile. Prioritize outreach to at-risk members and review billing failures immediately.",
+      insight: rsiOverallInsight,
+      componentInsights: rsiComponentInsights,
     });
   } catch (err) {
     console.error("[intelligence/rsi] Failed to compute RSI:", err);
@@ -146,6 +158,59 @@ router.get("/gyms/:gymId/intelligence/interventions", async (req, res): Promise<
   } catch (err) {
     console.error("[intelligence/interventions] Failed to generate interventions:", err);
     res.status(500).json({ error: "Failed to generate interventions. Please try again." });
+  }
+});
+
+router.get("/gyms/:gymId/intelligence/dismissed-interventions", async (req, res): Promise<void> => {
+  const gymId = parseGymId(req.params);
+  if (!gymId) { res.status(400).json({ error: "Invalid gym ID" }); return; }
+
+  try {
+    const rows = await db.select({ interventionId: dismissedInterventionsTable.interventionId })
+      .from(dismissedInterventionsTable)
+      .where(eq(dismissedInterventionsTable.gymId, gymId));
+    res.json(rows.map(r => r.interventionId));
+  } catch (err) {
+    console.error("[intelligence/dismissed-interventions] Failed to fetch:", err);
+    res.status(500).json({ error: "Failed to fetch dismissed interventions." });
+  }
+});
+
+router.post("/gyms/:gymId/intelligence/dismissed-interventions", async (req, res): Promise<void> => {
+  const gymId = parseGymId(req.params);
+  if (!gymId) { res.status(400).json({ error: "Invalid gym ID" }); return; }
+
+  const { interventionId } = req.body;
+  if (!interventionId || typeof interventionId !== "string") {
+    res.status(400).json({ error: "interventionId is required" });
+    return;
+  }
+
+  try {
+    await db.insert(dismissedInterventionsTable)
+      .values({ gymId, interventionId })
+      .onConflictDoNothing();
+    res.json({ success: true });
+  } catch (err) {
+    console.error("[intelligence/dismissed-interventions] Failed to dismiss:", err);
+    res.status(500).json({ error: "Failed to dismiss intervention." });
+  }
+});
+
+router.delete("/gyms/:gymId/intelligence/dismissed-interventions/:interventionId", async (req, res): Promise<void> => {
+  const gymId = parseGymId(req.params);
+  if (!gymId) { res.status(400).json({ error: "Invalid gym ID" }); return; }
+
+  const interventionId = req.params.interventionId;
+  if (!interventionId) { res.status(400).json({ error: "interventionId is required" }); return; }
+
+  try {
+    await db.delete(dismissedInterventionsTable)
+      .where(and(eq(dismissedInterventionsTable.gymId, gymId), eq(dismissedInterventionsTable.interventionId, interventionId)));
+    res.json({ success: true });
+  } catch (err) {
+    console.error("[intelligence/dismissed-interventions] Failed to restore:", err);
+    res.status(500).json({ error: "Failed to restore intervention." });
   }
 });
 
@@ -250,18 +315,21 @@ router.get("/gyms/:gymId/intelligence/overview", async (req, res): Promise<void>
 
   try {
     const metrics = await getGymMetrics(gymId);
-    const rsi = computeRSI(metrics.churnRate, metrics.avgRev, metrics.netGrowth, metrics.avgTenure);
+    const rsi = computeRSI(metrics.churnRate, metrics.avgRev, metrics.netGrowth, metrics.avgTenure, metrics.total);
     const { trend30d, trend90d, trendInsufficient } = await getRsiTrendsFromSnapshots(gymId, rsi.score);
+    const rsiOverallInsight = generateRSIOverallInsight(rsi);
+    const rsiComponentInsights = rsi.breakdown.map((item) => ({
+      ...item,
+      ...generateRSIComponentInsight(item, rsi.components),
+    }));
+
     const rsiData = {
       ...rsi,
       trend30d,
       trend90d,
       trendInsufficient,
-      insight: rsi.band === "Strong"
-        ? "Your gym is showing strong retention. Keep focus on onboarding quality."
-        : rsi.band === "Moderate"
-        ? "Some retention pressure building. Review at-risk members and recent cancellation patterns."
-        : "Retention is fragile. Prioritize outreach to at-risk members and review billing failures immediately.",
+      insight: rsiOverallInsight,
+      componentInsights: rsiComponentInsights,
     };
 
     const risks = await getRiskProfiles(gymId);
@@ -274,12 +342,18 @@ router.get("/gyms/:gymId/intelligence/overview", async (req, res): Promise<void>
     const churnRate = total > 0 ? Math.round(Number(cancelledCount?.count ?? 0) / total * 1000) / 10 : 0;
     const forecast = await computeRevenueForecast(gymId, currentMrr, churnRate, metrics.active);
 
+    const openLeads = await db.select({ count: count() }).from(leadsTable).where(
+      and(eq(leadsTable.gymId, gymId), sql`${leadsTable.stage} NOT IN ('converted', 'lost')`)
+    );
+    const openLeadCount = Number(openLeads[0]?.count ?? 0);
+    const forecastInsight = generateRevenueForecastInsight(forecast, openLeadCount, churnRate, metrics.active);
+
     res.json({
       gymId,
       rsi: rsiData,
       topRisks: risks.slice(0, 5),
       topInterventions: interventions.slice(0, 3),
-      revenueForecast: forecast,
+      revenueForecast: { ...forecast, insight: forecastInsight },
       generatedAt: new Date().toISOString(),
     });
   } catch (err) {
@@ -294,7 +368,7 @@ router.get("/gyms/:gymId/intelligence/morning-briefing", async (req, res): Promi
 
   try {
     const metrics = await getGymMetrics(gymId);
-    const rsi = computeRSI(metrics.churnRate, metrics.avgRev, metrics.netGrowth, metrics.avgTenure);
+    const rsi = computeRSI(metrics.churnRate, metrics.avgRev, metrics.netGrowth, metrics.avgTenure, metrics.total);
     const risks = await getRiskProfiles(gymId);
 
     const criticalRisks = risks.filter(r => r.riskTier === "critical");
@@ -351,6 +425,8 @@ router.get("/gyms/:gymId/intelligence/morning-briefing", async (req, res): Promi
         )
       );
 
+    const avgRevPerMember = metrics.active > 0 ? metrics.totalRev / metrics.active : 0;
+
     if (recentAutoSuspensions.length > 0) {
       const memberIds = recentAutoSuspensions.map(s => s.memberId).filter(Boolean);
       const suspendedMembers = memberIds.length > 0
@@ -359,85 +435,167 @@ router.get("/gyms/:gymId/intelligence/morning-briefing", async (req, res): Promi
           )
         : [];
       const memberNames = suspendedMembers.map(m => `${m.firstName} ${m.lastName}`);
-      const namesList = memberNames.length <= 3
-        ? memberNames.join(", ")
-        : `${memberNames.slice(0, 3).join(", ")} and ${memberNames.length - 3} more`;
-
+      const conversational = generateConversationalBriefingItem("auto_suspended", {
+        count: recentAutoSuspensions.length,
+        names: memberNames,
+      });
       items.push({
         icon: "billing",
         priority: "warning",
-        message: `${recentAutoSuspensions.length} member${recentAutoSuspensions.length > 1 ? "s were" : " was"} auto-suspended for non-payment: ${namesList}. Review and override if needed.`,
-        action: "Review Members",
-        link: "/members",
+        message: conversational.message,
+        action: conversational.action,
+        link: conversational.link,
       });
     }
 
     if (failedSubs.length > 0) {
       const failedRev = failedSubs.reduce((sum, s) => sum + parseFloat(s.amount || "0"), 0);
+      const conversational = generateConversationalBriefingItem("failed_payments", {
+        count: failedSubs.length,
+        amount: failedRev,
+      });
       items.push({
         icon: "billing",
         priority: "critical",
-        message: `${failedSubs.length} failed payment${failedSubs.length > 1 ? "s" : ""} totaling $${Math.round(failedRev)}/mo need recovery`,
-        action: "Go to Billing",
-        link: "/billing",
+        message: conversational.message,
+        action: conversational.action,
+        link: conversational.link,
+      });
+    }
+
+    if (atRiskCount > 0) {
+      const conversational = generateConversationalBriefingItem("at_risk_critical", {
+        count: atRiskCount,
+        amount: revenueAtRisk,
+      });
+      items.push({
+        icon: "alert",
+        priority: criticalRisks.length > 0 ? "critical" : "warning",
+        message: conversational.message,
+        action: conversational.action,
+        link: conversational.link,
       });
     }
 
     if (staleLeads.length > 0) {
+      const conversational = generateConversationalBriefingItem("stale_leads", {
+        count: staleLeads.length,
+        avgRevPerMember,
+      });
       items.push({
         icon: "leads",
         priority: "warning",
-        message: `${staleLeads.length} lead${staleLeads.length > 1 ? "s" : ""} went stale — follow up before they go cold`,
-        action: "Open Pipeline",
-        link: "/leads",
+        message: conversational.message,
+        action: conversational.action,
+        link: conversational.link,
       });
     }
 
     if (todayClasses.length > 0) {
+      const conversational = generateConversationalBriefingItem("class_schedule", {
+        classCount: todayClasses.length,
+        classFillRate,
+        enrolled: totalEnrolled,
+        capacity: totalCapacity,
+      });
       items.push({
         icon: "schedule",
         priority: classFillRate >= 80 ? "positive" : "info",
-        message: `${todayClasses.length} class${todayClasses.length > 1 ? "es" : ""} today at ${classFillRate}% capacity (${totalEnrolled}/${totalCapacity} spots filled)`,
-        action: "View Schedule",
-        link: "/schedule",
+        message: conversational.message,
+        action: conversational.action,
+        link: conversational.link,
       });
     }
 
     if (activeLeads.length > 0 && staleLeads.length === 0) {
+      const conversational = generateConversationalBriefingItem("active_leads", {
+        count: activeLeads.length,
+      });
       items.push({
         icon: "leads",
         priority: "info",
-        message: `${activeLeads.length} active lead${activeLeads.length > 1 ? "s" : ""} in your pipeline`,
-        link: "/leads",
+        message: conversational.message,
+        action: conversational.action,
+        link: conversational.link,
       });
     }
 
     if (rsi.band === "Strong") {
+      const conversational = generateConversationalBriefingItem("rsi_strong", {
+        rsiScore: rsi.score,
+        rsiBand: rsi.band,
+      });
       items.push({
         icon: "positive",
         priority: "positive",
-        message: `RSI is ${rsi.score.toFixed(1)} (Strong) — your business is in great shape. Invest in your systems and don't get complacent.`,
+        message: conversational.message,
+        action: conversational.action,
+        link: conversational.link,
       });
     }
 
     if (newLeadsToday.length > 0) {
+      const conversational = generateConversationalBriefingItem("new_leads", {
+        count: newLeadsToday.length,
+      });
       items.push({
         icon: "leads",
         priority: "positive",
-        message: `${newLeadsToday.length} new lead${newLeadsToday.length > 1 ? "s" : ""} in the last 24 hours`,
-        action: "View Leads",
-        link: "/leads",
+        message: conversational.message,
+        action: conversational.action,
+        link: conversational.link,
       });
     }
 
-    const summary = buildBriefingSummary(atRiskCount, staleLeads.length, failedSubs.length, metrics.totalRev, rsi, todayClasses.length, classFillRate);
+    const briefingSnapshot = {
+      activeMembers: metrics.active,
+      mrr: Math.round(metrics.totalRev),
+      rsiScore: rsi.score,
+      rsiBand: rsi.band,
+      atRiskMembers: atRiskCount,
+      atRiskCritical: criticalRisks.length,
+      atRiskHigh: highRisks.length,
+      revenueAtRisk: Math.round(revenueAtRisk),
+      engagementRate,
+      staleLeads: staleLeads.length,
+      newLeads: newLeadsToday.length,
+      activeLeads: activeLeads.length,
+      failedPayments: failedSubs.length,
+      todayClasses: todayClasses.length,
+      classFillRate,
+    };
+    const summary = generateConversationalSummary(briefingSnapshot);
+
+    let celebrations: { type: string; memberName: string; detail: string }[] = [];
+    try {
+      const [opSettings] = await db.select().from(aiOperatorSettingsTable).where(eq(aiOperatorSettingsTable.gymId, gymId));
+      const cooldown = opSettings?.cooldownCelebrations ?? 90;
+      const milestones = await detectMilestonesForBriefing(gymId);
+      celebrations = milestones.map((m) => ({
+        type: m.milestoneType,
+        memberName: `${m.memberFirstName} ${m.memberLastName}`,
+        detail: m.detail,
+      }));
+    } catch (err: any) {
+      console.error("[intelligence/morning-briefing] Celebration detection error:", err.message);
+    }
+
+    if (celebrations.length > 0) {
+      items.push({
+        icon: "celebration",
+        priority: "positive",
+        message: `${celebrations.length} member milestone${celebrations.length !== 1 ? "s" : ""} today — birthdays, anniversaries, and wins worth celebrating.`,
+        action: "View celebrations",
+        link: "/ai-insights",
+      });
+    }
 
     res.json({
       date: todayStr,
       summary,
       items: items.sort((a, b) => {
-        const priorityOrder = { critical: 0, warning: 1, info: 2, positive: 3 };
-        return priorityOrder[a.priority] - priorityOrder[b.priority];
+        const priorityOrder: Record<string, number> = { critical: 0, warning: 1, info: 2, positive: 3 };
+        return (priorityOrder[a.priority] ?? 3) - (priorityOrder[b.priority] ?? 3);
       }),
       snapshot: {
         activeMembers: metrics.active,
@@ -456,6 +614,7 @@ router.get("/gyms/:gymId/intelligence/morning-briefing", async (req, res): Promi
         todayClasses: todayClasses.length,
         classFillRate,
       },
+      celebrations,
     });
   } catch (err) {
     console.error("[intelligence/morning-briefing] Failed to generate briefing:", err);
@@ -469,7 +628,7 @@ router.get("/gyms/:gymId/intelligence/benchmarks", async (req, res): Promise<voi
 
   try {
     const metrics = await getGymMetrics(gymId);
-    const rsi = computeRSI(metrics.churnRate, metrics.avgRev, metrics.netGrowth, metrics.avgTenure);
+    const rsi = computeRSI(metrics.churnRate, metrics.avgRev, metrics.netGrowth, metrics.avgTenure, metrics.total);
     const engagement = await computeBlendedEngagement(gymId);
 
     const activeMemberCount = metrics.active;
@@ -555,19 +714,31 @@ router.get("/gyms/:gymId/intelligence/benchmarks", async (req, res): Promise<voi
       const gymValue = gymValues[metric];
       const percentileRank = computePercentileRank(gymValue, benchmarkRow, metric);
       const percentileLabel = getPercentileLabel(percentileRank);
+      const industryMedian = benchmarkRow && !insufficientData ? parseFloat(benchmarkRow.p50 || "0") : null;
+
+      const insight = generateBenchmarkInsight({
+        metric,
+        gymValue,
+        industryMedian,
+        percentileRank,
+        label: metricLabels[metric],
+        format: metricFormats[metric],
+        lowerIsBetter: lowerIsBetter[metric],
+      });
 
       return {
         metric,
         label: metricLabels[metric],
         format: metricFormats[metric],
         gymValue,
-        industryMedian: benchmarkRow && !insufficientData ? parseFloat(benchmarkRow.p50 || "0") : null,
+        industryMedian,
         p25: benchmarkRow && !insufficientData ? parseFloat(benchmarkRow.p25 || "0") : null,
         p75: benchmarkRow && !insufficientData ? parseFloat(benchmarkRow.p75 || "0") : null,
         p90: benchmarkRow && !insufficientData ? parseFloat(benchmarkRow.p90 || "0") : null,
         percentileRank,
         percentileLabel,
         lowerIsBetter: lowerIsBetter[metric] ?? false,
+        insight,
       };
     });
 
@@ -608,11 +779,13 @@ function buildBriefingSummary(
   }
 
   if (parts.length === 0) {
-    return `All clear — your gym is running smoothly. RSI: ${rsi.score.toFixed(1)} (${rsi.band}), MRR: $${mrr.toLocaleString()}.`;
+    const rsiStr = rsi.score !== null ? `RSI: ${rsi.score.toFixed(1)} (${rsi.band})` : "RSI: No Data";
+    return `All clear — your gym is running smoothly. ${rsiStr}, MRR: $${mrr.toLocaleString()}.`;
   }
 
   const actionPart = parts.join(", ");
-  return `${actionPart.charAt(0).toUpperCase() + actionPart.slice(1)}. MRR: $${Math.round(mrr).toLocaleString()}, RSI: ${rsi.score.toFixed(1)} (${rsi.band}).`;
+  const rsiStr = rsi.score !== null ? `RSI: ${rsi.score.toFixed(1)} (${rsi.band})` : "RSI: No Data";
+  return `${actionPart.charAt(0).toUpperCase() + actionPart.slice(1)}. MRR: $${Math.round(mrr).toLocaleString()}, ${rsiStr}.`;
 }
 
 export default router;

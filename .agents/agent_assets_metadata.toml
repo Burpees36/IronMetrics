@@ -1,5 +1,28 @@
 uploads = []
-generated = []
+
+[[generated]]
+id = "3UTvKl3lr5BHedL7nWI02"
+uri = "file://artifacts/mockup-sandbox/public/images/landing/hero-mission.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "vbocOga7A0BAz5y9l53Zu"
+uri = "file://artifacts/mockup-sandbox/public/images/landing/hero-proof.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "P50RcH10vfClBCOkWItU-"
+uri = "file://artifacts/mockup-sandbox/public/images/landing/hero-community.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "XlEDMy2zbsdRmAcyZn3E6"
+uri = "file://artifacts/mockup-sandbox/public/images/landing/founder-hunter.png"
+type = "image"
+title = "generated_image"
 
 [[outputs]]
 id = "yniQHRatN8Rov3SdKQZ-w"
@@ -24,3 +47,9 @@ id = "siN-OmL2tDxpUZ3L_eCvO"
 uri = "file://docs/ai-product-roadmap.md"
 type = "text"
 title = "AI & Intelligence Product Roadmap"
+
+[[outputs]]
+id = "zDU8hrJpqY9ymb3sr8hjz"
+uri = "file://docs/member-app-roadmap.md"
+type = "text"
+title = "Member Mobile App Roadmap"

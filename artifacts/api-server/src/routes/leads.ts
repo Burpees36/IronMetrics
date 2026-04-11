@@ -1,7 +1,10 @@
 import { Router, type IRouter } from "express";
 import { eq, and, ilike, or, desc, sql, count } from "drizzle-orm";
-import { db, leadsTable, leadActivitiesTable, membersTable, timelineEventsTable } from "@workspace/db";
+import { db, leadsTable, leadActivitiesTable, membersTable, timelineEventsTable, gymsTable } from "@workspace/db";
 import { CreateLeadBody, UpdateLeadBody } from "@workspace/api-zod";
+import { enrollLeadInSequence, pauseLeadSequences } from "../services/lead-sequence-engine";
+import { sendLeadSms } from "../services/member-sms";
+import { evaluateTriggersForGym } from "../schedulers/retention-engine";
 
 const router: IRouter = Router();
 
@@ -60,6 +63,12 @@ router.post("/gyms/:gymId/leads", async (req, res): Promise<void> => {
   const [lead] = await db.insert(leadsTable).values({ ...parsed.data, gymId }).returning();
 
   await logActivity(lead.id, gymId, "created", `Lead created: ${lead.firstName} ${lead.lastName}`);
+
+  try {
+    await enrollLeadInSequence(lead.id, gymId, lead.stage);
+  } catch (err: any) {
+    console.error("[leads] Auto-enroll error:", err.message);
+  }
 
   res.status(201).json(lead);
 });
@@ -175,6 +184,15 @@ router.patch("/gyms/:gymId/leads/:leadId", async (req, res): Promise<void> => {
 
   if (parsed.data.stage && parsed.data.stage !== existing.stage) {
     await logActivity(leadId, gymId, "stage_changed", `Stage changed from ${existing.stage} to ${parsed.data.stage}`, JSON.stringify({ from: existing.stage, to: parsed.data.stage }));
+
+    try {
+      await pauseLeadSequences(leadId, gymId, `stage_changed_to_${parsed.data.stage}`);
+      if (parsed.data.stage !== "converted" && parsed.data.stage !== "lost") {
+        await enrollLeadInSequence(leadId, gymId, parsed.data.stage);
+      }
+    } catch (err: any) {
+      console.error("[leads] Sequence stage-change handling error:", err.message);
+    }
   }
 
   if (parsed.data.nextFollowUpDate !== undefined) {
@@ -217,6 +235,11 @@ router.post("/gyms/:gymId/leads/:leadId/activities", async (req, res): Promise<v
 
   if (type === "contact_logged") {
     await db.update(leadsTable).set({ lastContactDate: new Date() }).where(eq(leadsTable.id, leadId));
+    try {
+      await pauseLeadSequences(leadId, gymId, "manual_contact");
+    } catch (err: any) {
+      console.error("[leads] Pause sequence on contact error:", err.message);
+    }
   }
 
   const activities = await db
@@ -271,6 +294,20 @@ router.post("/gyms/:gymId/leads/:leadId/convert", async (req, res): Promise<void
 
   await logActivity(leadId, gymId, "converted", `Converted to member${conversionNote ? ": " + conversionNote : ""}`);
 
+  try {
+    await pauseLeadSequences(leadId, gymId, "lead_converted");
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`[leads] Failed to pause sequences for converted lead ${leadId}:`, msg);
+  }
+
+  try {
+    await evaluateTriggersForGym(gymId, { onlyMemberId: member.id, onlySequenceType: "onboarding_journey" });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`[leads] Failed to evaluate onboarding triggers for new member ${member.id}:`, msg);
+  }
+
   res.json({ ...member, riskScore: null });
 });
 
@@ -294,5 +331,54 @@ function computeStale(lead: any): boolean {
 
   return false;
 }
+
+router.post("/gyms/:gymId/leads/:leadId/send-sms", async (req, res): Promise<void> => {
+  const gymId = parseGymId(req.params);
+  const leadId = parseLeadId(req.params);
+  if (!gymId || !leadId) { res.status(400).json({ error: "Invalid gym or lead ID" }); return; }
+
+  const { message } = req.body as { message?: string };
+  if (!message || typeof message !== "string" || message.trim().length === 0) {
+    res.status(400).json({ error: "Message is required" }); return;
+  }
+
+  try {
+    const [lead] = await db.select().from(leadsTable).where(and(eq(leadsTable.id, leadId), eq(leadsTable.gymId, gymId)));
+    if (!lead) { res.status(404).json({ error: "Lead not found" }); return; }
+    if (!lead.phone) { res.status(400).json({ error: "Lead has no phone number on file" }); return; }
+
+    const [gym] = await db.select().from(gymsTable).where(eq(gymsTable.id, gymId));
+    if (!gym) { res.status(404).json({ error: "Gym not found" }); return; }
+    if (!gym.smsEnabled) { res.status(400).json({ error: "SMS is not enabled for this gym" }); return; }
+
+    const result = await sendLeadSms({
+      leadId,
+      gymId,
+      to: lead.phone,
+      body: message.trim(),
+      smsType: "manual",
+      gymConfig: {
+        smsEnabled: gym.smsEnabled ?? false,
+        twilioAccountSid: gym.twilioAccountSid,
+        twilioAuthToken: gym.twilioAuthToken,
+        twilioPhoneNumber: gym.twilioPhoneNumber,
+      },
+    });
+
+    if (!result.success) {
+      res.status(500).json({ error: result.error || "Failed to send SMS" }); return;
+    }
+
+    res.json({
+      success: true,
+      recipientName: `${lead.firstName} ${lead.lastName}`,
+      recipientPhone: lead.phone,
+      messageSid: result.messageSid,
+    });
+  } catch (err) {
+    console.error("Error sending lead SMS:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
 
 export default router;

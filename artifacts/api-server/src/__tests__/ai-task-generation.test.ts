@@ -10,8 +10,11 @@ let updateCalls: any[] = [];
 vi.mock("drizzle-orm", () => ({
   eq: (left: any, right: any) => ({ _type: "eq", left, right }),
   and: (...conditions: any[]) => ({ _type: "and", conditions }),
-  sql: () => ({ _type: "sql" }),
+  sql: Object.assign((() => ({ _type: "sql" })) as any, { join: (...args: any[]) => ({}) }),
   count: () => ({ _type: "count" }),
+  gte: () => ({ _type: "gte" }),
+  desc: () => ({}),
+  asc: () => ({}),
 }));
 
 vi.mock("@workspace/db", () => {
@@ -110,6 +113,12 @@ vi.mock("@workspace/db", () => {
     leadsTable: makeTable("leads"),
     subscriptionsTable: makeTable("subscriptions"),
     aiTasksTable: makeTable("ai_tasks"),
+    gymsTable: makeTable("gyms"),
+    attendanceTable: makeTable("attendance"),
+    classesTable: makeTable("classes"),
+    leadActivitiesTable: makeTable("lead_activities"),
+    workoutResultsTable: makeTable("workout_results"),
+    workoutsTable: makeTable("workouts"),
   };
 });
 
@@ -130,6 +139,28 @@ describe("AI Task Generation", () => {
       const result = await generateAiTasks(1);
       expect(result.created).toBe(0);
       expect(result.tasks).toHaveLength(0);
+    });
+
+    it("returns a reason when zero tasks are created due to no risks", async () => {
+      const result = await generateAiTasks(1);
+      expect(result.created).toBe(0);
+      expect(result.reason).toBeDefined();
+      expect(result.reason).toContain("nothing flagged");
+    });
+
+    it("returns a reason about pending tasks when queue is full", async () => {
+      mockMembers = [];
+      mockLeads = [
+        { id: 1, gymId: 1, firstName: "Jane", lastName: "Doe", source: "web", stage: "new", isStale: true, createdAt: new Date(Date.now() - 3 * 86400000) },
+      ];
+      mockAiTasks = Array.from({ length: 5 }, (_, i) => ({
+        id: i + 1, gymId: 1, type: "outreach", status: "pending",
+        targetId: i + 10, targetType: "member",
+      }));
+      const result = await generateAiTasks(1);
+      expect(result.created).toBe(0);
+      expect(result.reason).toBeDefined();
+      expect(result.reason).toContain("already pending");
     });
 
     it("generates at-risk member outreach tasks for critical risk tier", async () => {

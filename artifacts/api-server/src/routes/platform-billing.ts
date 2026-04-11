@@ -1,7 +1,7 @@
 /**
  * @module platform-billing
- * API routes for Iron Metrics platform subscription management.
- * These handle the gym-as-customer billing (gym subscribing to Iron Metrics),
+ * API routes for ForgeOS platform subscription management.
+ * These handle the gym-as-customer billing (gym subscribing to ForgeOS),
  * separate from the member billing handled in billing.ts.
  *
  * Routes:
@@ -24,7 +24,7 @@ import {
 import { TIER_DEFINITIONS, type SubscriptionTier } from "../tierConfig";
 
 function requireGymOwner(req: Request, res: Response, next: NextFunction): void {
-  if (req.gymRole !== "owner") {
+  if (req.gymRole !== "owner" && req.gymRole !== "gym_owner") {
     res.status(403).json({
       error: "owner_required",
       message: "Only the gym owner can manage the platform subscription.",

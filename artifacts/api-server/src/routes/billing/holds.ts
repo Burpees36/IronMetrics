@@ -5,6 +5,7 @@ import { getStripeClient } from "../../stripeClient";
 import { requireBillingPermission, requireBillingRead } from "../../middlewares/billingRbac";
 import { billingAuditLogger } from "../../billingAuditLogger";
 import { parseGymId, paramStr } from "./helpers";
+import { exitMemberSequences } from "../../schedulers/retention-engine";
 
 const router: IRouter = Router();
 
@@ -59,6 +60,12 @@ router.post("/gyms/:gymId/members/:memberId/holds", requireBillingPermission("bi
         .where(eq(subscriptionsTable.id, sub.id));
       await db.update(membersTable).set({ status: "hold" })
         .where(eq(membersTable.id, memberId));
+      try {
+        await exitMemberSequences(memberId, gymId, "member_inactive");
+      } catch (seqErr: unknown) {
+        const msg = seqErr instanceof Error ? seqErr.message : String(seqErr);
+        console.error(`[billing] Failed to exit sequences for held member ${memberId}:`, msg);
+      }
     } catch (err: any) {
       console.error(`[billing] Error pausing subscription for hold:`, err.message);
       await db.update(scheduledHoldsTable).set({ status: "scheduled" }).where(eq(scheduledHoldsTable.id, hold.id));

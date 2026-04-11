@@ -26,9 +26,18 @@ import { Settings } from "@/pages/Settings";
 import { Onboarding } from "@/pages/Onboarding";
 import { UpdatePayment } from "@/pages/UpdatePayment";
 import { LeadCapture } from "@/pages/LeadCapture";
+import { PublicWod } from "@/pages/PublicWod";
 import { Retention } from "@/pages/Retention";
+import { LeadSequences } from "@/pages/LeadSequences";
+import { Finances } from "@/pages/Finances";
 import { PlanSelection } from "@/pages/PlanSelection";
 import { TierGate } from "@/components/TierGate";
+
+function RedirectTo({ to }: { to: string }) {
+  const [, setLoc] = useLocation();
+  React.useEffect(() => setLoc(to), [to, setLoc]);
+  return null;
+}
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -81,6 +90,7 @@ function Router() {
       <Route path="/select-gym" component={GymSelect} />
       <Route path="/update-payment" component={UpdatePayment} />
       <Route path="/join/:gymSlug" component={LeadCapture} />
+      <Route path="/wod/:gymSlug" component={PublicWod} />
       
       {/* Protected Routes */}
       <Route path="/">
@@ -96,14 +106,16 @@ function Router() {
       </Route>
       <Route path="/dashboard" component={() => <ProtectedRoute component={Dashboard} />} />
       <Route path="/ai-insights" component={() => <ProtectedRoute component={AiInsights} />} />
-      <Route path="/intelligence">{() => { const [, setLoc] = useLocation(); React.useEffect(() => setLoc("/ai-insights"), []); return null; }}</Route>
-      <Route path="/ai-operator">{() => { const [, setLoc] = useLocation(); React.useEffect(() => setLoc("/ai-insights"), []); return null; }}</Route>
+      <Route path="/intelligence" component={() => <RedirectTo to="/ai-insights" />} />
+      <Route path="/ai-operator" component={() => <RedirectTo to="/ai-insights" />} />
       <Route path="/members/:memberId" component={() => <ProtectedRoute component={() => <TierGate routeGroup="members" feature="Member Management" requiredTier="growth"><MemberDetail /></TierGate>} />} />
       <Route path="/members" component={() => <ProtectedRoute component={() => <TierGate routeGroup="members" feature="Member Management" requiredTier="growth"><Members /></TierGate>} />} />
       <Route path="/schedule" component={() => <ProtectedRoute component={() => <TierGate routeGroup="schedule" feature="Scheduling" requiredTier="growth"><Schedule /></TierGate>} />} />
       <Route path="/leads" component={() => <ProtectedRoute component={() => <TierGate routeGroup="leads" feature="Leads Pipeline" requiredTier="growth"><Leads /></TierGate>} />} />
+      <Route path="/lead-sequences" component={() => <ProtectedRoute component={() => <TierGate routeGroup="leads" feature="Lead Sequences" requiredTier="growth"><LeadSequences /></TierGate>} />} />
       <Route path="/retention" component={() => <ProtectedRoute component={Retention} />} />
       <Route path="/billing" component={() => <ProtectedRoute component={Billing} />} />
+      <Route path="/finances" component={() => <ProtectedRoute component={Finances} />} />
       <Route path="/workouts" component={() => <ProtectedRoute component={() => <TierGate routeGroup="workouts" feature="Workouts & Programming" requiredTier="growth"><Workouts /></TierGate>} />} />
       <Route path="/resources" component={() => <ProtectedRoute component={Resources} />} />
       <Route path="/settings" component={() => <ProtectedRoute component={Settings} />} />

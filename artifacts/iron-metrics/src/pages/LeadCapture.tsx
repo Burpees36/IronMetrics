@@ -294,7 +294,7 @@ export function LeadCapture() {
             <p>{gymInfo.address}, {gymInfo.city}, {gymInfo.state}</p>
           )}
           {gymInfo?.phone && <p className="mt-1">{gymInfo.phone}</p>}
-          <p className="mt-2 opacity-60">Powered by Iron Metrics</p>
+          <p className="mt-2 opacity-60">Powered by ForgeOS</p>
         </div>
       </motion.div>
     </div>

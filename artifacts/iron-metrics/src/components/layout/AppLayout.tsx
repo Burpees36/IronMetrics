@@ -2,10 +2,11 @@ import React, { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@workspace/replit-auth-web";
 import { 
-  Dumbbell, LayoutDashboard, BrainCircuit, Users, CalendarDays, 
+  LayoutDashboard, BrainCircuit, Users, CalendarDays, 
   Target, CreditCard, Activity, LogOut, Menu, BookOpen,
-  Settings, Sun, Moon, RefreshCw, Lock
+  Settings, Sun, Moon, RefreshCw, Lock, Wallet, AlertTriangle, Power
 } from "lucide-react";
+import { ForgeOSLogo } from "@/components/brand/ForgeOSLogo";
 import { useGym } from "@/store/GymContext";
 import { useTheme } from "@/store/ThemeContext";
 import { useGetGym } from "@workspace/api-client-react";
@@ -31,6 +32,7 @@ const NAV_ITEMS = [
   { name: "Schedule", href: "/schedule", icon: CalendarDays, routeGroup: "schedule", requiredTier: "growth" },
   { name: "Leads", href: "/leads", icon: Target, routeGroup: "leads", requiredTier: "growth" },
   { name: "Billing", href: "/billing", icon: CreditCard, routeGroup: "billing" },
+  { name: "Finances", href: "/finances", icon: Wallet, routeGroup: "billing" },
   { name: "Workouts", href: "/workouts", icon: Activity, routeGroup: "workouts", requiredTier: "growth" },
   { name: "Retention", href: "/retention", icon: RefreshCw, routeGroup: "retention" },
   { name: "Resources", href: "/resources", icon: BookOpen, routeGroup: "resources" },
@@ -71,12 +73,12 @@ function SidebarContent({ location, gym, gymLoading, user, logout, onNavigate, c
       <div>
         <div className="px-4 py-4">
           <div className="mb-6 px-2">
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Active Gym</p>
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Active Business</p>
             {gymLoading ? (
               <div className="h-6 w-32 bg-muted animate-pulse rounded" />
             ) : (
               <div className="flex items-center justify-between group cursor-pointer">
-                <span className="text-sm font-medium truncate">{gym?.name || "Select Gym"}</span>
+                <span className="text-sm font-medium truncate">{gym?.name || "Select Business"}</span>
                 <Link href="/select-gym" onClick={onNavigate} className="text-xs text-primary opacity-0 group-hover:opacity-100 transition-opacity">Change</Link>
               </div>
             )}
@@ -164,7 +166,21 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     query: { enabled: !!activeGymId }
   });
 
+  const isDeactivated = gym?.isActive === false;
+
   if (!activeGymId) return <>{children}</>;
+
+  const deactivatedBanner = isDeactivated ? (
+    <div className="bg-amber-500/10 border-b border-amber-500/30 px-4 py-3 flex items-center gap-3 shrink-0">
+      <Power className="h-4 w-4 text-amber-500 shrink-0" />
+      <p className="text-sm text-amber-700 dark:text-amber-300 flex-1">
+        <strong>This business is deactivated.</strong> Members and staff cannot access it.{" "}
+        <Link href="/settings?section=danger" className="underline font-medium hover:text-amber-800 dark:hover:text-amber-200">
+          Go to Settings
+        </Link>{" "}to reactivate.
+      </p>
+    </div>
+  ) : null;
 
   if (isMobile) {
     return (
@@ -177,11 +193,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           >
             <Menu className="h-6 w-6" />
           </button>
-          <Link href="/dashboard" className="flex items-center gap-2 text-primary">
-            <Dumbbell className="h-5 w-5" />
-            <span className="font-display font-bold text-lg tracking-tight text-foreground">
-              IRON<span className="text-primary">METRICS</span>
-            </span>
+          <Link href="/dashboard">
+            <ForgeOSLogo size="sm" />
           </Link>
           <div className="min-w-[44px]" />
         </header>
@@ -189,11 +202,9 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         <Sheet open={drawerOpen} onOpenChange={setDrawerOpen}>
           <SheetContent side="left" className="w-[280px] p-0 bg-sidebar">
             <SheetHeader className="h-14 flex items-center px-6 border-b border-border/50 flex-row">
-              <Link href="/dashboard" className="flex items-center gap-3 text-primary hover:opacity-80 transition-opacity">
-                <Dumbbell className="h-6 w-6" />
-                <SheetTitle className="font-display font-bold text-xl tracking-tight text-foreground">
-                  IRON<span className="text-primary">METRICS</span>
-                </SheetTitle>
+              <Link href="/dashboard" className="hover:opacity-80 transition-opacity">
+                <SheetTitle className="sr-only">ForgeOS</SheetTitle>
+                <ForgeOSLogo size="md" />
               </Link>
             </SheetHeader>
             <SidebarContent
@@ -207,6 +218,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             />
           </SheetContent>
         </Sheet>
+
+        {deactivatedBanner}
 
         <main className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
           <div className="absolute top-0 left-1/4 w-96 h-96 bg-primary/5 rounded-full blur-[120px] pointer-events-none" />
@@ -249,11 +262,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     <div className="flex h-screen w-full bg-background overflow-hidden">
       <aside className="w-64 border-r border-border bg-sidebar flex flex-col shrink-0">
         <div className="h-16 flex items-center px-6 border-b border-border/50 shrink-0">
-          <Link href="/dashboard" className="flex items-center gap-3 text-primary hover:opacity-80 transition-opacity">
-            <Dumbbell className="h-6 w-6" />
-            <span className="font-display font-bold text-xl tracking-tight text-foreground">
-              IRON<span className="text-primary">METRICS</span>
-            </span>
+          <Link href="/dashboard" className="hover:opacity-80 transition-opacity">
+            <ForgeOSLogo size="md" />
           </Link>
         </div>
         <SidebarContent
@@ -267,6 +277,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       </aside>
 
       <main className="flex-1 flex flex-col min-w-0 h-full overflow-hidden relative">
+        {deactivatedBanner}
         <div className="absolute top-0 left-1/4 w-96 h-96 bg-primary/5 rounded-full blur-[120px] pointer-events-none" />
         
         <div className="flex-1 overflow-y-auto p-6 md:p-8 z-10 custom-scrollbar">

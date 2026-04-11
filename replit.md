@@ -1,8 +1,8 @@
-# Iron Metrics — Gym Management SaaS
+# ForgeOS — Gym Management Platform
 
 ## Overview
 
-Iron Metrics is a comprehensive gym management SaaS platform for CrossFit and functional fitness gyms. It provides tools for member management, billing, scheduling, programming, lead management, and an AI-powered assistant. The platform aims to streamline administrative tasks, enhance member engagement, and offer actionable insights for gym owners to optimize operations and improve member retention.
+ForgeOS is a comprehensive gym management platform for CrossFit and functional fitness businesses. It streamlines operations with tools for member management, billing, scheduling, programming, and lead management. The platform features an embedded AI intelligence engine, **Iron Metrics**, which provides retention scoring, risk radar, revenue insights, and automated interventions to enhance member engagement and provide actionable business insights. ForgeOS handles the core operating system functions, while Iron Metrics provides the AI-driven intelligence.
 
 ## User Preferences
 
@@ -10,64 +10,58 @@ I prefer concise and direct communication. When making changes, please prioritiz
 
 ## System Architecture
 
-Iron Metrics is built as a pnpm workspace monorepo using TypeScript, designed for scalability and maintainability.
+ForgeOS is a pnpm workspace monorepo built with TypeScript, Node.js 24, and TypeScript 5.9, prioritizing scalability and maintainability.
 
 **Monorepo Structure:**
 - `artifacts/api-server/`: Express 5 API server.
 - `artifacts/iron-metrics/`: React + Vite frontend.
-- `lib/`: Shared libraries including OpenAPI spec, generated API clients, Drizzle ORM schema, and Replit Auth hooks.
+- `lib/`: Shared libraries for OpenAPI spec, generated API clients, Drizzle ORM schema, and Replit Auth hooks.
 
 **Technology Stack:**
-- **Node.js:** 24, with pnpm.
-- **TypeScript:** 5.9.
 - **API:** Express 5.
 - **Frontend:** React, Vite, TailwindCSS v4, shadcn/ui.
 - **Database:** PostgreSQL with Drizzle ORM.
-- **Validation:** Zod (`zod/v4`).
+- **Validation:** Zod.
 - **API Codegen:** Orval (from OpenAPI spec).
-- **Auth:** Replit Auth (OIDC with PKCE).
+- **Authentication:** Replit Auth (OIDC with PKCE).
 
 **UI/UX Design:**
-A premium SaaS theme with light/dark mode, 2xl rounded corners, and a glass-panel effect. Primary accent is emerald green; violet for Pro tier; amber/yellow for warnings. Theme context `ThemeProvider` persists to `localStorage` and respects `prefers-color-scheme`.
+A premium SaaS theme featuring light/dark mode, 2xl rounded corners, and a glass-panel effect. The primary accent color is emerald green, with violet for Pro tier features and amber/yellow for warnings. The theme context persists to `localStorage` and respects `prefers-color-scheme`.
 
-**Technical Implementations & Feature Specifications:**
+**Core Features & Technical Implementations:**
 
-- **Subscription Tiers & Feature Gating:** Three tiers (Insights, Growth, Pro) with beta access flag. Configured in `tierConfig.ts`. Backend uses `requireTierAccess` middleware, frontend uses `useGymTier` hook and `TierGate` component. Stripe integration for product/price creation and subscription management via Checkout and Billing Portal. Webhook handlers update `subscriptionTier`.
-- **Multi-tenancy:** `gyms` table provides isolated workspaces. `requireGymAccess` middleware enforces access.
-- **Member Management:** CRM with risk scoring, notes, lifecycle events, CSV/Wodify import. Import process includes preview, deduplication, and progress tracking via `sync_runs` table. Wodify API integration for syncing clients and memberships, handling pagination, data normalization, and async background processing with real-time progress updates.
-- **Lead Management:** Kanban-style pipeline, activity timelines, follow-up scheduling, and public lead capture form (`/join/:gymSlug`) with configurable fields and attribution.
-- **Class Scheduling:** Weekly calendar with RBAC-aware UI, capacity tracking, check-ins, templates, and Google Calendar-style overlap rendering.
-- **Billing:** Comprehensive billing command center with plans, subscriptions, payments, refunds, and Stripe integration. Includes billing audit logs, recovery flows (card updates, grace periods) with auto-suspension after grace expiry (configurable buffer period), payment method management, couples/linked billing, plan upgrade/downgrade, scheduled holds, past-due check-in enforcement, discount codes, account credits, invoice access, and tax configuration. Billing maintenance scheduler runs every 1 hour.
-- **Programming Hub:** Daily programming interface with section-based workout builder and result logging.
-- **AI Insights (Strategic Ops Board at `/ai-insights`):** Redesigned as a single-scroll Strategic Ops Board layout (no tabs). Two-column layout: Left column (~60%) shows AI-generated interventions sorted by urgency/score with dismissable cards (local dismiss with undo toast), each card has category icon, urgency badge, AI confidence score, impact metrics, expandable action steps, and "Execute Smart Action" button that navigates to the relevant page (retention→/retention, billing→/billing, leads→/leads, etc.). Right column (~40%) has RSI gauge, mini stat cards (Revenue Protected, AI Tasks, At-Risk, Success Rate), compact Risk Radar, collapsible RSI Trend chart, and AI Impact Summary. Below both columns is the full AI Task Inbox with pending/history toggle. "Auto-Pilot" renamed to "Smart Actions" throughout. Light-mode-first design using semantic tokens. Old routes `/intelligence` and `/ai-operator` redirect to `/ai-insights`. Navigation uses single "AI Insights" item with BrainCircuit icon.
-- **AI Task Queue (within AI Insights):** Task queue for AI-generated content (outreach, owner briefs), with approval/dismissal and email sending. Includes autonomous daily scheduling (24h interval) that auto-generates tasks for all gyms, editable email subjects per task, and a last auto-scan timestamp display. Before generating tasks, the scheduler refreshes `riskScore`/`riskTier` on the `members` table using `calculateRiskScore`/`getRiskTier` from `computations.ts`, ensuring imported members (Wodify, CSV) are scored. Task generation is capped at 5 pending tasks per gym, prioritized: critical outreach > high outreach > billing > leads. **Smart Email Personalization:** Emails are personalized using member/lead context assembled from attendance history, class preferences, coach relationships, workout PRs, membership tenure, and subscription data. The `personalization-context.ts` service provides `assembleMemberContext` and `assembleLeadContext` functions. Template variants rotate per risk tier (class-based, coach-based, streak-based, milestone-based hooks). The `aiTasksTable` has a `personalizationMeta` JSON column storing which data points were used. The UI displays "Personalized using" tags showing data points on each task card. **Outcome Tracking & Revenue Attribution:** When tasks are actioned (sent/completed), `actionedAt` timestamp and `outcome=pending_observation` are set. A daily outcome detection service (`outcome-detection.ts`) evaluates pending tasks within a 30-day observation window: outreach tasks check if member returned (lastVisitDate > actionedAt → `won_back`), billing tasks check if subscription reactivated post-action (updatedAt > actionedAt → `reactivated`), lead tasks check if lead converted (`convertedAt` > actionedAt → `converted`). Revenue impact is computed from subscription amounts or member monthlyRevenue. The `GET /gyms/:gymId/ai/impact` endpoint returns aggregated stats: totalActioned, outcomeCounts, successRate, membersSaved, totalRevenueRetained/Recovered, and monthly timeline. An "Impact" tab on the AI Operator page displays metric cards, revenue breakdown, outcome breakdown, and a stacked bar chart of outcomes over time. History task cards show outcome badges (Member returned, Reactivated, Converted, No change, Observing) with revenue impact amounts. Schema: `ai_tasks` table columns: `personalization_meta`, `outcome`, `outcome_detected_at`, `revenue_impact`, `actioned_at`. **Auto-Pilot Mode:** Owners can enable per-category auto-send (outreach, billing, leads) via `ai_operator_settings` table. When enabled, newly generated tasks are automatically emailed and marked `status=sent, autoSent=true`. Safety guardrails: valid email required, per-member cooldown (configurable, default 14 days), auto-pilot only for email task types. Settings managed via `GET/PUT /gyms/:gymId/ai/autopilot-settings` endpoints. Auto-sent tasks show an "Auto" badge in History with auto/manual filter. Configurable digest (daily/weekly/disabled) summarizes auto-piloted actions, sent via the `autopilot-digest-scheduler.ts` at 18:00 UTC. UI settings panel accessible via "Auto-Pilot" button on AI Operator page with toggle switches, cooldown slider, and digest frequency selector. Files: `ai-task-generation.ts`, `ai-task-scheduler.ts`, `personalization-context.ts`, `outcome-detection.ts`, `autopilot-sender.ts`, `autopilot-digest-scheduler.ts`.
-- **Retention Automations:** Automated retention sequences with 4 built-in templates (Miss You, Check-In, Win Back, Onboarding Journey). The legacy "New Member Support" sequence has been removed and replaced by the "Onboarding Journey" (5-phase protocol from day 1 through 90-day review). Scheduler engine runs every 2h evaluating triggers (`no_attendance`, `risk_score`, `new_member_join`, `new_member_decline`), advancing steps (email/task actions), handling re-engagement exits and cooldown. Tables: `retention_sequences`, `retention_sequence_steps`, `member_sequence_enrollments`, `retention_sequence_events`. Management UI at `/retention` with sequence CRUD, enrollment management, and activity log. Manual enrollment endpoint validates member belongs to gym. A one-time startup migration (`migrations/onboarding-cleanup.ts`) removes legacy `type='onboarding'` AI tasks and the deprecated "New Member Support" sequence from existing databases.
-- **Intelligence Hub:** KPI dashboards, RSI scores, risk radar, and intervention recommendations. Includes "Action-First Command" dashboard redesign prioritizing actionable items from morning briefings, alongside KPI cards for MRR, active members, RSI, retention rate, and quick stats. **RSI Historical Tracking:** Daily RSI snapshots stored in `rsi_snapshots` table (gymId, score, band, component norms, recordedAt). Scheduler runs every 24h computing and saving RSI for all gyms (idempotent with unique index on gym+date). Trend data (30d/90d deltas) now sourced from real snapshots instead of estimates. New `GET /gyms/:gymId/intelligence/rsi/history?window=30d|90d|all` endpoint returns historical data points. Intelligence Hub shows RSI trend chart (area chart with 30d/90d/all time windows). Dashboard RSI card shows trend delta (e.g., "+5 (30d)"). When <7 snapshots exist, trends gracefully show "Not enough data yet". Files: `lib/db/src/schema/retention.ts` (rsiSnapshotsTable), `artifacts/api-server/src/schedulers/rsi-snapshots.ts`, intelligence routes, reports.ts. Dashboard KPI card shows Member Engagement Rate (unique members with check-ins / active members × 100) with week-over-week change in percentage points. Morning briefing endpoint aggregates at-risk members, stale leads, failed payments, today's classes, and engagement into prioritized actionable items. Revenue forecast falls back to subscription-based MRR estimates when no invoice history exists. BillingPayrollCard and RecentCancellationsCard live on the Billing page. **Industry Benchmarking:** Industry benchmarking computed weekly from anonymized aggregate data across all gyms, segmented by size (small <100, medium 100-250, large 250+). The "How You Compare" tab shows percentile rankings for RSI, churn rate, ARM, tenure, and engagement. A compact benchmark highlights card also appears on the Dashboard sidebar. Privacy minimum enforced: segments with fewer than 5 gyms show "Not enough data yet".
-- **Blended Metrics (Wodify Integration):** All financial and engagement metrics use the blended metrics service (`artifacts/api-server/src/blendedMetrics.ts`) which combines subscription data with Wodify-imported member data. MRR = subscription MRR + monthly_revenue from members without active subscriptions (no double-counting). Active members counted from members table (status='active'). ARM = blended MRR / active billable members. Engagement rate blends attendance table records with Wodify summary fields (lastVisitDate, daysSinceLastAttendance). Risk profiles use member.monthlyRevenue as fallback for revenue-at-risk when no subscription exists. All API responses include `revenueSource` ('subscriptions_only'|'wodify_only'|'blended'), `attendanceSource`, and `hasSubscriptionData` metadata. Dashboard chart renamed "MRR Trend". Billing page shows informational banner when no subscription data exists and hides payment recovery widgets. Files: blendedMetrics.ts, reports.ts, billingMetrics.ts, intelligence/metrics.ts, intelligence/routes.ts.
-- **MRR Snapshots:** `mrr_snapshots` table stores daily MRR snapshots (totalMRR, subscriptionMRR, wodifyMRR, activeMemberCount, arm, revenueSource) with unique constraint on (gymId, snapshotDate). Snapshots are upserted after each successful Wodify sync via `computeBlendedMRR`. Dashboard and revenue report endpoints use snapshots as the primary source for historical months, falling back to invoice data, using whichever is higher. When fewer than 3 months of non-zero data exist, `revenueTrendSparse: true` is returned and the frontend shows a placeholder message instead of a misleading empty chart. Schema: `lib/db/src/schema/mrr-snapshots.ts`. Snapshot logic: `sync.ts` post-sync block. Trend logic: `reports.ts` `getSnapshotsByMonth` helper.
-- **Owner Console Dashboard (Action-First Command):** Redesigned as an action-queue-first layout. Layout: OnboardingBanner → SyncHealthBanner → Header (time-based greeting "Good morning, Boss." + critical count + MRR growth + billing snapshot + "Go to Billing" link) → Two-column grid: Left (8-col) has action queue from morning briefing organized into "Handle Now" (critical), "Follow Up Today" (warning), "Good News" (positive) expandable cards with dismiss/action buttons + AtRiskMembersCard + RetentionActivityCard. Right (4-col) has KPI sidebar: MRR card, Active Members, RSI Score (links to /intelligence), Retention Rate with progress bar, Revenue Trend area chart, Quick Stats (Engagement Rate, Collection Rate, At-Risk Members, Open Leads). Uses theme-aware CSS variables for light/dark mode. Data from `useGetDashboardStats` and `useGetMorningBriefing` API hooks. Components: `SyncHealthBanner.tsx`, `AtRiskMembersCard.tsx`, `RetentionActivityCard.tsx` in `src/components/dashboard/`.
-- **Settings:** Full administration panel for gym identity, staff/access management (RBAC), email/notifications, billing, security, branding, and integrations.
-- **Onboarding Wizard:** A streamlined 3-step guided setup for new gyms: Connect Data (Wodify sync, CSV import, or manual entry), Gym Details (profile info, skippable), and Launch (summary + go to dashboard). Flow: Create Gym → Plan Selection (Stripe checkout) → Onboarding → Dashboard. After Wodify sync, membership plans are auto-created from imported member data. Dashboard shows a ConnectWodifyBanner when no API key is set and the gym has zero members.
-- **Error Handling:** Centralized error handling with structured responses, console logging, and React `ErrorBoundary`.
-- **Rate Limiting:** `express-rate-limit` for API protection, with stricter limits on auth and public payment-update routes.
-- **Testing:** Vitest with comprehensive backend (402 tests) and frontend (42 tests) coverage, including webhook handlers, AI task generation, member import validation, billing metrics, RBAC, intelligence computations, and UI components.
-- **Data Integrity:** Drizzle numeric fields handled as strings and parsed to floats, PostgreSQL `COUNT(*)` wrapped with `Number()`. Tenure calculations fallback to `createdAt`.
-- **Database Indexes:** B-tree indexes on foreign key columns and composite indexes on common query patterns for performance.
-- **Date Columns:** All date-only fields use PostgreSQL `date` type, accepting/returning YYYY-MM-DD strings.
-- **Dev Preview Bypass:** Development-only feature to inject mock user sessions for authenticated dashboard content screenshots.
-
-## Object Storage
-
-Object storage (GCS-backed via Replit App Storage) is provisioned for file uploads. Storage routes are mounted at `/api/storage/*` (public routes, no auth required). The presigned URL upload flow: (1) POST `/api/storage/uploads/request-url` to get a presigned URL, (2) PUT the file directly to GCS. Server files: `lib/objectStorage.ts`, `lib/objectAcl.ts`, `routes/storage.ts`. Client lib at `lib/object-storage-web/`.
-
-## Member Email Timeline
-
-All member-targeted emails automatically log `email_sent` timeline events via the centralized `sendMemberEmail()` / `logMemberEmailSent()` functions in `services/member-email.ts`. This covers billing recovery, retention engine, and AI Operator emails.
+-   **Subscription Tiers & Feature Gating:** Implemented with backend middleware (`requireTierAccess`) and frontend hooks/components (`useGymTier`, `TierGate`).
+-   **Multi-tenancy:** Isolated workspaces using a `gyms` table and `requireGymAccess` middleware.
+-   **Member Management:** CRM with risk scoring, lifecycle events, and CSV/Wodify import. Includes server-side paginated member lists and an "at-risk" filter view.
+-   **Lead Management:** Kanban-style pipeline with activity timelines, follow-up scheduling, and a public lead capture form.
+-   **Class Scheduling:** Weekly calendar with RBAC, capacity tracking, check-ins, and Google Calendar-style overlap rendering.
+-   **Personal Training & Appointments:** Booking system for 1-on-1 appointments with coach availability, appointment type configuration, and automated reminders.
+-   **Billing:** Comprehensive command center for plans, subscriptions, payments, refunds, and Stripe integration. Includes audit logs, payment method management, and discount codes.
+-   **Programming Hub:** Daily workout builder with section-based programming, result logging, and AI-generated workout capabilities using OpenAI. AI generation considers gym methodology, equipment, and periodization, producing drafts for review with a post-generation validation layer and movement alias resolution.
+-   **AI Insights (Strategic Ops Board):** Displays AI-generated interventions sorted by urgency/score, key metrics (RSI gauge, Risk Radar), and a full AI Action Center (formerly AI Task Inbox). Features a dynamic intervention engine and "Smart Actions" for automated task execution. Includes Milestone Celebrations Auto-Pilot (birthday, anniversary, attendance milestone, streak, comeback detection with personalized messages and cooldown dedup) and Morning Briefing delivery (configurable daily email/SMS with gym snapshot, overnight autopilot report, and milestone celebrations). Intervention cards and risk badges use dark-mode-aware colors. Risk score bars use dynamic coloring (green/yellow/orange/red by score range).
+-   **SMS / Text Messaging:** Twilio-based SMS sending for manual messages from member/lead profiles and automated tasks, with gym-level configuration.
+-   **Retention Automations:** Automated retention sequences (e.g., "Miss You", "Win Back") with built-in templates and a scheduler engine.
+-   **Lead Nurture Sequences:** Automated multi-step lead nurture flows triggered by pipeline stage changes, with a sequence builder UI, execution engine, and templates.
+-   **Financial Intelligence & Owner Pay:** Expense tracking, payroll ratio monitoring, owner take-home calculation, and monthly trend charts.
+-   **Intelligence Hub:** KPI dashboards, RSI scores, risk radar, and intervention recommendations.
+-   **Blended Metrics:** Service combining subscription data with Wodify imports for accurate MRR, active members, and engagement rate.
+-   **MRR Snapshots:** Daily snapshots stored for historical reporting and trend analysis.
+-   **Owner Console Dashboard:** Action-queue-first layout with critical counts, MRR growth, action items, and a KPI sidebar.
+-   **Communication Style (Owner Voice):** Settings for gym owners to configure communication tone (e.g., Casual & Friendly, Professional), define custom word-replacement rules, and provide writing samples for AI task generation.
+-   **Danger Zone (Deactivate & Delete):** Settings Danger Zone allows gym owners to deactivate (temporarily disable, blocking staff/member access) or permanently delete a business and all associated data. Includes owner-only authorization enforcement, deactivated-gym middleware guard, and a frontend deactivation banner.
+-   **Onboarding Wizard:** A streamlined 3-step guided setup for new gyms.
+-   **Error Handling:** Centralized error handling with structured responses and logging.
+-   **Rate Limiting:** `express-rate-limit` for API protection.
+-   **Data Integrity:** Drizzle numeric fields handled as strings, PostgreSQL `COUNT(*)` wrapped with `Number()`, and robust tenure calculations.
+-   **Database Indexes:** B-tree indexes on foreign keys and composite indexes for performance.
+-   **Object Storage:** GCS-backed via Replit App Storage for file uploads.
 
 ## External Dependencies
 
-- **Stripe:** For billing, subscription management, payment processing, billing portal, and webhooks.
-- **Wodify API (api.wodify.com/v1):** For syncing client and membership data.
-- **Google Cloud Storage:** Object storage for file uploads (profile photos, etc.) via Replit App Storage.
-- **Google Calendar:** For class scheduling integration.
-- **PostgreSQL:** Relational database for all application data.
+-   **Stripe:** For billing, subscription management, payment processing, billing portal, and webhooks.
+-   **Twilio:** For SMS/text messaging via REST API.
+-   **Wodify API:** For syncing client and membership data.
+-   **Google Cloud Storage:** Object storage for file uploads (via Replit App Storage).
+-   **Google Calendar:** For class scheduling integration.
+-   **OpenAI (via Replit AI Integrations):** For AI-generated workout programming.
+-   **PostgreSQL:** Relational database.

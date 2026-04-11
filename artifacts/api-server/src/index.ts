@@ -7,38 +7,62 @@ import { startAiTaskScheduler } from "./schedulers/ai-task-scheduler";
 import { startRsiSnapshotScheduler } from "./schedulers/rsi-snapshots";
 import { startBenchmarkScheduler } from "./schedulers/benchmark-scheduler";
 import { startAutopilotDigestScheduler } from "./schedulers/autopilot-digest-scheduler";
+import { startAutoPublishScheduler } from "./schedulers/auto-publish-scheduler";
+import { startLeadSequenceScheduler } from "./schedulers/lead-sequence-scheduler";
+import { startAppointmentReminders } from "./schedulers/appointment-reminders";
+import { startBriefingScheduler } from "./schedulers/briefing-scheduler";
 import { runOnboardingMigrationCleanup } from "./migrations/onboarding-cleanup";
 
-const rawPort = process.env["PORT"];
+const REQUIRED_ENV_VARS = [
+  "PORT",
+  "DATABASE_URL",
+  "STRIPE_SECRET_KEY",
+  "STRIPE_PUBLISHABLE_KEY",
+  "RESEND_API_KEY",
+] as const;
 
-if (!rawPort) {
+const missing = REQUIRED_ENV_VARS.filter((v) => !process.env[v]);
+if (missing.length > 0) {
   throw new Error(
-    "PORT environment variable is required but was not provided.",
+    `Missing required environment variables: ${missing.join(", ")}. ` +
+    "The server cannot start without these. Please set them before running.",
   );
 }
 
+const rawPort = process.env["PORT"]!;
 const port = Number(rawPort);
 
 if (Number.isNaN(port) || port <= 0) {
   throw new Error(`Invalid PORT value: "${rawPort}"`);
 }
 
-try {
-  await initStripe();
-} catch (err: any) {
-  console.error("Stripe initialization failed (non-fatal):", err.message);
-  console.log("Server will start without Stripe features.");
+async function main() {
+  try {
+    await initStripe();
+  } catch (err: any) {
+    console.error("Stripe initialization failed (non-fatal):", err.message);
+    console.log("Server will start without Stripe features.");
+  }
+
+  await runOnboardingMigrationCleanup();
+
+  app.listen(port, () => {
+    console.log(`Server listening on port ${port}`);
+    startBillingMaintenanceScheduler();
+    startRetentionEngineScheduler();
+    startWodifySyncScheduler();
+    startAiTaskScheduler();
+    startRsiSnapshotScheduler();
+    startBenchmarkScheduler();
+    startAutopilotDigestScheduler();
+    startAutoPublishScheduler();
+    startLeadSequenceScheduler();
+    startAppointmentReminders();
+    startBriefingScheduler();
+  });
 }
 
-await runOnboardingMigrationCleanup();
-
-app.listen(port, () => {
-  console.log(`Server listening on port ${port}`);
-  startBillingMaintenanceScheduler();
-  startRetentionEngineScheduler();
-  startWodifySyncScheduler();
-  startAiTaskScheduler();
-  startRsiSnapshotScheduler();
-  startBenchmarkScheduler();
-  startAutopilotDigestScheduler();
+main().catch((err) => {
+  console.error("Fatal startup error:", err);
+  process.exit(1);
 });

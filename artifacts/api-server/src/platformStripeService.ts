@@ -1,7 +1,7 @@
 /**
  * @module platformStripeService
  * Manages Stripe products, prices, and subscriptions for the
- * Iron Metrics PLATFORM billing (gym-as-customer), separate from
+ * ForgeOS PLATFORM billing (gym-as-customer), separate from
  * the member billing handled by stripeService.ts.
  */
 import Stripe from "stripe";
@@ -27,7 +27,7 @@ export async function ensurePlatformProducts(): Promise<Record<SubscriptionTier,
 
     if (!product) {
       product = await stripe.products.create({
-        name: `Iron Metrics — ${tier.name}`,
+        name: `ForgeOS — ${tier.name}`,
         description: tier.description,
         metadata: {
           iron_metrics_platform_tier: tier.id,

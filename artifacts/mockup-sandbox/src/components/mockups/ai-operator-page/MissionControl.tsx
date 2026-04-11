@@ -212,7 +212,7 @@ export function MissionControl() {
             <div className="w-8 h-8 rounded-md bg-primary flex items-center justify-center text-primary-foreground">
               <Sparkles className="w-4 h-4" />
             </div>
-            Iron Metrics
+            ForgeOS
           </div>
           <Separator orientation="vertical" className="h-6" />
           <div className="flex items-center gap-2 text-sm font-medium text-slate-600 dark:text-slate-300">

@@ -333,6 +333,13 @@ export function AddMemberWizard({ open, onOpenChange }: Props) {
         try {
           const { error: stripeErr, setupIntent } = await stripeInstance.confirmSetup({
             elements: stripeElements,
+            confirmParams: {
+              payment_method_data: {
+                billing_details: {
+                  address: { country: "US" },
+                },
+              },
+            },
             redirect: "if_required",
           });
           if (stripeErr) {
@@ -639,6 +646,19 @@ export function AddMemberWizard({ open, onOpenChange }: Props) {
                 <div className="space-y-4">
                   <FormField label="Membership Plan">
                     <div className="space-y-2">
+                      {activePlans.length === 0 && (
+                        <div className="p-4 rounded-xl border border-amber-500/30 bg-amber-500/5">
+                          <div className="flex items-start gap-3">
+                            <AlertTriangle className="h-5 w-5 text-amber-500 mt-0.5 shrink-0" />
+                            <div>
+                              <p className="text-sm font-medium text-foreground">No membership plans created yet</p>
+                              <p className="text-xs text-muted-foreground mt-1">
+                                You can still add this member without a plan. To create plans, go to Settings &gt; Membership Plans after finishing here.
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      )}
                       <button
                         type="button"
                         onClick={() => { setSelectedPlanId(null); setSkipPayment(false); }}
@@ -649,7 +669,7 @@ export function AddMemberWizard({ open, onOpenChange }: Props) {
                         }`}
                       >
                         <div className="flex items-center justify-between">
-                          <span className="text-sm font-medium">No plan — skip for now</span>
+                          <span className="text-sm font-medium">{activePlans.length === 0 ? "Add without a plan" : "No plan — skip for now"}</span>
                           {!selectedPlanId && <Check className="h-4 w-4 text-primary" />}
                         </div>
                       </button>

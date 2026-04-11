@@ -1,7 +1,21 @@
-export function computeRSI(churnRate: number, avgRevPerMember: number, netGrowth: number, avgTenure: number) {
+export function computeRSI(churnRate: number, avgRevPerMember: number, netGrowth: number, avgTenure: number, totalMembers?: number) {
+  if (totalMembers !== undefined && totalMembers === 0) {
+    return {
+      score: null,
+      band: "No Data",
+      components: { churnRate: 0, avgRevPerMember: 0, netMemberGrowth: 0, avgTenure: 0 },
+      breakdown: [
+        { metric: "Churn Rate", value: 0, normalized: 0, weight: 35, contribution: 0 },
+        { metric: "Avg Revenue/Member", value: 0, normalized: 0, weight: 25, contribution: 0 },
+        { metric: "Net Member Growth", value: 0, normalized: 0, weight: 20, contribution: 0 },
+        { metric: "Avg Tenure (months)", value: 0, normalized: 0, weight: 20, contribution: 0 },
+      ],
+    };
+  }
+
   const churnNorm = Math.max(0, Math.min(100, 100 - churnRate * 7));
   const revNorm = Math.min(100, (avgRevPerMember / 200) * 100);
-  const growthNorm = Math.max(0, Math.min(100, 50 + netGrowth * 5));
+  const growthNorm = Math.max(0, Math.min(100, netGrowth * 10));
   const tenureNorm = Math.min(100, (avgTenure / 24) * 100);
 
   const weights = { churn: 0.35, rev: 0.25, growth: 0.2, tenure: 0.2 };

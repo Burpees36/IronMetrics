@@ -1,18 +1,39 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useListLeadActivities, useCreateLeadActivity, useUpdateLead, getListLeadActivitiesQueryKey, getListLeadsQueryKey } from "@workspace/api-client-react";
+import { useListLeadActivities, useCreateLeadActivity, useUpdateLead, useSendLeadSms, getListLeadActivitiesQueryKey, getListLeadsQueryKey, useListAppointmentTypes, useListStaff, useCreateAppointment, getListAppointmentsQueryKey } from "@workspace/api-client-react";
+import { Textarea } from "@/components/ui/textarea";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   X, Phone, Mail, Calendar, Clock, AlertTriangle, ArrowRight,
   UserCheck, MessageSquare, CalendarClock, PlusCircle, Edit3,
-  History, ChevronRight, Send
+  History, ChevronRight, Send, Zap, Timer
 } from "lucide-react";
 import { STAGE_CONFIG, PIPELINE_STAGES, SOURCE_OPTIONS, computeStale, timeInStage, formatRelativeDate, isFollowUpOverdue } from "./lead-utils";
+
+const API_BASE = import.meta.env.VITE_API_URL || "";
+
+function apiFetchLocal(url: string, opts?: RequestInit) {
+  return fetch(`${API_BASE}${url}`, { credentials: "include", ...opts });
+}
+
+interface SequenceEnrollmentStatus {
+  id: number;
+  sequenceId: number;
+  status: string;
+  currentStepIndex: number;
+  nextActionAt: string | null;
+  enrolledAt: string;
+  completedAt: string | null;
+  exitReason: string | null;
+  sequenceName: string;
+  sequenceType: string;
+}
 
 interface LeadDetailDrawerProps {
   lead: any;
@@ -61,13 +82,40 @@ export function LeadDetailDrawer({ lead, gymId, open, onClose, onMoveStage, onCo
   const [showFollowUp, setShowFollowUp] = useState(false);
   const [contactNote, setContactNote] = useState("");
   const [showContactLog, setShowContactLog] = useState(false);
+  const [smsOpen, setSmsOpen] = useState(false);
+  const [smsMessage, setSmsMessage] = useState("");
+  const [nsiOpen, setNsiOpen] = useState(false);
+  const [nsiTypeId, setNsiTypeId] = useState("");
+  const [nsiCoachId, setNsiCoachId] = useState("");
+  const [nsiDate, setNsiDate] = useState("");
+  const [nsiTime, setNsiTime] = useState("10:00");
 
   const { data: activities } = useListLeadActivities(gymId, lead?.id, {
     query: { enabled: !!lead?.id }
   });
+  const { data: appointmentTypes } = useListAppointmentTypes(gymId, {
+    query: { enabled: !!gymId && nsiOpen }
+  });
+  const { data: staff } = useListStaff(gymId, {
+    query: { enabled: !!gymId && nsiOpen }
+  });
+
+  const [sequenceEnrollments, setSequenceEnrollments] = useState<SequenceEnrollmentStatus[]>([]);
+
+  useEffect(() => {
+    if (!lead?.id || !gymId || !open) return;
+    apiFetchLocal(`/api/gyms/${gymId}/lead-sequences/lead/${lead.id}/status`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data?.enrollments) setSequenceEnrollments(data.enrollments);
+      })
+      .catch(() => {});
+  }, [lead?.id, gymId, open]);
 
   const updateLeadMutation = useUpdateLead();
   const createActivityMutation = useCreateLeadActivity();
+  const sendSmsMutation = useSendLeadSms();
+  const createAppointmentMutation = useCreateAppointment();
 
   const isStale = lead ? computeStale(lead) : false;
   const overdue = lead ? isFollowUpOverdue(lead) : false;
@@ -126,9 +174,69 @@ export function LeadDetailDrawer({ lead, gymId, open, onClose, onMoveStage, onCo
     );
   };
 
+  const handleSendSms = () => {
+    if (!lead || !smsMessage.trim()) return;
+    sendSmsMutation.mutate(
+      { gymId, leadId: lead.id, data: { message: smsMessage.trim() } },
+      {
+        onSuccess: (data) => {
+          toast({ title: "Text Sent", description: `Text sent to ${(data as any).recipientName} (${(data as any).recipientPhone}).` });
+          setSmsOpen(false);
+          setSmsMessage("");
+          queryClient.invalidateQueries({ queryKey: getListLeadActivitiesQueryKey(gymId, lead.id) });
+        },
+        onError: (err: unknown) => {
+          const error = err as { response?: { data?: { error?: string } } };
+          toast({ title: "Failed to Send", description: error?.response?.data?.error || "Could not send text.", variant: "destructive" });
+        },
+      }
+    );
+  };
+
+  const handleBookNsi = () => {
+    if (!lead || !nsiTypeId || !nsiDate || !nsiTime) return;
+    const startTime = `${nsiDate}T${nsiTime}:00`;
+    const selectedType = (appointmentTypes as any[])?.find((t: any) => String(t.id) === nsiTypeId);
+    const duration = selectedType?.durationMinutes || 30;
+    const endDate = new Date(startTime);
+    endDate.setMinutes(endDate.getMinutes() + duration);
+    const endTime = endDate.toISOString().slice(0, 19);
+
+    createAppointmentMutation.mutate(
+      {
+        gymId,
+        data: {
+          appointmentTypeId: parseInt(nsiTypeId),
+          coachId: nsiCoachId && nsiCoachId !== "none" ? parseInt(nsiCoachId) : undefined,
+          leadId: lead.id,
+          startTime,
+          endTime,
+          notes: `NSI for ${lead.firstName} ${lead.lastName}`,
+        } as any,
+      },
+      {
+        onSuccess: () => {
+          toast({ title: "Appointment booked", description: "No Sweat Intro scheduled successfully." });
+          setNsiOpen(false);
+          setNsiTypeId("");
+          setNsiCoachId("");
+          setNsiDate("");
+          setNsiTime("10:00");
+          queryClient.invalidateQueries({ queryKey: getListAppointmentsQueryKey(gymId) });
+          queryClient.invalidateQueries({ queryKey: getListLeadsQueryKey(gymId) });
+          onInvalidate();
+        },
+        onError: () => {
+          toast({ title: "Error", description: "Failed to book appointment." });
+        },
+      }
+    );
+  };
+
   if (!lead) return null;
 
   return (
+    <>
     <Sheet open={open} onOpenChange={(v) => !v && onClose()}>
       <SheetContent className="w-full sm:max-w-md bg-background dark:bg-[hsl(220,20%,8%)] border-border p-0 overflow-y-auto">
         <div className="p-6 border-b border-border">
@@ -203,6 +311,55 @@ export function LeadDetailDrawer({ lead, gymId, open, onClose, onMoveStage, onCo
             </div>
           )}
 
+          {sequenceEnrollments.length > 0 && (
+            <div className="space-y-2">
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                <Zap className="h-3 w-3" />
+                Active Sequences
+              </h3>
+              {sequenceEnrollments.map((e) => (
+                <div
+                  key={e.id}
+                  className={`rounded-lg border p-3 ${
+                    e.status === "active" ? "border-violet-500/30 bg-violet-500/5" :
+                    e.status === "paused" ? "border-amber-500/30 bg-amber-500/5" :
+                    e.status === "completed" ? "border-emerald-500/30 bg-emerald-500/5" :
+                    "border-border bg-muted/20"
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-sm">
+                      <Zap className={`h-3.5 w-3.5 ${
+                        e.status === "active" ? "text-violet-500" :
+                        e.status === "paused" ? "text-amber-500" :
+                        e.status === "completed" ? "text-emerald-500" :
+                        "text-muted-foreground"
+                      }`} />
+                      <span className="font-medium text-foreground text-xs">{e.sequenceName}</span>
+                    </div>
+                    <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                      e.status === "active" ? "bg-violet-500/15 text-violet-600" :
+                      e.status === "paused" ? "bg-amber-500/15 text-amber-600" :
+                      e.status === "completed" ? "bg-emerald-500/15 text-emerald-600" :
+                      "bg-muted text-muted-foreground"
+                    }`}>
+                      {e.status}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-3 mt-1.5 text-[10px] text-muted-foreground">
+                    <span>Step {e.currentStepIndex + 1}</span>
+                    {e.nextActionAt && e.status === "active" && (
+                      <span className="flex items-center gap-1">
+                        <Timer className="h-2.5 w-2.5" />
+                        Next: {new Date(e.nextActionAt).toLocaleDateString()}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
           <div className="space-y-2">
             <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Quick Actions</h3>
             <div className="grid grid-cols-2 gap-2">
@@ -220,8 +377,24 @@ export function LeadDetailDrawer({ lead, gymId, open, onClose, onMoveStage, onCo
                 <CalendarClock className="h-3.5 w-3.5 text-muted-foreground" />
                 Schedule Follow-up
               </button>
+              {lead.phone && (
+                <button
+                  onClick={() => { setSmsOpen(true); setSmsMessage(""); }}
+                  className="flex items-center gap-2 px-3 py-2 rounded-lg border border-emerald-500/20 bg-emerald-500/5 text-xs font-medium text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10 transition-colors"
+                >
+                  <MessageSquare className="h-3.5 w-3.5" />
+                  Send Text
+                </button>
+              )}
               {lead.stage !== "converted" && lead.stage !== "lost" && (
                 <>
+                  <button
+                    onClick={() => setNsiOpen(true)}
+                    className="flex items-center gap-2 px-3 py-2 rounded-lg border border-primary/20 bg-primary/5 text-xs font-medium text-primary hover:bg-primary/10 transition-colors col-span-2"
+                  >
+                    <Calendar className="h-3.5 w-3.5" />
+                    Book No Sweat Intro
+                  </button>
                   <button
                     onClick={() => onConvert(lead)}
                     className="flex items-center gap-2 px-3 py-2 rounded-lg border border-emerald-500/20 bg-emerald-500/5 text-xs font-medium text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10 transition-colors"
@@ -312,6 +485,40 @@ export function LeadDetailDrawer({ lead, gymId, open, onClose, onMoveStage, onCo
             )}
           </AnimatePresence>
 
+          <AnimatePresence>
+            {smsOpen && (
+              <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
+                <div className="space-y-2 p-3 rounded-lg border border-emerald-500/20 bg-emerald-500/5">
+                  <div className="flex items-center gap-2">
+                    <MessageSquare className="h-3.5 w-3.5 text-emerald-600" />
+                    <h4 className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">Send Text to {lead.firstName}</h4>
+                  </div>
+                  <Textarea
+                    value={smsMessage}
+                    onChange={(e) => setSmsMessage(e.target.value)}
+                    placeholder="Type your message..."
+                    className="text-sm min-h-[80px]"
+                    maxLength={1600}
+                  />
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] text-muted-foreground">{smsMessage.length}/1600</span>
+                    <div className="flex gap-2">
+                      <button onClick={() => setSmsOpen(false)} className="px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors">Cancel</button>
+                      <button
+                        onClick={handleSendSms}
+                        disabled={!smsMessage.trim() || sendSmsMutation.isPending}
+                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-emerald-600 text-white rounded-md font-medium hover:bg-emerald-700 disabled:opacity-50 transition-colors"
+                      >
+                        <Send className="h-3 w-3" />
+                        {sendSmsMutation.isPending ? "Sending..." : "Send"}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Notes</h3>
@@ -373,5 +580,62 @@ export function LeadDetailDrawer({ lead, gymId, open, onClose, onMoveStage, onCo
         </div>
       </SheetContent>
     </Sheet>
+
+    <Dialog open={nsiOpen} onOpenChange={setNsiOpen}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Book No Sweat Intro</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4 py-2">
+          <div className="text-sm text-muted-foreground">
+            Schedule a No Sweat Intro for <span className="font-medium text-foreground">{lead.firstName} {lead.lastName}</span>
+          </div>
+          <div className="space-y-2">
+            <Label>Appointment Type</Label>
+            <Select value={nsiTypeId} onValueChange={setNsiTypeId}>
+              <SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger>
+              <SelectContent>
+                {(appointmentTypes as any[])?.map((t: any) => (
+                  <SelectItem key={t.id} value={String(t.id)}>{t.name} ({t.durationMinutes} min)</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label>Coach (optional)</Label>
+            <Select value={nsiCoachId} onValueChange={setNsiCoachId}>
+              <SelectTrigger><SelectValue placeholder="Any coach" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">Any coach</SelectItem>
+                {(staff as any[])?.map((s: any) => (
+                  <SelectItem key={s.id} value={String(s.id)}>{s.displayName}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-2">
+              <Label>Date</Label>
+              <Input type="date" value={nsiDate} onChange={(e) => setNsiDate(e.target.value)} min={new Date().toISOString().split("T")[0]} />
+            </div>
+            <div className="space-y-2">
+              <Label>Time</Label>
+              <Input type="time" value={nsiTime} onChange={(e) => setNsiTime(e.target.value)} />
+            </div>
+          </div>
+        </div>
+        <DialogFooter>
+          <button onClick={() => setNsiOpen(false)} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors">Cancel</button>
+          <button
+            onClick={handleBookNsi}
+            disabled={!nsiTypeId || !nsiDate || !nsiTime || createAppointmentMutation.isPending}
+            className="px-4 py-2 text-sm bg-primary text-primary-foreground rounded-lg font-medium hover:bg-primary/90 disabled:opacity-50 transition-colors"
+          >
+            {createAppointmentMutation.isPending ? "Booking..." : "Book Appointment"}
+          </button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }

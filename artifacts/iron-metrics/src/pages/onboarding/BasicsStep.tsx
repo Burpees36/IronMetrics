@@ -40,7 +40,7 @@ export function BasicsStep({ gymId, onComplete, onSkip, isComplete }: StepProps)
 
   const handleSave = async () => {
     if (!form.name.trim()) {
-      toast({ title: "Gym name is required", variant: "destructive" });
+      toast({ title: "Business name is required", variant: "destructive" });
       return;
     }
     setSaving(true);
@@ -49,7 +49,7 @@ export function BasicsStep({ gymId, onComplete, onSkip, isComplete }: StepProps)
         method: "PATCH",
         body: JSON.stringify(form),
       });
-      toast({ title: "Gym profile saved" });
+      toast({ title: "Business profile saved" });
       onComplete();
     } catch (e: any) {
       toast({ title: "Error", description: e.message, variant: "destructive" });
@@ -61,17 +61,17 @@ export function BasicsStep({ gymId, onComplete, onSkip, isComplete }: StepProps)
   if (loading) return <div className="flex justify-center py-20"><Loader2 className="h-6 w-6 text-primary animate-spin" /></div>;
 
   return (
-    <StepCard title="Welcome! Let's set up your gym." description="Start with the basics — your name, location, and how members can reach you." onSkip={onSkip}>
+    <StepCard title="Welcome! Let's set up your business." description="Start with the basics — your name, location, and how members can reach you." onSkip={onSkip}>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="md:col-span-2">
-          <Label>Gym Name *</Label>
-          <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="CrossFit Iron Forge" />
+          <Label>Business Name *</Label>
+          <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Iron Forge Athletics" />
         </div>
         <div>
           <Label>Contact Email</Label>
           <div className="relative">
             <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input className="pl-10" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="info@yourgym.com" />
+            <Input className="pl-10" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="info@yourbusiness.com" />
           </div>
         </div>
         <div>
@@ -96,7 +96,7 @@ export function BasicsStep({ gymId, onComplete, onSkip, isComplete }: StepProps)
           <Label>Website</Label>
           <div className="relative">
             <Globe className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input className="pl-10" value={form.website} onChange={(e) => setForm({ ...form, website: e.target.value })} placeholder="https://yourgym.com" />
+            <Input className="pl-10" value={form.website} onChange={(e) => setForm({ ...form, website: e.target.value })} placeholder="https://yourbusiness.com" />
           </div>
         </div>
         <div className="md:col-span-2">

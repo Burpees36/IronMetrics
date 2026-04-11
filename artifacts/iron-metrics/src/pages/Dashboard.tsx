@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { useAuth } from "@workspace/replit-auth-web";
 import { useGym } from "@/store/GymContext";
 import { useGetDashboardStats, useGetMorningBriefing } from "@workspace/api-client-react";
 import { useQuery } from "@tanstack/react-query";
@@ -6,7 +7,8 @@ import {
   Users, TrendingUp, AlertTriangle, ArrowUpRight, ArrowDownRight,
   Loader2, BrainCircuit, Rocket, Sun, CreditCard, UserCheck,
   ChevronRight, Sparkles, ChevronDown, UserPlus, Clock, ShieldCheck,
-  Zap, CheckCircle2, Mail, MessageSquare, ArrowRight, BarChart3
+  Zap, CheckCircle2, Mail, MessageSquare, ArrowRight, BarChart3,
+  Wallet, PiggyBank
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { AreaChart, Area, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
@@ -50,7 +52,7 @@ function OnboardingBanner({ gymId }: { gymId: number }) {
         <Rocket className="h-5 w-5 text-primary" />
         <div>
           <p className="font-medium text-foreground text-sm">Setup isn't complete yet</p>
-          <p className="text-xs text-muted-foreground">Pick up where you left off and finish configuring your gym.</p>
+          <p className="text-xs text-muted-foreground">Pick up where you left off and finish configuring your business.</p>
         </div>
       </div>
       <Link href="/onboarding">
@@ -252,11 +254,11 @@ function buildActionItems(
 
     let impact = "";
     if (item.priority === "critical" && item.icon === "alert") {
-      impact = snapshot.revenueAtRisk ? `$${(snapshot.revenueAtRisk / 100).toFixed(0)} at risk` : "At risk";
+      impact = snapshot.revenueAtRisk ? `$${Math.round(snapshot.revenueAtRisk).toLocaleString()} at risk` : "At risk";
     } else if (item.icon === "billing") {
       impact = snapshot.failedPayments ? `${snapshot.failedPayments} overdue` : "Billing";
     } else if (item.icon === "leads" || item.icon === "clock") {
-      impact = snapshot.staleLeads ? `${snapshot.staleLeads} stale` : "Leads";
+      impact = snapshot.staleLeads ? `${snapshot.staleLeads} stale` : snapshot.newLeads ? `${snapshot.newLeads} new` : "Leads";
     } else if (item.priority === "positive") {
       impact = "Good news";
     } else {
@@ -266,11 +268,11 @@ function buildActionItems(
     return {
       id: `action-${idx}`,
       category,
-      title: item.action || item.message.slice(0, 50),
+      title: item.action || item.message.slice(0, 60),
       description: item.message,
       impact,
       icon: Icon,
-      actionLabel: item.action || "View",
+      actionLabel: item.action || "View details",
       actionLink: item.link || null,
     };
   });
@@ -315,28 +317,96 @@ function BenchmarkHighlightsCard({ gymId }: { gymId: number }) {
             h.percentileRank >= 25 ? "bg-yellow-500/15 text-yellow-600 dark:text-yellow-400 border-yellow-500/20" :
             "bg-destructive/15 text-destructive border-destructive/20";
 
-          const verb = h.lowerIsBetter
-            ? (h.percentileRank >= 50 ? "better than" : "worse than")
-            : (h.percentileRank >= 50 ? "better than" : "behind");
-
           return (
-            <div key={h.metric} className="flex items-center justify-between gap-3">
-              <span className="text-sm text-muted-foreground truncate">{h.label}</span>
-              <Badge variant="outline" className={cn("text-[11px] font-medium whitespace-nowrap", badgeColor)}>
-                {verb} {h.percentileRank}% of gyms
-              </Badge>
+            <div key={h.metric} className="space-y-1">
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-sm text-muted-foreground truncate">{h.label}</span>
+                <Badge variant="outline" className={cn("text-[11px] font-medium whitespace-nowrap", badgeColor)}>
+                  {h.percentileLabel || (h.percentileRank != null ? `${h.percentileRank}th percentile` : "N/A")}
+                </Badge>
+              </div>
+              {h.insight?.conversational && (
+                <p className="text-[10px] text-muted-foreground leading-relaxed">{h.insight.conversational}</p>
+              )}
+              {h.insight?.ctaLabel && h.insight?.ctaRoute && h.percentileRank != null && h.percentileRank < 50 && (
+                <Link href={h.insight.ctaRoute}>
+                  <span className="text-[10px] font-medium text-primary hover:text-primary/80 flex items-center gap-1 cursor-pointer">
+                    {h.insight.ctaLabel} <ArrowRight className="w-3 h-3" />
+                  </span>
+                </Link>
+              )}
             </div>
           );
         })}
         <p className="text-[10px] text-muted-foreground pt-1">
-          vs. {data.sampleCount} similar-sized gyms
+          vs. {data.sampleCount} similar-sized businesses
         </p>
       </div>
     </Card>
   );
 }
 
+function FinancialSummaryCard({ gymId }: { gymId: number }) {
+  const BASE_URL = import.meta.env.BASE_URL || "/";
+  const FINANCE_API = `${BASE_URL}api`.replace(/\/+/g, "/");
+  const { data } = useQuery({
+    queryKey: ["finances-dashboard-summary", gymId],
+    queryFn: async () => {
+      const res = await fetch(`${FINANCE_API}/gyms/${gymId}/finances/summary`, { credentials: "include" });
+      if (!res.ok) return null;
+      return res.json();
+    },
+    enabled: !!gymId,
+    staleTime: 60000,
+  });
+
+  if (!data || (data.revenue === 0 && data.totalExpenses === 0)) return null;
+
+  const profitColor = data.netProfit >= 0
+    ? "text-emerald-600 dark:text-emerald-400"
+    : "text-destructive";
+
+  return (
+    <Card className="shadow-sm">
+      <div className="p-4 border-b border-border flex items-center justify-between">
+        <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+          <Wallet className="w-4 h-4 text-primary" />
+          Financial Snapshot
+        </h3>
+        <Link href="/finances">
+          <Button variant="ghost" size="sm" className="h-6 text-xs text-muted-foreground">Details</Button>
+        </Link>
+      </div>
+      <div className="p-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <span className="text-sm text-muted-foreground">Expenses</span>
+          <span className="text-sm font-medium text-foreground">${data.totalExpenses.toLocaleString()}/mo</span>
+        </div>
+        <div className="flex items-center justify-between">
+          <span className="text-sm text-muted-foreground">Payroll ({data.payrollPercent}%)</span>
+          <span className="text-sm font-medium text-foreground">${data.payrollAmount.toLocaleString()}/mo</span>
+        </div>
+        <div className="h-px bg-border" />
+        <div className="flex items-center justify-between">
+          <span className="text-sm text-muted-foreground">Net Profit</span>
+          <span className={cn("text-sm font-semibold", profitColor)}>
+            ${Math.abs(data.netProfit).toLocaleString()}/mo
+          </span>
+        </div>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-1.5">
+            <PiggyBank className="w-3.5 h-3.5 text-primary" />
+            <span className="text-sm font-medium text-primary">Owner Take-Home</span>
+          </div>
+          <span className="text-sm font-bold text-primary">${data.ownerTakeHome.toLocaleString()}/mo</span>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
 export function Dashboard() {
+  const { user } = useAuth();
   const { activeGymId } = useGym();
   const { data: stats, isLoading: statsLoading } = useGetDashboardStats(activeGymId as number, {
     query: { enabled: !!activeGymId }
@@ -348,7 +418,7 @@ export function Dashboard() {
   if (!activeGymId) {
     return (
       <div className="h-full flex items-center justify-center">
-        <p className="text-muted-foreground">Select a gym to view your dashboard.</p>
+        <p className="text-muted-foreground">Select a business to view your dashboard.</p>
       </div>
     );
   }
@@ -373,6 +443,7 @@ export function Dashboard() {
 
   const snapshot = briefing?.snapshot;
   const briefingItems = briefing?.items || [];
+  const briefingSummary = briefing?.summary || null;
   const actionItems = buildActionItems(briefingItems, snapshot || {});
 
   const criticalItems = actionItems.filter(i => i.category === "critical");
@@ -380,7 +451,7 @@ export function Dashboard() {
   const positiveItems = actionItems.filter(i => i.category === "positive");
 
   const criticalCount = criticalItems.length + warningItems.length;
-  const mrrFormatted = `$${(stats.mrr / 1000).toFixed(1)}k`;
+  const mrrFormatted = stats.mrr >= 1000 ? `$${(stats.mrr / 1000).toFixed(1)}k` : `$${Math.round(stats.mrr)}`;
   const mrrChange = stats.mrrGrowth != null ? `${stats.mrrGrowth >= 0 ? "+" : ""}${stats.mrrGrowth.toFixed(1)}%` : null;
 
   return (
@@ -396,17 +467,19 @@ export function Dashboard() {
             <p className="text-xs font-mono text-muted-foreground uppercase tracking-wider">Owner Console</p>
           </div>
           <h1 className="text-3xl md:text-4xl font-display font-bold text-foreground mb-2">
-            {getGreeting()}, Boss.
+            {getGreeting()}, {user?.firstName || "Boss"}.
           </h1>
           <p className="text-lg text-muted-foreground max-w-2xl leading-relaxed">
-            {criticalCount > 0 ? (
+            {briefingSummary ? (
+              <span>{briefingSummary}</span>
+            ) : criticalCount > 0 ? (
               <>
                 <strong className="text-destructive font-semibold">{criticalCount} {criticalCount === 1 ? "thing" : "things"}</strong> need your attention today.
               </>
             ) : (
               <span>Everything is looking smooth today.</span>
             )}
-            {mrrChange && (
+            {mrrChange && !briefingSummary && (
               <>
                 {" "}Revenue is {stats.mrrGrowth >= 0 ? "up" : "down"}{" "}
                 <strong className={cn("font-semibold", stats.mrrGrowth >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-destructive")}>
@@ -484,8 +557,8 @@ export function Dashboard() {
           {actionItems.length === 0 && (
             <div className="text-center py-12 text-muted-foreground">
               <CheckCircle2 className="w-10 h-10 mx-auto mb-3 text-emerald-500" />
-              <p className="text-lg font-medium text-foreground">All clear!</p>
-              <p className="text-sm">No action items for today. Your gym is running smoothly.</p>
+              <p className="text-lg font-medium text-foreground">Nothing flagged</p>
+              <p className="text-sm">No action items today. Metrics are clean — use the time to build.</p>
             </div>
           )}
 
@@ -630,6 +703,7 @@ export function Dashboard() {
           </Card>
 
           <BenchmarkHighlightsCard gymId={activeGymId} />
+          <FinancialSummaryCard gymId={activeGymId} />
 
           <Card className="shadow-sm">
             <div className="p-4 border-b border-border">
