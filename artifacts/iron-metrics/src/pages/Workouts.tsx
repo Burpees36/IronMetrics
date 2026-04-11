@@ -319,13 +319,13 @@ export function Workouts() {
   }, [membersList]);
 
   const activeMemberCount = useMemo(() => {
-    return allMembers.filter((m) => m.status === "active").length;
+    return allMembers.filter((m) => m.status === "active" && m.email).length;
   }, [allMembers]);
 
   const getTrackMemberCount = useCallback((track: string | null | undefined): number => {
     if (!track || track === "default") return activeMemberCount;
     const trackTag = `track:${track}`;
-    return allMembers.filter((m) => m.status === "active" && (m.tags as string[] | null)?.includes(trackTag)).length;
+    return allMembers.filter((m) => m.status === "active" && m.email && (m.tags as string[] | null)?.includes(trackTag)).length;
   }, [allMembers, activeMemberCount]);
 
   const currentMemberId = useMemo(() => {

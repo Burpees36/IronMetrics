@@ -152,10 +152,12 @@ export function ShareWorkoutDialog({
         const data = await response.json() as { error?: string; cooldownMinutes?: number };
         if (response.status === 429) {
           setNotifyState("cooldown");
-          setNotifyError(data.error || "Notification was recently sent. Please wait before sending again.");
+          const cooldownMsg = data.error || "Notification was recently sent. Please wait before sending again.";
+          setNotifyError(cooldownMsg);
           if (data.cooldownMinutes) {
             setCooldownMinutes(data.cooldownMinutes);
           }
+          onNotifyError?.(cooldownMsg);
           return;
         }
         throw new Error(data.error || "Failed to notify members");
