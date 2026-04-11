@@ -19,13 +19,34 @@ interface TriggerConfig {
   inactiveDays?: number;
 }
 
-async function evaluateTriggersForGym(gymId: number, onlySequenceId?: number, onlyMemberId?: number): Promise<void> {
+interface EvaluateTriggerOptions {
+  onlySequenceId?: number;
+  onlyMemberId?: number;
+  onlySequenceType?: string;
+}
+
+async function evaluateTriggersForGym(gymId: number, opts?: number | EvaluateTriggerOptions): Promise<void> {
+  let onlySequenceId: number | undefined;
+  let onlyMemberId: number | undefined;
+  let onlySequenceType: string | undefined;
+
+  if (typeof opts === "number") {
+    onlySequenceId = opts;
+  } else if (opts) {
+    onlySequenceId = opts.onlySequenceId;
+    onlyMemberId = opts.onlyMemberId;
+    onlySequenceType = opts.onlySequenceType;
+  }
+
   const conditions = [
     eq(retentionSequencesTable.gymId, gymId),
     eq(retentionSequencesTable.isEnabled, true),
   ];
   if (onlySequenceId !== undefined) {
     conditions.push(eq(retentionSequencesTable.id, onlySequenceId));
+  }
+  if (onlySequenceType !== undefined) {
+    conditions.push(eq(retentionSequencesTable.type, onlySequenceType));
   }
   const sequences = await db.select().from(retentionSequencesTable)
     .where(and(...conditions));

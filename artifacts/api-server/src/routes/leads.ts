@@ -302,7 +302,7 @@ router.post("/gyms/:gymId/leads/:leadId/convert", async (req, res): Promise<void
   }
 
   try {
-    await evaluateTriggersForGym(gymId, undefined, member.id);
+    await evaluateTriggersForGym(gymId, { onlyMemberId: member.id, onlySequenceType: "onboarding_journey" });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error(`[leads] Failed to evaluate onboarding triggers for new member ${member.id}:`, msg);

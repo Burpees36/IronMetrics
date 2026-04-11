@@ -55,16 +55,16 @@ describe("Sequence lifecycle transitions", () => {
       expect(pauseCall).toBeGreaterThan(convertRoute);
     });
 
-    it("lead conversion calls evaluateTriggersForGym scoped to new member", () => {
+    it("lead conversion scopes onboarding evaluation to new member and onboarding_journey type", () => {
       const convertRoute = leadsSource.indexOf('leads/:leadId/convert');
-      const evalCall = leadsSource.indexOf('evaluateTriggersForGym(gymId, undefined, member.id)', convertRoute);
+      const evalCall = leadsSource.indexOf('onlyMemberId: member.id, onlySequenceType: "onboarding_journey"', convertRoute);
       expect(convertRoute).toBeGreaterThan(-1);
       expect(evalCall).toBeGreaterThan(convertRoute);
     });
 
-    it("lead conversion awaits evaluateTriggersForGym", () => {
+    it("lead conversion awaits onboarding evaluation", () => {
       const convertRoute = leadsSource.indexOf('leads/:leadId/convert');
-      const awaitEval = leadsSource.indexOf('await evaluateTriggersForGym(gymId, undefined, member.id)', convertRoute);
+      const awaitEval = leadsSource.indexOf('await evaluateTriggersForGym(gymId, { onlyMemberId: member.id', convertRoute);
       expect(awaitEval).toBeGreaterThan(convertRoute);
     });
 
