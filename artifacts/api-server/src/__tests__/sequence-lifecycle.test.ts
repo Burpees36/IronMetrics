@@ -36,10 +36,10 @@ describe("Sequence lifecycle transitions", () => {
       expect(matches!.length).toBe(2);
     });
 
-    it("holds route calls exit when immediate hold is applied", () => {
+    it("holds route awaits exit when immediate hold is applied", () => {
       const holdsSource = readSource("../routes/billing/holds.ts");
       const statusUpdate = holdsSource.indexOf('status: "hold"');
-      const exitCall = holdsSource.indexOf("exitMemberSequences(memberId, gymId", statusUpdate);
+      const exitCall = holdsSource.indexOf("await exitMemberSequences(memberId, gymId", statusUpdate);
       expect(statusUpdate).toBeGreaterThan(-1);
       expect(exitCall).toBeGreaterThan(statusUpdate);
     });
@@ -55,11 +55,17 @@ describe("Sequence lifecycle transitions", () => {
       expect(pauseCall).toBeGreaterThan(convertRoute);
     });
 
-    it("lead conversion calls evaluateTriggersForGym for onboarding enrollment", () => {
+    it("lead conversion calls evaluateTriggersForGym scoped to new member", () => {
       const convertRoute = leadsSource.indexOf('leads/:leadId/convert');
-      const evalCall = leadsSource.indexOf('evaluateTriggersForGym(gymId)', convertRoute);
+      const evalCall = leadsSource.indexOf('evaluateTriggersForGym(gymId, undefined, member.id)', convertRoute);
       expect(convertRoute).toBeGreaterThan(-1);
       expect(evalCall).toBeGreaterThan(convertRoute);
+    });
+
+    it("lead conversion awaits evaluateTriggersForGym", () => {
+      const convertRoute = leadsSource.indexOf('leads/:leadId/convert');
+      const awaitEval = leadsSource.indexOf('await evaluateTriggersForGym(gymId, undefined, member.id)', convertRoute);
+      expect(awaitEval).toBeGreaterThan(convertRoute);
     });
 
     it("lead sequence pause happens before response is sent", () => {

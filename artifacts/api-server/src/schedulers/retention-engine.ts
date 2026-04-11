@@ -19,7 +19,7 @@ interface TriggerConfig {
   inactiveDays?: number;
 }
 
-async function evaluateTriggersForGym(gymId: number, onlySequenceId?: number): Promise<void> {
+async function evaluateTriggersForGym(gymId: number, onlySequenceId?: number, onlyMemberId?: number): Promise<void> {
   const conditions = [
     eq(retentionSequencesTable.gymId, gymId),
     eq(retentionSequencesTable.isEnabled, true),
@@ -31,6 +31,11 @@ async function evaluateTriggersForGym(gymId: number, onlySequenceId?: number): P
     .where(and(...conditions));
 
   if (sequences.length === 0) return;
+
+  const memberConditions = [eq(membersTable.gymId, gymId), eq(membersTable.status, "active")];
+  if (onlyMemberId !== undefined) {
+    memberConditions.push(eq(membersTable.id, onlyMemberId));
+  }
 
   const activeMembers = await db.select({
     id: membersTable.id,
@@ -44,7 +49,7 @@ async function evaluateTriggersForGym(gymId: number, onlySequenceId?: number): P
     createdAt: membersTable.createdAt,
     status: membersTable.status,
   }).from(membersTable)
-    .where(and(eq(membersTable.gymId, gymId), eq(membersTable.status, "active")));
+    .where(and(...memberConditions));
 
   for (const sequence of sequences) {
     const trigger = sequence.triggerConfig as TriggerConfig;

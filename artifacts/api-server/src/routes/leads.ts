@@ -301,10 +301,12 @@ router.post("/gyms/:gymId/leads/:leadId/convert", async (req, res): Promise<void
     console.error(`[leads] Failed to pause sequences for converted lead ${leadId}:`, msg);
   }
 
-  evaluateTriggersForGym(gymId).catch((err: unknown) => {
+  try {
+    await evaluateTriggersForGym(gymId, undefined, member.id);
+  } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
-    console.error(`[leads] Failed to evaluate onboarding triggers after conversion for gym ${gymId}:`, msg);
-  });
+    console.error(`[leads] Failed to evaluate onboarding triggers for new member ${member.id}:`, msg);
+  }
 
   res.json({ ...member, riskScore: null });
 });
