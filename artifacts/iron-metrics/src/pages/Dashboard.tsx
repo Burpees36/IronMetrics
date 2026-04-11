@@ -488,11 +488,59 @@ export function Dashboard() {
               </>
             )}
           </p>
+
+          <div className="flex flex-wrap items-center gap-2 mt-3">
+            <div className={cn(
+              "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border",
+              stats.mrrGrowth == null
+                ? "bg-muted text-muted-foreground border-border"
+                : stats.mrrGrowth >= 0
+                  ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20"
+                  : "bg-destructive/10 text-destructive border-destructive/20"
+            )}>
+              <TrendingUp className="w-3 h-3" />
+              <span className="font-semibold">{mrrFormatted}</span>
+              {mrrChange && (
+                <>
+                  {stats.mrrGrowth >= 0 ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
+                  <span>{mrrChange}</span>
+                </>
+              )}
+            </div>
+
+            <div className={cn(
+              "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border",
+              (stats.newMembersThisMonth - stats.churnedThisMonth) >= 0
+                ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20"
+                : "bg-destructive/10 text-destructive border-destructive/20"
+            )}>
+              <Users className="w-3 h-3" />
+              <span className="font-semibold">{stats.activeMembers}</span>
+              <span>active</span>
+              <span className="font-semibold">
+                {(stats.newMembersThisMonth - stats.churnedThisMonth) >= 0 ? "+" : ""}
+                {stats.newMembersThisMonth - stats.churnedThisMonth}
+              </span>
+            </div>
+
+            <div className={cn(
+              "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border",
+              stats.rsiScore >= 70
+                ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20"
+                : stats.rsiScore >= 40
+                  ? "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 border-yellow-500/20"
+                  : "bg-destructive/10 text-destructive border-destructive/20"
+            )}>
+              <BrainCircuit className="w-3 h-3" />
+              <span className="font-semibold">{stats.rsiScore.toFixed(1)}</span>
+              <span>{stats.rsiBand}</span>
+            </div>
+          </div>
           {(() => {
             const urgentItems = [...criticalItems, ...warningItems].filter(i => i.actionLink).slice(0, 2);
             if (urgentItems.length === 0) return null;
             return (
-              <div className="flex flex-wrap gap-2 mt-3" data-testid="header-quick-actions">
+              <div className="flex flex-wrap gap-2 mt-2" data-testid="header-quick-actions">
                 {urgentItems.map((item) => (
                   <Link key={item.id} href={item.actionLink!}>
                     <Button

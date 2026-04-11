@@ -109,6 +109,7 @@ vi.mock("@workspace/api-client-react", () => ({
   useGetMorningBriefing: (...args: any[]) => mockUseGetMorningBriefing(...args),
 }));
 
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Dashboard } from "../pages/Dashboard";
 
 function renderWithProviders(ui: React.ReactElement) {
@@ -207,14 +208,14 @@ describe("Dashboard", () => {
     mockUseGetDashboardStats.mockReturnValue({ data: MOCK_STATS, isLoading: false });
     renderWithProviders(<Dashboard />);
     expect(screen.getByText("Monthly Recurring Rev")).toBeInTheDocument();
-    expect(screen.getByText("$12.8k")).toBeInTheDocument();
+    expect(screen.getAllByText("$12.8k").length).toBeGreaterThanOrEqual(1);
   });
 
   it("renders active members count", () => {
     mockUseGym.mockReturnValue({ activeGymId: 1 });
     mockUseGetDashboardStats.mockReturnValue({ data: MOCK_STATS, isLoading: false });
     renderWithProviders(<Dashboard />);
-    expect(screen.getByText("85")).toBeInTheDocument();
+    expect(screen.getAllByText("85").length).toBeGreaterThanOrEqual(1);
   });
 
   it("renders retention rate with progress bar", () => {
@@ -229,8 +230,40 @@ describe("Dashboard", () => {
     mockUseGym.mockReturnValue({ activeGymId: 1 });
     mockUseGetDashboardStats.mockReturnValue({ data: MOCK_STATS, isLoading: false });
     renderWithProviders(<Dashboard />);
-    expect(screen.getByText("74.3")).toBeInTheDocument();
-    expect(screen.getByText("Strong")).toBeInTheDocument();
+    expect(screen.getAllByText("74.3").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText("Strong").length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("renders stat indicator chips in dashboard header", () => {
+    mockUseGym.mockReturnValue({ activeGymId: 1 });
+    mockUseGetDashboardStats.mockReturnValue({ data: MOCK_STATS, isLoading: false });
+    renderWithProviders(<Dashboard />);
+    expect(screen.getAllByText("$12.8k").length).toBeGreaterThanOrEqual(2);
+    expect(screen.getAllByText("+4.2%").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText("active")).toBeInTheDocument();
+    expect(screen.getAllByText("+9").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText("74.3").length).toBeGreaterThanOrEqual(2);
+    expect(screen.getAllByText("Strong").length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("renders stat chips with negative values correctly", () => {
+    mockUseGym.mockReturnValue({ activeGymId: 1 });
+    mockUseGetDashboardStats.mockReturnValue({
+      data: {
+        ...MOCK_STATS,
+        mrrGrowth: -2.5,
+        newMembersThisMonth: 2,
+        churnedThisMonth: 5,
+        rsiScore: 35.0,
+        rsiBand: "Weak",
+      },
+      isLoading: false,
+    });
+    renderWithProviders(<Dashboard />);
+    expect(screen.getAllByText("-2.5%").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText("-3").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText("35.0").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText("Weak").length).toBeGreaterThanOrEqual(1);
   });
 
   it("renders Revenue Trend chart", () => {
