@@ -57,6 +57,8 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ShareWorkoutDialog } from "@/components/programming/ShareWorkoutDialog";
+import { useGymTier } from "@/hooks/useGymTier";
+import { UpgradePrompt } from "@/components/UpgradePrompt";
 
 function toDateString(d: Date): string {
   return d.toISOString().split("T")[0];
@@ -238,6 +240,8 @@ export function Workouts() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const { isStaff, isLoading: roleLoading } = useUserRole();
+  const { canAccess } = useGymTier();
+  const canUseAiProgramming = canAccess("ai-programming");
 
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [viewMode, setViewMode] = useState<"day" | "week">("day");
@@ -749,22 +753,35 @@ export function Workouts() {
               <span className="hidden sm:inline">Share</span>
             </button>
           )}
-          <button
-            onClick={() => handleGenerateDay()}
-            disabled={isGenerating}
-            className="flex items-center gap-2 px-4 py-2.5 bg-violet-600 text-white hover:bg-violet-700 rounded-xl font-medium transition-colors shadow-lg shadow-violet-600/20 disabled:opacity-50"
-          >
-            <Wand2 className="h-4 w-4" />
-            <span className="hidden sm:inline">Generate Day</span>
-          </button>
-          <button
-            onClick={handleGenerateWeek}
-            disabled={isGenerating}
-            className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-violet-600 to-purple-600 text-white hover:from-violet-700 hover:to-purple-700 rounded-xl font-medium transition-colors shadow-lg shadow-purple-600/20 disabled:opacity-50"
-          >
-            <Sparkles className="h-4 w-4" />
-            <span className="hidden sm:inline">Generate Week</span>
-          </button>
+          {canUseAiProgramming ? (
+            <>
+              <button
+                onClick={() => handleGenerateDay()}
+                disabled={isGenerating}
+                className="flex items-center gap-2 px-4 py-2.5 bg-violet-600 text-white hover:bg-violet-700 rounded-xl font-medium transition-colors shadow-lg shadow-violet-600/20 disabled:opacity-50"
+              >
+                <Wand2 className="h-4 w-4" />
+                <span className="hidden sm:inline">Generate Day</span>
+              </button>
+              <button
+                onClick={handleGenerateWeek}
+                disabled={isGenerating}
+                className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-violet-600 to-purple-600 text-white hover:from-violet-700 hover:to-purple-700 rounded-xl font-medium transition-colors shadow-lg shadow-purple-600/20 disabled:opacity-50"
+              >
+                <Sparkles className="h-4 w-4" />
+                <span className="hidden sm:inline">Generate Week</span>
+              </button>
+            </>
+          ) : (
+            <button
+              onClick={() => toast({ title: "Upgrade Required", description: "AI workout generation is available on the Growth plan and above." })}
+              className="flex items-center gap-2 px-4 py-2.5 bg-violet-600/50 text-white/70 rounded-xl font-medium transition-colors cursor-not-allowed"
+            >
+              <Wand2 className="h-4 w-4" />
+              <span className="hidden sm:inline">AI Generate</span>
+              <span className="text-xs bg-white/20 px-1.5 py-0.5 rounded">Growth</span>
+            </button>
+          )}
           <button
             onClick={() => {
               setEditData(null);

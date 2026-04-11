@@ -6,7 +6,7 @@ import { Loader2 } from "lucide-react";
 interface TierGateProps {
   routeGroup: string;
   feature: string;
-  requiredTier?: "growth" | "pro";
+  requiredTier?: "insights" | "growth" | "pro";
   children: React.ReactNode;
 }
 
