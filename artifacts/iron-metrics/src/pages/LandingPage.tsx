@@ -437,7 +437,13 @@ function FounderSection() {
               <h3 className="text-3xl font-bold text-slate-900 mb-8">Why ForgeOS Exists</h3>
 
               <p>
-                I realized that if you want to make a bigger impact, you can't just coach one class at a time. You have to make the gyms themselves better. Because when a gym improves, every single member inside it benefits.
+                I found CrossFit in 2015 when my dad introduced me to it, and not long after, I started coaching. That's where everything changed for me. Coaching CrossFit gave me an opportunity to see what people are truly capable of. I've seen confidence built, lives changed, and people become something they didn't think they could be. That's what I love most about it.
+              </p>
+              <p>
+                Over time, I started to realize something though. The impact of a coach is powerful, but the impact of a great gym is exponential. When a gym is run well, when the systems are strong and the experience is right, every single member inside it benefits.
+              </p>
+              <p>
+                That realization is what led me to build ForgeOS.
               </p>
               <p>
                 ForgeOS is a system designed to help gym owners understand who is at risk of leaving, where revenue is being lost, what actions actually move the needle — and most importantly, what to do next.
