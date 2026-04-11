@@ -7,8 +7,10 @@ import {
   Users, Mail, ClipboardList, Clock, Trash2, Play, Square,
   UserMinus, ArrowLeft, AlertCircle, CheckCircle2, XCircle,
   Zap, Shield, Heart, Sparkles, Settings2, Activity,
-  HelpCircle, X, Info, PauseCircle, UserPlus
+  HelpCircle, X, Info, PauseCircle, UserPlus,
+  ChevronDown, ExternalLink, AlertTriangle
 } from "lucide-react";
+import { Link } from "wouter";
 import { EnrollMemberDialog } from "@/components/EnrollMemberDialog";
 
 const API_BASE = import.meta.env.VITE_API_URL || "";
@@ -67,9 +69,11 @@ interface SequenceEvent {
   eventType: string;
   stepIndex: number | null;
   details: string | null;
+  metadata?: Record<string, any> | null;
   createdAt: string;
   memberFirstName: string;
   memberLastName: string;
+  sequenceName?: string;
 }
 
 const TYPE_ICONS: Record<string, typeof Zap> = {
@@ -247,6 +251,7 @@ export function Retention() {
   const [showGuide, setShowGuide] = useState(true);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [showEnrollDialog, setShowEnrollDialog] = useState(false);
+  const [expandedEventId, setExpandedEventId] = useState<number | null>(null);
 
   const loadData = useCallback(async () => {
     if (!activeGymId) return;
@@ -608,22 +613,117 @@ export function Retention() {
                   </p>
                 </div>
               ) : (
-                events.map(event => (
-                  <div key={event.id} className="bg-card border border-border rounded-xl px-4 py-3 flex items-center gap-3">
-                    <div className={`h-7 w-7 rounded-lg flex items-center justify-center shrink-0 ${getEventStyle(event.eventType)}`}>
-                      {getEventIcon(event.eventType)}
+                events.map(event => {
+                  const isFail = isFailureEventType(event.eventType);
+                  const isExpanded = expandedEventId === event.id;
+                  const seqName = event.sequenceName || sequences.find(s => s.id === event.sequenceId)?.name;
+
+                  return (
+                    <div key={event.id} className={`bg-card border rounded-xl overflow-hidden transition-colors duration-150 ${isFail ? "border-red-500/30" : "border-border"}`}>
+                      <button
+                        type="button"
+                        onClick={() => setExpandedEventId(isExpanded ? null : event.id)}
+                        className={`w-full px-4 py-3 flex items-center gap-3 text-left transition-colors duration-150 cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-inset
+                          ${isFail ? "hover:bg-red-500/5" : "hover:bg-muted/30"}
+                          ${isExpanded ? (isFail ? "bg-red-500/5" : "bg-muted/20") : ""}
+                        `}
+                      >
+                        <div className={`h-7 w-7 rounded-lg flex items-center justify-center shrink-0 ${getEventStyle(event.eventType)}`}>
+                          {getEventIcon(event.eventType)}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs text-foreground">
+                            <Link href={`/members/${event.memberId}`}>
+                              <span className="font-medium text-primary hover:text-primary/80 hover:underline transition-colors" onClick={(e) => e.stopPropagation()}>
+                                {event.memberFirstName} {event.memberLastName}
+                              </span>
+                            </Link>
+                            {" "}&mdash;{" "}
+                            <span className={isFail ? "text-red-600 dark:text-red-400 font-medium" : ""}>
+                              {event.details || event.eventType.replace(/_/g, " ")}
+                            </span>
+                          </p>
+                          {seqName && (
+                            <Link href="/retention">
+                              <p className="text-[10px] text-primary/70 hover:text-primary hover:underline mt-0.5 truncate transition-colors" onClick={(e) => e.stopPropagation()}>
+                                {seqName}
+                              </p>
+                            </Link>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span className="text-[10px] text-muted-foreground whitespace-nowrap">
+                            {new Date(event.createdAt).toLocaleString()}
+                          </span>
+                          <ChevronDown className={`h-3.5 w-3.5 text-muted-foreground transition-transform duration-200 ${isExpanded ? "rotate-180" : ""}`} />
+                        </div>
+                      </button>
+
+                      <AnimatePresence>
+                        {isExpanded && (
+                          <motion.div
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: "auto", opacity: 1 }}
+                            exit={{ height: 0, opacity: 0 }}
+                            transition={{ duration: 0.2 }}
+                            className="overflow-hidden"
+                          >
+                            <div className="px-4 pb-3 pt-1 ml-10 space-y-2 border-t border-border/50">
+                              <div className="flex items-center gap-2 pt-2">
+                                <span className="text-[10px] text-muted-foreground w-16 shrink-0">Member</span>
+                                <Link href={`/members/${event.memberId}`}>
+                                  <span className="text-[11px] font-medium text-primary hover:text-primary/80 hover:underline inline-flex items-center gap-0.5 transition-colors">
+                                    {event.memberFirstName} {event.memberLastName}
+                                    <ExternalLink className="h-2.5 w-2.5" />
+                                  </span>
+                                </Link>
+                              </div>
+                              {seqName && (
+                                <div className="flex items-center gap-2">
+                                  <span className="text-[10px] text-muted-foreground w-16 shrink-0">Sequence</span>
+                                  <Link href="/retention">
+                                    <span className="text-[11px] font-medium text-primary hover:text-primary/80 hover:underline inline-flex items-center gap-0.5 transition-colors">
+                                      {seqName}
+                                      <ExternalLink className="h-2.5 w-2.5" />
+                                    </span>
+                                  </Link>
+                                </div>
+                              )}
+                              {event.stepIndex != null && (
+                                <div className="flex items-center gap-2">
+                                  <span className="text-[10px] text-muted-foreground w-16 shrink-0">Step</span>
+                                  <span className="text-[11px] text-foreground">#{event.stepIndex + 1}</span>
+                                </div>
+                              )}
+                              {event.details && (
+                                <div className="flex items-start gap-2">
+                                  <span className="text-[10px] text-muted-foreground w-16 shrink-0">Details</span>
+                                  <span className={`text-[11px] ${isFail ? "text-red-500" : "text-foreground"}`}>
+                                    {event.details}
+                                  </span>
+                                </div>
+                              )}
+                              {event.metadata && typeof event.metadata === "object" && Object.keys(event.metadata).length > 0 && (
+                                <div className="flex items-start gap-2">
+                                  <span className="text-[10px] text-muted-foreground w-16 shrink-0">Metadata</span>
+                                  <span className="text-[10px] text-muted-foreground font-mono">
+                                    {Object.entries(event.metadata).map(([k, v]) => `${k}: ${typeof v === "object" ? JSON.stringify(v) : String(v)}`).join(", ")}
+                                  </span>
+                                </div>
+                              )}
+                              <div className="flex items-center gap-2">
+                                <span className="text-[10px] text-muted-foreground w-16 shrink-0">Time</span>
+                                <span className="text-[10px] text-muted-foreground">
+                                  {new Date(event.createdAt).toLocaleString()}
+                                </span>
+                              </div>
+                            </div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs text-foreground">
-                        <span className="font-medium">{event.memberFirstName} {event.memberLastName}</span>
-                        {" "}&mdash; {event.details || event.eventType}
-                      </p>
-                      <p className="text-[10px] text-muted-foreground mt-0.5">
-                        {new Date(event.createdAt).toLocaleString()}
-                      </p>
-                    </div>
-                  </div>
-                ))
+                  );
+                })
               )}
             </motion.div>
           )}
@@ -656,6 +756,7 @@ function getTriggerSummary(trigger: TriggerConfig): string {
 
 function getEventStyle(type: string): string {
   if (type.includes("email_sent")) return "bg-blue-500/15 text-blue-500";
+  if (type.includes("email_failed") || type.includes("email_skipped")) return "bg-red-500/15 text-red-500";
   if (type.includes("task")) return "bg-amber-500/15 text-amber-500";
   if (type.includes("enrolled")) return "bg-emerald-500/15 text-emerald-500";
   if (type.includes("exit") || type.includes("completed")) return "bg-muted/30 text-muted-foreground";
@@ -664,12 +765,16 @@ function getEventStyle(type: string): string {
 }
 
 function getEventIcon(type: string) {
+  if (type.includes("failed") || type.includes("skipped") || type.includes("error")) return <AlertTriangle className="h-3.5 w-3.5" />;
   if (type.includes("email")) return <Mail className="h-3.5 w-3.5" />;
   if (type.includes("task")) return <ClipboardList className="h-3.5 w-3.5" />;
   if (type.includes("enrolled")) return <Play className="h-3.5 w-3.5" />;
   if (type.includes("exit") || type.includes("completed")) return <Square className="h-3.5 w-3.5" />;
-  if (type.includes("error")) return <AlertCircle className="h-3.5 w-3.5" />;
   return <Activity className="h-3.5 w-3.5" />;
+}
+
+function isFailureEventType(type: string): boolean {
+  return type === "email_failed" || type === "email_skipped" || type === "step_error";
 }
 
 function CreateSequenceForm({ gymId, onBack }: { gymId: number; onBack: () => void }) {

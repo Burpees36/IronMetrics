@@ -622,8 +622,10 @@ router.get("/gyms/:gymId/retention/events", async (req, res): Promise<void> => {
       createdAt: retentionSequenceEventsTable.createdAt,
       memberFirstName: membersTable.firstName,
       memberLastName: membersTable.lastName,
+      sequenceName: retentionSequencesTable.name,
     }).from(retentionSequenceEventsTable)
       .innerJoin(membersTable, eq(retentionSequenceEventsTable.memberId, membersTable.id))
+      .innerJoin(retentionSequencesTable, eq(retentionSequenceEventsTable.sequenceId, retentionSequencesTable.id))
       .where(eq(retentionSequenceEventsTable.gymId, gymId))
       .orderBy(desc(retentionSequenceEventsTable.createdAt))
       .limit(limit);
