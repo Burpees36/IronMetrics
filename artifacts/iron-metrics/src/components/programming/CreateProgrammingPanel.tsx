@@ -84,6 +84,7 @@ export function CreateProgrammingPanel({
   const hasChanges = (() => {
     if (title !== (initialData?.title || "")) return true;
     if (date !== (initialData?.date || initialDate)) return true;
+    if (track !== (initialData?.track || defaultTrack)) return true;
     const origSections = initialData?.sections || [];
     if (sections.length !== origSections.length) return true;
     for (let i = 0; i < sections.length; i++) {
