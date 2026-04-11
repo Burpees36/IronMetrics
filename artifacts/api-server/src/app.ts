@@ -30,6 +30,7 @@ import router from "./routes";
 import paymentUpdatePublicRouter from "./routes/payment-update-public";
 import leadCaptureRouter from "./routes/lead-capture";
 import publicWodRouter from "./routes/public-wod";
+import unsubscribeRouter from "./routes/unsubscribe";
 
 const app: Express = express();
 
@@ -154,6 +155,7 @@ app.use("/api", apiLimiter);
 app.use("/api", paymentUpdatePublicRouter);
 app.use("/api", leadCaptureRouter);
 app.use("/api", publicWodRouter);
+app.use("/api", unsubscribeRouter);
 
 // Dev-only preview bypass — must run before authMiddleware
 app.use(previewMiddleware);

@@ -425,6 +425,15 @@ router.put("/gyms/:gymId/retention/sequences/:sequenceId", async (req, res): Pro
 
     const { name, description, isEnabled, triggerConfig, cooldownDays, steps } = req.body;
 
+    const [activeEnrollmentCount] = await db.select({ count: count() })
+      .from(memberSequenceEnrollmentsTable)
+      .where(and(
+        eq(memberSequenceEnrollmentsTable.sequenceId, sequenceId),
+        sql`${memberSequenceEnrollmentsTable.status} IN ('active', 'retry_pending')`
+      ));
+
+    const activeCount = Number(activeEnrollmentCount.count);
+
     const [updated] = await db.update(retentionSequencesTable).set({
       ...(name !== undefined ? { name } : {}),
       ...(description !== undefined ? { description } : {}),
@@ -434,6 +443,13 @@ router.put("/gyms/:gymId/retention/sequences/:sequenceId", async (req, res): Pro
     }).where(eq(retentionSequencesTable.id, sequenceId)).returning();
 
     if (steps && Array.isArray(steps)) {
+      const oldSteps = await db.select().from(retentionSequenceStepsTable)
+        .where(eq(retentionSequenceStepsTable.sequenceId, sequenceId))
+        .orderBy(asc(retentionSequenceStepsTable.stepOrder));
+
+      const oldStepCount = oldSteps.length;
+      const newStepCount = steps.length;
+
       await db.delete(retentionSequenceStepsTable).where(eq(retentionSequenceStepsTable.sequenceId, sequenceId));
       for (const step of steps) {
         await db.insert(retentionSequenceStepsTable).values({
@@ -444,9 +460,36 @@ router.put("/gyms/:gymId/retention/sequences/:sequenceId", async (req, res): Pro
           config: step.config || {},
         });
       }
+
+      if (activeCount > 0 && oldStepCount !== newStepCount) {
+        const activeEnrollments = await db.select()
+          .from(memberSequenceEnrollmentsTable)
+          .where(and(
+            eq(memberSequenceEnrollmentsTable.sequenceId, sequenceId),
+            sql`${memberSequenceEnrollmentsTable.status} IN ('active', 'retry_pending')`
+          ));
+
+        for (const enrollment of activeEnrollments) {
+          let newIndex = enrollment.currentStepIndex;
+          if (newIndex >= newStepCount) {
+            newIndex = Math.max(0, newStepCount - 1);
+          }
+          if (newIndex !== enrollment.currentStepIndex) {
+            await db.update(memberSequenceEnrollmentsTable).set({
+              currentStepIndex: newIndex,
+            }).where(eq(memberSequenceEnrollmentsTable.id, enrollment.id));
+          }
+        }
+      }
     }
 
-    res.json(updated);
+    const responseData: any = { ...updated };
+    if (activeCount > 0 && steps) {
+      responseData._warning = `This sequence has ${activeCount} active enrollment(s). Step indices have been adjusted for in-flight enrollments.`;
+      responseData._activeEnrollments = activeCount;
+    }
+
+    res.json(responseData);
 
     if (isEnabled === true && !existing.isEnabled) {
       evaluateTriggersForGym(gymId, sequenceId).catch((err) => {
