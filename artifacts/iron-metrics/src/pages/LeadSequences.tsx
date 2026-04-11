@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useGym } from "@/store/GymContext";
 import { useToast } from "@/hooks/use-toast";
 import { motion, AnimatePresence } from "framer-motion";
@@ -7,9 +7,14 @@ import {
   Users, Mail, MessageSquare, Clock, Trash2, Play, Square,
   ArrowLeft, AlertCircle, CheckCircle2, XCircle, Zap, Target,
   Settings2, Activity, HelpCircle, X, BarChart3, Send, Timer,
-  UserPlus, TrendingUp, ChevronDown, ChevronUp
+  UserPlus, TrendingUp, ChevronDown, ChevronUp, Eye, EyeOff
 } from "lucide-react";
 import { STAGE_CONFIG } from "@/components/leads/lead-utils";
+import {
+  AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction,
+} from "@/components/ui/alert-dialog";
+import { useGetGym } from "@workspace/api-client-react";
 
 const API_BASE = import.meta.env.VITE_API_URL || "";
 
@@ -577,9 +582,30 @@ function SequenceDetail({
   const Icon = TYPE_ICONS[sequence.type] || Settings2;
   const colorClass = TYPE_COLORS[sequence.type] || TYPE_COLORS.custom;
   const steps = sequence.steps || [];
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   return (
     <div className="h-full flex flex-col gap-4 overflow-y-auto">
+      <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this sequence?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Enrolled leads will be removed from this sequence. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={onDelete}
+              className="bg-red-500 text-white hover:bg-red-600"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <div className="flex items-center gap-3 shrink-0">
         <button onClick={onBack} className="p-2 rounded-lg hover:bg-muted/50 transition-colors">
           <ArrowLeft className="h-4 w-4" />
@@ -598,7 +624,7 @@ function SequenceDetail({
           <button onClick={onEdit} className="px-3 py-1.5 rounded-lg border border-border text-xs font-medium hover:bg-muted/50 transition-colors">
             Edit
           </button>
-          <button onClick={onDelete} className="p-2 rounded-lg hover:bg-red-500/10 text-red-500 transition-colors">
+          <button onClick={() => setShowDeleteConfirm(true)} className="p-2 rounded-lg hover:bg-red-500/10 text-red-500 transition-colors">
             <Trash2 className="h-4 w-4" />
           </button>
         </div>
@@ -722,6 +748,15 @@ function SequenceBuilder({
     ]
   );
   const [saving, setSaving] = useState(false);
+  const textareaRefs = useRef<Record<number, HTMLTextAreaElement | null>>({});
+  const [previewStepIndex, setPreviewStepIndex] = useState<number | null>(null);
+  const { data: gym } = useGetGym(gymId, { query: { enabled: !!gymId } });
+
+  const VARIABLE_CHIPS = [
+    { label: "first_name", value: "{{first_name}}" },
+    { label: "last_name", value: "{{last_name}}" },
+    { label: "gym_name", value: "{{gym_name}}" },
+  ];
 
   const addStep = () => {
     setSteps([
@@ -737,14 +772,56 @@ function SequenceBuilder({
   };
 
   const removeStep = (index: number) => {
+    setPreviewStepIndex(null);
     const newSteps = steps.filter((_, i) => i !== index).map((s, i) => ({ ...s, stepOrder: i + 1 }));
     setSteps(newSteps);
   };
 
+  const moveStep = (index: number, direction: "up" | "down") => {
+    const targetIndex = direction === "up" ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= steps.length) return;
+    setPreviewStepIndex((prev) => {
+      if (prev === index) return targetIndex;
+      if (prev === targetIndex) return index;
+      return prev;
+    });
+    const newSteps = [...steps];
+    [newSteps[index], newSteps[targetIndex]] = [newSteps[targetIndex], newSteps[index]];
+    setSteps(newSteps.map((s, i) => ({ ...s, stepOrder: i + 1 })));
+  };
+
   const updateStep = (index: number, field: string, value: any) => {
+    if (field === "channel" && value !== "email" && previewStepIndex === index) {
+      setPreviewStepIndex(null);
+    }
     const newSteps = [...steps];
     (newSteps[index] as any)[field] = value;
     setSteps(newSteps);
+  };
+
+  const insertVariable = (stepIndex: number, variable: string) => {
+    const textarea = textareaRefs.current[stepIndex];
+    if (!textarea) {
+      updateStep(stepIndex, "messageContent", steps[stepIndex].messageContent + variable);
+      return;
+    }
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const content = steps[stepIndex].messageContent;
+    const newContent = content.substring(0, start) + variable + content.substring(end);
+    updateStep(stepIndex, "messageContent", newContent);
+    requestAnimationFrame(() => {
+      textarea.focus();
+      const cursorPos = start + variable.length;
+      textarea.setSelectionRange(cursorPos, cursorPos);
+    });
+  };
+
+  const renderPreview = (content: string) => {
+    return content
+      .replace(/\{\{first_name\}\}/g, "Sarah")
+      .replace(/\{\{last_name\}\}/g, "Johnson")
+      .replace(/\{\{gym_name\}\}/g, gym?.name || "Your Gym");
   };
 
   const save = async () => {
@@ -871,11 +948,31 @@ function SequenceBuilder({
                   </span>
                   <span className="text-sm font-semibold text-foreground">Step {i + 1}</span>
                 </div>
-                {steps.length > 1 && (
-                  <button onClick={() => removeStep(i)} className="p-1.5 rounded-lg hover:bg-red-500/10 text-muted-foreground hover:text-red-500 transition-colors">
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                )}
+                <div className="flex items-center gap-1">
+                  {i > 0 && (
+                    <button
+                      onClick={() => moveStep(i, "up")}
+                      className="p-1.5 rounded-lg hover:bg-muted/50 text-muted-foreground hover:text-foreground transition-colors"
+                      title="Move step up"
+                    >
+                      <ChevronUp className="h-4 w-4" />
+                    </button>
+                  )}
+                  {i < steps.length - 1 && (
+                    <button
+                      onClick={() => moveStep(i, "down")}
+                      className="p-1.5 rounded-lg hover:bg-muted/50 text-muted-foreground hover:text-foreground transition-colors"
+                      title="Move step down"
+                    >
+                      <ChevronDown className="h-4 w-4" />
+                    </button>
+                  )}
+                  {steps.length > 1 && (
+                    <button onClick={() => removeStep(i)} className="p-1.5 rounded-lg hover:bg-red-500/10 text-muted-foreground hover:text-red-500 transition-colors">
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  )}
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4 mb-4">
@@ -906,29 +1003,70 @@ function SequenceBuilder({
 
               {step.channel === "email" && (
                 <div className="mb-4">
-                  <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Subject Line</label>
-                  <input
-                    type="text"
-                    value={step.subject || ""}
-                    onChange={(e) => updateStep(i, "subject", e.target.value)}
-                    placeholder="Email subject..."
-                    className="w-full bg-card border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
-                  />
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-xs font-medium text-muted-foreground">Subject Line</label>
+                    <button
+                      onClick={() => setPreviewStepIndex(previewStepIndex === i ? null : i)}
+                      className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors ${
+                        previewStepIndex === i
+                          ? "bg-primary/15 text-primary"
+                          : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                      }`}
+                    >
+                      {previewStepIndex === i ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+                      {previewStepIndex === i ? "Edit" : "Preview"}
+                    </button>
+                  </div>
+                  {previewStepIndex === i ? (
+                    <div className="w-full bg-card border border-primary/20 rounded-lg px-3 py-2 text-sm text-foreground">
+                      {renderPreview(step.subject || "(No subject)")}
+                    </div>
+                  ) : (
+                    <input
+                      type="text"
+                      value={step.subject || ""}
+                      onChange={(e) => updateStep(i, "subject", e.target.value)}
+                      placeholder="Email subject..."
+                      className="w-full bg-card border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+                    />
+                  )}
                 </div>
               )}
 
               <div>
                 <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Message Content</label>
-                <textarea
-                  value={step.messageContent}
-                  onChange={(e) => updateStep(i, "messageContent", e.target.value)}
-                  placeholder="Write your message... Use {{first_name}}, {{last_name}}, {{gym_name}} as placeholders."
-                  rows={step.channel === "email" ? 10 : 5}
-                  className="w-full bg-card border border-border rounded-lg px-3 py-2.5 text-sm text-foreground leading-relaxed focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary resize-y min-h-[120px]"
-                />
-                <p className="text-xs text-muted-foreground mt-1.5">
-                  Variables: {"{{first_name}}"}, {"{{last_name}}"}, {"{{gym_name}}"}
-                </p>
+                <div className="flex flex-wrap gap-1.5 mb-2">
+                  {VARIABLE_CHIPS.map((chip) => (
+                    <button
+                      key={chip.label}
+                      type="button"
+                      onClick={() => insertVariable(i, chip.value)}
+                      disabled={previewStepIndex === i}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-primary/10 text-primary text-[11px] font-medium hover:bg-primary/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      <Plus className="h-2.5 w-2.5" />
+                      {chip.value}
+                    </button>
+                  ))}
+                </div>
+                {previewStepIndex === i && step.channel === "email" ? (
+                  <div className="w-full bg-card border border-primary/20 rounded-lg px-3 py-2.5 text-sm text-foreground leading-relaxed min-h-[120px] whitespace-pre-wrap">
+                    <div className="flex items-center gap-1.5 mb-2 pb-2 border-b border-border">
+                      <Eye className="h-3 w-3 text-primary" />
+                      <span className="text-[10px] font-medium text-primary uppercase tracking-wider">Preview</span>
+                    </div>
+                    {renderPreview(step.messageContent || "(No message content)")}
+                  </div>
+                ) : (
+                  <textarea
+                    ref={(el) => { textareaRefs.current[i] = el; }}
+                    value={step.messageContent}
+                    onChange={(e) => updateStep(i, "messageContent", e.target.value)}
+                    placeholder="Write your message... Use the variable chips above to insert placeholders."
+                    rows={step.channel === "email" ? 10 : 5}
+                    className="w-full bg-card border border-border rounded-lg px-3 py-2.5 text-sm text-foreground leading-relaxed focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary resize-y min-h-[120px]"
+                  />
+                )}
               </div>
             </div>
           ))}
