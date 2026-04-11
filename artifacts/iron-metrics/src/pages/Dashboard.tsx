@@ -488,6 +488,31 @@ export function Dashboard() {
               </>
             )}
           </p>
+          {(() => {
+            const urgentItems = [...criticalItems, ...warningItems].filter(i => i.actionLink).slice(0, 2);
+            if (urgentItems.length === 0) return null;
+            return (
+              <div className="flex flex-wrap gap-2 mt-3" data-testid="header-quick-actions">
+                {urgentItems.map((item) => (
+                  <Link key={item.id} href={item.actionLink!}>
+                    <Button
+                      size="sm"
+                      variant={item.category === "critical" ? "destructive" : "outline"}
+                      className={cn(
+                        "text-xs font-semibold gap-1.5",
+                        item.category === "warning" && "border-amber-500/50 bg-amber-500/10 text-amber-700 hover:bg-amber-500/20 dark:text-amber-400 dark:border-amber-400/50 dark:bg-amber-400/10 dark:hover:bg-amber-400/20"
+                      )}
+                    >
+                      <item.icon className="w-3.5 h-3.5" />
+                      {item.actionLabel}
+                      {item.impact && <span className="opacity-70">· {item.impact}</span>}
+                      <ArrowRight className="w-3 h-3" />
+                    </Button>
+                  </Link>
+                ))}
+              </div>
+            );
+          })()}
         </div>
 
         <div className="flex items-center gap-4 pb-1">
