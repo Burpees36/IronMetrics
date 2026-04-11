@@ -3494,6 +3494,16 @@ export const GetMorningBriefingResponse = zod.object({
       }),
     )
     .optional(),
+  celebrations: zod
+    .array(
+      zod.object({
+        type: zod.string(),
+        memberName: zod.string(),
+        detail: zod.string(),
+        memberId: zod.number(),
+      }),
+    )
+    .optional(),
 });
 
 /**

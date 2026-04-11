@@ -7036,6 +7036,19 @@ components:
           type: ["string", "null"]
       required: [id, icon, title, message, actionLabel, actionLink]
 
+    MorningBriefingCelebration:
+      type: object
+      properties:
+        type:
+          type: string
+        memberName:
+          type: string
+        detail:
+          type: string
+        memberId:
+          type: integer
+      required: [type, memberName, detail, memberId]
+
     MorningBriefing:
       type: object
       properties:
@@ -7053,6 +7066,10 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/GrowthNudge"
+        celebrations:
+          type: array
+          items:
+            $ref: "#/components/schemas/MorningBriefingCelebration"
       required: [date, summary, items, snapshot]
 
     LeadCaptureBody:

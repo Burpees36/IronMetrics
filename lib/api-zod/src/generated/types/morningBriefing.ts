@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { GrowthNudge } from "./growthNudge";
+import type { MorningBriefingCelebration } from "./morningBriefingCelebration";
 import type { MorningBriefingItem } from "./morningBriefingItem";
 import type { MorningBriefingSnapshot } from "./morningBriefingSnapshot";
 
@@ -15,4 +16,5 @@ export interface MorningBriefing {
   items: MorningBriefingItem[];
   snapshot: MorningBriefingSnapshot;
   growthNudges?: GrowthNudge[];
+  celebrations?: MorningBriefingCelebration[];
 }

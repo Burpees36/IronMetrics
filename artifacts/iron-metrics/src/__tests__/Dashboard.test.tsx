@@ -1,10 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
-import React from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import React from "react";
 
 const mockFetch = vi.fn();
 global.fetch = mockFetch;
+
+vi.mock("@workspace/replit-auth-web", () => ({
+  useAuth: () => ({ user: { firstName: "Test" }, isAuthenticated: true }),
+}));
 
 vi.mock("wouter", () => ({
   Link: ({ children, href }: any) => <a href={href}>{children}</a>,
@@ -58,6 +62,12 @@ vi.mock("lucide-react", () => ({
   BarChart3: (props: any) => <span {...props}>BarChart3</span>,
   Wallet: (props: any) => <span {...props}>Wallet</span>,
   PiggyBank: (props: any) => <span {...props}>PiggyBank</span>,
+  PartyPopper: (props: any) => <span {...props}>PartyPopper</span>,
+  Cake: (props: any) => <span {...props}>Cake</span>,
+  Award: (props: any) => <span {...props}>Award</span>,
+  Flame: (props: any) => <span {...props}>Flame</span>,
+  RotateCcw: (props: any) => <span {...props}>RotateCcw</span>,
+  Star: (props: any) => <span {...props}>Star</span>,
 }));
 
 vi.mock("@/components/ui/button", () => ({
@@ -91,10 +101,6 @@ vi.mock("@/components/dashboard/AtRiskMembersCard", () => ({
 
 vi.mock("@/components/dashboard/RetentionActivityCard", () => ({
   RetentionActivityCard: () => <div data-testid="retention-card">RetentionActivityCard</div>,
-}));
-
-vi.mock("@workspace/replit-auth-web", () => ({
-  useAuth: () => ({ user: { firstName: "Test" }, isAuthenticated: true }),
 }));
 
 const mockUseGym = vi.fn();
@@ -172,6 +178,10 @@ const MOCK_BRIEFING = {
     staleLeads: 3,
     newLeads: 5,
   },
+  celebrations: [
+    { type: "birthday", memberName: "Jane Doe", detail: "Birthday today", memberId: 101 },
+    { type: "anniversary", memberName: "John Smith", detail: "2-year membership anniversary", memberId: 202 },
+  ],
 };
 
 describe("Dashboard", () => {
@@ -353,6 +363,64 @@ describe("Dashboard", () => {
     expect(screen.queryByTestId("header-quick-actions")).not.toBeInTheDocument();
   });
 
+  it("renders celebrations banner when milestones exist", () => {
+    mockUseGym.mockReturnValue({ activeGymId: 1 });
+    mockUseGetDashboardStats.mockReturnValue({ data: MOCK_STATS, isLoading: false });
+    renderWithProviders(<Dashboard />);
+    expect(screen.getByTestId("celebrations-banner")).toBeInTheDocument();
+    expect(screen.getByText("2 Member Milestones Today")).toBeInTheDocument();
+    expect(screen.getByText("Jane Doe")).toBeInTheDocument();
+    expect(screen.getByText("Birthday today")).toBeInTheDocument();
+    expect(screen.getByText("Birthday")).toBeInTheDocument();
+    expect(screen.getByText("John Smith")).toBeInTheDocument();
+    expect(screen.getByText("2-year membership anniversary")).toBeInTheDocument();
+    expect(screen.getByText("Anniversary")).toBeInTheDocument();
+    const viewLinks = screen.getAllByText("View");
+    expect(viewLinks.length).toBe(2);
+    const link1 = viewLinks[0].closest("a");
+    const link2 = viewLinks[1].closest("a");
+    expect(link1?.getAttribute("href")).toBe("/members/101");
+    expect(link2?.getAttribute("href")).toBe("/members/202");
+  });
+
+  it("does not render celebrations banner when no milestones", () => {
+    mockUseGym.mockReturnValue({ activeGymId: 1 });
+    mockUseGetDashboardStats.mockReturnValue({ data: MOCK_STATS, isLoading: false });
+    mockUseGetMorningBriefing.mockReturnValue({
+      data: { ...MOCK_BRIEFING, celebrations: [] },
+      isLoading: false,
+    });
+    renderWithProviders(<Dashboard />);
+    expect(screen.queryByTestId("celebrations-banner")).not.toBeInTheDocument();
+  });
+
+  it("does not render celebrations banner when celebrations field is absent", () => {
+    mockUseGym.mockReturnValue({ activeGymId: 1 });
+    mockUseGetDashboardStats.mockReturnValue({ data: MOCK_STATS, isLoading: false });
+    const { celebrations, ...briefingWithout } = MOCK_BRIEFING;
+    mockUseGetMorningBriefing.mockReturnValue({
+      data: briefingWithout,
+      isLoading: false,
+    });
+    renderWithProviders(<Dashboard />);
+    expect(screen.queryByTestId("celebrations-banner")).not.toBeInTheDocument();
+  });
+
+  it("renders singular milestone text for one celebration", () => {
+    mockUseGym.mockReturnValue({ activeGymId: 1 });
+    mockUseGetDashboardStats.mockReturnValue({ data: MOCK_STATS, isLoading: false });
+    mockUseGetMorningBriefing.mockReturnValue({
+      data: {
+        ...MOCK_BRIEFING,
+        celebrations: [{ type: "birthday", memberName: "Alice Test", detail: "Birthday today", memberId: 303 }],
+      },
+      isLoading: false,
+    });
+    renderWithProviders(<Dashboard />);
+    expect(screen.getByText("1 Member Milestone Today")).toBeInTheDocument();
+    expect(screen.getByText("Alice Test")).toBeInTheDocument();
+  });
+
   it("renders growth nudges when no action items", () => {
     mockUseGym.mockReturnValue({ activeGymId: 1 });
     mockUseGetDashboardStats.mockReturnValue({ data: MOCK_STATS, isLoading: false });
@@ -384,7 +452,7 @@ describe("Dashboard", () => {
       },
       isLoading: false,
     });
-    render(<Dashboard />);
+    renderWithProviders(<Dashboard />);
     expect(screen.getByText("Growth Playbook")).toBeInTheDocument();
     expect(screen.getByText("Run a Bring-a-Friend day")).toBeInTheDocument();
     expect(screen.getByText("Launch a referral sprint")).toBeInTheDocument();
@@ -413,7 +481,7 @@ describe("Dashboard", () => {
       },
       isLoading: false,
     });
-    render(<Dashboard />);
+    renderWithProviders(<Dashboard />);
     expect(screen.getByText("Growth Playbook")).toBeInTheDocument();
     expect(screen.getByText("Check in with 3 members today")).toBeInTheDocument();
     expect(screen.queryByText("Nothing flagged")).not.toBeInTheDocument();
@@ -431,7 +499,7 @@ describe("Dashboard", () => {
       },
       isLoading: false,
     });
-    render(<Dashboard />);
+    renderWithProviders(<Dashboard />);
     expect(screen.getByText("Nothing flagged")).toBeInTheDocument();
   });
 });

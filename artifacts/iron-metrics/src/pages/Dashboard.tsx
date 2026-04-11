@@ -18,6 +18,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { SyncHealthBanner } from "@/components/dashboard/SyncHealthBanner";
+import { CelebrationsBanner } from "@/components/dashboard/CelebrationsBanner";
 import { AtRiskMembersCard } from "@/components/dashboard/AtRiskMembersCard";
 import { RetentionActivityCard } from "@/components/dashboard/RetentionActivityCard";
 import { cn } from "@/lib/utils";
@@ -451,6 +452,7 @@ export function Dashboard() {
   const briefingItems = briefing?.items || [];
   const briefingSummary = briefing?.summary || null;
   const growthNudges = briefing?.growthNudges || [];
+  const celebrations = briefing?.celebrations || [];
   const actionItems = buildActionItems(briefingItems, snapshot || {});
 
   const criticalItems = actionItems.filter(i => i.category === "critical");
@@ -585,6 +587,8 @@ export function Dashboard() {
           </Link>
         </div>
       </header>
+
+      <CelebrationsBanner celebrations={celebrations} />
 
       <main className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         <div className="lg:col-span-8 space-y-6">

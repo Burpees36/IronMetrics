@@ -1565,12 +1565,20 @@ export interface GrowthNudge {
   source?: string | null;
 }
 
+export interface MorningBriefingCelebration {
+  type: string;
+  memberName: string;
+  detail: string;
+  memberId: number;
+}
+
 export interface MorningBriefing {
   date: string;
   summary: string;
   items: MorningBriefingItem[];
   snapshot: MorningBriefingSnapshot;
   growthNudges?: GrowthNudge[];
+  celebrations?: MorningBriefingCelebration[];
 }
 
 export interface LeadCaptureBody {

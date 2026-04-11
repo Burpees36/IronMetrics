@@ -192,6 +192,7 @@ export * from "./membershipReportByPlanItem";
 export * from "./membershipReportGrowthByMonthItem";
 export * from "./memberStatus";
 export * from "./morningBriefing";
+export * from "./morningBriefingCelebration";
 export * from "./morningBriefingItem";
 export * from "./morningBriefingItemPriority";
 export * from "./morningBriefingSnapshot";

@@ -569,7 +569,7 @@ router.get("/gyms/:gymId/intelligence/morning-briefing", async (req, res): Promi
     };
     const summary = generateConversationalSummary(briefingSnapshot);
 
-    let celebrations: { type: string; memberName: string; detail: string }[] = [];
+    let celebrations: { type: string; memberName: string; detail: string; memberId: number }[] = [];
     try {
       const [opSettings] = await db.select().from(aiOperatorSettingsTable).where(eq(aiOperatorSettingsTable.gymId, gymId));
       const cooldown = opSettings?.cooldownCelebrations ?? 90;
@@ -578,6 +578,7 @@ router.get("/gyms/:gymId/intelligence/morning-briefing", async (req, res): Promi
         type: m.milestoneType,
         memberName: `${m.memberFirstName} ${m.memberLastName}`,
         detail: m.detail,
+        memberId: m.memberId,
       }));
     } catch (err: any) {
       console.error("[intelligence/morning-briefing] Celebration detection error:", err.message);
