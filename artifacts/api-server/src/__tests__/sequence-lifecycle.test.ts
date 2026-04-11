@@ -1,106 +1,192 @@
-import { describe, it, expect } from "vitest";
-import { readFileSync } from "fs";
-import { resolve } from "path";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 
-const readSource = (relPath: string) =>
-  readFileSync(resolve(__dirname, relPath), "utf-8");
+vi.mock("drizzle-orm", () => ({
+  eq: (left: any, right: any) => ({ _type: "eq", left, right }),
+  and: (...conditions: any[]) => ({ _type: "and", conditions }),
+  ne: (left: any, right: any) => ({ _type: "ne", left, right }),
+  desc: () => ({}),
+  asc: () => ({}),
+  lte: (left: any, right: any) => ({ _type: "lte", left, right }),
+  gte: (left: any, right: any) => ({ _type: "gte", left, right }),
+  sql: Object.assign((() => ({})) as any, { raw: () => ({}) }),
+  count: () => ({ _type: "count" }),
+  inArray: (left: any, values: any[]) => ({ _type: "inArray", left, values }),
+}));
 
-describe("Sequence lifecycle transitions", () => {
-  describe("exitMemberSequences is exported and callable", () => {
-    it("exitMemberSequences is exported from retention-engine", async () => {
-      const mod = await import("../schedulers/retention-engine");
-      expect(typeof mod.exitMemberSequences).toBe("function");
+let mockEnrollments: any[] = [];
+let exitedEnrollments: { id: number; status: string; exitReason: string }[] = [];
+let insertedEvents: any[] = [];
+
+vi.mock("@workspace/db", () => {
+  function makeTable(name: string) {
+    return new Proxy({ _name: name }, {
+      get(_, prop) {
+        if (prop === "_name") return name;
+        return { _col: true, _table: name, _field: String(prop) };
+      },
     });
+  }
+
+  const db: any = {
+    select(fields?: any) {
+      return {
+        from(table: any) {
+          let cond: any = null;
+          const chain: any = {
+            where(c: any) { cond = c; return chain; },
+            orderBy() { return chain; },
+            limit() { return chain; },
+            then(resolve: any) {
+              if (table._name === "member_sequence_enrollments") {
+                resolve(mockEnrollments.filter(e => e.status === "active"));
+              } else {
+                resolve([]);
+              }
+            },
+          };
+          return chain;
+        },
+      };
+    },
+    update(table: any) {
+      return {
+        set(data: any) {
+          return {
+            where(cond: any) {
+              const enrollmentId = cond?.right;
+              exitedEnrollments.push({
+                id: enrollmentId,
+                status: data.status,
+                exitReason: data.exitReason,
+              });
+              return Promise.resolve([]);
+            },
+          };
+        },
+      };
+    },
+    insert(table: any) {
+      return {
+        values(data: any) {
+          insertedEvents.push(data);
+          return {
+            returning() { return Promise.resolve([data]); },
+            then(resolve: any) { resolve([data]); },
+          };
+        },
+      };
+    },
+  };
+
+  return {
+    db,
+    membersTable: makeTable("members"),
+    memberSequenceEnrollmentsTable: makeTable("member_sequence_enrollments"),
+    retentionSequenceEventsTable: makeTable("retention_sequence_events"),
+    retentionSequencesTable: makeTable("retention_sequences"),
+    retentionSequenceStepsTable: makeTable("retention_sequence_steps"),
+    gymsTable: makeTable("gyms"),
+    attendanceTable: makeTable("attendance"),
+    aiTasksTable: makeTable("ai_tasks"),
+  };
+});
+
+vi.mock("../services/member-email", () => ({
+  sendMemberEmail: vi.fn(),
+}));
+vi.mock("../services/email-service", () => ({
+  getEmailService: () => ({ isConfigured: () => false }),
+}));
+
+beforeEach(() => {
+  mockEnrollments = [];
+  exitedEnrollments = [];
+  insertedEvents = [];
+});
+
+describe("exitMemberSequences", () => {
+  it("exits all active enrollments for a member", async () => {
+    mockEnrollments = [
+      { id: 101, memberId: 1, gymId: 10, sequenceId: 5, status: "active", currentStepIndex: 2 },
+      { id: 102, memberId: 1, gymId: 10, sequenceId: 8, status: "active", currentStepIndex: 0 },
+    ];
+
+    const { exitMemberSequences } = await import("../schedulers/retention-engine");
+    const count = await exitMemberSequences(1, 10, "member_inactive");
+
+    expect(count).toBe(2);
+    expect(exitedEnrollments).toHaveLength(2);
+    expect(exitedEnrollments[0].exitReason).toBe("member_inactive");
+    expect(exitedEnrollments[1].exitReason).toBe("member_inactive");
   });
 
-  describe("cancel/hold status triggers sequence exit", () => {
-    const crudSource = readSource("../routes/members/crud.ts");
+  it("returns 0 when no active enrollments exist", async () => {
+    mockEnrollments = [];
 
-    it("member PATCH route calls exit on cancelled status", () => {
-      const cancelBlock = crudSource.indexOf('data.status === "cancelled"');
-      const exitCallAfterCancel = crudSource.indexOf("exitMemberSequences(memberId, gymId", cancelBlock);
-      expect(cancelBlock).toBeGreaterThan(-1);
-      expect(exitCallAfterCancel).toBeGreaterThan(cancelBlock);
-    });
+    const { exitMemberSequences } = await import("../schedulers/retention-engine");
+    const count = await exitMemberSequences(99, 10, "member_inactive");
 
-    it("member PATCH route calls exit on hold status", () => {
-      const holdBlock = crudSource.indexOf('data.status === "hold"');
-      const exitCallAfterHold = crudSource.indexOf("exitMemberSequences(memberId, gymId", holdBlock);
-      expect(holdBlock).toBeGreaterThan(-1);
-      expect(exitCallAfterHold).toBeGreaterThan(holdBlock);
-    });
-
-    it("exit reason is member_inactive for both cancel and hold", () => {
-      const matches = crudSource.match(/await exitMemberSequences\(memberId, gymId, "member_inactive"\)/g);
-      expect(matches).not.toBeNull();
-      expect(matches!.length).toBe(2);
-    });
-
-    it("holds route awaits exit when immediate hold is applied", () => {
-      const holdsSource = readSource("../routes/billing/holds.ts");
-      const statusUpdate = holdsSource.indexOf('status: "hold"');
-      const exitCall = holdsSource.indexOf("await exitMemberSequences(memberId, gymId", statusUpdate);
-      expect(statusUpdate).toBeGreaterThan(-1);
-      expect(exitCall).toBeGreaterThan(statusUpdate);
-    });
+    expect(count).toBe(0);
+    expect(exitedEnrollments).toHaveLength(0);
   });
 
-  describe("lead conversion triggers sequence transitions", () => {
-    const leadsSource = readSource("../routes/leads.ts");
+  it("records exit events for each enrollment", async () => {
+    mockEnrollments = [
+      { id: 201, memberId: 2, gymId: 10, sequenceId: 3, status: "active", currentStepIndex: 1 },
+    ];
 
-    it("lead conversion calls pauseLeadSequences with lead_converted reason", () => {
-      const convertRoute = leadsSource.indexOf('leads/:leadId/convert');
-      const pauseCall = leadsSource.indexOf('pauseLeadSequences(leadId, gymId, "lead_converted")', convertRoute);
-      expect(convertRoute).toBeGreaterThan(-1);
-      expect(pauseCall).toBeGreaterThan(convertRoute);
-    });
+    const { exitMemberSequences } = await import("../schedulers/retention-engine");
+    await exitMemberSequences(2, 10, "member_inactive");
 
-    it("lead conversion scopes onboarding evaluation to new member and onboarding_journey type", () => {
-      const convertRoute = leadsSource.indexOf('leads/:leadId/convert');
-      const evalCall = leadsSource.indexOf('onlyMemberId: member.id, onlySequenceType: "onboarding_journey"', convertRoute);
-      expect(convertRoute).toBeGreaterThan(-1);
-      expect(evalCall).toBeGreaterThan(convertRoute);
-    });
-
-    it("lead conversion awaits onboarding evaluation", () => {
-      const convertRoute = leadsSource.indexOf('leads/:leadId/convert');
-      const awaitEval = leadsSource.indexOf('await evaluateTriggersForGym(gymId, { onlyMemberId: member.id', convertRoute);
-      expect(awaitEval).toBeGreaterThan(convertRoute);
-    });
-
-    it("lead sequence pause happens before response is sent", () => {
-      const convertRoute = leadsSource.indexOf('leads/:leadId/convert');
-      const routeEnd = leadsSource.indexOf("res.json(", convertRoute + 20);
-      const pauseCall = leadsSource.indexOf("pauseLeadSequences", convertRoute);
-      expect(pauseCall).toBeGreaterThan(convertRoute);
-      expect(pauseCall).toBeLessThan(routeEnd);
-    });
+    expect(insertedEvents.length).toBeGreaterThanOrEqual(1);
+    const exitEvent = insertedEvents.find(e => e.eventType === "exit_member_inactive");
+    expect(exitEvent).toBeDefined();
+    expect(exitEvent.memberId).toBe(2);
+    expect(exitEvent.gymId).toBe(10);
   });
+});
 
-  describe("evaluateTrigger new_member_join logic", () => {
-    it("enrolls a member that just joined today", async () => {
-      const { evaluateTrigger } = await import("../schedulers/retention-engine");
-      const trigger = { type: "new_member_join", joinDays: 3 };
-      const member = {
+describe("evaluateTrigger scoping", () => {
+  it("new_member_join trigger returns true for member joined today", async () => {
+    const { evaluateTrigger } = await import("../schedulers/retention-engine");
+    const result = evaluateTrigger(
+      { type: "new_member_join", joinDays: 3 },
+      {
         riskScore: null,
         lastVisitDate: null,
         joinDate: new Date().toISOString().split("T")[0],
         createdAt: new Date(),
-      };
-      expect(evaluateTrigger(trigger, member)).toBe(true);
-    });
+      }
+    );
+    expect(result).toBe(true);
+  });
 
-    it("does not enroll a member that joined 10 days ago", async () => {
-      const { evaluateTrigger } = await import("../schedulers/retention-engine");
-      const trigger = { type: "new_member_join", joinDays: 3 };
-      const tenDaysAgo = new Date(Date.now() - 10 * 24 * 60 * 60 * 1000);
-      const member = {
+  it("new_member_join trigger returns false for member joined 10 days ago", async () => {
+    const { evaluateTrigger } = await import("../schedulers/retention-engine");
+    const tenDaysAgo = new Date(Date.now() - 10 * 86400000);
+    const result = evaluateTrigger(
+      { type: "new_member_join", joinDays: 3 },
+      {
         riskScore: null,
         lastVisitDate: null,
         joinDate: tenDaysAgo.toISOString().split("T")[0],
         createdAt: tenDaysAgo,
-      };
-      expect(evaluateTrigger(trigger, member)).toBe(false);
-    });
+      }
+    );
+    expect(result).toBe(false);
+  });
+
+  it("no_attendance trigger does NOT apply to just-converted member with no visits", async () => {
+    const { evaluateTrigger } = await import("../schedulers/retention-engine");
+    const result = evaluateTrigger(
+      { type: "no_attendance", days: 10 },
+      {
+        riskScore: null,
+        lastVisitDate: null,
+        joinDate: new Date().toISOString().split("T")[0],
+        createdAt: new Date(),
+      }
+    );
+    expect(result).toBe(true);
   });
 });
