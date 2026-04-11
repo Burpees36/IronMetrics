@@ -17,6 +17,8 @@ import {
   useGenerateProgrammingWeek,
   getListProgrammingDaysQueryKey,
   useGetGym,
+  useListProgrammingTracks,
+  getListProgrammingTracksQueryKey,
 } from "@workspace/api-client-react";
 import type { ProgrammingDayWithSections, SectionType as ApiSectionType } from "@workspace/api-client-react";
 import { useAuth } from "@workspace/replit-auth-web";
@@ -34,6 +36,9 @@ import {
   Sparkles,
   Wand2,
   Share2,
+  GitBranch,
+  ChevronDown,
+  Check,
 } from "lucide-react";
 
 import { DateNavigation } from "@/components/programming/DateNavigation";
@@ -111,6 +116,7 @@ function programmingDayToData(day: ProgrammingDayWithSections): ProgrammingDayDa
     date: day.date,
     title: day.title,
     status: (day.status === "archived" ? "draft" : day.status) as "draft" | "published",
+    track: day.track || "default",
     sections,
   };
 }
@@ -251,12 +257,24 @@ export function Workouts() {
   const [isSaving, setIsSaving] = useState(false);
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const [shareDialogDay, setShareDialogDay] = useState<{ title?: string; date?: string } | null>(null);
+  const [selectedTrack, setSelectedTrack] = useState("default");
+  const [trackDropdownOpen, setTrackDropdownOpen] = useState(false);
 
   const { data: gym } = useGetGym(activeGymId as number, { query: { enabled: !!activeGymId } });
   const gymSlug = (gym as { slug?: string } | undefined)?.slug;
   const publicWodUrl = gymSlug
     ? `${window.location.origin}${import.meta.env.BASE_URL.replace(/\/$/, "")}/wod/${gymSlug}`
     : "";
+
+  const { data: tracksList } = useListProgrammingTracks(
+    activeGymId as number,
+    { query: { enabled: !!activeGymId && !roleLoading } }
+  );
+  const availableTracks = useMemo(() => {
+    if (!tracksList) return ["default"];
+    const tracks = tracksList as string[];
+    return tracks.length > 0 ? tracks : ["default"];
+  }, [tracksList]);
 
   const dateStr = toDateString(selectedDate);
   const weekDates = useMemo(() => getWeekDates(selectedDate), [dateStr]);
@@ -279,9 +297,10 @@ export function Workouts() {
   const startDate = isStaff ? staffStartDate : memberRangeStart;
   const endDate = isStaff ? staffEndDate : memberRangeEnd;
 
+  const trackParam = selectedTrack !== "all" ? selectedTrack : undefined;
   const { data: programmingDays, isLoading: programmingLoading } = useListProgrammingDays(
     activeGymId as number,
-    { startDate, endDate },
+    { startDate, endDate, track: trackParam },
     { query: { enabled: !!activeGymId && !roleLoading } }
   );
 
@@ -326,6 +345,9 @@ export function Workouts() {
     if (activeGymId) {
       queryClient.invalidateQueries({
         queryKey: getListProgrammingDaysQueryKey(activeGymId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: getListProgrammingTracksQueryKey(activeGymId),
       });
     }
   }, [activeGymId, queryClient]);
@@ -428,6 +450,7 @@ export function Workouts() {
               date: data.date,
               title: data.title,
               status: data.status,
+              track: data.track || null,
             },
           });
 
@@ -485,6 +508,7 @@ export function Workouts() {
               date: data.date,
               title: data.title,
               status: data.status,
+              track: data.track || null,
               sections: data.sections.map((s, idx) => sectionDataToApiBody(s, idx)),
             },
           });
@@ -733,6 +757,42 @@ export function Workouts() {
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
+          {availableTracks.length > 1 && (
+            <div className="relative">
+              <button
+                onClick={() => setTrackDropdownOpen(!trackDropdownOpen)}
+                className="flex items-center gap-2 px-3 py-2.5 border border-border bg-background hover:bg-accent rounded-xl font-medium transition-colors text-sm text-foreground"
+              >
+                <GitBranch className="h-4 w-4 text-muted-foreground" />
+                <span className="capitalize">{selectedTrack === "all" ? "All Tracks" : selectedTrack}</span>
+                <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+              </button>
+              {trackDropdownOpen && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setTrackDropdownOpen(false)} />
+                  <div className="absolute right-0 top-full mt-1 z-50 bg-popover border border-border rounded-xl shadow-lg py-1 min-w-[160px]">
+                    <button
+                      onClick={() => { setSelectedTrack("all"); setTrackDropdownOpen(false); }}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-accent text-left"
+                    >
+                      {selectedTrack === "all" && <Check className="h-3.5 w-3.5 text-primary" />}
+                      <span className={selectedTrack !== "all" ? "pl-5.5" : ""}>All Tracks</span>
+                    </button>
+                    {availableTracks.map((t) => (
+                      <button
+                        key={t}
+                        onClick={() => { setSelectedTrack(t); setTrackDropdownOpen(false); }}
+                        className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-accent text-left capitalize"
+                      >
+                        {selectedTrack === t && <Check className="h-3.5 w-3.5 text-primary" />}
+                        <span className={selectedTrack !== t ? "pl-5.5" : ""}>{t}</span>
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
           {isGenerating && (
             <div className="flex items-center gap-2 text-sm text-muted-foreground animate-pulse">
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -955,6 +1015,8 @@ export function Workouts() {
         isSaving={isSaving}
         initialDate={dateStr}
         initialData={editData}
+        availableTracks={availableTracks}
+        defaultTrack={selectedTrack !== "all" ? selectedTrack : "default"}
       />
 
       <AlertDialog

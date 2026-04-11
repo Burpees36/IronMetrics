@@ -34,6 +34,7 @@ import { MemberBalance } from "@/components/billing/MemberBalance";
 import { SubscriptionDiscount } from "@/components/billing/SubscriptionDiscount";
 import { statusColor, riskColor, subStatusColor, formatDate } from "./member-detail/helpers";
 import { MemberDialogs } from "./member-detail/MemberDialogs";
+import { MemberTrackAssignment } from "./member-detail/MemberTrackAssignment";
 
 export function MemberDetail() {
   const { activeGymId } = useGym();
@@ -789,6 +790,12 @@ export function MemberDetail() {
               </div>
             )}
           </motion.div>
+
+          <MemberTrackAssignment
+            member={member}
+            gymId={activeGymId as number}
+            onUpdate={invalidateAll}
+          />
         </div>
       )}
 

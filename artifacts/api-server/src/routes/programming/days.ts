@@ -17,7 +17,7 @@ router.get(
     }
 
     const role = req.programmingRole ?? "member";
-    const { startDate, endDate, status } = req.query;
+    const { startDate, endDate, status, track } = req.query;
 
     const conditions: any[] = [eq(programmingDaysTable.gymId, gymId)];
 
@@ -30,6 +30,10 @@ router.get(
       }
     } else {
       conditions.push(ne(programmingDaysTable.status, "archived"));
+    }
+
+    if (track && typeof track === "string") {
+      conditions.push(eq(programmingDaysTable.track, track));
     }
 
     if (startDate && typeof startDate === "string") {
@@ -324,6 +328,31 @@ router.post(
 
     const result = await getDayWithSections(newDay.id);
     res.status(201).json(result);
+  }
+);
+
+router.get(
+  "/gyms/:gymId/programming-tracks",
+  requireProgrammingRead(),
+  async (req, res): Promise<void> => {
+    const gymId = parseGymId(req.params);
+    if (!gymId) {
+      res.status(400).json({ error: "Invalid gym ID" });
+      return;
+    }
+
+    const days = await db
+      .select({ track: programmingDaysTable.track })
+      .from(programmingDaysTable)
+      .where(and(eq(programmingDaysTable.gymId, gymId), ne(programmingDaysTable.status, "archived")));
+
+    const trackSet = new Set<string>();
+    trackSet.add("default");
+    for (const d of days) {
+      if (d.track) trackSet.add(d.track);
+    }
+
+    res.json(Array.from(trackSet).sort());
   }
 );
 

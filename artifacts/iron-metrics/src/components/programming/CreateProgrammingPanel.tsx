@@ -29,6 +29,8 @@ interface CreateProgrammingPanelProps {
   isSaving: boolean;
   initialDate: string;
   initialData?: ProgrammingDayData | null;
+  availableTracks?: string[];
+  defaultTrack?: string;
 }
 
 export interface ProgrammingDayData {
@@ -36,6 +38,7 @@ export interface ProgrammingDayData {
   date: string;
   title: string;
   status: "draft" | "published";
+  track?: string;
   sections: SectionData[];
 }
 
@@ -46,29 +49,37 @@ export function CreateProgrammingPanel({
   isSaving,
   initialDate,
   initialData,
+  availableTracks = ["default"],
+  defaultTrack = "default",
 }: CreateProgrammingPanelProps) {
   const [date, setDate] = useState(initialData?.date || initialDate);
   const [title, setTitle] = useState(initialData?.title || "");
   const [status, setStatus] = useState<"draft" | "published">(
     initialData?.status || "draft"
   );
+  const [track, setTrack] = useState(initialData?.track || defaultTrack);
   const [sections, setSections] = useState<SectionData[]>(
     initialData?.sections || []
   );
   const [showTypePicker, setShowTypePicker] = useState(false);
   const [showDiscardDialog, setShowDiscardDialog] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [newTrackInput, setNewTrackInput] = useState("");
+  const [showNewTrackInput, setShowNewTrackInput] = useState(false);
 
   useEffect(() => {
     if (open) {
       setDate(initialData?.date || initialDate);
       setTitle(initialData?.title || "");
       setStatus(initialData?.status || "draft");
+      setTrack(initialData?.track || defaultTrack);
       setSections(initialData?.sections || []);
       setShowTypePicker(false);
+      setShowNewTrackInput(false);
+      setNewTrackInput("");
       setErrors({});
     }
-  }, [open, initialData, initialDate]);
+  }, [open, initialData, initialDate, defaultTrack]);
 
   const hasChanges = (() => {
     if (title !== (initialData?.title || "")) return true;
@@ -113,6 +124,7 @@ export function CreateProgrammingPanel({
       date,
       title: title.trim(),
       status: publishStatus,
+      track,
       sections,
     });
   };
@@ -239,6 +251,56 @@ export function CreateProgrammingPanel({
                   )}
                 </div>
               </div>
+
+              {availableTracks.length >= 1 && (
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-muted-foreground">Track</Label>
+                  <div className="flex items-center gap-2">
+                    <select
+                      value={showNewTrackInput ? "__new__" : track}
+                      onChange={(e) => {
+                        if (e.target.value === "__new__") {
+                          setShowNewTrackInput(true);
+                        } else {
+                          setShowNewTrackInput(false);
+                          setTrack(e.target.value);
+                        }
+                      }}
+                      className="flex h-9 w-full rounded-lg border border-input bg-muted/30 px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                    >
+                      {availableTracks.map((t) => (
+                        <option key={t} value={t} className="capitalize">
+                          {t}
+                        </option>
+                      ))}
+                      <option value="__new__">+ New track...</option>
+                    </select>
+                    {showNewTrackInput && (
+                      <Input
+                        autoFocus
+                        value={newTrackInput}
+                        onChange={(e) => setNewTrackInput(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "-"))}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" && newTrackInput.trim()) {
+                            setTrack(newTrackInput.trim());
+                            setShowNewTrackInput(false);
+                            setNewTrackInput("");
+                          }
+                        }}
+                        onBlur={() => {
+                          if (newTrackInput.trim()) {
+                            setTrack(newTrackInput.trim());
+                          }
+                          setShowNewTrackInput(false);
+                          setNewTrackInput("");
+                        }}
+                        placeholder="e.g. competition"
+                        className="bg-muted/30 max-w-[180px]"
+                      />
+                    )}
+                  </div>
+                </div>
+              )}
 
               {errors.sections && (
                 <p className="text-xs text-destructive flex items-center gap-1">

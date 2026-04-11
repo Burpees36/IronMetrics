@@ -2528,6 +2528,7 @@ export const ListProgrammingDaysQueryParams = zod.object({
   startDate: zod.date().optional(),
   endDate: zod.date().optional(),
   status: zod.enum(["draft", "published", "archived"]).optional(),
+  track: zod.coerce.string().optional(),
 });
 
 export const ListProgrammingDaysResponseItem = zod
@@ -2626,6 +2627,18 @@ export const CreateProgrammingDayBody = zod.object({
     )
     .optional(),
 });
+
+/**
+ * @summary List distinct programming tracks for a gym
+ */
+export const ListProgrammingTracksParams = zod.object({
+  gymId: zod.coerce.number(),
+});
+
+export const ListProgrammingTracksResponseItem = zod.string();
+export const ListProgrammingTracksResponse = zod.array(
+  ListProgrammingTracksResponseItem,
+);
 
 /**
  * @summary Get a programming day with all sections

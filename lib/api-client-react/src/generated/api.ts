@@ -9119,6 +9119,95 @@ export const useCreateProgrammingDay = <
 };
 
 /**
+ * @summary List distinct programming tracks for a gym
+ */
+export const getListProgrammingTracksUrl = (gymId: number) => {
+  return `/api/gyms/${gymId}/programming-tracks`;
+};
+
+export const listProgrammingTracks = async (
+  gymId: number,
+  options?: RequestInit,
+): Promise<string[]> => {
+  return customFetch<string[]>(getListProgrammingTracksUrl(gymId), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListProgrammingTracksQueryKey = (gymId: number) => {
+  return [`/api/gyms/${gymId}/programming-tracks`] as const;
+};
+
+export const getListProgrammingTracksQueryOptions = <
+  TData = Awaited<ReturnType<typeof listProgrammingTracks>>,
+  TError = ErrorType<unknown>,
+>(
+  gymId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listProgrammingTracks>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListProgrammingTracksQueryKey(gymId);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listProgrammingTracks>>
+  > = ({ signal }) =>
+    listProgrammingTracks(gymId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!gymId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof listProgrammingTracks>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListProgrammingTracksQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listProgrammingTracks>>
+>;
+export type ListProgrammingTracksQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List distinct programming tracks for a gym
+ */
+
+export function useListProgrammingTracks<
+  TData = Awaited<ReturnType<typeof listProgrammingTracks>>,
+  TError = ErrorType<unknown>,
+>(
+  gymId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listProgrammingTracks>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListProgrammingTracksQueryOptions(gymId, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
  * @summary Get a programming day with all sections
  */
 export const getGetProgrammingDayUrl = (gymId: number, dayId: number) => {

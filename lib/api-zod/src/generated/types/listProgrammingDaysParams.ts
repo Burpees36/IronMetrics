@@ -11,4 +11,5 @@ export type ListProgrammingDaysParams = {
   startDate?: Date;
   endDate?: Date;
   status?: ListProgrammingDaysStatus;
+  track?: string;
 };

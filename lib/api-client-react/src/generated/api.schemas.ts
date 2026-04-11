@@ -2725,6 +2725,7 @@ export type ListProgrammingDaysParams = {
   startDate?: string;
   endDate?: string;
   status?: ListProgrammingDaysStatus;
+  track?: string;
 };
 
 export type ListProgrammingDaysStatus =

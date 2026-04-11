@@ -50,6 +50,7 @@ router.get("/public/wod/:gymSlug/programming", async (req, res): Promise<void> =
     const conditions: any[] = [
       eq(programmingDaysTable.gymId, gym.id),
       eq(programmingDaysTable.status, "published"),
+      eq(programmingDaysTable.track, "default"),
     ];
 
     if (startDate && typeof startDate === "string") {
