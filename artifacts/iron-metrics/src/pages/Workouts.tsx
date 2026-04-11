@@ -257,6 +257,7 @@ export function Workouts() {
   const [isSaving, setIsSaving] = useState(false);
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const [shareDialogDay, setShareDialogDay] = useState<{ title?: string; date?: string; track?: string } | null>(null);
+  const [notifyVersion, setNotifyVersion] = useState(0);
   const [selectedTrack, setSelectedTrack] = useState("default");
   const [trackDropdownOpen, setTrackDropdownOpen] = useState(false);
 
@@ -885,6 +886,8 @@ export function Workouts() {
                   <DayCard
                     day={day}
                     isStaff={isStaff}
+                    gymId={activeGymId}
+                    notifyVersion={notifyVersion}
                     onEdit={() => {
                       setEditData(programmingDayToData(day));
                       setPanelOpen(true);
@@ -999,6 +1002,8 @@ export function Workouts() {
                 key={d}
                 day={day}
                 isStaff={isStaff}
+                gymId={activeGymId}
+                notifyVersion={notifyVersion}
                 animationDelay={i * 0.05}
                 onEdit={() => {
                   setEditData(programmingDayToData(day));
@@ -1094,6 +1099,8 @@ export function Workouts() {
           dayDate={shareDialogDay?.date}
           dayTrack={shareDialogDay?.track}
           trackMemberCount={shareDialogDay?.track ? getTrackMemberCount(shareDialogDay.track) : undefined}
+          onNotifySuccess={(count) => { setNotifyVersion((v) => v + 1); toast({ title: "Notifications sent", description: `${count} member${count !== 1 ? "s" : ""} notified.` }); }}
+          onNotifyError={(error) => toast({ title: "Notification failed", description: error, variant: "destructive" })}
         />
       )}
     </div>

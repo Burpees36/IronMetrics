@@ -144,7 +144,10 @@ router.post("/gyms/:gymId/notify-workout", requireProgrammingWrite(), async (req
     }
 
     const baseUrl = getPublicBaseUrl();
-    const publicUrl = `${baseUrl}/wod/${gym.slug}`;
+    const isNonDefaultTrack = track && track !== "default";
+    const publicUrl = isNonDefaultTrack
+      ? `${baseUrl}/workouts`
+      : `${baseUrl}/wod/${gym.slug}`;
 
     const workoutSummary = daySections
       .map(({ day, sections }) => {
@@ -167,7 +170,7 @@ router.post("/gyms/:gymId/notify-workout", requireProgrammingWrite(), async (req
 
     const textBody = `New programming has been published at ${gym.name}!\n\n${workoutSummary}\n\nView the full programming:\n${publicUrl}\n`;
 
-    const htmlBody = buildNotificationHtml(gym.name, daySections, publicUrl, gym.logoUrl);
+    const htmlBody = buildNotificationHtml(gym.name, daySections, publicUrl, gym.logoUrl, !!isNonDefaultTrack);
 
     let emailsSent = 0;
     const errors: string[] = [];
@@ -218,6 +221,7 @@ function buildNotificationHtml(
   daySections: Array<{ day: { title: string; date: string }; sections: Array<{ title: string; instructions: string | null; sectionType: string }> }>,
   publicUrl: string,
   logoUrl: string | null,
+  isTrackSpecific: boolean = false,
 ): string {
   const dayBlocks = daySections
     .map(({ day, sections }) => {
@@ -266,7 +270,7 @@ function buildNotificationHtml(
           ${dayBlocks}
           <div style="margin-top:24px;text-align:center;">
             <a href="${escapeHtml(publicUrl)}" style="display:inline-block;padding:12px 32px;background:#6366f1;color:white;text-decoration:none;border-radius:8px;font-weight:600;font-size:14px;">
-              View Full Programming
+              ${isTrackSpecific ? "View Your Programming" : "View Full Programming"}
             </a>
           </div>
         </div>

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { motion } from "framer-motion";
 import {
   Users,
@@ -13,12 +13,26 @@ import {
   Share2,
   Check,
   Send,
+  Clock,
 } from "lucide-react";
 import { getSectionTypeInfo, SectionData, type SectionType } from "./SectionEditor";
 import type { ProgrammingDayWithSections } from "@workspace/api-client-react";
 
 const LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 const PREVIEW_LINES = 3;
+const COOLDOWN_MS = 15 * 60 * 1000;
+
+function getNotifyCooldownRemaining(gymId: number | undefined, dayDate: string, track?: string | null): number {
+  if (!gymId) return 0;
+  const trackSuffix = track && track !== "default" ? `:${track}` : "";
+  const key = `im_notify_cooldown_${gymId}_${dayDate}${trackSuffix}`;
+  const stored = localStorage.getItem(key);
+  if (!stored) return 0;
+  const ts = parseInt(stored, 10);
+  if (isNaN(ts)) return 0;
+  const remaining = COOLDOWN_MS - (Date.now() - ts);
+  return remaining > 0 ? remaining : 0;
+}
 
 interface DayCardProps {
   day: ProgrammingDayWithSections;
@@ -31,6 +45,8 @@ interface DayCardProps {
   onCopyLink?: (message: string) => void;
   isStaff: boolean;
   animationDelay?: number;
+  gymId?: number;
+  notifyVersion?: number;
 }
 
 function sectionTypeToUiType(sectionType: string): SectionType {
@@ -58,6 +74,8 @@ export function DayCard({
   onCopyLink,
   isStaff,
   animationDelay = 0,
+  gymId,
+  notifyVersion,
 }: DayCardProps) {
   const formattedDate = new Date(day.date + "T00:00:00").toLocaleDateString("en-US", {
     weekday: "short",
@@ -68,6 +86,27 @@ export function DayCard({
   const [expanded, setExpanded] = useState(false);
   const [shareCopied, setShareCopied] = useState(false);
   const scoredSections = day.sections.filter((s) => s.resultTrackingEnabled).length;
+
+  const [cooldownRemaining, setCooldownRemaining] = useState(() =>
+    getNotifyCooldownRemaining(gymId, day.date, day.track)
+  );
+
+  useEffect(() => {
+    setCooldownRemaining(getNotifyCooldownRemaining(gymId, day.date, day.track));
+  }, [notifyVersion, gymId, day.date, day.track]);
+
+  useEffect(() => {
+    if (cooldownRemaining <= 0) return;
+    const interval = setInterval(() => {
+      const remaining = getNotifyCooldownRemaining(gymId, day.date, day.track);
+      setCooldownRemaining(remaining);
+      if (remaining <= 0) clearInterval(interval);
+    }, 10_000);
+    return () => clearInterval(interval);
+  }, [cooldownRemaining, gymId, day.date, day.track]);
+
+  const isNotifyCooldown = cooldownRemaining > 0;
+  const cooldownMinutes = Math.ceil(cooldownRemaining / 60_000);
 
   const hasOverflow = day.sections.some((s) => {
     if (!s.instructions) return false;
@@ -124,11 +163,23 @@ export function DayCard({
             <div className="flex items-center gap-1 shrink-0 ml-2">
               {day.status === "published" && onNotify && (
                 <button
-                  onClick={onNotify}
-                  className="h-8 w-8 flex items-center justify-center rounded-lg hover:bg-primary/10 transition-colors"
-                  title="Notify members"
+                  onClick={isNotifyCooldown ? undefined : onNotify}
+                  disabled={isNotifyCooldown}
+                  className={`h-8 flex items-center justify-center rounded-lg transition-colors ${
+                    isNotifyCooldown
+                      ? "opacity-50 cursor-not-allowed px-2 gap-1"
+                      : "w-8 hover:bg-primary/10"
+                  }`}
+                  title={isNotifyCooldown ? `Cooldown: ${cooldownMinutes}m remaining` : "Notify members"}
                 >
-                  <Send className="h-4 w-4 text-primary" />
+                  {isNotifyCooldown ? (
+                    <>
+                      <Clock className="h-3.5 w-3.5 text-muted-foreground" />
+                      <span className="text-xs text-muted-foreground">{cooldownMinutes}m</span>
+                    </>
+                  ) : (
+                    <Send className="h-4 w-4 text-primary" />
+                  )}
                 </button>
               )}
               {day.status === "published" && publicWodUrl && (

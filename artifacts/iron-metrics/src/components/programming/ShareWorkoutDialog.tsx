@@ -23,12 +23,13 @@ import {
 
 const COOLDOWN_MS = 15 * 60 * 1000;
 
-function getCooldownStorageKey(gymId: number, dayDate?: string): string {
-  return `im_notify_cooldown_${gymId}_${dayDate || "all"}`;
+function getCooldownStorageKey(gymId: number, dayDate?: string, track?: string): string {
+  const trackSuffix = track && track !== "default" ? `:${track}` : "";
+  return `im_notify_cooldown_${gymId}_${dayDate || "all"}${trackSuffix}`;
 }
 
-function getStoredCooldownRemaining(gymId: number, dayDate?: string): number {
-  const key = getCooldownStorageKey(gymId, dayDate);
+function getStoredCooldownRemaining(gymId: number, dayDate?: string, track?: string): number {
+  const key = getCooldownStorageKey(gymId, dayDate, track);
   const stored = localStorage.getItem(key);
   if (!stored) return 0;
   const ts = parseInt(stored, 10);
@@ -54,6 +55,8 @@ interface ShareWorkoutDialogProps {
   dayDate?: string;
   dayTrack?: string;
   trackMemberCount?: number;
+  onNotifySuccess?: (count: number) => void;
+  onNotifyError?: (error: string) => void;
 }
 
 export function ShareWorkoutDialog({
@@ -66,6 +69,8 @@ export function ShareWorkoutDialog({
   dayDate,
   dayTrack,
   trackMemberCount,
+  onNotifySuccess,
+  onNotifyError,
 }: ShareWorkoutDialogProps) {
   const [copied, setCopied] = useState(false);
   const [notifyState, setNotifyState] = useState<"idle" | "loading" | "success" | "cooldown" | "error">("idle");
@@ -74,20 +79,19 @@ export function ShareWorkoutDialog({
   const [cooldownMinutes, setCooldownMinutes] = useState(0);
   const webShareSupported = useWebShareSupported();
 
-  const cooldownDateKey = dayDate ? `${dayDate}${dayTrack && dayTrack !== "default" ? `:${dayTrack}` : ""}` : undefined;
   const notifyTargetCount = dayTrack && dayTrack !== "default" && trackMemberCount !== undefined
     ? trackMemberCount
     : activeMemberCount;
 
   useEffect(() => {
     if (!open) return;
-    const remaining = getStoredCooldownRemaining(gymId, cooldownDateKey);
+    const remaining = getStoredCooldownRemaining(gymId, dayDate, dayTrack);
     if (remaining > 0) {
       setCooldownMinutes(Math.ceil(remaining / 60000));
       setNotifyState("cooldown");
       setNotifyError(`Notification was sent recently. Please wait ${Math.ceil(remaining / 60000)} minute${Math.ceil(remaining / 60000) !== 1 ? "s" : ""} before sending again.`);
     }
-  }, [open, gymId, cooldownDateKey]);
+  }, [open, gymId, dayDate, dayTrack]);
 
   useEffect(() => {
     if (notifyState === "success") {
@@ -160,15 +164,17 @@ export function ShareWorkoutDialog({
       const data = await response.json() as { emailsSent: number };
       setNotifyCount(data.emailsSent);
       setNotifyState("success");
+      onNotifySuccess?.(data.emailsSent);
 
-      const key = getCooldownStorageKey(gymId, cooldownDateKey);
+      const key = getCooldownStorageKey(gymId, dayDate, dayTrack);
       localStorage.setItem(key, String(Date.now()));
     } catch (err: unknown) {
       const error = err as Error;
       setNotifyState("error");
       setNotifyError(error.message || "Failed to send notifications");
+      onNotifyError?.(error.message || "Failed to send notifications");
     }
-  }, [gymId, dayDate, dayTrack, cooldownDateKey]);
+  }, [gymId, dayDate, dayTrack, onNotifySuccess, onNotifyError]);
 
   const handleOpenChange = useCallback((open: boolean) => {
     if (!open) {
