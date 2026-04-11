@@ -58,7 +58,6 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { ShareWorkoutDialog } from "@/components/programming/ShareWorkoutDialog";
 import { useGymTier } from "@/hooks/useGymTier";
-import { UpgradePrompt } from "@/components/UpgradePrompt";
 
 function toDateString(d: Date): string {
   return d.toISOString().split("T")[0];
