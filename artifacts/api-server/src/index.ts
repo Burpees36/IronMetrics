@@ -12,6 +12,7 @@ import { startLeadSequenceScheduler } from "./schedulers/lead-sequence-scheduler
 import { startAppointmentReminders } from "./schedulers/appointment-reminders";
 import { startBriefingScheduler } from "./schedulers/briefing-scheduler";
 import { runOnboardingMigrationCleanup } from "./migrations/onboarding-cleanup";
+import { runStaleEnrollmentCleanup } from "./migrations/stale-enrollment-cleanup";
 
 const REQUIRED_ENV_VARS = [
   "PORT",
@@ -45,6 +46,7 @@ async function main() {
   }
 
   await runOnboardingMigrationCleanup();
+  await runStaleEnrollmentCleanup();
 
   app.listen(port, () => {
     console.log(`Server listening on port ${port}`);

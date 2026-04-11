@@ -3,6 +3,7 @@ import { getUncachableStripeClient } from "./stripeClient";
 import { db, membersTable, subscriptionsTable, membershipPlansTable, invoicesTable, paymentsTable, gymsTable, discountCodesTable } from "@workspace/db";
 import { eq, and, sql } from "drizzle-orm";
 import { billingAuditLogger, type AuditSource } from "./billingAuditLogger";
+import { exitMemberSequences } from "./schedulers/retention-engine";
 
 interface ActorInfo {
   userId?: string;
@@ -239,6 +240,12 @@ export class StripeService {
 
     if (!cancelAtPeriodEnd) {
       await db.update(membersTable).set({ status: "cancelled" }).where(eq(membersTable.id, sub.memberId));
+      try {
+        await exitMemberSequences(sub.memberId, gymId, "member_inactive");
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error(`[stripeService] Failed to exit sequences for cancelled member ${sub.memberId}:`, msg);
+      }
     }
 
     await billingAuditLogger.log({

@@ -5,6 +5,7 @@ import { billingAuditLogger } from "./billingAuditLogger";
 import { billingRecoveryService } from "./services/billing-recovery";
 import type Stripe from "stripe";
 import { getTierFromPriceId, type SubscriptionTier } from "./tierConfig";
+import { exitMemberSequences } from "./schedulers/retention-engine";
 
 async function claimEvent(stripeEventId: string, eventType: string): Promise<boolean> {
   try {
@@ -147,6 +148,13 @@ async function handleSubscriptionDeleted(sub: Stripe.Subscription): Promise<void
   }).where(eq(subscriptionsTable.id, existing.id));
 
   await db.update(membersTable).set({ status: "cancelled" }).where(eq(membersTable.id, existing.memberId));
+
+  try {
+    await exitMemberSequences(existing.memberId, existing.gymId, "member_inactive");
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`[webhook] Failed to exit sequences for cancelled member ${existing.memberId}:`, msg);
+  }
 
   await billingAuditLogger.log({
     gymId: existing.gymId,
@@ -443,6 +451,8 @@ async function handlePaymentMethodAttached(pm: Stripe.PaymentMethod): Promise<vo
     afterValue: { brand: pm.card?.brand, last4: pm.card?.last4 },
   });
 }
+
+export { handleSubscriptionDeleted as _handleSubscriptionDeleted };
 
 export class WebhookHandlers {
   static async processWebhook(payload: Buffer, signature: string): Promise<void> {

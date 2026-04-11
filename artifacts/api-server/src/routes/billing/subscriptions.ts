@@ -7,6 +7,7 @@ import { getStripeClient } from "../../stripeClient";
 import { requireBillingPermission, requireBillingRead } from "../../middlewares/billingRbac";
 import { billingAuditLogger } from "../../billingAuditLogger";
 import { parseGymId, paramStr, getActor } from "./helpers";
+import { exitMemberSequences } from "../../schedulers/retention-engine";
 
 const router: IRouter = Router();
 
@@ -110,8 +111,20 @@ router.patch("/gyms/:gymId/subscriptions/:subscriptionId", requireBillingPermiss
 
   if (parsed.data.status === "cancelled") {
     await db.update(membersTable).set({ status: "cancelled" }).where(eq(membersTable.id, sub.memberId));
+    try {
+      await exitMemberSequences(sub.memberId, gymId, "member_inactive");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`[subscriptions] Failed to exit sequences for cancelled member ${sub.memberId}:`, msg);
+    }
   } else if (parsed.data.status === "paused") {
     await db.update(membersTable).set({ status: "hold" }).where(eq(membersTable.id, sub.memberId));
+    try {
+      await exitMemberSequences(sub.memberId, gymId, "member_inactive");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`[subscriptions] Failed to exit sequences for paused member ${sub.memberId}:`, msg);
+    }
   } else if (parsed.data.status === "active") {
     await db.update(membersTable).set({ status: "active" }).where(eq(membersTable.id, sub.memberId));
   }
