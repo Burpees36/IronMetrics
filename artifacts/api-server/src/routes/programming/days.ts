@@ -45,7 +45,16 @@ router.get(
         conditions.push(inArray(programmingDaysTable.track, allowed));
       }
     } else if (track && typeof track === "string") {
-      conditions.push(eq(programmingDaysTable.track, track));
+      if (track === "default") {
+        conditions.push(
+          or(
+            eq(programmingDaysTable.track, "default"),
+            isNull(programmingDaysTable.track)
+          )!
+        );
+      } else {
+        conditions.push(eq(programmingDaysTable.track, track));
+      }
     }
 
     if (startDate && typeof startDate === "string") {
@@ -95,9 +104,18 @@ router.get(
       return;
     }
 
-    if (!isStaffRole(role) && dayWithSections.status !== "published") {
-      res.status(404).json({ error: "Programming day not found" });
-      return;
+    if (!isStaffRole(role)) {
+      if (dayWithSections.status !== "published") {
+        res.status(404).json({ error: "Programming day not found" });
+        return;
+      }
+      if (req.memberAllowedTracks) {
+        const dayTrack = dayWithSections.track || "default";
+        if (!req.memberAllowedTracks.includes(dayTrack)) {
+          res.status(404).json({ error: "Programming day not found" });
+          return;
+        }
+      }
     }
 
     res.json(stripCoachNotesFromDay(dayWithSections, role));

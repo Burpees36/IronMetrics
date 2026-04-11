@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useGym } from "@/store/GymContext";
-import { useListMembers, useUpdateMember, useAddMemberNote, getListMembersQueryKey, useListMembershipPlans } from "@workspace/api-client-react";
+import { useListMembers, useUpdateMember, useAddMemberNote, getListMembersQueryKey, useListMembershipPlans, useListProgrammingTracks } from "@workspace/api-client-react";
 import type { ApiError } from "@workspace/api-client-react/custom-fetch";
 import { useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
-import { Loader2, Search, Plus, Filter, MoreHorizontal, UserCircle, Upload, FileSpreadsheet, ShieldAlert, Users, X as XIcon, ChevronLeft, ChevronRight } from "lucide-react";
+import { Loader2, Search, Plus, Filter, MoreHorizontal, UserCircle, Upload, FileSpreadsheet, ShieldAlert, Users, X as XIcon, ChevronLeft, ChevronRight, GitBranch } from "lucide-react";
 import { ImportMembersDialog } from "@/components/members/ImportMembersDialog";
 import { SyncStatusBanner } from "@/components/members/SyncStatusBanner";
 import { AddMemberWizard } from "@/components/members/AddMemberWizard";
@@ -133,6 +133,12 @@ export function Members() {
 
   const [noteContent, setNoteContent] = useState("");
 
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [trackDialogOpen, setTrackDialogOpen] = useState(false);
+  const [trackAction, setTrackAction] = useState<"assign" | "remove">("assign");
+  const [selectedTrack, setSelectedTrack] = useState("");
+  const [bulkUpdating, setBulkUpdating] = useState(false);
+
   const [tempStatusFilter, setTempStatusFilter] = useState<string[]>([]);
   const [tempRiskFilter, setTempRiskFilter] = useState<string[]>([]);
   const [riskFilter, setRiskFilter] = useState<string[]>([]);
@@ -140,6 +146,10 @@ export function Members() {
   const [tempPlanFilter, setTempPlanFilter] = useState<string>(urlPlan || "");
 
   const { data: plans } = useListMembershipPlans(activeGymId as number, {
+    query: { enabled: !!activeGymId }
+  });
+
+  const { data: tracksData } = useListProgrammingTracks(activeGymId as number, {
     query: { enabled: !!activeGymId }
   });
 
@@ -164,7 +174,12 @@ export function Members() {
 
   useEffect(() => {
     setCurrentPage(1);
+    setSelectedIds(new Set());
   }, [search, statusFilter, planFilter]);
+
+  useEffect(() => {
+    setSelectedIds(new Set());
+  }, [currentPage]);
 
   const { data, isLoading } = useListMembers(activeGymId as number, filterParams as any, {
     query: { enabled: !!activeGymId, placeholderData: (prev: any) => prev } as any
@@ -302,6 +317,68 @@ export function Members() {
     setSelectedMember(member);
     setPendingStatus(newStatus);
     setStatusChangeOpen(true);
+  };
+
+  const toggleSelectMember = (id: number) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === displayMembers.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(displayMembers.map((m: MemberFromList) => m.id)));
+    }
+  };
+
+  const availableTracks = useMemo(() => {
+    const tracks = (tracksData as string[] | undefined) ?? [];
+    return tracks.filter(t => t !== "default");
+  }, [tracksData]);
+
+  const handleBulkTrackAssign = async () => {
+    if (!selectedTrack || selectedIds.size === 0) return;
+    setBulkUpdating(true);
+    const members = (data?.members ?? []) as MemberFromList[];
+    const targetMembers = members.filter(m => selectedIds.has(m.id));
+    const tagKey = `track:${selectedTrack}`;
+
+    let successCount = 0;
+    for (const member of targetMembers) {
+      const currentTags = member.tags ?? [];
+      let newTags: string[];
+      if (trackAction === "assign") {
+        if (currentTags.includes(tagKey)) { successCount++; continue; }
+        newTags = [...currentTags, tagKey];
+      } else {
+        if (!currentTags.includes(tagKey)) { successCount++; continue; }
+        newTags = currentTags.filter(t => t !== tagKey);
+      }
+      try {
+        await updateMemberMutation.mutateAsync({
+          gymId,
+          memberId: member.id,
+          data: { tags: newTags },
+        });
+        successCount++;
+      } catch {
+        // continue with remaining
+      }
+    }
+
+    queryClient.invalidateQueries({ queryKey: getListMembersQueryKey(gymId) });
+    toast({
+      title: trackAction === "assign" ? "Track assigned" : "Track removed",
+      description: `${successCount} member${successCount !== 1 ? "s" : ""} updated.`,
+    });
+    setBulkUpdating(false);
+    setTrackDialogOpen(false);
+    setSelectedIds(new Set());
+    setSelectedTrack("");
   };
 
   const openFilter = () => {
@@ -456,6 +533,38 @@ export function Members() {
 
       <SyncStatusBanner key={syncRefreshKey} onImport={() => setImportOpen(true)} memberCount={data?.total ?? 0} />
 
+      {selectedIds.size > 0 && (
+        <div className="flex items-center gap-3 px-4 py-3 bg-primary/5 border border-primary/20 rounded-xl">
+          <GitBranch className="h-5 w-5 text-primary shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-foreground">
+              {selectedIds.size} member{selectedIds.size !== 1 ? "s" : ""} selected
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => { setTrackAction("assign"); setSelectedTrack(""); setTrackDialogOpen(true); }}
+              className="px-3 py-1.5 text-xs font-medium bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
+            >
+              Assign Track
+            </button>
+            <button
+              onClick={() => { setTrackAction("remove"); setSelectedTrack(""); setTrackDialogOpen(true); }}
+              className="px-3 py-1.5 text-xs font-medium bg-card border border-border text-foreground rounded-lg hover:bg-muted transition-colors"
+            >
+              Remove Track
+            </button>
+            <button
+              onClick={() => setSelectedIds(new Set())}
+              className="p-1.5 hover:bg-primary/10 rounded-lg transition-colors"
+              aria-label="Clear selection"
+            >
+              <XIcon className="h-4 w-4 text-muted-foreground" />
+            </button>
+          </div>
+        </div>
+      )}
+
       {riskViewActive && (
         <div className="flex items-center gap-3 px-4 py-3 bg-destructive/5 border border-destructive/20 rounded-xl">
           <ShieldAlert className="h-5 w-5 text-destructive shrink-0" />
@@ -520,6 +629,13 @@ export function Members() {
                 className="p-4 active:bg-secondary transition-colors"
               >
                 <div className="flex items-center gap-3">
+                  <div className="shrink-0" onClick={e => e.stopPropagation()}>
+                    <Checkbox
+                      checked={selectedIds.has(member.id)}
+                      onCheckedChange={() => toggleSelectMember(member.id)}
+                      aria-label={`Select ${member.firstName} ${member.lastName}`}
+                    />
+                  </div>
                   <Link href={`/members/${member.id}`} className="h-10 w-10 bg-muted rounded-full overflow-hidden flex items-center justify-center shrink-0">
                     {member.profileImageUrl ? (
                       <img src={member.profileImageUrl} alt={member.firstName} className="w-full h-full object-cover" />
@@ -594,6 +710,13 @@ export function Members() {
             <table className="w-full text-sm text-left">
               <thead className="text-xs text-muted-foreground uppercase bg-muted/30 border-b border-border sticky top-0 z-10 backdrop-blur-md">
                 <tr>
+                  <th className="pl-4 pr-2 py-4 w-10">
+                    <Checkbox
+                      checked={displayMembers.length > 0 && selectedIds.size === displayMembers.length}
+                      onCheckedChange={toggleSelectAll}
+                      aria-label="Select all members"
+                    />
+                  </th>
                   <th className="px-6 py-4 font-semibold">Member</th>
                   <th className="px-6 py-4 font-semibold">Status</th>
                   {idsFilter ? (
@@ -627,6 +750,13 @@ export function Members() {
                     className="hover:bg-secondary transition-colors group cursor-pointer"
                     onClick={() => navigate(`/members/${member.id}`)}
                   >
+                    <td className="pl-4 pr-2 py-4 w-10" onClick={e => e.stopPropagation()}>
+                      <Checkbox
+                        checked={selectedIds.has(member.id)}
+                        onCheckedChange={() => toggleSelectMember(member.id)}
+                        aria-label={`Select ${member.firstName} ${member.lastName}`}
+                      />
+                    </td>
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
                         <div className="h-10 w-10 bg-muted rounded-full overflow-hidden flex items-center justify-center">
@@ -983,6 +1113,49 @@ export function Members() {
           </div>
         </SheetContent>
       </Sheet>
+
+      <Dialog open={trackDialogOpen} onOpenChange={setTrackDialogOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>{trackAction === "assign" ? "Assign Track" : "Remove Track"}</DialogTitle>
+            <DialogDescription>
+              {trackAction === "assign"
+                ? `Assign a programming track to ${selectedIds.size} selected member${selectedIds.size !== 1 ? "s" : ""}.`
+                : `Remove a programming track from ${selectedIds.size} selected member${selectedIds.size !== 1 ? "s" : ""}.`}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <Label className="text-sm text-foreground mb-2 block">Track</Label>
+            {availableTracks.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No tracks available. Create tracks in the Workouts section first.</p>
+            ) : (
+              <Select value={selectedTrack} onValueChange={setSelectedTrack}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a track" />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableTracks.map(track => (
+                    <SelectItem key={track} value={track}>
+                      {track.charAt(0).toUpperCase() + track.slice(1)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          </div>
+          <DialogFooter>
+            <button onClick={() => setTrackDialogOpen(false)} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors">Cancel</button>
+            <button
+              onClick={handleBulkTrackAssign}
+              disabled={!selectedTrack || bulkUpdating}
+              className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            >
+              {bulkUpdating && <Loader2 className="h-4 w-4 animate-spin" />}
+              {trackAction === "assign" ? "Assign" : "Remove"}
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <ImportMembersDialog
         open={importOpen}
