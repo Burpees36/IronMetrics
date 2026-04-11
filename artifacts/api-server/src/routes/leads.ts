@@ -4,6 +4,7 @@ import { db, leadsTable, leadActivitiesTable, membersTable, timelineEventsTable,
 import { CreateLeadBody, UpdateLeadBody } from "@workspace/api-zod";
 import { enrollLeadInSequence, pauseLeadSequences } from "../services/lead-sequence-engine";
 import { sendLeadSms } from "../services/member-sms";
+import { evaluateTriggersForGym } from "../schedulers/retention-engine";
 
 const router: IRouter = Router();
 
@@ -292,6 +293,18 @@ router.post("/gyms/:gymId/leads/:leadId/convert", async (req, res): Promise<void
   });
 
   await logActivity(leadId, gymId, "converted", `Converted to member${conversionNote ? ": " + conversionNote : ""}`);
+
+  try {
+    await pauseLeadSequences(leadId, gymId, "lead_converted");
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`[leads] Failed to pause sequences for converted lead ${leadId}:`, msg);
+  }
+
+  evaluateTriggersForGym(gymId).catch((err: unknown) => {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`[leads] Failed to evaluate onboarding triggers after conversion for gym ${gymId}:`, msg);
+  });
 
   res.json({ ...member, riskScore: null });
 });

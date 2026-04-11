@@ -6,6 +6,7 @@ import { getStripeClient } from "../../stripeClient";
 import { sendMemberSms } from "../../services/member-sms";
 import { CreateMemberBody, UpdateMemberBody } from "@workspace/api-zod";
 import { parseGymId, parseMemberId, EMAIL_REGEX } from "./helpers";
+import { exitMemberSequences } from "../../schedulers/retention-engine";
 
 const router: IRouter = Router();
 
@@ -391,6 +392,21 @@ router.patch("/gyms/:gymId/members/:memberId", async (req, res): Promise<void> =
         eq(subscriptionsTable.gymId, gymId),
         inArray(subscriptionsTable.status, ["active", "past_due", "cancel_at_period_end"]),
       ));
+    try {
+      await exitMemberSequences(memberId, gymId, "member_inactive");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`[members] Failed to exit sequences for cancelled member ${memberId}:`, msg);
+    }
+  }
+
+  if (data.status === "hold") {
+    try {
+      await exitMemberSequences(memberId, gymId, "member_inactive");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`[members] Failed to exit sequences for held member ${memberId}:`, msg);
+    }
   }
 
   res.json({

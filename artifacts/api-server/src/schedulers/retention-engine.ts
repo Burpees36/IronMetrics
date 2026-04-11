@@ -402,4 +402,24 @@ export function stopRetentionEngineScheduler(): void {
   }
 }
 
-export { runRetentionForAllGyms, evaluateTriggersForGym, evaluateTrigger, renderTemplate, RETENTION_INTERVAL_MS };
+async function exitMemberSequences(memberId: number, gymId: number, reason: string): Promise<number> {
+  const activeEnrollments = await db.select()
+    .from(memberSequenceEnrollmentsTable)
+    .where(and(
+      eq(memberSequenceEnrollmentsTable.memberId, memberId),
+      eq(memberSequenceEnrollmentsTable.gymId, gymId),
+      eq(memberSequenceEnrollmentsTable.status, "active")
+    ));
+
+  for (const enrollment of activeEnrollments) {
+    await exitEnrollment(enrollment.id, gymId, memberId, enrollment.sequenceId, enrollment.currentStepIndex, reason);
+  }
+
+  if (activeEnrollments.length > 0) {
+    console.log(`[retention-engine] Exited ${activeEnrollments.length} enrollment(s) for member ${memberId} (reason: ${reason})`);
+  }
+
+  return activeEnrollments.length;
+}
+
+export { runRetentionForAllGyms, evaluateTriggersForGym, evaluateTrigger, renderTemplate, exitMemberSequences, RETENTION_INTERVAL_MS };
