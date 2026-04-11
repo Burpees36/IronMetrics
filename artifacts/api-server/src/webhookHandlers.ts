@@ -79,7 +79,13 @@ async function handleSubscriptionUpdated(sub: Stripe.Subscription): Promise<void
   const beforeStatus = existing.status;
   let newStatus = existing.status;
 
-  if (sub.status === "active" && !(sub as any).cancel_at_period_end) {
+  if (existing.status === "pending" && (sub.status === "active" || sub.status === "trialing")) {
+    newStatus = "active";
+  } else if (existing.status === "pending" && (sub.status === "canceled" || sub.status === "incomplete_expired")) {
+    newStatus = "cancelled";
+  } else if (sub.status === "incomplete_expired") {
+    newStatus = "cancelled";
+  } else if (sub.status === "active" && !(sub as any).cancel_at_period_end) {
     newStatus = "active";
   } else if (sub.status === "active" && (sub as any).cancel_at_period_end) {
     newStatus = "cancel_at_period_end";
@@ -110,8 +116,11 @@ async function handleSubscriptionUpdated(sub: Stripe.Subscription): Promise<void
   await db.update(subscriptionsTable).set(updates).where(eq(subscriptionsTable.id, existing.id));
 
   if (newStatus === "cancelled" || newStatus === "past_due") {
-    const memberStatus = newStatus === "cancelled" ? "cancelled" : "active";
-    await db.update(membersTable).set({ status: memberStatus }).where(eq(membersTable.id, existing.memberId));
+    if (newStatus === "cancelled") {
+      await db.update(membersTable).set({ status: "cancelled", riskScore: null, riskTier: null }).where(eq(membersTable.id, existing.memberId));
+    } else {
+      await db.update(membersTable).set({ status: "active" }).where(eq(membersTable.id, existing.memberId));
+    }
   } else if (newStatus === "active" && beforeStatus !== "active") {
     await db.update(membersTable).set({ status: "active" }).where(eq(membersTable.id, existing.memberId));
   }
@@ -147,7 +156,16 @@ async function handleSubscriptionDeleted(sub: Stripe.Subscription): Promise<void
     cancelledAt: existing.cancelledAt || new Date(),
   }).where(eq(subscriptionsTable.id, existing.id));
 
-  await db.update(membersTable).set({ status: "cancelled" }).where(eq(membersTable.id, existing.memberId));
+  await db.update(subscriptionsTable).set({
+    status: "cancelled",
+    cancelledAt: new Date(),
+  }).where(and(
+    eq(subscriptionsTable.memberId, existing.memberId),
+    eq(subscriptionsTable.gymId, existing.gymId),
+    eq(subscriptionsTable.status, "pending"),
+  ));
+
+  await db.update(membersTable).set({ status: "cancelled", riskScore: null, riskTier: null }).where(eq(membersTable.id, existing.memberId));
 
   try {
     await exitMemberSequences(existing.memberId, existing.gymId, "member_inactive");

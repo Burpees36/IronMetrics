@@ -372,31 +372,35 @@ router.patch("/gyms/:gymId/members/:memberId", async (req, res): Promise<void> =
     data.email = data.email.trim().toLowerCase();
   }
 
+  const updateData = (data.status === "cancelled" || data.status === "inactive")
+    ? { ...data, riskScore: null, riskTier: null }
+    : data;
+
   const [member] = await db
     .update(membersTable)
-    .set(data)
+    .set(updateData)
     .where(and(eq(membersTable.id, memberId), eq(membersTable.gymId, gymId)))
     .returning();
 
   if (!member) { res.status(404).json({ error: "Member not found" }); return; }
 
-  if (data.status === "cancelled") {
+  if (data.status === "cancelled" || data.status === "inactive") {
     await db.update(subscriptionsTable)
       .set({
         status: "cancelled",
         cancelledAt: new Date(),
-        cancelReason: "Member cancelled by staff",
+        cancelReason: data.status === "cancelled" ? "Member cancelled by staff" : "Member set to inactive by staff",
       })
       .where(and(
         eq(subscriptionsTable.memberId, memberId),
         eq(subscriptionsTable.gymId, gymId),
-        inArray(subscriptionsTable.status, ["active", "past_due", "cancel_at_period_end"]),
+        inArray(subscriptionsTable.status, ["active", "past_due", "cancel_at_period_end", "pending"]),
       ));
     try {
       await exitMemberSequences(memberId, gymId, "member_inactive");
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
-      console.error(`[members] Failed to exit sequences for cancelled member ${memberId}:`, msg);
+      console.error(`[members] Failed to exit sequences for ${data.status} member ${memberId}:`, msg);
     }
   }
 

@@ -3,6 +3,7 @@ import { eq, and, gte, lte, desc, sql, lt } from "drizzle-orm";
 import { db, classesTable, attendanceTable, gymStaffTable, scheduledHoldsTable, gymsTable, membersTable } from "@workspace/db";
 import { CreateClassBody, UpdateClassBody } from "@workspace/api-zod";
 import { requireScheduleManage, requireScheduleOperate, canManageSchedule, type ScheduleRole } from "../middlewares/scheduleRbac";
+import { calculateRiskScore, getRiskTier } from "./intelligence/computations";
 
 async function checkMemberBillingStatus(memberId: number, gymId: number): Promise<{ allowed: boolean; reason?: string }> {
   const activeHolds = await db.select().from(scheduledHoldsTable)
@@ -306,7 +307,10 @@ router.post("/gyms/:gymId/classes/:classId/checkin", requireScheduleOperate(), a
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
     const [countResult] = await db.select({ count: sql<number>`count(*)` }).from(attendanceTable)
       .where(and(eq(attendanceTable.memberId, memberId), gte(attendanceTable.checkinTime, thirtyDaysAgo)));
-    await db.update(membersTable).set({ lastVisitDate: new Date(), attendanceCount30d: Number(countResult.count) }).where(eq(membersTable.id, memberId));
+    const newAttendanceCount = Number(countResult.count);
+    const freshRiskScore = calculateRiskScore(0, newAttendanceCount);
+    const freshRiskTier = getRiskTier(freshRiskScore);
+    await db.update(membersTable).set({ lastVisitDate: new Date(), attendanceCount30d: newAttendanceCount, riskScore: String(Math.round(freshRiskScore)), riskTier: freshRiskTier }).where(eq(membersTable.id, memberId));
     res.json(updated);
     return;
   }
@@ -352,7 +356,10 @@ router.post("/gyms/:gymId/classes/:classId/checkin", requireScheduleOperate(), a
   const thirtyDaysAgo2 = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
   const [countResult2] = await db.select({ count: sql<number>`count(*)` }).from(attendanceTable)
     .where(and(eq(attendanceTable.memberId, memberId), gte(attendanceTable.checkinTime, thirtyDaysAgo2)));
-  await db.update(membersTable).set({ lastVisitDate: new Date(), attendanceCount30d: Number(countResult2.count) }).where(eq(membersTable.id, memberId));
+  const newAttendanceCount2 = Number(countResult2.count);
+  const freshRiskScore2 = calculateRiskScore(0, newAttendanceCount2);
+  const freshRiskTier2 = getRiskTier(freshRiskScore2);
+  await db.update(membersTable).set({ lastVisitDate: new Date(), attendanceCount30d: newAttendanceCount2, riskScore: String(Math.round(freshRiskScore2)), riskTier: freshRiskTier2 }).where(eq(membersTable.id, memberId));
   res.status(201).json(attendance);
 });
 
@@ -511,7 +518,13 @@ router.patch("/gyms/:gymId/classes/:classId/attendance/:attendanceId", requireSc
   }
 
   if (newStatus === "checked_in") {
-    await db.update(membersTable).set({ lastVisitDate: new Date() }).where(eq(membersTable.id, existing.memberId));
+    const thirtyDaysAgoStatus = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const [countResultStatus] = await db.select({ count: sql<number>`count(*)` }).from(attendanceTable)
+      .where(and(eq(attendanceTable.memberId, existing.memberId), gte(attendanceTable.checkinTime, thirtyDaysAgoStatus)));
+    const newCount = Number(countResultStatus.count);
+    const riskScore = calculateRiskScore(0, newCount);
+    const riskTier = getRiskTier(riskScore);
+    await db.update(membersTable).set({ lastVisitDate: new Date(), attendanceCount30d: newCount, riskScore: String(Math.round(riskScore)), riskTier }).where(eq(membersTable.id, existing.memberId));
   }
 
   res.json(updated);

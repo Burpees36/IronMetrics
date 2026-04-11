@@ -652,7 +652,7 @@ export function Members() {
                     </div>
                     <div className="flex items-center justify-between mt-1">
                       <span className="text-xs text-muted-foreground truncate">{member.email}</span>
-                      {member.riskTier ? (
+                      {member.riskTier && member.status === "active" ? (
                         <span className={`flex items-center gap-1 text-[10px] font-semibold shrink-0 ${riskColor(member.riskTier)}`}>
                           <div className="h-1.5 w-1.5 rounded-full bg-current" />
                           {member.riskTier.toUpperCase()}
@@ -802,7 +802,7 @@ export function Members() {
                     ) : riskViewActive ? (
                       <>
                         <td className="px-6 py-4">
-                          {member.riskTier ? (
+                          {member.riskTier && member.status === "active" ? (
                             <div className="flex items-center gap-2">
                               <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold uppercase ${
                                 member.riskTier === "critical" ? "bg-destructive/10 text-destructive" :
@@ -841,7 +841,7 @@ export function Members() {
                           {member.membershipType || "None"}
                         </td>
                         <td className="px-6 py-4">
-                          {member.riskTier ? (
+                          {member.riskTier && member.status === "active" ? (
                             <span className={`flex items-center gap-1.5 text-xs font-semibold ${riskColor(member.riskTier)}`}>
                               <div className="h-2 w-2 rounded-full bg-current" />
                               {member.riskTier.toUpperCase()}
