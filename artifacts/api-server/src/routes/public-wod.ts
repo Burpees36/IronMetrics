@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, and, gte, lte, asc, desc } from "drizzle-orm";
+import { eq, and, gte, lte, asc, desc, or, isNull } from "drizzle-orm";
 import { db, gymsTable, programmingDaysTable, programmingSectionsTable } from "@workspace/db";
 
 const router: IRouter = Router();
@@ -50,7 +50,7 @@ router.get("/public/wod/:gymSlug/programming", async (req, res): Promise<void> =
     const conditions: any[] = [
       eq(programmingDaysTable.gymId, gym.id),
       eq(programmingDaysTable.status, "published"),
-      eq(programmingDaysTable.track, "default"),
+      or(eq(programmingDaysTable.track, "default"), isNull(programmingDaysTable.track)),
     ];
 
     if (startDate && typeof startDate === "string") {

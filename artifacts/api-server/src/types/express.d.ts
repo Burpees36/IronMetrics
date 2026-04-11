@@ -5,5 +5,6 @@ declare namespace Express {
     billingRole?: string;
     billingPermissions?: string[];
     programmingRole?: import("../middlewares/programmingRbac").ProgrammingRole;
+    memberAllowedTracks?: string[];
   }
 }

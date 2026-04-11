@@ -297,7 +297,7 @@ export function Workouts() {
   const startDate = isStaff ? staffStartDate : memberRangeStart;
   const endDate = isStaff ? staffEndDate : memberRangeEnd;
 
-  const trackParam = selectedTrack !== "all" ? selectedTrack : undefined;
+  const trackParam = isStaff && selectedTrack !== "all" ? selectedTrack : undefined;
   const { data: programmingDays, isLoading: programmingLoading } = useListProgrammingDays(
     activeGymId as number,
     { startDate, endDate, track: trackParam },

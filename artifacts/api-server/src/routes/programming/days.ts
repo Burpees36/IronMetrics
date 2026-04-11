@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, and, gte, lte, desc, asc, ne } from "drizzle-orm";
+import { eq, and, gte, lte, desc, asc, ne, inArray, or, isNull } from "drizzle-orm";
 import { db, programmingDaysTable, programmingSectionsTable } from "@workspace/db";
 import { requireProgrammingRead, requireProgrammingWrite, isStaffRole, stripCoachNotesFromDay } from "../../middlewares/programmingRbac";
 import { parseGymId, parseDayId, getDayWithSections } from "./helpers";
@@ -32,7 +32,19 @@ router.get(
       conditions.push(ne(programmingDaysTable.status, "archived"));
     }
 
-    if (track && typeof track === "string") {
+    if (!isStaffRole(role) && req.memberAllowedTracks) {
+      const allowed = req.memberAllowedTracks;
+      if (allowed.includes("default")) {
+        conditions.push(
+          or(
+            inArray(programmingDaysTable.track, allowed),
+            isNull(programmingDaysTable.track)
+          )!
+        );
+      } else {
+        conditions.push(inArray(programmingDaysTable.track, allowed));
+      }
+    } else if (track && typeof track === "string") {
       conditions.push(eq(programmingDaysTable.track, track));
     }
 
