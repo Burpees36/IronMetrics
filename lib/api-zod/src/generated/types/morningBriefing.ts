@@ -5,6 +5,7 @@
  * ForgeOS Gym Management Platform API
  * OpenAPI spec version: 0.1.0
  */
+import type { GrowthNudge } from "./growthNudge";
 import type { MorningBriefingItem } from "./morningBriefingItem";
 import type { MorningBriefingSnapshot } from "./morningBriefingSnapshot";
 
@@ -13,4 +14,5 @@ export interface MorningBriefing {
   summary: string;
   items: MorningBriefingItem[];
   snapshot: MorningBriefingSnapshot;
+  growthNudges?: GrowthNudge[];
 }

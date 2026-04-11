@@ -13,6 +13,7 @@ import {
   generateConversationalBriefingItem,
   generateConversationalSummary,
 } from "./insights-copy-engine";
+import { generateGrowthNudges } from "./growth-nudge-engine";
 
 const router: IRouter = Router();
 
@@ -592,6 +593,30 @@ router.get("/gyms/:gymId/intelligence/morning-briefing", async (req, res): Promi
       });
     }
 
+    let growthNudges: { id: string; icon: string; title: string; message: string; actionLabel: string; actionLink: string; source?: string }[] = [];
+    if (items.length === 0) {
+      try {
+        const churnRate = metrics.churnRate ?? 0;
+        const retentionRate = 100 - churnRate;
+        growthNudges = await generateGrowthNudges({
+          activeMembers: metrics.active,
+          mrr: Math.round(metrics.totalRev),
+          engagementRate,
+          classFillRate,
+          retentionRate,
+          atRiskCount,
+          activeLeads: activeLeads.length,
+          staleLeads: staleLeads.length,
+          arm: avgRevPerMember,
+          rsiScore: rsi.score,
+          rsiBand: rsi.band,
+          churnRate,
+        }, gymId);
+      } catch (err: any) {
+        console.error("[intelligence/morning-briefing] Growth nudge generation error:", err.message);
+      }
+    }
+
     res.json({
       date: todayStr,
       summary,
@@ -617,6 +642,7 @@ router.get("/gyms/:gymId/intelligence/morning-briefing", async (req, res): Promi
         classFillRate,
       },
       celebrations,
+      ...(growthNudges.length > 0 ? { growthNudges } : {}),
     });
   } catch (err) {
     console.error("[intelligence/morning-briefing] Failed to generate briefing:", err);

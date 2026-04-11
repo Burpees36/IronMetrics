@@ -1554,11 +1554,23 @@ export interface MorningBriefingSnapshot {
   classFillRate?: number;
 }
 
+export interface GrowthNudge {
+  id: string;
+  icon: string;
+  title: string;
+  message: string;
+  actionLabel: string;
+  actionLink: string;
+  /** @nullable */
+  source?: string | null;
+}
+
 export interface MorningBriefing {
   date: string;
   summary: string;
   items: MorningBriefingItem[];
   snapshot: MorningBriefingSnapshot;
+  growthNudges?: GrowthNudge[];
 }
 
 export interface LeadCaptureBody {

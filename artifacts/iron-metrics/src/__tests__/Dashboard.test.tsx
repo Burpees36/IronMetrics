@@ -352,4 +352,86 @@ describe("Dashboard", () => {
     renderWithProviders(<Dashboard />);
     expect(screen.queryByTestId("header-quick-actions")).not.toBeInTheDocument();
   });
+
+  it("renders growth nudges when no action items", () => {
+    mockUseGym.mockReturnValue({ activeGymId: 1 });
+    mockUseGetDashboardStats.mockReturnValue({ data: MOCK_STATS, isLoading: false });
+    mockUseGetMorningBriefing.mockReturnValue({
+      data: {
+        date: "2026-04-02",
+        summary: "Nothing urgent. $12,750 MRR, 85 active members.",
+        items: [],
+        snapshot: { activeMembers: 85, mrr: 12750 },
+        growthNudges: [
+          {
+            id: "bring_a_friend",
+            icon: "community",
+            title: "Run a Bring-a-Friend day",
+            message: "Classes are at 55% capacity. Empty spots are wasted overhead.",
+            actionLabel: "View schedule",
+            actionLink: "/schedule",
+            source: "Two Brain Business",
+          },
+          {
+            id: "referral_sprint",
+            icon: "growth",
+            title: "Launch a referral sprint",
+            message: "Your members are showing up — now ask them to bring people.",
+            actionLabel: "View leads",
+            actionLink: "/leads",
+          },
+        ],
+      },
+      isLoading: false,
+    });
+    render(<Dashboard />);
+    expect(screen.getByText("Growth Playbook")).toBeInTheDocument();
+    expect(screen.getByText("Run a Bring-a-Friend day")).toBeInTheDocument();
+    expect(screen.getByText("Launch a referral sprint")).toBeInTheDocument();
+    expect(screen.getByText(/Two Brain Business/)).toBeInTheDocument();
+  });
+
+  it("does not show static empty state when nudges are present", () => {
+    mockUseGym.mockReturnValue({ activeGymId: 1 });
+    mockUseGetDashboardStats.mockReturnValue({ data: MOCK_STATS, isLoading: false });
+    mockUseGetMorningBriefing.mockReturnValue({
+      data: {
+        date: "2026-04-02",
+        summary: "Nothing urgent.",
+        items: [],
+        snapshot: { activeMembers: 85, mrr: 12750 },
+        growthNudges: [
+          {
+            id: "fallback_member_check",
+            icon: "community",
+            title: "Check in with 3 members today",
+            message: "Use this window to strengthen relationships.",
+            actionLabel: "View members",
+            actionLink: "/members",
+          },
+        ],
+      },
+      isLoading: false,
+    });
+    render(<Dashboard />);
+    expect(screen.getByText("Growth Playbook")).toBeInTheDocument();
+    expect(screen.getByText("Check in with 3 members today")).toBeInTheDocument();
+    expect(screen.queryByText("Nothing flagged")).not.toBeInTheDocument();
+  });
+
+  it("shows fallback 'Nothing flagged' only when no items and no nudges", () => {
+    mockUseGym.mockReturnValue({ activeGymId: 1 });
+    mockUseGetDashboardStats.mockReturnValue({ data: MOCK_STATS, isLoading: false });
+    mockUseGetMorningBriefing.mockReturnValue({
+      data: {
+        date: "2026-04-02",
+        summary: "Nothing urgent.",
+        items: [],
+        snapshot: { activeMembers: 85, mrr: 12750 },
+      },
+      isLoading: false,
+    });
+    render(<Dashboard />);
+    expect(screen.getByText("Nothing flagged")).toBeInTheDocument();
+  });
 });

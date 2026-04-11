@@ -85,3 +85,12 @@ export const dismissedInterventionsTable = pgTable("dismissed_interventions", {
 ]);
 
 export type DismissedIntervention = typeof dismissedInterventionsTable.$inferSelect;
+
+export const nudgeHistoryTable = pgTable("nudge_history", {
+  id: serial("id").primaryKey(),
+  gymId: integer("gym_id").notNull().references(() => gymsTable.id),
+  nudgeId: text("nudge_id").notNull(),
+  shownAt: timestamp("shown_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export type NudgeHistory = typeof nudgeHistoryTable.$inferSelect;

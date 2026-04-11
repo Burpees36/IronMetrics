@@ -3481,6 +3481,19 @@ export const GetMorningBriefingResponse = zod.object({
     todayClasses: zod.number().optional(),
     classFillRate: zod.number().optional(),
   }),
+  growthNudges: zod
+    .array(
+      zod.object({
+        id: zod.string(),
+        icon: zod.string(),
+        title: zod.string(),
+        message: zod.string(),
+        actionLabel: zod.string(),
+        actionLink: zod.string(),
+        source: zod.string().nullish(),
+      }),
+    )
+    .optional(),
 });
 
 /**

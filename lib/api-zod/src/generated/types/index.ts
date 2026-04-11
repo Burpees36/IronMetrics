@@ -138,6 +138,7 @@ export * from "./getRsiHistoryParams";
 export * from "./getRsiHistoryWindow";
 export * from "./getStripePublishableKey200";
 export * from "./graceEvaluationResponse";
+export * from "./growthNudge";
 export * from "./gym";
 export * from "./gymClass";
 export * from "./gymClassDetail";

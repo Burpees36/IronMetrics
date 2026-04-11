@@ -120,6 +120,12 @@ const iconMap: Record<string, React.ElementType> = {
   retention: ShieldCheck,
   clock: Clock,
   usercheck: UserCheck,
+  community: Users,
+  marketing: MessageSquare,
+  growth: Rocket,
+  revenue: TrendingUp,
+  coaching: BrainCircuit,
+  schedule: Clock,
 };
 
 function getGreeting(): string {
@@ -444,6 +450,7 @@ export function Dashboard() {
   const snapshot = briefing?.snapshot;
   const briefingItems = briefing?.items || [];
   const briefingSummary = briefing?.summary || null;
+  const growthNudges = briefing?.growthNudges || [];
   const actionItems = buildActionItems(briefingItems, snapshot || {});
 
   const criticalItems = actionItems.filter(i => i.category === "critical");
@@ -627,7 +634,56 @@ export function Dashboard() {
             </section>
           )}
 
-          {actionItems.length === 0 && (
+          {actionItems.length === 0 && growthNudges.length > 0 && (
+            <section>
+              <div className="flex items-center gap-3 mb-4">
+                <div className="flex items-center justify-center w-6 h-6 rounded bg-primary/10 text-primary">
+                  <Rocket className="w-4 h-4" />
+                </div>
+                <h2 className="text-lg font-semibold text-foreground">Growth Playbook</h2>
+                <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 text-[11px] font-medium">
+                  No fires — time to build
+                </Badge>
+              </div>
+              <div className="space-y-3">
+                {growthNudges.map((nudge) => {
+                  const NudgeIcon = iconMap[nudge.icon] || Rocket;
+                  return (
+                    <Card key={nudge.id} className="shadow-sm overflow-hidden">
+                      <CardContent className="p-4">
+                        <div className="flex items-start gap-3">
+                          <div className="flex-shrink-0 w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center mt-0.5">
+                            <NudgeIcon className="w-4 h-4 text-primary" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1">
+                              <h3 className="text-sm font-semibold text-foreground">{nudge.title}</h3>
+                            </div>
+                            <p className="text-sm text-muted-foreground leading-relaxed mb-3">{nudge.message}</p>
+                            <div className="flex items-center justify-between">
+                              <Link href={nudge.actionLink}>
+                                <Button size="sm" variant="outline" className="h-7 text-xs border-primary/30 text-primary hover:bg-primary/10">
+                                  {nudge.actionLabel}
+                                  <ArrowRight className="w-3 h-3 ml-1.5" />
+                                </Button>
+                              </Link>
+                              {nudge.source && (
+                                <span className="text-[10px] text-muted-foreground/60 italic truncate max-w-[180px]">
+                                  via {nudge.source}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
+            </section>
+          )}
+
+          {actionItems.length === 0 && growthNudges.length === 0 && (
             <div className="text-center py-12 text-muted-foreground">
               <CheckCircle2 className="w-10 h-10 mx-auto mb-3 text-emerald-500" />
               <p className="text-lg font-medium text-foreground">Nothing flagged</p>

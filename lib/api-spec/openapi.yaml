@@ -7017,6 +7017,25 @@ components:
         classFillRate:
           type: number
 
+    GrowthNudge:
+      type: object
+      properties:
+        id:
+          type: string
+        icon:
+          type: string
+        title:
+          type: string
+        message:
+          type: string
+        actionLabel:
+          type: string
+        actionLink:
+          type: string
+        source:
+          type: ["string", "null"]
+      required: [id, icon, title, message, actionLabel, actionLink]
+
     MorningBriefing:
       type: object
       properties:
@@ -7030,6 +7049,10 @@ components:
             $ref: "#/components/schemas/MorningBriefingItem"
         snapshot:
           $ref: "#/components/schemas/MorningBriefingSnapshot"
+        growthNudges:
+          type: array
+          items:
+            $ref: "#/components/schemas/GrowthNudge"
       required: [date, summary, items, snapshot]
 
     LeadCaptureBody:
