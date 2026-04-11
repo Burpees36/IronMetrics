@@ -6,7 +6,50 @@ import {
   leadSequenceEnrollmentsTable,
   leadSequenceEventsTable,
   leadsTable,
+  aiTasksTable,
 } from "@workspace/db";
+
+async function createSequenceExhaustionAlert(
+  gymId: number,
+  enrollmentId: number,
+  leadId: number,
+  sequenceId: number,
+): Promise<void> {
+  try {
+    const [lead] = await db.select().from(leadsTable).where(eq(leadsTable.id, leadId));
+    if (!lead || lead.stage === "converted") return;
+
+    const [sequence] = await db.select().from(leadSequencesTable).where(eq(leadSequencesTable.id, sequenceId));
+    const sequenceName = sequence?.name || "Unknown Sequence";
+    const leadName = `${lead.firstName || ""} ${lead.lastName || ""}`.trim() || "Unknown Lead";
+
+    await db.insert(aiTasksTable).values({
+      gymId,
+      type: "outreach",
+      subtype: "sequence_exhaustion",
+      title: `Personal follow-up needed: ${leadName} completed ${sequenceName} without booking`,
+      description: `${leadName} has completed all steps of the "${sequenceName}" nurture sequence but hasn't converted (current stage: ${lead.stage}). A personal follow-up is recommended to prevent this lead from going cold.`,
+      priority: "high",
+      status: "pending",
+      targetId: leadId,
+      targetType: "lead",
+    });
+
+    await db.insert(leadSequenceEventsTable).values({
+      gymId,
+      enrollmentId,
+      leadId,
+      sequenceId,
+      eventType: "exhaustion_alert_created",
+      stepIndex: null,
+      details: `All steps completed without conversion — AI task created for personal follow-up`,
+    });
+
+    console.log(`[lead-sequence-engine] Created exhaustion alert for lead ${leadId} in sequence "${sequenceName}" (gym ${gymId})`);
+  } catch (err: any) {
+    console.error(`[lead-sequence-engine] Error creating exhaustion alert for enrollment ${enrollmentId}:`, err.message);
+  }
+}
 
 export async function processLeadSequences(): Promise<{ processed: number; sent: number; completed: number; errors: number }> {
   let processed = 0;
@@ -64,6 +107,7 @@ export async function processLeadSequences(): Promise<{ processed: number; sent:
               exitReason: "all_steps_done",
             })
             .where(eq(leadSequenceEnrollmentsTable.id, enrollment.id));
+          await createSequenceExhaustionAlert(enrollment.gymId, enrollment.id, enrollment.leadId, enrollment.sequenceId);
           completed++;
           continue;
         }
@@ -136,6 +180,7 @@ export async function processLeadSequences(): Promise<{ processed: number; sent:
               exitReason: "all_steps_done",
             })
             .where(eq(leadSequenceEnrollmentsTable.id, enrollment.id));
+          await createSequenceExhaustionAlert(enrollment.gymId, enrollment.id, enrollment.leadId, enrollment.sequenceId);
           completed++;
         } else {
           const nextStep = steps[nextStepIndex];

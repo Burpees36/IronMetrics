@@ -4,6 +4,7 @@ import { billingRecoveryService } from "../services/billing-recovery";
 import { paymentUpdateTokenService } from "../services/payment-update-token";
 import { billingAuditLogger } from "../billingAuditLogger";
 import { getStripeClient } from "../stripeClient";
+import { evaluateTriggersForGym } from "./retention-engine";
 
 const MAINTENANCE_INTERVAL_MS = 1 * 60 * 60 * 1000;
 
@@ -146,6 +147,13 @@ async function processScheduledHolds(gymId: number): Promise<{ activated: number
           gymId, memberId: hold.memberId,
           action: "hold.auto_completed", entityType: "hold", entityId: String(hold.id), source: "system",
         });
+
+        try {
+          await evaluateTriggersForGym(gymId, { onlyMemberId: hold.memberId });
+          console.log(`[billing-maintenance] Triggered retention evaluation for member ${hold.memberId} after hold end (gym ${gymId})`);
+        } catch (retentionErr: any) {
+          console.error(`[billing-maintenance] Error evaluating retention triggers for member ${hold.memberId}:`, retentionErr.message);
+        }
       } catch (err: any) {
         errors++;
         console.error(`[billing-maintenance] Error ending hold ${hold.id}:`, err.message);

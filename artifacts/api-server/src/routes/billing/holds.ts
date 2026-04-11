@@ -5,7 +5,7 @@ import { getStripeClient } from "../../stripeClient";
 import { requireBillingPermission, requireBillingRead } from "../../middlewares/billingRbac";
 import { billingAuditLogger } from "../../billingAuditLogger";
 import { parseGymId, paramStr } from "./helpers";
-import { exitMemberSequences } from "../../schedulers/retention-engine";
+import { exitMemberSequences, evaluateTriggersForGym } from "../../schedulers/retention-engine";
 
 const router: IRouter = Router();
 
@@ -137,6 +137,13 @@ router.post("/gyms/:gymId/holds/:holdId/cancel", requireBillingPermission("billi
         console.error(`[billing] Error resuming subscription for hold ${holdId}:`, err.message);
         res.status(500).json({ error: "Failed to resume subscription in Stripe" }); return;
       }
+    }
+
+    try {
+      await evaluateTriggersForGym(gymId, { onlyMemberId: hold.memberId });
+      console.log(`[billing] Triggered retention evaluation for member ${hold.memberId} after manual hold cancel (gym ${gymId})`);
+    } catch (retentionErr: any) {
+      console.error(`[billing] Error evaluating retention triggers for member ${hold.memberId}:`, (retentionErr as Error).message);
     }
   }
 
