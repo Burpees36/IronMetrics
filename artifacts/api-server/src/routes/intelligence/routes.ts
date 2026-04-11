@@ -396,6 +396,7 @@ router.get("/gyms/:gymId/intelligence/morning-briefing", async (req, res): Promi
     const blendedEngagement = await computeBlendedEngagement(gymId);
     const engagementRate = blendedEngagement.engagementRate;
 
+    const todayStr = now.toISOString().split("T")[0];
     const endOfToday = new Date(now);
     endOfToday.setHours(23, 59, 59, 999);
     const allClasses = await db.select().from(classesTable).where(eq(classesTable.gymId, gymId));
