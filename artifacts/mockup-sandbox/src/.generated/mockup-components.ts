@@ -30,12 +30,12 @@ export const modules: ModuleMap = {
   "./components/mockups/founder-cards/TheJourney.tsx": () => import("../components/mockups/founder-cards/TheJourney.tsx"),
   "./components/mockups/founder-cards/TheLetter.tsx": () => import("../components/mockups/founder-cards/TheLetter.tsx"),
   "./components/mockups/founder-cards/TheManifesto.tsx": () => import("../components/mockups/founder-cards/TheManifesto.tsx"),
+  "./components/mockups/landing-page/TheCommunity.tsx": () => import("../components/mockups/landing-page/TheCommunity.tsx"),
+  "./components/mockups/landing-page/TheMission.tsx": () => import("../components/mockups/landing-page/TheMission.tsx"),
+  "./components/mockups/landing-page/TheProof.tsx": () => import("../components/mockups/landing-page/TheProof.tsx"),
   "./components/mockups/logo-designs/GeometricBarbell.tsx": () => import("../components/mockups/logo-designs/GeometricBarbell.tsx"),
   "./components/mockups/logo-designs/MetricPulse.tsx": () => import("../components/mockups/logo-designs/MetricPulse.tsx"),
   "./components/mockups/logo-designs/MinimalistWordmark.tsx": () => import("../components/mockups/logo-designs/MinimalistWordmark.tsx"),
   "./components/mockups/logo-designs/MonogramShield.tsx": () => import("../components/mockups/logo-designs/MonogramShield.tsx"),
-  "./components/mockups/logo-designs/StackedIndustrial.tsx": () => import("../components/mockups/logo-designs/StackedIndustrial.tsx"),
-  "./components/mockups/landing-page/TheCommunity.tsx": () => import("../components/mockups/landing-page/TheCommunity.tsx"),
-  "./components/mockups/landing-page/TheMission.tsx": () => import("../components/mockups/landing-page/TheMission.tsx"),
-  "./components/mockups/landing-page/TheProof.tsx": () => import("../components/mockups/landing-page/TheProof.tsx")
+  "./components/mockups/logo-designs/StackedIndustrial.tsx": () => import("../components/mockups/logo-designs/StackedIndustrial.tsx")
 };
