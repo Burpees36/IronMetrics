@@ -39,6 +39,8 @@ import {
   GitBranch,
   ChevronDown,
   Check,
+  Users,
+  Info,
 } from "lucide-react";
 
 import { DateNavigation } from "@/components/programming/DateNavigation";
@@ -260,6 +262,9 @@ export function Workouts() {
   const [notifyVersion, setNotifyVersion] = useState(0);
   const [selectedTrack, setSelectedTrack] = useState("default");
   const [trackDropdownOpen, setTrackDropdownOpen] = useState(false);
+  const [showNewTrackInline, setShowNewTrackInline] = useState(false);
+  const [newTrackInlineName, setNewTrackInlineName] = useState("");
+  const [trackOverviewOpen, setTrackOverviewOpen] = useState(false);
 
   const { data: gym } = useGetGym(activeGymId as number, { query: { enabled: !!activeGymId } });
   const gymSlug = (gym as { slug?: string } | undefined)?.slug;
@@ -305,6 +310,12 @@ export function Workouts() {
     { query: { enabled: !!activeGymId && !roleLoading } }
   );
 
+  const { data: allDaysForCurrentDate } = useListProgrammingDays(
+    activeGymId as number,
+    { startDate: dateStr, endDate: dateStr },
+    { query: { enabled: !!activeGymId && !roleLoading && isStaff } }
+  );
+
   const { user: currentUser } = useAuth();
   const { data: membersList } = useListMembers(
     activeGymId as number,
@@ -333,6 +344,20 @@ export function Workouts() {
     const match = allMembers.find((m) => m.email === currentUser.email);
     return match?.id ?? null;
   }, [currentUser, allMembers]);
+
+  const dateHasDefaultTrackDay = useMemo(() => {
+    const daysToCheck = allDaysForCurrentDate || programmingDays;
+    if (!daysToCheck) return false;
+    return (daysToCheck as ProgrammingDayWithSections[]).some(
+      (d) => d.date === dateStr && (!d.track || d.track === "default")
+    );
+  }, [allDaysForCurrentDate, programmingDays, dateStr]);
+
+  const suggestedTrackForNewDay = useMemo(() => {
+    if (!dateHasDefaultTrackDay) return undefined;
+    const nonDefaultTracks = availableTracks.filter((t) => t !== "default");
+    return nonDefaultTracks.length > 0 ? nonDefaultTracks[0] : undefined;
+  }, [dateHasDefaultTrackDay, availableTracks]);
 
   const createDayMutation = useCreateProgrammingDay();
   const updateDayMutation = useUpdateProgrammingDay();
@@ -522,11 +547,21 @@ export function Workouts() {
           });
         }
 
+        const isNewTrack = data.track && data.track !== "default" && !availableTracks.includes(data.track);
         invalidateProgramming();
         toast({
           title: data.status === "published" ? "Programming Published" : "Draft Saved",
           description: `${data.title} for ${new Date(data.date + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })} has been saved.`,
         });
+        if (isNewTrack) {
+          setTimeout(() => {
+            toast({
+              title: `New track "${data.track}" created`,
+              description: "Members need to be assigned to this track (via their profile) to see its programming.",
+              duration: 8000,
+            });
+          }, 500);
+        }
         setPanelOpen(false);
         setEditData(null);
       } catch (error: any) {
@@ -539,7 +574,7 @@ export function Workouts() {
         setIsSaving(false);
       }
     },
-    [activeGymId, programmingDays, createDayMutation, updateDayMutation, deleteSectionMutation, updateSectionMutation, addSectionMutation, reorderSectionsMutation, invalidateProgramming, toast]
+    [activeGymId, programmingDays, availableTracks, createDayMutation, updateDayMutation, deleteSectionMutation, updateSectionMutation, addSectionMutation, reorderSectionsMutation, invalidateProgramming, toast]
   );
 
   const handleTogglePublish = useCallback(
@@ -765,20 +800,20 @@ export function Workouts() {
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          {availableTracks.length > 1 && (
-            <div className="relative">
-              <button
-                onClick={() => setTrackDropdownOpen(!trackDropdownOpen)}
-                className="flex items-center gap-2 px-3 py-2.5 border border-border bg-background hover:bg-accent rounded-xl font-medium transition-colors text-sm text-foreground"
-              >
-                <GitBranch className="h-4 w-4 text-muted-foreground" />
-                <span className="capitalize">{selectedTrack === "all" ? "All Tracks" : selectedTrack}</span>
-                <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
-              </button>
-              {trackDropdownOpen && (
-                <>
-                  <div className="fixed inset-0 z-40" onClick={() => setTrackDropdownOpen(false)} />
-                  <div className="absolute right-0 top-full mt-1 z-50 bg-popover border border-border rounded-xl shadow-lg py-1 min-w-[160px]">
+          <div className="relative">
+            <button
+              onClick={() => { setTrackDropdownOpen(!trackDropdownOpen); setTrackOverviewOpen(false); }}
+              className="flex items-center gap-2 px-3 py-2.5 border border-border bg-background hover:bg-accent rounded-xl font-medium transition-colors text-sm text-foreground"
+            >
+              <GitBranch className="h-4 w-4 text-muted-foreground" />
+              <span className="capitalize">{selectedTrack === "all" ? "All Tracks" : selectedTrack}</span>
+              <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+            </button>
+            {trackDropdownOpen && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => { setTrackDropdownOpen(false); setShowNewTrackInline(false); setNewTrackInlineName(""); }} />
+                <div className="absolute right-0 top-full mt-1 z-50 bg-popover border border-border rounded-xl shadow-lg py-1 min-w-[220px]">
+                  {availableTracks.length > 1 && (
                     <button
                       onClick={() => { setSelectedTrack("all"); setTrackDropdownOpen(false); }}
                       className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-accent text-left"
@@ -786,21 +821,90 @@ export function Workouts() {
                       {selectedTrack === "all" && <Check className="h-3.5 w-3.5 text-primary" />}
                       <span className={selectedTrack !== "all" ? "pl-5.5" : ""}>All Tracks</span>
                     </button>
-                    {availableTracks.map((t) => (
-                      <button
-                        key={t}
-                        onClick={() => { setSelectedTrack(t); setTrackDropdownOpen(false); }}
-                        className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-accent text-left capitalize"
-                      >
+                  )}
+                  {availableTracks.map((t) => (
+                    <button
+                      key={t}
+                      onClick={() => { setSelectedTrack(t); setTrackDropdownOpen(false); }}
+                      className="w-full flex items-center justify-between px-3 py-2 text-sm hover:bg-accent text-left"
+                    >
+                      <span className="flex items-center gap-2">
                         {selectedTrack === t && <Check className="h-3.5 w-3.5 text-primary" />}
-                        <span className={selectedTrack !== t ? "pl-5.5" : ""}>{t}</span>
+                        <span className={selectedTrack !== t ? "pl-5.5 capitalize" : "capitalize"}>{t}</span>
+                      </span>
+                      <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                        <Users className="h-3 w-3" />
+                        {getTrackMemberCount(t)}
+                      </span>
+                    </button>
+                  ))}
+                  <div className="border-t border-border mt-1 pt-1">
+                    {!showNewTrackInline ? (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setShowNewTrackInline(true); }}
+                        className="w-full flex items-center gap-2 px-3 py-2 text-sm text-primary hover:bg-accent text-left font-medium"
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                        New Track
                       </button>
-                    ))}
+                    ) : (
+                      <div className="px-3 py-2 space-y-2" onClick={(e) => e.stopPropagation()}>
+                        <input
+                          autoFocus
+                          value={newTrackInlineName}
+                          onChange={(e) => setNewTrackInlineName(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "-"))}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" && newTrackInlineName.trim()) {
+                              setSelectedTrack(newTrackInlineName.trim());
+                              setEditData(null);
+                              setPanelOpen(true);
+                              setTrackDropdownOpen(false);
+                              setShowNewTrackInline(false);
+                              setNewTrackInlineName("");
+                            }
+                            if (e.key === "Escape") {
+                              setShowNewTrackInline(false);
+                              setNewTrackInlineName("");
+                            }
+                          }}
+                          placeholder="e.g. competitors"
+                          className="w-full text-sm px-2 py-1.5 rounded-lg border border-input bg-muted/30 focus:outline-none focus:ring-1 focus:ring-ring"
+                        />
+                        <p className="text-[11px] text-muted-foreground leading-tight">
+                          Type a name and press Enter to create a new programming track.
+                        </p>
+                      </div>
+                    )}
                   </div>
-                </>
-              )}
-            </div>
-          )}
+                  <div className="border-t border-border mt-1 pt-1">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setTrackOverviewOpen(!trackOverviewOpen); }}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-sm text-muted-foreground hover:bg-accent text-left"
+                    >
+                      <Info className="h-3.5 w-3.5" />
+                      Track Overview
+                    </button>
+                    {trackOverviewOpen && (
+                      <div className="px-3 pb-2 pt-1 space-y-1.5">
+                        {availableTracks.map((t) => (
+                          <div key={t} className="flex items-center justify-between text-xs py-1 px-2 bg-muted/40 rounded-lg">
+                            <span className="font-medium capitalize text-foreground">{t}</span>
+                            <span className="text-muted-foreground flex items-center gap-1">
+                              <Users className="h-3 w-3" />
+                              {getTrackMemberCount(t)} member{getTrackMemberCount(t) !== 1 ? "s" : ""}
+                            </span>
+                          </div>
+                        ))}
+                        <p className="text-[11px] text-muted-foreground leading-tight pt-1">
+                          Assign members to tracks from their profile page.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
           {isGenerating && (
             <div className="flex items-center gap-2 text-sm text-muted-foreground animate-pulse">
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -1040,6 +1144,8 @@ export function Workouts() {
         initialData={editData}
         availableTracks={availableTracks}
         defaultTrack={selectedTrack !== "all" ? selectedTrack : "default"}
+        suggestAlternateTrack={!editData ? suggestedTrackForNewDay : undefined}
+        dateHasDefaultTrackDay={dateHasDefaultTrackDay}
       />
 
       <AlertDialog

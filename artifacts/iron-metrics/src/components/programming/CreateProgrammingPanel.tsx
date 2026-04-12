@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect } from "react";
-import { X, Plus, Loader2, AlertTriangle } from "lucide-react";
+import { X, Plus, Loader2, AlertTriangle, GitBranch, Info } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -31,6 +31,8 @@ interface CreateProgrammingPanelProps {
   initialData?: ProgrammingDayData | null;
   availableTracks?: string[];
   defaultTrack?: string;
+  suggestAlternateTrack?: string;
+  dateHasDefaultTrackDay?: boolean;
 }
 
 export interface ProgrammingDayData {
@@ -51,6 +53,8 @@ export function CreateProgrammingPanel({
   initialData,
   availableTracks = ["default"],
   defaultTrack = "default",
+  suggestAlternateTrack,
+  dateHasDefaultTrackDay,
 }: CreateProgrammingPanelProps) {
   const [date, setDate] = useState(initialData?.date || initialDate);
   const [title, setTitle] = useState(initialData?.title || "");
@@ -253,55 +257,75 @@ export function CreateProgrammingPanel({
                 </div>
               </div>
 
-              {availableTracks.length >= 1 && (
-                <div className="space-y-1.5">
-                  <Label className="text-xs text-muted-foreground">Track</Label>
-                  <div className="flex items-center gap-2">
-                    <select
-                      value={showNewTrackInput ? "__new__" : track}
-                      onChange={(e) => {
-                        if (e.target.value === "__new__") {
-                          setShowNewTrackInput(true);
-                        } else {
-                          setShowNewTrackInput(false);
-                          setTrack(e.target.value);
-                        }
-                      }}
-                      className="flex h-9 w-full rounded-lg border border-input bg-muted/30 px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                    >
-                      {availableTracks.map((t) => (
-                        <option key={t} value={t} className="capitalize">
-                          {t}
-                        </option>
-                      ))}
-                      <option value="__new__">+ New track...</option>
-                    </select>
-                    {showNewTrackInput && (
-                      <Input
-                        autoFocus
-                        value={newTrackInput}
-                        onChange={(e) => setNewTrackInput(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "-"))}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" && newTrackInput.trim()) {
-                            setTrack(newTrackInput.trim());
-                            setShowNewTrackInput(false);
-                            setNewTrackInput("");
-                          }
-                        }}
-                        onBlur={() => {
-                          if (newTrackInput.trim()) {
-                            setTrack(newTrackInput.trim());
-                          }
+              <div className="space-y-2 p-3 bg-muted/20 rounded-xl border border-border">
+                <div className="flex items-center gap-2">
+                  <GitBranch className="h-4 w-4 text-primary" />
+                  <Label className="text-sm font-medium text-foreground">Track</Label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <select
+                    value={showNewTrackInput ? "__new__" : track}
+                    onChange={(e) => {
+                      if (e.target.value === "__new__") {
+                        setShowNewTrackInput(true);
+                      } else {
+                        setShowNewTrackInput(false);
+                        setTrack(e.target.value);
+                      }
+                    }}
+                    className="flex h-9 w-full rounded-lg border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring capitalize"
+                  >
+                    {availableTracks.map((t) => (
+                      <option key={t} value={t} className="capitalize">
+                        {t}
+                      </option>
+                    ))}
+                    <option value="__new__">+ New track...</option>
+                  </select>
+                  {showNewTrackInput && (
+                    <Input
+                      autoFocus
+                      value={newTrackInput}
+                      onChange={(e) => setNewTrackInput(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "-"))}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && newTrackInput.trim()) {
+                          setTrack(newTrackInput.trim());
                           setShowNewTrackInput(false);
                           setNewTrackInput("");
-                        }}
-                        placeholder="e.g. competition"
-                        className="bg-muted/30 max-w-[180px]"
-                      />
-                    )}
-                  </div>
+                        }
+                      }}
+                      onBlur={() => {
+                        if (newTrackInput.trim()) {
+                          setTrack(newTrackInput.trim());
+                        }
+                        setShowNewTrackInput(false);
+                        setNewTrackInput("");
+                      }}
+                      placeholder="e.g. competition"
+                      className="bg-background max-w-[180px]"
+                    />
+                  )}
                 </div>
-              )}
+                <p className="text-[11px] text-muted-foreground leading-relaxed">
+                  Tracks let you publish different programming for different groups of athletes.
+                </p>
+                {suggestAlternateTrack && !initialData && track === "default" && dateHasDefaultTrackDay && (
+                  <div className="flex items-start gap-2 p-2 bg-primary/5 border border-primary/20 rounded-lg">
+                    <Info className="h-3.5 w-3.5 text-primary mt-0.5 shrink-0" />
+                    <div className="text-[11px] text-primary leading-relaxed">
+                      <span>This date already has programming on the default track. </span>
+                      <button
+                        type="button"
+                        onClick={() => setTrack(suggestAlternateTrack)}
+                        className="font-semibold underline underline-offset-2 hover:opacity-80"
+                      >
+                        Switch to "{suggestAlternateTrack}"
+                      </button>
+                      <span> instead?</span>
+                    </div>
+                  </div>
+                )}
+              </div>
 
               {errors.sections && (
                 <p className="text-xs text-destructive flex items-center gap-1">
