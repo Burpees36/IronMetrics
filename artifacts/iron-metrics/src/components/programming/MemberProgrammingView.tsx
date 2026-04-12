@@ -383,6 +383,8 @@ export function MemberProgrammingView({
   }
 
   const todayDays = daysByDate[todayStr] || [];
+  const hasMultipleTracksByDate = (dateStr: string) =>
+    (daysByDate[dateStr] || []).length > 1;
 
   const futureDates = [...new Set(days.map(d => d.date))]
     .filter(d => d > todayStr)
@@ -460,29 +462,42 @@ export function MemberProgrammingView({
         </div>
 
         {todayDays.length > 0 ? (
-          todayDays.map((todayDay) => (
-            <div key={todayDay.id} className="bg-card border border-border rounded-2xl p-5">
-              {todayDays.length > 1 && todayDay.track && (
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">{todayDay.track}</p>
-              )}
-              {todayDay.sections.map((section, i) => (
-                <SectionResultsPanel
-                  key={section.id}
-                  gymId={gymId}
-                  dayId={todayDay.id}
-                  section={section}
-                  currentMemberId={currentMemberId}
-                  index={i}
-                  total={todayDay.sections.length}
-                  onLogResult={onLogResult}
-                  onEditResult={onEditResult}
-                  isLoggingResult={isLoggingResult}
-                  isStaff={isStaff}
-                  membersList={membersList}
-                />
-              ))}
-            </div>
-          ))
+          <div className="bg-card border border-border rounded-2xl p-5">
+            {todayDays.map((day, dayIdx) => {
+              const showTrackHeader = hasMultipleTracksByDate(todayStr);
+              return (
+                <React.Fragment key={day.id}>
+                  {showTrackHeader && (
+                    <>
+                      {dayIdx > 0 && <div className="border-b border-border my-4" />}
+                      <div className="flex items-center gap-2 mb-3">
+                        <div className="h-1 w-1 rounded-full bg-primary" />
+                        <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                          {day.track || "Daily WOD"}
+                        </span>
+                      </div>
+                    </>
+                  )}
+                  {day.sections.map((section, i) => (
+                    <SectionResultsPanel
+                      key={section.id}
+                      gymId={gymId}
+                      dayId={day.id}
+                      section={section}
+                      currentMemberId={currentMemberId}
+                      index={i}
+                      total={day.sections.length}
+                      onLogResult={onLogResult}
+                      onEditResult={onEditResult}
+                      isLoggingResult={isLoggingResult}
+                      isStaff={isStaff}
+                      membersList={membersList}
+                    />
+                  ))}
+                </React.Fragment>
+              );
+            })}
+          </div>
         ) : (
           <div className="text-center py-12 border border-dashed border-border rounded-2xl">
             <div className="h-12 w-12 bg-muted rounded-xl flex items-center justify-center mx-auto mb-3">
@@ -506,6 +521,7 @@ export function MemberProgrammingView({
           {futureDates.map((dateStr) => {
             const daysForDate = daysByDate[dateStr];
             if (!daysForDate?.length) return null;
+            const showTrackHeader = daysForDate.length > 1;
             return (
               <div key={dateStr} className="space-y-2">
                 <p className="text-xs font-medium text-foreground">
@@ -515,34 +531,44 @@ export function MemberProgrammingView({
                     day: "numeric",
                   })}
                 </p>
-                {daysForDate.map((day) => (
-                  <div key={day.id} className="bg-card border border-border rounded-2xl p-5">
-                    {daysForDate.length > 1 && day.track && (
-                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">{day.track}</p>
-                    )}
-                    {day.sections.map((section, i) => {
-                      const uiType = sectionTypeToUiType(section.sectionType);
-                      const typeInfo = getSectionTypeInfo(uiType);
-                      const letter = LETTERS[i] || String(i + 1);
-                      return (
-                        <div key={section.id} className="mb-2 last:mb-0">
-                          <div className="flex items-center gap-2">
-                            <span className="h-5 w-5 rounded flex items-center justify-center bg-primary/10 text-primary text-[10px] font-bold shrink-0">
-                              {letter}
+                <div className="bg-card border border-border rounded-2xl p-5">
+                  {daysForDate.map((day, dayIdx) => (
+                    <React.Fragment key={day.id}>
+                      {showTrackHeader && (
+                        <>
+                          {dayIdx > 0 && <div className="border-b border-border my-3" />}
+                          <div className="flex items-center gap-2 mb-2">
+                            <div className="h-1 w-1 rounded-full bg-primary" />
+                            <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                              {day.track || "Daily WOD"}
                             </span>
-                            <span className={`${typeInfo.color} shrink-0`}>{typeInfo.icon}</span>
-                            <span className="text-sm font-semibold text-foreground">{section.title}</span>
                           </div>
-                          {section.instructions && (
-                            <p className="text-xs text-muted-foreground pl-7 mt-0.5 line-clamp-2 whitespace-pre-line">
-                              {section.instructions}
-                            </p>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                ))}
+                        </>
+                      )}
+                      {day.sections.map((section, i) => {
+                        const uiType = sectionTypeToUiType(section.sectionType);
+                        const typeInfo = getSectionTypeInfo(uiType);
+                        const letter = LETTERS[i] || String(i + 1);
+                        return (
+                          <div key={section.id} className="mb-2 last:mb-0">
+                            <div className="flex items-center gap-2">
+                              <span className="h-5 w-5 rounded flex items-center justify-center bg-primary/10 text-primary text-[10px] font-bold shrink-0">
+                                {letter}
+                              </span>
+                              <span className={`${typeInfo.color} shrink-0`}>{typeInfo.icon}</span>
+                              <span className="text-sm font-semibold text-foreground">{section.title}</span>
+                            </div>
+                            {section.instructions && (
+                              <p className="text-xs text-muted-foreground pl-7 mt-0.5 line-clamp-2 whitespace-pre-line">
+                                {section.instructions}
+                              </p>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </React.Fragment>
+                  ))}
+                </div>
               </div>
             );
           })}
@@ -557,6 +583,7 @@ export function MemberProgrammingView({
           {pastDates.map((dateStr) => {
             const daysForDate = daysByDate[dateStr];
             if (!daysForDate?.length) return null;
+            const showTrackHeader = daysForDate.length > 1;
             return (
               <div key={dateStr} className="space-y-2">
                 <p className="text-xs font-medium text-foreground">
@@ -566,29 +593,39 @@ export function MemberProgrammingView({
                     day: "numeric",
                   })}
                 </p>
-                {daysForDate.map((day) => (
-                  <div key={day.id} className="bg-card border border-border rounded-2xl p-5 opacity-80">
-                    {daysForDate.length > 1 && day.track && (
-                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">{day.track}</p>
-                    )}
-                    {day.sections.map((section, i) => (
-                      <SectionResultsPanel
-                        key={section.id}
-                        gymId={gymId}
-                        dayId={day.id}
-                        section={section}
-                        currentMemberId={currentMemberId}
-                        index={i}
-                        total={day.sections.length}
-                        onLogResult={onLogResult}
-                        onEditResult={onEditResult}
-                        isLoggingResult={isLoggingResult}
-                        isStaff={isStaff}
-                        membersList={membersList}
-                      />
-                    ))}
-                  </div>
-                ))}
+                <div className="bg-card border border-border rounded-2xl p-5 opacity-80">
+                  {daysForDate.map((day, dayIdx) => (
+                    <React.Fragment key={day.id}>
+                      {showTrackHeader && (
+                        <>
+                          {dayIdx > 0 && <div className="border-b border-border my-4" />}
+                          <div className="flex items-center gap-2 mb-3">
+                            <div className="h-1 w-1 rounded-full bg-primary" />
+                            <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                              {day.track || "Daily WOD"}
+                            </span>
+                          </div>
+                        </>
+                      )}
+                      {day.sections.map((section, i) => (
+                        <SectionResultsPanel
+                          key={section.id}
+                          gymId={gymId}
+                          dayId={day.id}
+                          section={section}
+                          currentMemberId={currentMemberId}
+                          index={i}
+                          total={day.sections.length}
+                          onLogResult={onLogResult}
+                          onEditResult={onEditResult}
+                          isLoggingResult={isLoggingResult}
+                          isStaff={isStaff}
+                          membersList={membersList}
+                        />
+                      ))}
+                    </React.Fragment>
+                  ))}
+                </div>
               </div>
             );
           })}
