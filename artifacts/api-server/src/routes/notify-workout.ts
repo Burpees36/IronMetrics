@@ -86,17 +86,15 @@ router.post("/gyms/:gymId/notify-workout", requireProgrammingWrite(), async (req
       conditions.push(lte(programmingDaysTable.date, weekEnd));
     }
 
-    if (track) {
-      if (track === "default") {
-        conditions.push(
-          or(
-            eq(programmingDaysTable.track, "default"),
-            isNull(programmingDaysTable.track)
-          )!
-        );
-      } else {
-        conditions.push(eq(programmingDaysTable.track, track));
-      }
+    if (track && track !== "default") {
+      conditions.push(eq(programmingDaysTable.track, track));
+    } else {
+      conditions.push(
+        or(
+          eq(programmingDaysTable.track, "default"),
+          isNull(programmingDaysTable.track)
+        )!
+      );
     }
 
     const publishedDays = await db
@@ -145,9 +143,11 @@ router.post("/gyms/:gymId/notify-workout", requireProgrammingWrite(), async (req
 
     const baseUrl = getPublicBaseUrl();
     const isNonDefaultTrack = track && track !== "default";
-    const publicUrl = isNonDefaultTrack
-      ? `${baseUrl}/workouts`
-      : `${baseUrl}/wod/${gym.slug}`;
+    const firstDate = publishedDays[0]?.date;
+    const dateParam = firstDate ? `date=${firstDate}` : "";
+    const trackParam = isNonDefaultTrack ? `track=${encodeURIComponent(track)}` : "";
+    const queryString = [dateParam, trackParam].filter(Boolean).join("&");
+    const publicUrl = `${baseUrl}/wod/${gym.slug}${queryString ? `?${queryString}` : ""}`;
 
     const workoutSummary = daySections
       .map(({ day, sections }) => {
