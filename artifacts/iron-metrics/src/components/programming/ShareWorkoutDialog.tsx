@@ -54,6 +54,7 @@ interface ShareWorkoutDialogProps {
   dayTitle?: string;
   dayDate?: string;
   dayTrack?: string;
+  isDraft?: boolean;
   trackMemberCount?: number;
   onNotifySuccess?: (count: number) => void;
   onNotifyError?: (error: string) => void;
@@ -68,6 +69,7 @@ export function ShareWorkoutDialog({
   dayTitle,
   dayDate,
   dayTrack,
+  isDraft,
   trackMemberCount,
   onNotifySuccess,
   onNotifyError,
@@ -198,9 +200,11 @@ export function ShareWorkoutDialog({
             Share Programming
           </DialogTitle>
           <DialogDescription>
-            {dayTitle
-              ? `Share "${dayTitle}" with your members`
-              : "Share your public programming page with members"}
+            {isDraft
+              ? `Preview "${dayTitle || "this workout"}" — publish it to share with members`
+              : dayTitle
+                ? `Share "${dayTitle}" with your members`
+                : "Share your public programming page with members"}
           </DialogDescription>
         </DialogHeader>
 
@@ -208,7 +212,7 @@ export function ShareWorkoutDialog({
           <div className="rounded-xl border border-primary/20 bg-primary/5 p-4 space-y-3">
             <label className="text-sm font-semibold text-foreground flex items-center gap-1.5">
               <ExternalLink className="h-3.5 w-3.5 text-primary" />
-              Public Programming Link
+              {isDraft ? "Preview Link" : "Public Programming Link"}
             </label>
             <div
               className="rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-foreground font-mono break-all select-all leading-relaxed cursor-text"

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { useParams } from "wouter";
 import { motion } from "framer-motion";
-import { Loader2, Dumbbell, ChevronLeft, ChevronRight, Zap, FileText } from "lucide-react";
+import { Loader2, Dumbbell, ChevronLeft, ChevronRight, Zap, FileText, Eye } from "lucide-react";
 import { getSectionTypeInfo, type SectionType } from "@/components/programming/SectionEditor";
 
 const API_BASE = import.meta.env.VITE_API_URL || "";
@@ -59,6 +59,11 @@ interface ProgrammingDay {
 
 function toDateString(d: Date): string {
   return d.toISOString().split("T")[0];
+}
+
+function trackLabel(track: string | null): string {
+  if (!track || track === "default") return "Main";
+  return track.charAt(0).toUpperCase() + track.slice(1);
 }
 
 function SectionCard({ section, index, total }: { section: ProgrammingSection; index: number; total: number }) {
@@ -120,22 +125,49 @@ function SectionCard({ section, index, total }: { section: ProgrammingSection; i
   );
 }
 
+function DayContent({ day }: { day: ProgrammingDay }) {
+  return (
+    <div className="bg-card border border-border rounded-2xl p-5" data-testid="workout-card">
+      {day.publicNotes && (
+        <p className="text-sm text-muted-foreground mb-4 italic">
+          {day.publicNotes}
+        </p>
+      )}
+      {day.sections.map((section, i) => (
+        <SectionCard
+          key={section.id}
+          section={section}
+          index={i}
+          total={day.sections.length}
+        />
+      ))}
+    </div>
+  );
+}
+
 export function PublicWod() {
   const params = useParams<{ gymSlug: string }>();
   const gymSlug = params.gymSlug;
 
   const [gymInfo, setGymInfo] = useState<GymInfo | null>(null);
   const [days, setDays] = useState<ProgrammingDay[]>([]);
+  const [previewDay, setPreviewDay] = useState<ProgrammingDay | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
-  const [selectedTrack] = useState<string | null>(() => {
-    const params = new URLSearchParams(window.location.search);
-    return params.get("track");
-  });
+
+  const urlParams = useMemo(() => new URLSearchParams(window.location.search), []);
+  const selectedTrack = useMemo(() => urlParams.get("track"), [urlParams]);
+  const previewDayId = useMemo(() => {
+    const id = urlParams.get("preview");
+    if (!id) return null;
+    const parsed = parseInt(id, 10);
+    return isNaN(parsed) ? null : parsed;
+  }, [urlParams]);
+  const previewToken = useMemo(() => urlParams.get("token"), [urlParams]);
+  const isPreview = previewDayId !== null && previewToken !== null;
 
   const [selectedDate, setSelectedDate] = useState<Date>(() => {
-    const params = new URLSearchParams(window.location.search);
-    const dateParam = params.get("date");
+    const dateParam = urlParams.get("date");
     if (dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam)) {
       const parsed = new Date(dateParam + "T00:00:00");
       if (!isNaN(parsed.getTime())) return parsed;
@@ -171,6 +203,23 @@ export function PublicWod() {
   useEffect(() => {
     if (!gymSlug || notFound || loading) return;
 
+    if (isPreview) {
+      const fetchPreview = async () => {
+        try {
+          const res = await fetch(
+            `${API_BASE}/api/public/wod/${gymSlug}/preview/${previewDayId}?token=${encodeURIComponent(previewToken!)}`
+          );
+          if (res.ok) {
+            const data = await res.json();
+            setPreviewDay(data);
+          }
+        } catch {
+        }
+      };
+      fetchPreview();
+      return;
+    }
+
     const fetchProgramming = async () => {
       try {
         const start = new Date(selectedDate);
@@ -178,7 +227,7 @@ export function PublicWod() {
         const end = new Date(selectedDate);
         end.setDate(end.getDate() + 7);
 
-        const trackParam = selectedTrack && selectedTrack !== "default" ? `&track=${encodeURIComponent(selectedTrack)}` : "";
+        const trackParam = selectedTrack ? `&track=${encodeURIComponent(selectedTrack)}` : "";
         const progRes = await fetch(
           `${API_BASE}/api/public/wod/${gymSlug}/programming?startDate=${toDateString(start)}&endDate=${toDateString(end)}${trackParam}`
         );
@@ -191,10 +240,12 @@ export function PublicWod() {
     };
 
     fetchProgramming();
-  }, [gymSlug, notFound, loading, selectedDateStr, selectedTrack]);
+  }, [gymSlug, notFound, loading, selectedDateStr, selectedTrack, isPreview, previewDayId, previewToken]);
 
-  const todayStr = selectedDateStr;
-  const todayDay = useMemo(() => days.find((d) => d.date === todayStr) || null, [days, todayStr]);
+  const todayDays = useMemo(() => {
+    if (isPreview && previewDay) return [previewDay];
+    return days.filter((d) => d.date === selectedDateStr);
+  }, [days, selectedDateStr, isPreview, previewDay]);
 
   const isToday = useMemo(() => {
     const today = new Date();
@@ -235,6 +286,10 @@ export function PublicWod() {
     );
   }
 
+  const displayDate = isPreview && previewDay
+    ? previewDay.date
+    : selectedDateStr;
+
   return (
     <div className="min-h-screen bg-background">
       <div className="max-w-lg mx-auto px-4 py-6">
@@ -254,9 +309,16 @@ export function PublicWod() {
             {gymInfo?.name}
           </h1>
           {selectedTrack && selectedTrack !== "default" && (
-            <p className="text-sm font-medium text-primary mt-1">{selectedTrack} Track</p>
+            <p className="text-sm font-medium text-primary mt-1">{trackLabel(selectedTrack)} Track</p>
           )}
         </div>
+
+        {isPreview && (
+          <div className="flex items-center gap-2 mb-4 px-3 py-2 bg-amber-500/10 border border-amber-500/20 rounded-xl text-sm text-amber-700">
+            <Eye className="h-4 w-4 shrink-0" />
+            <span>Draft preview — this workout is not published yet</span>
+          </div>
+        )}
 
         <div className="space-y-4">
           <div className="flex items-center gap-3">
@@ -265,59 +327,63 @@ export function PublicWod() {
             </div>
             <div className="flex-1">
               <h2 className="text-lg font-bold text-foreground">
-                {isToday ? "Today's Workout" : "Workout"}
+                {isToday && !isPreview ? "Today's Workout" : "Workout"}
               </h2>
               <p className="text-xs text-muted-foreground" data-testid="selected-date">
-                {new Date(todayStr + "T00:00:00").toLocaleDateString("en-US", {
+                {new Date(displayDate + "T00:00:00").toLocaleDateString("en-US", {
                   weekday: "long",
                   month: "long",
                   day: "numeric",
                 })}
               </p>
             </div>
-            <div className="flex items-center gap-1">
-              <button
-                onClick={() => navigate(-1)}
-                className="h-8 w-8 flex items-center justify-center rounded-lg border border-border hover:bg-accent transition-colors"
-                data-testid="nav-prev"
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </button>
-              {!isToday && (
+            {!isPreview && (
+              <div className="flex items-center gap-1">
                 <button
-                  onClick={goToToday}
-                  className="px-2.5 h-8 text-xs font-medium rounded-lg border border-border hover:bg-accent transition-colors"
-                  data-testid="nav-today"
+                  onClick={() => navigate(-1)}
+                  className="h-8 w-8 flex items-center justify-center rounded-lg border border-border hover:bg-accent transition-colors"
+                  data-testid="nav-prev"
                 >
-                  Today
+                  <ChevronLeft className="h-4 w-4" />
                 </button>
-              )}
-              <button
-                onClick={() => navigate(1)}
-                className="h-8 w-8 flex items-center justify-center rounded-lg border border-border hover:bg-accent transition-colors"
-                data-testid="nav-next"
-              >
-                <ChevronRight className="h-4 w-4" />
-              </button>
-            </div>
+                {!isToday && (
+                  <button
+                    onClick={goToToday}
+                    className="px-2.5 h-8 text-xs font-medium rounded-lg border border-border hover:bg-accent transition-colors"
+                    data-testid="nav-today"
+                  >
+                    Today
+                  </button>
+                )}
+                <button
+                  onClick={() => navigate(1)}
+                  className="h-8 w-8 flex items-center justify-center rounded-lg border border-border hover:bg-accent transition-colors"
+                  data-testid="nav-next"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </button>
+              </div>
+            )}
           </div>
 
-          {todayDay ? (
-            <div className="bg-card border border-border rounded-2xl p-5" data-testid="workout-card">
-              {todayDay.publicNotes && (
-                <p className="text-sm text-muted-foreground mb-4 italic">
-                  {todayDay.publicNotes}
-                </p>
-              )}
-              {todayDay.sections.map((section, i) => (
-                <SectionCard
-                  key={section.id}
-                  section={section}
-                  index={i}
-                  total={todayDay.sections.length}
-                />
-              ))}
-            </div>
+          {todayDays.length > 0 ? (
+            todayDays.length === 1 ? (
+              <>
+                {todayDays[0].track && todayDays[0].track !== "default" && !selectedTrack && (
+                  <p className="text-xs font-semibold text-primary uppercase tracking-wide">{trackLabel(todayDays[0].track)} Track</p>
+                )}
+                <DayContent day={todayDays[0]} />
+              </>
+            ) : (
+              <div className="space-y-5">
+                {todayDays.map((day) => (
+                  <div key={day.id}>
+                    <p className="text-xs font-semibold text-primary uppercase tracking-wide mb-2">{trackLabel(day.track)} Track</p>
+                    <DayContent day={day} />
+                  </div>
+                ))}
+              </div>
+            )
           ) : (
             <div className="text-center py-12 border border-dashed border-border rounded-2xl" data-testid="empty-state">
               <div className="h-12 w-12 bg-muted rounded-xl flex items-center justify-center mx-auto mb-3">
