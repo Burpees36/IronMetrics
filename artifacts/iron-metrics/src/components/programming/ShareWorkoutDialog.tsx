@@ -216,14 +216,15 @@ export function ShareWorkoutDialog({
             </label>
             <div
               className="rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-foreground font-mono break-all select-all leading-relaxed cursor-text"
-              title={publicUrl}
+              title={publicUrl || undefined}
             >
-              {publicUrl}
+              {publicUrl || (isDraft ? "Generating preview link..." : "")}
             </div>
             <div className="flex flex-col gap-2">
               <button
                 onClick={handleCopyLink}
-                className="w-full flex items-center justify-center gap-2 h-10 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 font-medium text-sm transition-all active:scale-[0.98]"
+                disabled={!publicUrl}
+                className="w-full flex items-center justify-center gap-2 h-10 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 font-medium text-sm transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <AnimatePresence mode="wait" initial={false}>
                   {copied ? (

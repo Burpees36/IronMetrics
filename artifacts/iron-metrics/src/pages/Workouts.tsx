@@ -1252,7 +1252,9 @@ export function Workouts() {
             setShareDialogOpen(open);
             if (!open) setSharePreviewUrl("");
           }}
-          publicUrl={sharePreviewUrl || (() => {
+          publicUrl={(() => {
+            const isDraftDay = shareDialogDay?.status !== "published" && !!shareDialogDay?.dayId;
+            if (isDraftDay) return sharePreviewUrl;
             const params = new URLSearchParams();
             if (shareDialogDay?.date) params.set("date", shareDialogDay.date);
             if (shareDialogDay?.track && shareDialogDay.track !== "default") params.set("track", shareDialogDay.track);
