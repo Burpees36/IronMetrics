@@ -1,10 +1,10 @@
 import { createHmac } from "crypto";
 
-const PREVIEW_SECRET = process.env.PUBLIC_WOD_PREVIEW_SECRET || process.env.DATABASE_URL;
+const PREVIEW_SECRET = process.env.PUBLIC_WOD_PREVIEW_SECRET;
 const PREVIEW_TTL_MS = 60 * 60 * 1000;
 
 if (!PREVIEW_SECRET) {
-  console.warn("[preview-token] No PUBLIC_WOD_PREVIEW_SECRET or DATABASE_URL set. Preview tokens will be unavailable.");
+  console.warn("[preview-token] No PUBLIC_WOD_PREVIEW_SECRET set. Preview tokens will be unavailable.");
 }
 
 export function generatePreviewToken(dayId: number, gymId: number): string | null {
