@@ -3,7 +3,7 @@ import { eq, and, gte, lte, desc, asc, ne, inArray, or, isNull } from "drizzle-o
 import { db, programmingDaysTable, programmingSectionsTable } from "@workspace/db";
 import { requireProgrammingRead, requireProgrammingWrite, isStaffRole, stripCoachNotesFromDay } from "../../middlewares/programmingRbac";
 import { parseGymId, parseDayId, getDayWithSections } from "./helpers";
-import { generatePreviewToken } from "../public-wod";
+import { generatePreviewToken } from "../../utils/preview-token";
 
 const router: IRouter = Router();
 
@@ -409,6 +409,10 @@ router.post(
     }
 
     const token = generatePreviewToken(dayId, gymId);
+    if (!token) {
+      res.status(503).json({ error: "Preview tokens are not configured" });
+      return;
+    }
     res.json({ token, dayId, expiresInMinutes: 60 });
   }
 );

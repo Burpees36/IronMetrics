@@ -393,6 +393,15 @@ export function Workouts() {
     return nonDefaultTracks.length > 0 ? nonDefaultTracks[0] : undefined;
   }, [dateHasDefaultTrackDay, availableTracks]);
 
+  const resolveDayForShare = useCallback((date: string, track: string): { dayId?: number; status?: string } => {
+    const days = (programmingDays || []) as ProgrammingDayWithSections[];
+    const match = days.find((d) => {
+      const dayTrack = d.track || "default";
+      return d.date === date && dayTrack === track;
+    });
+    return match ? { dayId: match.id, status: match.status } : {};
+  }, [programmingDays]);
+
   const createDayMutation = useCreateProgrammingDay();
   const updateDayMutation = useUpdateProgrammingDay();
   const deleteDayMutation = useDeleteProgrammingDay();
@@ -475,7 +484,9 @@ export function Workouts() {
             description: `${generated} days created${skipped > 0 ? `, ${skipped} days skipped (already exist)` : ""}. Review and edit before publishing.`,
           });
           if (generated > 0 && baseWodUrl) {
-            setShareDialogDay({ date: dateStr, track: selectedTrack || "default" });
+            const track = selectedTrack || "default";
+            const resolved = resolveDayForShare(dateStr, track);
+            setShareDialogDay({ date: dateStr, track, ...resolved });
             setShareDialogOpen(true);
           }
         }
@@ -948,7 +959,9 @@ export function Workouts() {
           {baseWodUrl && (
             <button
               onClick={() => {
-                setShareDialogDay({ date: dateStr, track: selectedTrack || "default" });
+                const track = selectedTrack || "default";
+                const resolved = resolveDayForShare(dateStr, track);
+                setShareDialogDay({ date: dateStr, track, ...resolved });
                 setShareDialogOpen(true);
               }}
               className="flex items-center gap-2 px-4 py-2.5 border border-border bg-background hover:bg-accent rounded-xl font-medium transition-colors text-foreground"

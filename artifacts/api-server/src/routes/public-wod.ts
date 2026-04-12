@@ -1,26 +1,7 @@
 import { Router, type IRouter } from "express";
-import { eq, and, gte, lte, asc, desc, or, isNull, ne } from "drizzle-orm";
-import { createHmac } from "crypto";
+import { eq, and, gte, lte, asc, desc, or, isNull } from "drizzle-orm";
 import { db, gymsTable, programmingDaysTable, programmingSectionsTable } from "@workspace/db";
-
-const PREVIEW_SECRET = process.env.DATABASE_URL || "forgeos-preview-secret";
-const PREVIEW_TTL_MS = 60 * 60 * 1000;
-
-export function generatePreviewToken(dayId: number, gymId: number): string {
-  const hour = Math.floor(Date.now() / PREVIEW_TTL_MS);
-  const payload = `${dayId}:${gymId}:${hour}`;
-  return createHmac("sha256", PREVIEW_SECRET).update(payload).digest("hex").slice(0, 32);
-}
-
-function verifyPreviewToken(token: string, dayId: number, gymId: number): boolean {
-  const hour = Math.floor(Date.now() / PREVIEW_TTL_MS);
-  for (const h of [hour, hour - 1]) {
-    const payload = `${dayId}:${gymId}:${h}`;
-    const expected = createHmac("sha256", PREVIEW_SECRET).update(payload).digest("hex").slice(0, 32);
-    if (token === expected) return true;
-  }
-  return false;
-}
+import { verifyPreviewToken } from "../utils/preview-token";
 
 const router: IRouter = Router();
 
