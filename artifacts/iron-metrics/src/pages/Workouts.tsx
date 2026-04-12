@@ -484,7 +484,7 @@ export function Workouts() {
             description: `${generated} days created${skipped > 0 ? `, ${skipped} days skipped (already exist)` : ""}. Review and edit before publishing.`,
           });
           if (generated > 0 && baseWodUrl) {
-            const track = selectedTrack || "default";
+            const track = selectedTrack === "all" ? "default" : (selectedTrack || "default");
             const resolved = resolveDayForShare(dateStr, track);
             setShareDialogDay({ date: dateStr, track, ...resolved });
             setShareDialogOpen(true);
@@ -959,7 +959,7 @@ export function Workouts() {
           {baseWodUrl && (
             <button
               onClick={() => {
-                const track = selectedTrack || "default";
+                const track = selectedTrack === "all" ? "default" : (selectedTrack || "default");
                 const resolved = resolveDayForShare(dateStr, track);
                 setShareDialogDay({ date: dateStr, track, ...resolved });
                 setShareDialogOpen(true);
