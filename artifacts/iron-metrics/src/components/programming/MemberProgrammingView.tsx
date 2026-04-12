@@ -370,21 +370,20 @@ export function MemberProgrammingView({
 }: MemberProgrammingViewProps) {
   const todayStr = toDateString(selectedDate);
 
-  const daysByDate: Record<string, ProgrammingDayWithSections> = {};
+  const daysByDate: Record<string, ProgrammingDayWithSections[]> = {};
   for (const d of days) {
-    daysByDate[d.date] = d;
+    if (!daysByDate[d.date]) daysByDate[d.date] = [];
+    daysByDate[d.date].push(d);
   }
 
-  const todayDay = daysByDate[todayStr] || null;
+  const todayDays = daysByDate[todayStr] || [];
 
-  const futureDates = days
-    .map(d => d.date)
+  const futureDates = [...new Set(days.map(d => d.date))]
     .filter(d => d > todayStr)
     .sort()
     .slice(0, 5);
 
-  const pastDates = days
-    .map(d => d.date)
+  const pastDates = [...new Set(days.map(d => d.date))]
     .filter(d => d < todayStr)
     .sort()
     .reverse()
@@ -454,25 +453,30 @@ export function MemberProgrammingView({
           )}
         </div>
 
-        {todayDay ? (
-          <div className="bg-card border border-border rounded-2xl p-5">
-            {todayDay.sections.map((section, i) => (
-              <SectionResultsPanel
-                key={section.id}
-                gymId={gymId}
-                dayId={todayDay.id}
-                section={section}
-                currentMemberId={currentMemberId}
-                index={i}
-                total={todayDay.sections.length}
-                onLogResult={onLogResult}
-                onEditResult={onEditResult}
-                isLoggingResult={isLoggingResult}
-                isStaff={isStaff}
-                membersList={membersList}
-              />
-            ))}
-          </div>
+        {todayDays.length > 0 ? (
+          todayDays.map((todayDay) => (
+            <div key={todayDay.id} className="bg-card border border-border rounded-2xl p-5">
+              {todayDays.length > 1 && todayDay.track && (
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">{todayDay.track}</p>
+              )}
+              {todayDay.sections.map((section, i) => (
+                <SectionResultsPanel
+                  key={section.id}
+                  gymId={gymId}
+                  dayId={todayDay.id}
+                  section={section}
+                  currentMemberId={currentMemberId}
+                  index={i}
+                  total={todayDay.sections.length}
+                  onLogResult={onLogResult}
+                  onEditResult={onEditResult}
+                  isLoggingResult={isLoggingResult}
+                  isStaff={isStaff}
+                  membersList={membersList}
+                />
+              ))}
+            </div>
+          ))
         ) : (
           <div className="text-center py-12 border border-dashed border-border rounded-2xl">
             <div className="h-12 w-12 bg-muted rounded-xl flex items-center justify-center mx-auto mb-3">
@@ -494,8 +498,8 @@ export function MemberProgrammingView({
             Upcoming
           </h2>
           {futureDates.map((dateStr) => {
-            const day = daysByDate[dateStr];
-            if (!day) return null;
+            const daysForDate = daysByDate[dateStr];
+            if (!daysForDate?.length) return null;
             return (
               <div key={dateStr} className="space-y-2">
                 <p className="text-xs font-medium text-foreground">
@@ -505,29 +509,34 @@ export function MemberProgrammingView({
                     day: "numeric",
                   })}
                 </p>
-                <div className="bg-card border border-border rounded-2xl p-5">
-                  {day.sections.map((section, i) => {
-                    const uiType = sectionTypeToUiType(section.sectionType);
-                    const typeInfo = getSectionTypeInfo(uiType);
-                    const letter = LETTERS[i] || String(i + 1);
-                    return (
-                      <div key={section.id} className="mb-2 last:mb-0">
-                        <div className="flex items-center gap-2">
-                          <span className="h-5 w-5 rounded flex items-center justify-center bg-primary/10 text-primary text-[10px] font-bold shrink-0">
-                            {letter}
-                          </span>
-                          <span className={`${typeInfo.color} shrink-0`}>{typeInfo.icon}</span>
-                          <span className="text-sm font-semibold text-foreground">{section.title}</span>
+                {daysForDate.map((day) => (
+                  <div key={day.id} className="bg-card border border-border rounded-2xl p-5">
+                    {daysForDate.length > 1 && day.track && (
+                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">{day.track}</p>
+                    )}
+                    {day.sections.map((section, i) => {
+                      const uiType = sectionTypeToUiType(section.sectionType);
+                      const typeInfo = getSectionTypeInfo(uiType);
+                      const letter = LETTERS[i] || String(i + 1);
+                      return (
+                        <div key={section.id} className="mb-2 last:mb-0">
+                          <div className="flex items-center gap-2">
+                            <span className="h-5 w-5 rounded flex items-center justify-center bg-primary/10 text-primary text-[10px] font-bold shrink-0">
+                              {letter}
+                            </span>
+                            <span className={`${typeInfo.color} shrink-0`}>{typeInfo.icon}</span>
+                            <span className="text-sm font-semibold text-foreground">{section.title}</span>
+                          </div>
+                          {section.instructions && (
+                            <p className="text-xs text-muted-foreground pl-7 mt-0.5 line-clamp-2 whitespace-pre-line">
+                              {section.instructions}
+                            </p>
+                          )}
                         </div>
-                        {section.instructions && (
-                          <p className="text-xs text-muted-foreground pl-7 mt-0.5 line-clamp-2 whitespace-pre-line">
-                            {section.instructions}
-                          </p>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
+                      );
+                    })}
+                  </div>
+                ))}
               </div>
             );
           })}
@@ -540,8 +549,8 @@ export function MemberProgrammingView({
             Past Workouts
           </h2>
           {pastDates.map((dateStr) => {
-            const day = daysByDate[dateStr];
-            if (!day) return null;
+            const daysForDate = daysByDate[dateStr];
+            if (!daysForDate?.length) return null;
             return (
               <div key={dateStr} className="space-y-2">
                 <p className="text-xs font-medium text-foreground">
@@ -551,24 +560,29 @@ export function MemberProgrammingView({
                     day: "numeric",
                   })}
                 </p>
-                <div className="bg-card border border-border rounded-2xl p-5 opacity-80">
-                  {day.sections.map((section, i) => (
-                    <SectionResultsPanel
-                      key={section.id}
-                      gymId={gymId}
-                      dayId={day.id}
-                      section={section}
-                      currentMemberId={currentMemberId}
-                      index={i}
-                      total={day.sections.length}
-                      onLogResult={onLogResult}
-                      onEditResult={onEditResult}
-                      isLoggingResult={isLoggingResult}
-                      isStaff={isStaff}
-                      membersList={membersList}
-                    />
-                  ))}
-                </div>
+                {daysForDate.map((day) => (
+                  <div key={day.id} className="bg-card border border-border rounded-2xl p-5 opacity-80">
+                    {daysForDate.length > 1 && day.track && (
+                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">{day.track}</p>
+                    )}
+                    {day.sections.map((section, i) => (
+                      <SectionResultsPanel
+                        key={section.id}
+                        gymId={gymId}
+                        dayId={day.id}
+                        section={section}
+                        currentMemberId={currentMemberId}
+                        index={i}
+                        total={day.sections.length}
+                        onLogResult={onLogResult}
+                        onEditResult={onEditResult}
+                        isLoggingResult={isLoggingResult}
+                        isStaff={isStaff}
+                        membersList={membersList}
+                      />
+                    ))}
+                  </div>
+                ))}
               </div>
             );
           })}

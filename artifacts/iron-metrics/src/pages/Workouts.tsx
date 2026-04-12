@@ -435,10 +435,11 @@ export function Workouts() {
   );
 
   const daysByDate = useMemo(() => {
-    const map: Record<string, ProgrammingDayWithSections> = {};
+    const map: Record<string, ProgrammingDayWithSections[]> = {};
     if (!programmingDays) return map;
     for (const day of programmingDays as ProgrammingDayWithSections[]) {
-      map[day.date] = day;
+      if (!map[day.date]) map[day.date] = [];
+      map[day.date].push(day);
     }
     return map;
   }, [programmingDays]);
@@ -877,12 +878,11 @@ export function Workouts() {
         />
       ) : viewMode === "day" ? (
         <div className="space-y-4">
-          {daysByDate[dateStr] ? (
-            (() => {
-              const day = daysByDate[dateStr];
+          {daysByDate[dateStr]?.length ? (
+            daysByDate[dateStr].map((day) => {
               const hasTrackableSections = day.sections.some(s => s.resultTrackingEnabled);
               return (
-                <>
+                <div key={day.id} className="space-y-4">
                   <DayCard
                     day={day}
                     isStaff={isStaff}
@@ -917,9 +917,9 @@ export function Workouts() {
                       showNavigation={false}
                     />
                   )}
-                </>
+                </div>
               );
-            })()
+            })
           ) : (
             <motion.div
               initial={{ opacity: 0 }}
@@ -963,8 +963,8 @@ export function Workouts() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {weekDates.map((d, i) => {
-            const day = daysByDate[d];
-            if (!day) {
+            const daysForDate = daysByDate[d];
+            if (!daysForDate?.length) {
               return (
                 <motion.div
                   key={d}
@@ -998,27 +998,31 @@ export function Workouts() {
             }
 
             return (
-              <DayCard
-                key={d}
-                day={day}
-                isStaff={isStaff}
-                gymId={activeGymId}
-                notifyVersion={notifyVersion}
-                animationDelay={i * 0.05}
-                onEdit={() => {
-                  setEditData(programmingDayToData(day));
-                  setPanelOpen(true);
-                }}
-                onDuplicate={() => handleDuplicate(day)}
-                onTogglePublish={() => handleTogglePublish(day)}
-                onDelete={() => setDeleteConfirmDay(day)}
-                onNotify={() => {
-                  setShareDialogDay({ title: day.title, date: day.date, track: day.track || "default" });
-                  setShareDialogOpen(true);
-                }}
-                publicWodUrl={publicWodUrl}
-                onCopyLink={(msg) => toast({ title: "Link Copied", description: msg })}
-              />
+              <div key={d} className="space-y-4">
+                {daysForDate.map((day) => (
+                  <DayCard
+                    key={day.id}
+                    day={day}
+                    isStaff={isStaff}
+                    gymId={activeGymId}
+                    notifyVersion={notifyVersion}
+                    animationDelay={i * 0.05}
+                    onEdit={() => {
+                      setEditData(programmingDayToData(day));
+                      setPanelOpen(true);
+                    }}
+                    onDuplicate={() => handleDuplicate(day)}
+                    onTogglePublish={() => handleTogglePublish(day)}
+                    onDelete={() => setDeleteConfirmDay(day)}
+                    onNotify={() => {
+                      setShareDialogDay({ title: day.title, date: day.date, track: day.track || "default" });
+                      setShareDialogOpen(true);
+                    }}
+                    publicWodUrl={publicWodUrl}
+                    onCopyLink={(msg) => toast({ title: "Link Copied", description: msg })}
+                  />
+                ))}
+              </div>
             );
           })}
         </div>
