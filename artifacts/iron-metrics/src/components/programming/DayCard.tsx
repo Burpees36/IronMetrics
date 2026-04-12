@@ -115,7 +115,10 @@ export function DayCard({
 
   const handleShareCopy = async () => {
     if (!publicWodUrl) return;
-    const dayUrl = `${publicWodUrl}?date=${day.date}`;
+    const params = new URLSearchParams();
+    params.set("date", day.date);
+    if (day.track && day.track !== "default") params.set("track", day.track);
+    const dayUrl = `${publicWodUrl}?${params.toString()}`;
     try {
       await navigator.clipboard.writeText(dayUrl);
     } catch {

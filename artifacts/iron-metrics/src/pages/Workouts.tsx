@@ -268,7 +268,7 @@ export function Workouts() {
 
   const { data: gym } = useGetGym(activeGymId as number, { query: { enabled: !!activeGymId } });
   const gymSlug = (gym as { slug?: string } | undefined)?.slug;
-  const publicWodUrl = gymSlug
+  const baseWodUrl = gymSlug
     ? `${window.location.origin}${import.meta.env.BASE_URL.replace(/\/$/, "")}/wod/${gymSlug}`
     : "";
 
@@ -440,7 +440,7 @@ export function Workouts() {
             title: "Week Generated",
             description: `${generated} days created${skipped > 0 ? `, ${skipped} days skipped (already exist)` : ""}. Review and edit before publishing.`,
           });
-          if (generated > 0 && publicWodUrl) {
+          if (generated > 0 && baseWodUrl) {
             setShareDialogDay(null);
             setShareDialogOpen(true);
           }
@@ -456,7 +456,7 @@ export function Workouts() {
         setIsGenerating(false);
       }
     },
-    [activeGymId, weekDates, generateWeekMutation, invalidateProgramming, toast, publicWodUrl]
+    [activeGymId, weekDates, generateWeekMutation, invalidateProgramming, toast, baseWodUrl]
   );
 
   const daysByDate = useMemo(() => {
@@ -591,7 +591,7 @@ export function Workouts() {
           title: wasPublishing ? "Published" : "Unpublished",
           description: `Programming for ${new Date(day.date + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })} has been ${wasPublishing ? "published" : "unpublished"}.`,
         });
-        if (wasPublishing && publicWodUrl) {
+        if (wasPublishing && baseWodUrl) {
           setShareDialogDay({ title: day.title, date: day.date, track: day.track || "default" });
           setShareDialogOpen(true);
         }
@@ -603,7 +603,7 @@ export function Workouts() {
         });
       }
     },
-    [activeGymId, togglePublishMutation, invalidateProgramming, toast, publicWodUrl]
+    [activeGymId, togglePublishMutation, invalidateProgramming, toast, baseWodUrl]
   );
 
   const handleDelete = useCallback(
@@ -911,7 +911,7 @@ export function Workouts() {
               <span>Generating...</span>
             </div>
           )}
-          {publicWodUrl && (
+          {baseWodUrl && (
             <button
               onClick={() => {
                 setShareDialogDay(null);
@@ -1003,7 +1003,7 @@ export function Workouts() {
                       setShareDialogDay({ title: day.title, date: day.date, track: day.track || "default" });
                       setShareDialogOpen(true);
                     }}
-                    publicWodUrl={publicWodUrl}
+                    publicWodUrl={baseWodUrl}
                     onCopyLink={(msg) => toast({ title: "Link Copied", description: msg })}
                   />
                   {hasTrackableSections && (
@@ -1122,7 +1122,7 @@ export function Workouts() {
                       setShareDialogDay({ title: day.title, date: day.date, track: day.track || "default" });
                       setShareDialogOpen(true);
                     }}
-                    publicWodUrl={publicWodUrl}
+                    publicWodUrl={baseWodUrl}
                     onCopyLink={(msg) => toast({ title: "Link Copied", description: msg })}
                   />
                 ))}
@@ -1198,11 +1198,17 @@ export function Workouts() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {publicWodUrl && activeGymId && (
+      {baseWodUrl && activeGymId && (
         <ShareWorkoutDialog
           open={shareDialogOpen}
           onOpenChange={setShareDialogOpen}
-          publicUrl={publicWodUrl}
+          publicUrl={(() => {
+            const params = new URLSearchParams();
+            if (shareDialogDay?.date) params.set("date", shareDialogDay.date);
+            if (shareDialogDay?.track && shareDialogDay.track !== "default") params.set("track", shareDialogDay.track);
+            const qs = params.toString();
+            return qs ? `${baseWodUrl}?${qs}` : baseWodUrl;
+          })()}
           gymId={activeGymId}
           activeMemberCount={activeMemberCount}
           dayTitle={shareDialogDay?.title}

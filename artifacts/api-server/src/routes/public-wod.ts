@@ -45,12 +45,16 @@ router.get("/public/wod/:gymSlug/programming", async (req, res): Promise<void> =
       return;
     }
 
-    const { startDate, endDate } = req.query;
+    const { startDate, endDate, track } = req.query;
+
+    const trackFilter = track && typeof track === "string" && track !== "default"
+      ? eq(programmingDaysTable.track, track)
+      : or(eq(programmingDaysTable.track, "default"), isNull(programmingDaysTable.track));
 
     const conditions: any[] = [
       eq(programmingDaysTable.gymId, gym.id),
       eq(programmingDaysTable.status, "published"),
-      or(eq(programmingDaysTable.track, "default"), isNull(programmingDaysTable.track)),
+      trackFilter,
     ];
 
     if (startDate && typeof startDate === "string") {

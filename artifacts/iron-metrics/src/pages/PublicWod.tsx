@@ -128,6 +128,11 @@ export function PublicWod() {
   const [days, setDays] = useState<ProgrammingDay[]>([]);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
+  const [selectedTrack] = useState<string | null>(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get("track");
+  });
+
   const [selectedDate, setSelectedDate] = useState<Date>(() => {
     const params = new URLSearchParams(window.location.search);
     const dateParam = params.get("date");
@@ -173,8 +178,9 @@ export function PublicWod() {
         const end = new Date(selectedDate);
         end.setDate(end.getDate() + 7);
 
+        const trackParam = selectedTrack && selectedTrack !== "default" ? `&track=${encodeURIComponent(selectedTrack)}` : "";
         const progRes = await fetch(
-          `${API_BASE}/api/public/wod/${gymSlug}/programming?startDate=${toDateString(start)}&endDate=${toDateString(end)}`
+          `${API_BASE}/api/public/wod/${gymSlug}/programming?startDate=${toDateString(start)}&endDate=${toDateString(end)}${trackParam}`
         );
         if (progRes.ok) {
           const progData = await progRes.json();
@@ -185,7 +191,7 @@ export function PublicWod() {
     };
 
     fetchProgramming();
-  }, [gymSlug, notFound, loading, selectedDateStr]);
+  }, [gymSlug, notFound, loading, selectedDateStr, selectedTrack]);
 
   const todayStr = selectedDateStr;
   const todayDay = useMemo(() => days.find((d) => d.date === todayStr) || null, [days, todayStr]);
@@ -247,6 +253,9 @@ export function PublicWod() {
           <h1 className="text-xl font-bold text-foreground" data-testid="gym-name">
             {gymInfo?.name}
           </h1>
+          {selectedTrack && selectedTrack !== "default" && (
+            <p className="text-sm font-medium text-primary mt-1">{selectedTrack} Track</p>
+          )}
         </div>
 
         <div className="space-y-4">
