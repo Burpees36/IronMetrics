@@ -90,7 +90,7 @@ export function CreateProgrammingPanel({
     for (let i = 0; i < sections.length; i++) {
       const s = sections[i];
       const o = origSections[i];
-      if (s.title !== o.title || s.instructions !== o.instructions || s.type !== o.type || s.coachNotes !== o.coachNotes || s.trackResults !== o.trackResults) return true;
+      if (s.title !== o.title || s.instructions !== o.instructions || s.type !== o.type || s.coachNotes !== o.coachNotes || s.trackResults !== o.trackResults || s.timeCap !== o.timeCap || s.stimulus !== o.stimulus || s.scalingNotes !== o.scalingNotes || s.memberNotes !== o.memberNotes) return true;
     }
     return false;
   })();

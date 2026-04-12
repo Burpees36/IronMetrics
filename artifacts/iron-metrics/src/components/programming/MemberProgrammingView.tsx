@@ -166,6 +166,12 @@ function SectionResultsPanel({
         </div>
       )}
 
+      {section.intendedStimulus && (
+        <div className="pl-8 mb-2">
+          <p className="text-xs text-blue-500">🎯 Stimulus: {section.intendedStimulus}</p>
+        </div>
+      )}
+
       {section.scalingNotes && (
         <div className="pl-8 mb-2">
           <p className="text-xs text-muted-foreground">Scaling: {section.scalingNotes}</p>
