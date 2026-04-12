@@ -922,7 +922,8 @@ export type CancelledMembersResponseCancelledMembersItem = {
   membershipType?: string | null;
   /** @nullable */
   joinDate?: string | null;
-  updatedAt?: string;
+  /** @nullable */
+  cancelledAt?: string | null;
 };
 
 export type CancelledMembersResponsePeriod = {
@@ -943,11 +944,14 @@ export interface BillingSummary {
   arm?: number;
   activeSubscriptions?: number;
   totalSubscriptions?: number;
+  activeBillableMembers?: number;
   failedPayments?: number;
   overdueAccounts?: number;
   collectionsThisMonth?: number;
   refundsThisMonth?: number;
   cancelledThisMonth?: number;
+  revenueSource?: string;
+  hasSubscriptionData?: boolean;
 }
 
 export interface Product {

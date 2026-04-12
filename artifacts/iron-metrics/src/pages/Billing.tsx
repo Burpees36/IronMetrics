@@ -166,7 +166,7 @@ export function Billing() {
 
   const isLoading = plansLoading || subsLoading;
 
-  const summary = billingSummary as any;
+  const summary = billingSummary;
   const mrr = summary?.mrr ?? 0;
   const activeBillableMembers = summary?.activeBillableMembers ?? summary?.activeSubscriptions ?? 0;
   const activeSubs = summary?.activeSubscriptions ?? 0;
@@ -818,11 +818,11 @@ export function Billing() {
                 </button>
               </div>
             </div>
-            {(cancelledData as any)?.lostRevenue > 0 && (
+            {(cancelledData?.lostRevenue ?? 0) > 0 && (
               <div className="mt-4 p-3 rounded-xl bg-destructive/5 border border-destructive/20 flex items-center gap-3">
                 <AlertTriangle className="h-5 w-5 text-destructive flex-shrink-0" />
                 <p className="text-sm text-destructive">
-                  <span className="font-semibold">${(cancelledData as any)?.lostRevenue?.toLocaleString()}/mo</span> in lost recurring revenue this period
+                  <span className="font-semibold">${cancelledData?.lostRevenue?.toLocaleString()}/mo</span> in lost recurring revenue this period
                 </p>
               </div>
             )}
@@ -831,11 +831,11 @@ export function Billing() {
             <div className="p-12 flex justify-center"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>
           ) : (
             <>
-              {(cancelledData as any)?.cancelledSubscriptions?.length > 0 && (
+              {(cancelledData?.cancelledSubscriptions?.length ?? 0) > 0 && (
                 <div className="p-6 border-b border-border">
                   <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-4">Cancellation Details</h4>
                   <div className="space-y-3">
-                    {(cancelledData as any)?.cancelledSubscriptions?.map((cs: any) => (
+                    {cancelledData?.cancelledSubscriptions?.map((cs) => (
                       <div key={cs.subscriptionId} className="flex items-center justify-between p-4 rounded-xl bg-muted/20 border border-border">
                         <div className="flex items-center gap-4">
                           <div className="h-10 w-10 rounded-full bg-destructive/10 flex items-center justify-center">
@@ -859,7 +859,7 @@ export function Billing() {
               )}
               <div className="p-6">
                 <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-4">All Cancelled Members</h4>
-                {(cancelledData as any)?.cancelledMembers?.length > 0 ? (
+                {(cancelledData?.cancelledMembers?.length ?? 0) > 0 ? (
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm text-left">
                       <thead className="text-xs text-muted-foreground uppercase bg-muted/30 border-b border-border">
@@ -872,7 +872,7 @@ export function Billing() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-border">
-                        {(cancelledData as any)?.cancelledMembers?.map((m: any) => (
+                        {cancelledData?.cancelledMembers?.map((m) => (
                           <tr key={m.id} className="hover:bg-secondary transition-colors cursor-pointer" onClick={() => navigate(`/members/${m.id}`)}>
                             <td className="px-4 py-3 font-medium text-foreground">{m.firstName} {m.lastName}</td>
                             <td className="px-4 py-3 text-muted-foreground">{m.email}</td>
