@@ -263,16 +263,23 @@ export function ShareWorkoutDialog({
                     Share
                   </button>
                 )}
-                <a
-                  href={publicUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex-1 flex items-center justify-center gap-2 h-9 rounded-lg border border-border bg-background hover:bg-accent transition-colors text-sm text-muted-foreground hover:text-foreground"
-                  title="Open in new tab"
-                >
-                  <ExternalLink className="h-4 w-4" />
-                  <span>Open</span>
-                </a>
+                {isDraft && !publicUrl ? (
+                  <span className="flex-1 flex items-center justify-center gap-2 h-9 rounded-lg border border-border bg-muted/50 text-sm text-muted-foreground cursor-wait">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    <span>Loading preview...</span>
+                  </span>
+                ) : (
+                  <a
+                    href={publicUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex-1 flex items-center justify-center gap-2 h-9 rounded-lg border border-border bg-background hover:bg-accent transition-colors text-sm text-muted-foreground hover:text-foreground"
+                    title="Open in new tab"
+                  >
+                    <ExternalLink className="h-4 w-4" />
+                    <span>Open</span>
+                  </a>
+                )}
               </div>
             </div>
           </div>

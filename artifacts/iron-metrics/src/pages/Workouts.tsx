@@ -501,7 +501,7 @@ export function Workouts() {
         setIsGenerating(false);
       }
     },
-    [activeGymId, weekDates, generateWeekMutation, invalidateProgramming, toast, baseWodUrl]
+    [activeGymId, weekDates, generateWeekMutation, invalidateProgramming, toast, baseWodUrl, selectedTrack, dateStr, resolveDayForShare]
   );
 
   const daysByDate = useMemo(() => {
