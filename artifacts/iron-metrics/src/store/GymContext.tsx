@@ -27,7 +27,7 @@ function isPreviewMode(): boolean {
 }
 
 export function GymProvider({ children }: { children: React.ReactNode }) {
-  const { isLoaded, isSignedIn, userId } = useAuth();
+  const { isLoaded, isSignedIn, userId, getToken } = useAuth();
   const [activeGymId, setActiveGymIdRaw] = useState<number | null>(() => {
     const saved = localStorage.getItem(STORAGE_KEY);
     return saved ? parseInt(saved, 10) : null;
@@ -44,7 +44,7 @@ export function GymProvider({ children }: { children: React.ReactNode }) {
     shouldAutoFetch && activeGymId === null,
   );
 
-  const fetchOnboardingStatus = useCallback((gymId: number) => {
+  const fetchOnboardingStatus = useCallback(async (gymId: number) => {
     if (abortRef.current) {
       abortRef.current.abort();
     }
@@ -54,6 +54,12 @@ export function GymProvider({ children }: { children: React.ReactNode }) {
     setIsOnboardingLoading(true);
     setOnboardingFetchFailed(false);
     const headers: Record<string, string> = isPreviewMode() ? { "X-Preview": "1" } : {};
+    try {
+      const token = await getToken();
+      if (token) {
+        headers["Authorization"] = `Bearer ${token}`;
+      }
+    } catch {}
     fetch(`/api/gyms/${gymId}/onboarding`, { credentials: "include", headers, signal: controller.signal })
       .then((r) => {
         if (controller.signal.aborted) return null;
@@ -82,7 +88,7 @@ export function GymProvider({ children }: { children: React.ReactNode }) {
           setIsOnboardingLoading(false);
         }
       });
-  }, []);
+  }, [getToken]);
 
   const refreshOnboarding = useCallback(() => {
     if (activeGymId) {
@@ -137,18 +143,22 @@ export function GymProvider({ children }: { children: React.ReactNode }) {
 
     setIsGymLoading(true);
     const headers: Record<string, string> = preview ? { "X-Preview": "1" } : {};
-    fetch("/api/gyms", { credentials: "include", headers })
-      .then((res) => (res.ok ? res.json() : []))
-      .then((gyms: { id: number }[]) => {
-        if (gyms.length > 0) {
-          setActiveGymId(gyms[0].id);
-        }
-        setIsGymLoading(false);
-      })
-      .catch(() => {
-        setIsGymLoading(false);
-      });
-  }, [activeGymId, shouldAutoFetch, preview, setActiveGymId]);
+    getToken().then((token) => {
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+    }).catch(() => {}).then(() =>
+      fetch("/api/gyms", { credentials: "include", headers })
+        .then((res) => (res.ok ? res.json() : []))
+        .then((gyms: { id: number }[]) => {
+          if (gyms.length > 0) {
+            setActiveGymId(gyms[0].id);
+          }
+          setIsGymLoading(false);
+        })
+        .catch(() => {
+          setIsGymLoading(false);
+        })
+    );
+  }, [activeGymId, shouldAutoFetch, preview, setActiveGymId, getToken]);
 
   return (
     <GymContext.Provider value={{
