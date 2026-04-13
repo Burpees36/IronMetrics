@@ -535,6 +535,7 @@ export function Dashboard() {
               </span>
             </div>
 
+            {stats.rsiScore != null && (
             <div className={cn(
               "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border",
               stats.rsiScore >= 70
@@ -547,6 +548,7 @@ export function Dashboard() {
               <span className="font-semibold">{stats.rsiScore.toFixed(1)}</span>
               <span>{stats.rsiBand}</span>
             </div>
+            )}
           </div>
           {(() => {
             const urgentItems = [...criticalItems, ...warningItems].filter(i => i.actionLink).slice(0, 2);
@@ -747,9 +749,11 @@ export function Dashboard() {
                   <BrainCircuit className="w-4 h-4" /> RSI Score
                 </p>
                 <div className="flex items-end justify-between mt-2">
-                  <p className="text-xl font-bold text-foreground">{stats.rsiScore.toFixed(1)}</p>
+                  <p className="text-xl font-bold text-foreground">{stats.rsiScore != null ? stats.rsiScore.toFixed(1) : "—"}</p>
                   <div className="text-right">
-                    {stats.rsiTrendInsufficient ? (
+                    {stats.rsiScore == null ? (
+                      <span className="text-xs text-muted-foreground">No data yet</span>
+                    ) : stats.rsiTrendInsufficient ? (
                       <Link href="/intelligence">
                         <span className="text-xs text-primary font-medium hover:underline cursor-pointer">{stats.rsiBand}</span>
                       </Link>
