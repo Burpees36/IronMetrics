@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useRef } from "react";
+import React, { createContext, useContext, useState, useEffect } from "react";
 import { useAuth } from "@clerk/react";
 
 interface GymContextType {
@@ -24,7 +24,6 @@ function isPreviewMode(): boolean {
 
 export function GymProvider({ children }: { children: React.ReactNode }) {
   const { isLoaded, isSignedIn, userId } = useAuth();
-  const prevUserId = useRef<string | null | undefined>(undefined);
   const [activeGymId, setActiveGymId] = useState<number | null>(() => {
     const saved = localStorage.getItem(STORAGE_KEY);
     return saved ? parseInt(saved, 10) : null;
@@ -38,29 +37,15 @@ export function GymProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!isLoaded) return;
-    const previousId = prevUserId.current;
-    prevUserId.current = userId ?? null;
-    if (previousId === undefined) {
-      const storedUser = localStorage.getItem(USER_KEY);
-      if (userId && storedUser && storedUser !== userId) {
+    const storedUser = localStorage.getItem(USER_KEY);
+    if (userId) {
+      if (storedUser && storedUser !== userId) {
         localStorage.removeItem(STORAGE_KEY);
         localStorage.setItem(USER_KEY, userId);
         setActiveGymId(null);
-        return;
-      }
-      if (userId) {
+      } else if (!storedUser) {
         localStorage.setItem(USER_KEY, userId);
       }
-      return;
-    }
-    if (previousId !== (userId ?? null)) {
-      localStorage.removeItem(STORAGE_KEY);
-      if (userId) {
-        localStorage.setItem(USER_KEY, userId);
-      } else {
-        localStorage.removeItem(USER_KEY);
-      }
-      setActiveGymId(null);
     }
   }, [isLoaded, userId]);
 
