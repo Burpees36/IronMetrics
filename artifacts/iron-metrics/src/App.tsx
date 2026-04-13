@@ -87,9 +87,19 @@ function Router() {
 
   return (
     <Switch>
+      <Route path="/sign-in/:rest*">
+        <div className="min-h-screen w-full flex items-center justify-center bg-background">
+          <SignIn routing="path" path={`${BASE}/sign-in`} signUpUrl={`${BASE}/sign-up`} fallbackRedirectUrl={`${BASE}/dashboard`} />
+        </div>
+      </Route>
       <Route path="/sign-in">
         <div className="min-h-screen w-full flex items-center justify-center bg-background">
           <SignIn routing="path" path={`${BASE}/sign-in`} signUpUrl={`${BASE}/sign-up`} fallbackRedirectUrl={`${BASE}/dashboard`} />
+        </div>
+      </Route>
+      <Route path="/sign-up/:rest*">
+        <div className="min-h-screen w-full flex items-center justify-center bg-background">
+          <SignUp routing="path" path={`${BASE}/sign-up`} signInUrl={`${BASE}/sign-in`} fallbackRedirectUrl={`${BASE}/dashboard`} />
         </div>
       </Route>
       <Route path="/sign-up">
