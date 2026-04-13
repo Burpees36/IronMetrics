@@ -45,8 +45,20 @@ function CelebrationItem({ celebration }: { celebration: MorningBriefingCelebrat
   );
 }
 
+const typePriority: Record<string, number> = {
+  birthday: 0,
+  anniversary: 1,
+  attendance_milestone: 2,
+  streak: 3,
+  comeback: 4,
+};
+
 export function CelebrationsBanner({ celebrations }: { celebrations: MorningBriefingCelebration[] }) {
   if (!celebrations || celebrations.length === 0) return null;
+
+  const sorted = [...celebrations].sort(
+    (a, b) => (typePriority[a.type] ?? 99) - (typePriority[b.type] ?? 99)
+  );
 
   return (
     <motion.div
@@ -62,9 +74,9 @@ export function CelebrationsBanner({ celebrations }: { celebrations: MorningBrie
         </div>
         <div>
           <h3 className="text-sm font-semibold text-foreground">
-            {celebrations.length === 1
+            {sorted.length === 1
               ? "1 Member Milestone Today"
-              : `${celebrations.length} Member Milestones Today`}
+              : `${sorted.length} Member Milestones Today`}
           </h3>
           <p className="text-xs text-muted-foreground">
             Take a moment to recognize these wins — it means a lot.
@@ -73,7 +85,7 @@ export function CelebrationsBanner({ celebrations }: { celebrations: MorningBrie
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-        {celebrations.map((c, i) => (
+        {sorted.map((c, i) => (
           <CelebrationItem key={`${c.memberName}-${c.type}-${i}`} celebration={c} />
         ))}
       </div>
