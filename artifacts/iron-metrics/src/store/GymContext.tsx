@@ -1,10 +1,14 @@
-import React, { createContext, useContext, useState, useEffect } from "react";
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from "react";
 import { useAuth } from "@clerk/react";
 
 interface GymContextType {
   activeGymId: number | null;
   setActiveGymId: (id: number | null) => void;
   isGymLoading: boolean;
+  onboardingComplete: boolean | null;
+  isOnboardingLoading: boolean;
+  onboardingFetchFailed: boolean;
+  refreshOnboarding: () => void;
 }
 
 const GymContext = createContext<GymContextType | undefined>(undefined);
@@ -24,16 +28,73 @@ function isPreviewMode(): boolean {
 
 export function GymProvider({ children }: { children: React.ReactNode }) {
   const { isLoaded, isSignedIn, userId } = useAuth();
-  const [activeGymId, setActiveGymId] = useState<number | null>(() => {
+  const [activeGymId, setActiveGymIdRaw] = useState<number | null>(() => {
     const saved = localStorage.getItem(STORAGE_KEY);
     return saved ? parseInt(saved, 10) : null;
   });
+
+  const [onboardingComplete, setOnboardingComplete] = useState<boolean | null>(null);
+  const [isOnboardingLoading, setIsOnboardingLoading] = useState(false);
+  const [onboardingFetchFailed, setOnboardingFetchFailed] = useState(false);
+  const abortRef = useRef<AbortController | null>(null);
 
   const preview = isPreviewMode();
   const shouldAutoFetch = preview || (isLoaded && isSignedIn);
   const [isGymLoading, setIsGymLoading] = useState(
     shouldAutoFetch && activeGymId === null,
   );
+
+  const fetchOnboardingStatus = useCallback((gymId: number) => {
+    if (abortRef.current) {
+      abortRef.current.abort();
+    }
+    const controller = new AbortController();
+    abortRef.current = controller;
+
+    setIsOnboardingLoading(true);
+    setOnboardingFetchFailed(false);
+    const headers: Record<string, string> = isPreviewMode() ? { "X-Preview": "1" } : {};
+    fetch(`/api/gyms/${gymId}/onboarding`, { credentials: "include", headers, signal: controller.signal })
+      .then((r) => {
+        if (controller.signal.aborted) return null;
+        if (!r.ok) {
+          setOnboardingComplete(null);
+          setOnboardingFetchFailed(true);
+          return null;
+        }
+        return r.json();
+      })
+      .then((data) => {
+        if (controller.signal.aborted) return;
+        if (data) {
+          setOnboardingComplete(data.isComplete === true);
+        }
+      })
+      .catch((err) => {
+        if (err instanceof DOMException && err.name === "AbortError") return;
+        if (!controller.signal.aborted) {
+          setOnboardingComplete(null);
+          setOnboardingFetchFailed(true);
+        }
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) {
+          setIsOnboardingLoading(false);
+        }
+      });
+  }, []);
+
+  const refreshOnboarding = useCallback(() => {
+    if (activeGymId) {
+      fetchOnboardingStatus(activeGymId);
+    }
+  }, [activeGymId, fetchOnboardingStatus]);
+
+  const setActiveGymId = useCallback((id: number | null) => {
+    setActiveGymIdRaw(id);
+    setOnboardingComplete(null);
+    setOnboardingFetchFailed(false);
+  }, []);
 
   useEffect(() => {
     if (!isLoaded) return;
@@ -47,7 +108,7 @@ export function GymProvider({ children }: { children: React.ReactNode }) {
         localStorage.setItem(USER_KEY, userId);
       }
     }
-  }, [isLoaded, userId]);
+  }, [isLoaded, userId, setActiveGymId]);
 
   useEffect(() => {
     if (activeGymId) {
@@ -56,6 +117,17 @@ export function GymProvider({ children }: { children: React.ReactNode }) {
       localStorage.removeItem(STORAGE_KEY);
     }
   }, [activeGymId]);
+
+  useEffect(() => {
+    if (activeGymId && shouldAutoFetch) {
+      fetchOnboardingStatus(activeGymId);
+    }
+    return () => {
+      if (abortRef.current) {
+        abortRef.current.abort();
+      }
+    };
+  }, [activeGymId, shouldAutoFetch, fetchOnboardingStatus]);
 
   useEffect(() => {
     if (activeGymId || !shouldAutoFetch) {
@@ -76,10 +148,18 @@ export function GymProvider({ children }: { children: React.ReactNode }) {
       .catch(() => {
         setIsGymLoading(false);
       });
-  }, [activeGymId, shouldAutoFetch, preview]);
+  }, [activeGymId, shouldAutoFetch, preview, setActiveGymId]);
 
   return (
-    <GymContext.Provider value={{ activeGymId, setActiveGymId, isGymLoading }}>
+    <GymContext.Provider value={{
+      activeGymId,
+      setActiveGymId,
+      isGymLoading,
+      onboardingComplete,
+      isOnboardingLoading,
+      onboardingFetchFailed,
+      refreshOnboarding,
+    }}>
       {children}
     </GymContext.Provider>
   );

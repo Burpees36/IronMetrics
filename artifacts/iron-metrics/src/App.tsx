@@ -53,9 +53,8 @@ const ONBOARDING_EXEMPT = new Set(["/onboarding", "/select-gym", "/plan-selectio
 
 function ProtectedRoute({ component: Component }: { component: React.ElementType }) {
   const { isLoaded, isSignedIn } = useAuth();
-  const { activeGymId, setActiveGymId, isGymLoading } = useGym();
+  const { activeGymId, setActiveGymId, isGymLoading, onboardingComplete, isOnboardingLoading, onboardingFetchFailed } = useGym();
   const [location, setLocation] = useLocation();
-  const [onboardingChecked, setOnboardingChecked] = React.useState(false);
 
   React.useEffect(() => {
     if (isLoaded && !isSignedIn) {
@@ -71,40 +70,23 @@ function ProtectedRoute({ component: Component }: { component: React.ElementType
 
   React.useEffect(() => {
     if (!isLoaded || !isSignedIn || !activeGymId || ONBOARDING_EXEMPT.has(location)) {
-      setOnboardingChecked(true);
       return;
     }
-    setOnboardingChecked(false);
-    let cancelled = false;
-    fetch(`/api/gyms/${activeGymId}/onboarding`, { credentials: "include" })
-      .then((r) => {
-        if (cancelled) return null;
-        if (!r.ok) {
-          setActiveGymId(null);
-          setLocation("/select-gym");
-          return null;
-        }
-        return r.json();
-      })
-      .then((data) => {
-        if (cancelled || !data) return;
-        if (data.isComplete === false) {
-          setLocation("/onboarding");
-        }
-        setOnboardingChecked(true);
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setActiveGymId(null);
-          setLocation("/select-gym");
-        }
-      });
-    return () => { cancelled = true; };
-  }, [isLoaded, isSignedIn, activeGymId, location, setLocation, setActiveGymId]);
+    if (onboardingFetchFailed) {
+      setActiveGymId(null);
+      setLocation("/select-gym");
+      return;
+    }
+    if (onboardingComplete === false) {
+      setLocation("/onboarding");
+    }
+  }, [isLoaded, isSignedIn, activeGymId, location, setLocation, setActiveGymId, onboardingComplete, onboardingFetchFailed]);
 
   if (!isLoaded || isGymLoading) return null;
   if (!isSignedIn) return null;
-  if (!onboardingChecked) return null;
+  if (isOnboardingLoading) return null;
+  if (!activeGymId) return null;
+  if (!ONBOARDING_EXEMPT.has(location) && onboardingComplete === false) return null;
 
   return (
     <AppLayout>
@@ -136,12 +118,12 @@ function Router() {
       </Route>
       <Route path="/sign-up/:rest*">
         <div className="min-h-screen w-full flex items-center justify-center bg-background">
-          <SignUp routing="path" path={`${BASE}/sign-up`} signInUrl={`${BASE}/sign-in`} fallbackRedirectUrl={`${BASE}/dashboard`} />
+          <SignUp routing="path" path={`${BASE}/sign-up`} signInUrl={`${BASE}/sign-in`} fallbackRedirectUrl={`${BASE}/select-gym`} />
         </div>
       </Route>
       <Route path="/sign-up">
         <div className="min-h-screen w-full flex items-center justify-center bg-background">
-          <SignUp routing="path" path={`${BASE}/sign-up`} signInUrl={`${BASE}/sign-in`} fallbackRedirectUrl={`${BASE}/dashboard`} />
+          <SignUp routing="path" path={`${BASE}/sign-up`} signInUrl={`${BASE}/sign-in`} fallbackRedirectUrl={`${BASE}/select-gym`} />
         </div>
       </Route>
       <Route path="/login">{() => <RedirectTo to="/sign-in" />}</Route>

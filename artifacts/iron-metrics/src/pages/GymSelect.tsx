@@ -10,35 +10,22 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { TIMEZONES } from "./onboarding/types";
+import { useToast } from "@/hooks/use-toast";
 
 export function GymSelect() {
   const [, setLocation] = useLocation();
   const { setActiveGymId } = useGym();
   const { signOut } = useClerk();
+  const { toast } = useToast();
   const { data: gyms, isLoading } = useListGyms();
   const createGym = useCreateGym();
   const [showCreate, setShowCreate] = useState(false);
   const [gymName, setGymName] = useState("");
   const [timezone, setTimezone] = useState("America/New_York");
 
-  const [selecting, setSelecting] = useState(false);
-
   const handleSelect = (id: number) => {
-    setSelecting(true);
     setActiveGymId(id);
-    fetch(`/api/gyms/${id}/onboarding`, { credentials: "include" })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data) => {
-        if (data && data.isComplete === false) {
-          setLocation("/onboarding");
-        } else {
-          setLocation("/dashboard");
-        }
-      })
-      .catch(() => {
-        setLocation("/dashboard");
-      })
-      .finally(() => setSelecting(false));
+    setLocation("/dashboard");
   };
 
   const handleCreateGym = () => {
@@ -52,11 +39,18 @@ export function GymSelect() {
       onSuccess: (data) => {
         setActiveGymId(data.id);
         setLocation("/plan-selection");
-      }
+      },
+      onError: (err) => {
+        toast({
+          title: "Could not create business",
+          description: err instanceof Error ? err.message : "Something went wrong. Please try again.",
+          variant: "destructive",
+        });
+      },
     });
   };
 
-  if (isLoading || selecting) {
+  if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <Loader2 className="h-8 w-8 text-primary animate-spin" />

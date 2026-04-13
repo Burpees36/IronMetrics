@@ -12,7 +12,7 @@ import { EmailBrandingStep } from "./onboarding/EmailBrandingStep";
 import { FinishStep } from "./onboarding/FinishStep";
 
 export function Onboarding() {
-  const { activeGymId } = useGym();
+  const { activeGymId, refreshOnboarding } = useGym();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const [loading, setLoading] = useState(true);
@@ -92,6 +92,7 @@ export function Onboarding() {
   const handleFinish = async () => {
     const ok = await updateStep("finish");
     if (!ok) return;
+    refreshOnboarding();
     setLocation("/dashboard");
   };
 
