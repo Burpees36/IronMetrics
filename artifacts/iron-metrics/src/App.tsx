@@ -74,6 +74,7 @@ function ProtectedRoute({ component: Component }: { component: React.ElementType
       setOnboardingChecked(true);
       return;
     }
+    setOnboardingChecked(false);
     let cancelled = false;
     fetch(`/api/gyms/${activeGymId}/onboarding`, { credentials: "include" })
       .then((r) => (r.ok ? r.json() : null))
