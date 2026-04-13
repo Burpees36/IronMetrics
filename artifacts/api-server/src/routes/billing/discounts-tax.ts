@@ -43,7 +43,7 @@ router.patch("/gyms/:gymId/discount-codes/:id", requireBillingPermission("billin
     .returning();
   if (!updated) { res.status(404).json({ error: "Discount not found" }); return; }
   await billingAuditLogger.log({
-    gymId, actorUserId: req.user?.id, actorName: req.user?.firstName || "Unknown",
+    gymId, actorUserId: req.userId, actorName: "Staff",
     action: isActive ? "discount.reactivated" : "discount.deactivated",
     entityType: "discount", entityId: String(id), source: "ui",
   });

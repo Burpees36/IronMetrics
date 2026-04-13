@@ -6,8 +6,9 @@ import React from "react";
 const mockFetch = vi.fn();
 global.fetch = mockFetch;
 
-vi.mock("@workspace/replit-auth-web", () => ({
-  useAuth: () => ({ user: { firstName: "Test" }, isAuthenticated: true }),
+vi.mock("@clerk/react", () => ({
+  useUser: () => ({ user: { firstName: "Test" } }),
+  useAuth: () => ({ isLoaded: true, isSignedIn: true, userId: "test-user" }),
 }));
 
 vi.mock("wouter", () => ({

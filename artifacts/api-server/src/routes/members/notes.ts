@@ -17,8 +17,8 @@ router.post("/gyms/:gymId/members/:memberId/notes", async (req, res): Promise<vo
     return;
   }
 
-  const authorName = req.isAuthenticated() ? `${req.user.firstName || ""} ${req.user.lastName || ""}`.trim() || "Staff" : "System";
-  const authorId = req.isAuthenticated() ? req.user.id : undefined;
+  const authorName = req.userId ? "Staff" : "System";
+  const authorId = req.userId;
 
   const [note] = await db
     .insert(memberNotesTable)

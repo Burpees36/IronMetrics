@@ -4,7 +4,7 @@ import { useGym } from "@/store/GymContext";
 import { useLocation } from "wouter";
 import { motion } from "framer-motion";
 import { Building2, Plus, Loader2, ArrowRight } from "lucide-react";
-import { useAuth } from "@workspace/replit-auth-web";
+import { useClerk } from "@clerk/react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -14,7 +14,7 @@ import { TIMEZONES } from "./onboarding/types";
 export function GymSelect() {
   const [, setLocation] = useLocation();
   const { setActiveGymId } = useGym();
-  const { logout } = useAuth();
+  const { signOut } = useClerk();
   const { data: gyms, isLoading } = useListGyms();
   const createGym = useCreateGym();
   const [showCreate, setShowCreate] = useState(false);
@@ -142,7 +142,7 @@ export function GymSelect() {
         </div>
         
         <div className="mt-8 md:mt-12 text-center">
-           <button onClick={() => logout()} className="text-muted-foreground hover:text-foreground text-sm min-h-[44px] px-4">Sign out</button>
+           <button onClick={() => signOut()} className="text-muted-foreground hover:text-foreground text-sm min-h-[44px] px-4">Sign out</button>
         </div>
       </div>
     </div>

@@ -90,7 +90,7 @@ router.post("/gyms/:gymId/classes", requireScheduleManage(), async (req, res): P
     coachName = `${staff.firstName} ${staff.lastName}`;
   }
 
-  const userId = req.user?.id || null;
+  const userId = req.userId || null;
 
   const [gymClass] = await db.insert(classesTable).values({
     ...parsed.data,
@@ -154,7 +154,7 @@ router.patch("/gyms/:gymId/classes/:classId", requireScheduleManage(), async (re
     updateData.coachName = null;
   }
 
-  updateData.updatedBy = req.user?.id || null;
+  updateData.updatedBy = req.userId || null;
 
   const [gymClass] = await db.update(classesTable).set(updateData).where(and(eq(classesTable.id, classId), eq(classesTable.gymId, gymId))).returning();
   if (!gymClass) { res.status(404).json({ error: "Class not found" }); return; }
@@ -233,7 +233,7 @@ router.post("/gyms/:gymId/classes/:classId/duplicate", requireScheduleManage(), 
     endTime = new Date(startTime.getTime() + duration);
   }
 
-  const userId = req.user?.id || null;
+  const userId = req.userId || null;
 
   const [duplicate] = await db.insert(classesTable).values({
     gymId,

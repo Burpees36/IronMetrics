@@ -6,7 +6,6 @@
  *
  *   1. **Public routes** (no auth required):
  *      - Health check (`/api/health`)
- *      - Auth endpoints (`/api/login`, `/api/callback`, `/api/logout`)
  *
  *   2. **Authenticated routes** (require valid session via `requireAuth`):
  *      - Gym management (`/api/gyms`) — list/create gyms the user owns or has access to
@@ -25,7 +24,6 @@ import { requireGymAccess } from "../middlewares/requireGymAccess";
 import { requireTierAccess } from "../middlewares/requireTierAccess";
 import healthRouter from "./health";
 import storageRouter from "./storage";
-import authRouter from "./auth";
 import gymsRouter from "./gyms";
 import membersRouter from "./members";
 import leadsRouter from "./leads";
@@ -61,7 +59,6 @@ const router: IRouter = Router();
 // --- Tier 1: Public routes (no authentication required) ---
 router.use(healthRouter);
 router.use(storageRouter);
-router.use(authRouter);
 
 // --- Tier 2: Authenticated routes (valid session required) ---
 router.use(requireAuth);

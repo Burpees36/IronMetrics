@@ -15,7 +15,7 @@ ForgeOS is a pnpm workspace monorepo built with TypeScript, Node.js 24, and Type
 **Monorepo Structure:**
 - `artifacts/api-server/`: Express 5 API server.
 - `artifacts/iron-metrics/`: React + Vite frontend.
-- `lib/`: Shared libraries for OpenAPI spec, generated API clients, Drizzle ORM schema, and Replit Auth hooks.
+- `lib/`: Shared libraries for OpenAPI spec, generated API clients, and Drizzle ORM schema.
 
 **Technology Stack:**
 - **API:** Express 5.
@@ -23,7 +23,7 @@ ForgeOS is a pnpm workspace monorepo built with TypeScript, Node.js 24, and Type
 - **Database:** PostgreSQL with Drizzle ORM.
 - **Validation:** Zod.
 - **API Codegen:** Orval (from OpenAPI spec).
-- **Authentication:** Replit Auth (OIDC with PKCE).
+- **Authentication:** Clerk (email/password + social login). Backend uses `@clerk/express` middleware; frontend uses `@clerk/react` with `ClerkProvider`, `SignIn`/`SignUp` components, and `useAuth`/`useUser` hooks.
 
 **UI/UX Design:**
 A premium SaaS theme featuring light/dark mode, 2xl rounded corners, and a glass-panel effect. The primary accent color is emerald green, with violet for Pro tier features and amber/yellow for warnings. The theme context persists to `localStorage` and respects `prefers-color-scheme`.

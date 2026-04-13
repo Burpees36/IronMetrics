@@ -19,15 +19,14 @@ router.get("/gyms/:gymId/stripe/publishable-key", async (_req, res): Promise<voi
 });
 
 router.get("/gyms/:gymId/billing/permissions", async (req, res): Promise<void> => {
-  if (!req.isAuthenticated()) {
-    res.json({ role: null, permissions: [] });
-    return;
-  }
-
   const gymId = parseGymId(req.params);
   if (!gymId) { res.status(400).json({ error: "Invalid gym ID" }); return; }
 
-  const userId = req.user!.id;
+  const userId = req.userId;
+  if (!userId) {
+    res.json({ role: null, permissions: [] });
+    return;
+  }
   const [gym] = await db.select().from(gymsTable).where(eq(gymsTable.id, gymId));
   let role: string | null = null;
 
@@ -77,8 +76,8 @@ router.post("/gyms/:gymId/plans", requireBillingPermission("billing.create_plan"
 
   await billingAuditLogger.log({
     gymId,
-    actorUserId: req.user?.id,
-    actorName: req.user?.firstName || "Unknown",
+    actorUserId: req.userId,
+    actorName: "Staff",
     action: "plan.created",
     entityType: "plan",
     entityId: String(plan.id),
@@ -115,8 +114,8 @@ router.patch("/gyms/:gymId/plans/:planId", requireBillingPermission("billing.edi
 
   await billingAuditLogger.log({
     gymId,
-    actorUserId: req.user?.id,
-    actorName: req.user?.firstName || "Unknown",
+    actorUserId: req.userId,
+    actorName: "Staff",
     action: "plan.updated",
     entityType: "plan",
     entityId: String(planId),

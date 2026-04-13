@@ -9,19 +9,6 @@ export interface HealthStatus {
   status: string;
 }
 
-export interface AuthUser {
-  id: string;
-  /** @nullable */
-  email?: string | null;
-  /** @nullable */
-  firstName?: string | null;
-  /** @nullable */
-  lastName?: string | null;
-  /** @nullable */
-  profileImageUrl?: string | null;
-  isAuthenticated: boolean;
-}
-
 export interface Gym {
   id: number;
   name: string;
@@ -922,8 +909,7 @@ export type CancelledMembersResponseCancelledMembersItem = {
   membershipType?: string | null;
   /** @nullable */
   joinDate?: string | null;
-  /** @nullable */
-  cancelledAt?: string | null;
+  updatedAt?: string;
 };
 
 export type CancelledMembersResponsePeriod = {
@@ -944,14 +930,11 @@ export interface BillingSummary {
   arm?: number;
   activeSubscriptions?: number;
   totalSubscriptions?: number;
-  activeBillableMembers?: number;
   failedPayments?: number;
   overdueAccounts?: number;
   collectionsThisMonth?: number;
   refundsThisMonth?: number;
   cancelledThisMonth?: number;
-  revenueSource?: string;
-  hasSubscriptionData?: boolean;
 }
 
 export interface Product {

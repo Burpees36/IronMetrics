@@ -32,7 +32,6 @@ export * from "./attendanceReportByDayOfWeekItem";
 export * from "./attendanceReportByHourItem";
 export * from "./attendanceReportTrendItem";
 export * from "./attendanceStatus";
-export * from "./authUser";
 export * from "./autopilotSettings";
 export * from "./autopilotSettingsChannelBilling";
 export * from "./autopilotSettingsChannelCelebrations";

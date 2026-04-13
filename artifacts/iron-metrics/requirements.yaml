@@ -15,6 +15,6 @@ images:
     aspect_ratio: "16:9"
 
 notes:
-  - App uses Replit Auth (@workspace/replit-auth-web) for authentication
+  - App uses Clerk (@clerk/react) for authentication
   - OpenAPI hooks are imported directly from @workspace/api-client-react
   - Force dark theme by setting the default variables in :root to dark values

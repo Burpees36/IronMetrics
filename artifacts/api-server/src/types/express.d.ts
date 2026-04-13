@@ -1,5 +1,6 @@
 declare namespace Express {
   interface Request {
+    userId?: string;
     gymRole?: string;
     gymId?: number;
     billingRole?: string;

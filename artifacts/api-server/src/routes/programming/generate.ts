@@ -141,7 +141,7 @@ router.post(
       const generated = result.day;
       const validationMeta = buildValidationMeta(result.validation, result.retries);
 
-      const userId = req.user?.id || null;
+      const userId = req.userId || null;
       const [day] = await db
         .insert(programmingDaysTable)
         .values({
@@ -224,7 +224,7 @@ router.post(
         return;
       }
 
-      const userId = req.user?.id || null;
+      const userId = req.userId || null;
       const results = [];
 
       for (const { day: generated, validationMeta } of generatedDays) {

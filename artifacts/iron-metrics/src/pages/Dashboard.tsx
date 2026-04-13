@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { useAuth } from "@workspace/replit-auth-web";
+import { useUser } from "@clerk/react";
 import { useGym } from "@/store/GymContext";
 import { useGetDashboardStats, useGetMorningBriefing } from "@workspace/api-client-react";
 import { useQuery } from "@tanstack/react-query";
@@ -414,7 +414,7 @@ function FinancialSummaryCard({ gymId }: { gymId: number }) {
 }
 
 export function Dashboard() {
-  const { user } = useAuth();
+  const { user } = useUser();
   const { activeGymId } = useGym();
   const { data: stats, isLoading: statsLoading, isError: statsError, refetch: refetchStats } = useGetDashboardStats(activeGymId as number, {
     query: { enabled: !!activeGymId }

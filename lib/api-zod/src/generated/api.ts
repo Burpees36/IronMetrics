@@ -54,18 +54,6 @@ export const HealthCheckResponse = zod.object({
 });
 
 /**
- * @summary Get current authenticated user
- */
-export const GetCurrentUserResponse = zod.object({
-  id: zod.string(),
-  email: zod.string().nullish(),
-  firstName: zod.string().nullish(),
-  lastName: zod.string().nullish(),
-  profileImageUrl: zod.string().nullish(),
-  isAuthenticated: zod.boolean(),
-});
-
-/**
  * @summary List all gyms accessible to current user
  */
 export const ListGymsResponseItem = zod.object({

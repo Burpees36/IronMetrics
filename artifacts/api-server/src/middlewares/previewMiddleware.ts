@@ -81,8 +81,7 @@ export async function previewMiddleware(
 
   const hasPreviewHeader = req.headers["x-preview"] === "1";
   const hasPreviewQuery = req.query.preview === "1";
-  const hasPreviewCookie = req.cookies?.["__dev_preview"] === "1";
-  if (!hasPreviewHeader && !hasPreviewQuery && !hasPreviewCookie) {
+  if (!hasPreviewHeader && !hasPreviewQuery) {
     next();
     return;
   }
@@ -91,20 +90,9 @@ export async function previewMiddleware(
     const user = await ensurePreviewUser();
     await ensurePreviewUserHasGym(user.id);
 
-    req.user = {
-      id: user.id,
-      email: user.email,
-      firstName: user.firstName,
-      lastName: user.lastName,
-      profileImageUrl: user.profileImageUrl,
-      isAuthenticated: true,
-    };
+    req.userId = user.id;
 
-    req.isAuthenticated = function (this: Request) {
-      return this.user != null;
-    } as Request["isAuthenticated"];
-
-    if (!hasPreviewCookie) {
+    if (!hasPreviewQuery) {
       _res.cookie("__dev_preview", "1", {
         httpOnly: false,
         secure: false,

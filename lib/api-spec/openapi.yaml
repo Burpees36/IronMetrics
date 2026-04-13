@@ -144,22 +144,6 @@ paths:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
 
-  # AUTH
-  /auth/user:
-    get:
-      operationId: getCurrentUser
-      tags: [auth]
-      summary: Get current authenticated user
-      responses:
-        "200":
-          description: Current user
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AuthUser"
-        "401":
-          description: Not authenticated
-
   # GYMS
   /gyms:
     get:
@@ -4711,25 +4695,6 @@ components:
           type: string
       required:
         - status
-
-    AuthUser:
-      type: object
-      properties:
-        id:
-          type: string
-        email:
-          type: ["string", "null"]
-        firstName:
-          type: ["string", "null"]
-        lastName:
-          type: ["string", "null"]
-        profileImageUrl:
-          type: ["string", "null"]
-        isAuthenticated:
-          type: boolean
-      required:
-        - id
-        - isAuthenticated
 
     Gym:
       type: object

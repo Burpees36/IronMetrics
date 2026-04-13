@@ -78,8 +78,8 @@ router.post("/gyms/:gymId/subscriptions", requireBillingPermission("billing.crea
   await billingAuditLogger.log({
     gymId,
     memberId: parsed.data.memberId,
-    actorUserId: req.user?.id,
-    actorName: req.user?.firstName || "Unknown",
+    actorUserId: req.userId,
+    actorName: "Staff",
     action: "subscription.created",
     entityType: "subscription",
     entityId: String(sub.id),

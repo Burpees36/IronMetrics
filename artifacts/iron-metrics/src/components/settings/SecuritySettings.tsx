@@ -1,11 +1,11 @@
 import React from "react";
-import { useAuth } from "@workspace/replit-auth-web";
+import { useUser } from "@clerk/react";
 import { motion } from "framer-motion";
 import { Shield, Key, User, Clock } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
 export function SecuritySettings() {
-  const { user } = useAuth();
+  const { user } = useUser();
 
   return (
     <div className="space-y-6">
@@ -20,13 +20,13 @@ export function SecuritySettings() {
           <div className="flex items-center justify-between p-3 rounded-xl border border-border bg-background">
             <div>
               <p className="text-sm font-medium">Display Name</p>
-              <p className="text-sm text-muted-foreground">{user?.email || "—"}</p>
+              <p className="text-sm text-muted-foreground">{user?.primaryEmailAddress?.emailAddress || "—"}</p>
             </div>
           </div>
           <div className="flex items-center justify-between p-3 rounded-xl border border-border bg-background">
             <div>
               <p className="text-sm font-medium">Auth Provider</p>
-              <p className="text-sm text-muted-foreground">Replit Auth (OpenID Connect)</p>
+              <p className="text-sm text-muted-foreground">Clerk (Email / Social Login)</p>
             </div>
             <Badge variant="outline" className="bg-emerald-500/10 text-emerald-500 border-emerald-500/20">Connected</Badge>
           </div>
@@ -71,7 +71,7 @@ export function SecuritySettings() {
         </div>
         <p className="text-sm text-muted-foreground mb-4">Add an extra layer of security to your account.</p>
         <div className="p-4 rounded-xl border border-dashed border-border bg-background text-center">
-          <p className="text-sm text-muted-foreground">2FA is managed through your Replit account settings.</p>
+          <p className="text-sm text-muted-foreground">2FA can be managed through your Clerk account settings.</p>
         </div>
       </motion.div>
     </div>

@@ -36,7 +36,8 @@ const READ_ROLES: ProgrammingRole[] = ["owner", "admin", "coach", "front_desk", 
 
 export function requireProgrammingWrite() {
   return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    if (!req.isAuthenticated()) {
+    const userId = req.userId;
+    if (!userId) {
       res.status(401).json({ error: "Unauthorized" });
       return;
     }
@@ -49,7 +50,6 @@ export function requireProgrammingWrite() {
       return;
     }
 
-    const userId = req.user!.id;
     const resolved = await resolveUserRole(userId, gymId);
 
     if (!resolved || !WRITE_ROLES.includes(resolved.role)) {
@@ -64,7 +64,8 @@ export function requireProgrammingWrite() {
 
 export function requireProgrammingRead() {
   return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    if (!req.isAuthenticated()) {
+    const userId = req.userId;
+    if (!userId) {
       res.status(401).json({ error: "Unauthorized" });
       return;
     }
@@ -77,7 +78,6 @@ export function requireProgrammingRead() {
       return;
     }
 
-    const userId = req.user!.id;
     const resolved = await resolveUserRole(userId, gymId);
 
     if (!resolved || !READ_ROLES.includes(resolved.role)) {

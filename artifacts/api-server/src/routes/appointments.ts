@@ -229,7 +229,7 @@ router.post("/gyms/:gymId/appointments", async (req, res): Promise<void> => {
     leadName = `${lead.firstName} ${lead.lastName}`;
   }
 
-  const userId = req.user?.id || null;
+  const userId = req.userId || null;
 
   const [appointment] = await db.insert(appointmentsTable).values({
     gymId,

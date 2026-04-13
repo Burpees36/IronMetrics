@@ -21,7 +21,7 @@ import {
   getListProgrammingTracksQueryKey,
 } from "@workspace/api-client-react";
 import type { ProgrammingDayWithSections, SectionType as ApiSectionType } from "@workspace/api-client-react";
-import { useAuth } from "@workspace/replit-auth-web";
+import { useUser } from "@clerk/react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { motion, AnimatePresence } from "framer-motion";
@@ -317,7 +317,7 @@ export function Workouts() {
     { query: { enabled: !!activeGymId && !roleLoading && isStaff } }
   );
 
-  const { user: currentUser } = useAuth();
+  const { user: currentUser } = useUser();
   const { data: membersList } = useListMembers(
     activeGymId as number,
     undefined,
@@ -342,8 +342,9 @@ export function Workouts() {
 
 
   const currentMemberId = useMemo(() => {
-    if (!currentUser?.email || allMembers.length === 0) return null;
-    const match = allMembers.find((m) => m.email === currentUser.email);
+    const email = currentUser?.primaryEmailAddress?.emailAddress;
+    if (!email || allMembers.length === 0) return null;
+    const match = allMembers.find((m) => m.email === email);
     return match?.id ?? null;
   }, [currentUser, allMembers]);
 

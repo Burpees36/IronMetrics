@@ -139,7 +139,7 @@ router.post(
       return;
     }
 
-    const userId = req.user?.id || null;
+    const userId = req.userId || null;
 
     const [day] = await db
       .insert(programmingDaysTable)
@@ -203,7 +203,7 @@ router.patch(
     }
 
     const { date, title, status, publicNotes, coachNotes, track } = req.body;
-    const userId = req.user?.id || null;
+    const userId = req.userId || null;
 
     const updates: any = { updatedBy: userId };
     if (date !== undefined) updates.date = date;
@@ -278,7 +278,7 @@ router.post(
 
     await db
       .update(programmingDaysTable)
-      .set({ status: newStatus, updatedBy: req.user?.id || null })
+      .set({ status: newStatus, updatedBy: req.userId || null })
       .where(eq(programmingDaysTable.id, dayId));
 
     const result = await getDayWithSections(dayId);
@@ -313,7 +313,7 @@ router.post(
       return;
     }
 
-    const userId = req.user?.id || null;
+    const userId = req.userId || null;
 
     const [newDay] = await db
       .insert(programmingDaysTable)
