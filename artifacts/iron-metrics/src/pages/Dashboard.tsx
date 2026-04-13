@@ -481,7 +481,10 @@ export function Dashboard() {
             <p className="text-xs font-mono text-muted-foreground uppercase tracking-wider">Owner Console</p>
           </div>
           <h1 className="text-3xl md:text-4xl font-display font-bold text-foreground mb-2">
-            {getGreeting()}, {user?.firstName || "Boss"}.
+            {(() => {
+              const name = user?.firstName || user?.fullName?.split(" ")[0] || user?.username;
+              return name ? `${getGreeting()}, ${name}.` : `${getGreeting()}.`;
+            })()}
           </h1>
           <p className="text-lg text-muted-foreground max-w-2xl leading-relaxed">
             {briefingSummary ? (

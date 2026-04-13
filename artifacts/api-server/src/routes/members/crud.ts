@@ -18,8 +18,13 @@ router.get("/gyms/:gymId/members", async (req, res): Promise<void> => {
   const search = req.query.search as string | undefined;
   const idsParam = req.query.ids as string | undefined;
   const planIdParam = req.query.planId as string | undefined;
+  const riskTiersParam = req.query.riskTiers as string | undefined;
   const planId = planIdParam ? parseInt(planIdParam, 10) : null;
-  const limit = Math.min(parseInt(req.query.limit as string) || 50, 200);
+  const riskTiers = riskTiersParam
+    ? riskTiersParam.split(",").map(t => t.trim()).filter(Boolean)
+    : null;
+  const maxLimit = riskTiers ? 500 : 200;
+  const limit = Math.min(parseInt(req.query.limit as string) || 50, maxLimit);
   const offset = parseInt(req.query.offset as string) || 0;
 
   let conditions = [eq(membersTable.gymId, gymId)];
@@ -30,6 +35,9 @@ router.get("/gyms/:gymId/members", async (req, res): Promise<void> => {
     }
   }
   if (status) conditions.push(eq(membersTable.status, status));
+  if (riskTiers && riskTiers.length > 0) {
+    conditions.push(inArray(membersTable.riskTier, riskTiers));
+  }
   if (search) {
     conditions.push(
       or(

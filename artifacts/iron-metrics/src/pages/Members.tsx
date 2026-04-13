@@ -163,7 +163,10 @@ export function Members() {
   if (statusFilter.length === 1) filterParams.status = statusFilter[0];
   if (planFilter) filterParams.planId = parseInt(planFilter, 10);
   if (riskViewActive) {
-    filterParams.limit = 200;
+    const tiers = riskFilter.length > 0 ? riskFilter.join(",") : "critical,high,moderate";
+    filterParams.riskTiers = tiers;
+    filterParams.status = "active";
+    filterParams.limit = 500;
     filterParams.offset = 0;
   } else if (idsFilter) {
     filterParams.limit = 200;
@@ -453,11 +456,8 @@ export function Members() {
   const displayMembers = React.useMemo(() => {
     const members = data?.members ?? [];
     if (!riskViewActive) return members;
-    const tiers = riskFilter.length > 0 ? riskFilter : ["critical", "high", "moderate"];
-    return members
-      .filter((m: any) => tiers.includes(m.riskTier))
-      .sort((a: any, b: any) => (b.riskScore ?? 0) - (a.riskScore ?? 0));
-  }, [data?.members, riskViewActive, riskFilter]);
+    return [...members].sort((a: any, b: any) => (b.riskScore ?? 0) - (a.riskScore ?? 0));
+  }, [data?.members, riskViewActive]);
 
   const RowActions = ({ member }: { member: MemberFromList }) => (
     <DropdownMenu>
