@@ -23,6 +23,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 
+import { authFetch } from "@/lib/authFetch";
+
 const BASE_URL = import.meta.env.BASE_URL || "/";
 const API_BASE = `${BASE_URL}api`.replace(/\/\//g, "/");
 
@@ -32,7 +34,7 @@ function useFetch<T>(key: string[], url: string, enabled = true) {
   return useQuery<T>({
     queryKey: key,
     queryFn: async () => {
-      const res = await fetch(`${API_BASE}${url}`, { credentials: "include" });
+      const res = await authFetch(`${API_BASE}${url}`);
       if (!res.ok) throw new Error("Failed to fetch");
       return res.json();
     },
@@ -114,9 +116,8 @@ export function Finances() {
         ? `${API_BASE}/gyms/${activeGymId}/finances/expenses/${editingExpense.id}`
         : `${API_BASE}/gyms/${activeGymId}/finances/expenses`;
 
-      const res = await fetch(url, {
+      const res = await authFetch(url, {
         method,
-        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
@@ -133,9 +134,8 @@ export function Finances() {
 
   const deleteExpense = async (id: number) => {
     try {
-      const res = await fetch(`${API_BASE}/gyms/${activeGymId}/finances/expenses/${id}`, {
+      const res = await authFetch(`${API_BASE}/gyms/${activeGymId}/finances/expenses/${id}`, {
         method: "DELETE",
-        credentials: "include",
       });
       if (!res.ok) throw new Error("Failed to delete");
       toast({ title: "Expense deleted" });
@@ -172,9 +172,8 @@ export function Finances() {
     if (!settingsForm) return;
     setSettingsSaving(true);
     try {
-      const res = await fetch(`${API_BASE}/gyms/${activeGymId}/finances/payroll-settings`, {
+      const res = await authFetch(`${API_BASE}/gyms/${activeGymId}/finances/payroll-settings`, {
         method: "PATCH",
-        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(settingsForm),
       });

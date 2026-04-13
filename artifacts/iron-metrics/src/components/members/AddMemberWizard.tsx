@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
+import { authFetch } from "@/lib/authFetch";
 import { useGym } from "@/store/GymContext";
 import {
   useCreateMember, useCheckMemberEmail, useListMembershipPlans,
@@ -237,7 +238,7 @@ export function AddMemberWizard({ open, onOpenChange }: Props) {
       const stripe = stripeRaw as StripeInstance;
       setStripeInstance(stripe);
 
-      const res = await fetch(`${API_BASE}/gyms/${gymId}/onboarding/setup-intent`, {
+      const res = await authFetch(`${API_BASE}/gyms/${gymId}/onboarding/setup-intent`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -351,7 +352,7 @@ export function AddMemberWizard({ open, onOpenChange }: Props) {
             setConfirmedSetupIntentId(setupIntent.id);
             if (setupIntent.payment_method) {
               try {
-                const pmRes = await fetch(`${API_BASE}/gyms/${gymId}/payment-methods/${setupIntent.payment_method}`);
+                const pmRes = await authFetch(`${API_BASE}/gyms/${gymId}/payment-methods/${setupIntent.payment_method}`);
                 if (pmRes.ok) {
                   const pmData = await pmRes.json() as { brand?: string; last4?: string };
                   if (pmData.brand && pmData.last4) {

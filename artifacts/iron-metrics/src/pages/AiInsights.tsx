@@ -49,6 +49,8 @@ import { useIsMobile } from "@/hooks/useMobile";
 import { useGymTier } from "@/hooks/useGymTier";
 import { PageError } from "@/components/ui/page-error";
 
+import { authFetch } from "@/lib/authFetch";
+
 const BASE_URL = import.meta.env.BASE_URL || "/";
 const API_BASE = `${BASE_URL}api`.replace(/\/+/g, "/");
 
@@ -124,7 +126,7 @@ function useBenchmarks(gymId: number | null) {
   return useQuery({
     queryKey: ["benchmarks", gymId],
     queryFn: async () => {
-      const res = await fetch(`${API_BASE}/gyms/${gymId}/intelligence/benchmarks`, { credentials: "include" });
+      const res = await authFetch(`${API_BASE}/gyms/${gymId}/intelligence/benchmarks`);
       if (!res.ok) return null;
       return res.json();
     },
@@ -137,7 +139,7 @@ function useRsiHistory(gymId: number | null, window: string) {
   return useQuery({
     queryKey: ["rsi-history", gymId, window],
     queryFn: async () => {
-      const res = await fetch(`${API_BASE}/gyms/${gymId}/intelligence/rsi/history?window=${window}`, { credentials: "include" });
+      const res = await authFetch(`${API_BASE}/gyms/${gymId}/intelligence/rsi/history?window=${window}`);
       if (!res.ok) return { window, dataPoints: [], insufficient: true };
       return res.json();
     },

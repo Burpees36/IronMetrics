@@ -21,6 +21,7 @@ import {
   getListProgrammingTracksQueryKey,
 } from "@workspace/api-client-react";
 import type { ProgrammingDayWithSections, SectionType as ApiSectionType } from "@workspace/api-client-react";
+import { authFetch } from "@/lib/authFetch";
 import { useUser } from "@clerk/react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
@@ -725,10 +726,9 @@ export function Workouts() {
     async (dayId: number, sectionId: number, resultId: number, result: { result: string; notes: string; isRx: boolean; isPr: boolean }) => {
       if (!activeGymId) return;
       try {
-        const response = await fetch(`/api/gyms/${activeGymId}/programming/${dayId}/sections/${sectionId}/results/${resultId}`, {
+        const response = await authFetch(`/api/gyms/${activeGymId}/programming/${dayId}/sections/${sectionId}/results/${resultId}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          credentials: "include",
           body: JSON.stringify(result),
         });
         if (!response.ok) throw new Error("Failed to update result");

@@ -20,6 +20,8 @@ import {
 import { useGetGym } from "@workspace/api-client-react";
 import { PageError } from "@/components/ui/page-error";
 
+import { authFetch } from "@/lib/authFetch";
+
 const API_BASE = import.meta.env.VITE_API_URL || "";
 
 interface TriggerConfig {
@@ -102,7 +104,7 @@ const TYPE_COLORS: Record<string, string> = {
 };
 
 function apiFetch(url: string, opts?: RequestInit) {
-  return fetch(`${API_BASE}${url}`, { credentials: "include", ...opts });
+  return authFetch(`${API_BASE}${url}`, opts);
 }
 
 function TabHint({ children }: { children: React.ReactNode }) {

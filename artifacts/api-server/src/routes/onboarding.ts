@@ -99,6 +99,8 @@ router.get("/gyms/:gymId/onboarding", async (req, res): Promise<void> => {
 
   const { stepStatus, counts, gymName, gymTimezone } = await computeStepStatus(gymId);
 
+  const [gymRow] = await db.select().from(gymsTable).where(eq(gymsTable.id, gymId));
+
   res.json({
     ...onboarding,
     stepStatus,
@@ -106,6 +108,8 @@ router.get("/gyms/:gymId/onboarding", async (req, res): Promise<void> => {
     steps: STEPS,
     gymName,
     gymTimezone,
+    subscriptionTier: gymRow?.subscriptionTier ?? "none",
+    isBetaAccess: gymRow?.isBetaAccess ?? false,
   });
 });
 
@@ -160,6 +164,12 @@ router.patch("/gyms/:gymId/onboarding", async (req, res): Promise<void> => {
     const { stepStatus, gymName, gymTimezone } = await computeStepStatus(gymId);
     if (!gymName || !gymName.trim() || !gymTimezone || !gymTimezone.trim()) {
       res.status(400).json({ error: "Gym name and timezone are required before finishing onboarding." });
+      return;
+    }
+
+    const [gym] = await db.select().from(gymsTable).where(eq(gymsTable.id, gymId));
+    if (gym && gym.subscriptionTier === "none" && !gym.isBetaAccess) {
+      res.status(400).json({ error: "Please select a plan before finishing onboarding." });
       return;
     }
 

@@ -3,6 +3,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Activity, ChevronRight, ChevronDown, Mail, ClipboardList, UserCheck, Loader2, Zap, AlertTriangle, ExternalLink } from "lucide-react";
 import { Link } from "wouter";
 
+import { authFetch } from "@/lib/authFetch";
+
 const API_BASE = import.meta.env.VITE_API_URL || "";
 
 interface ApiRetentionEvent {
@@ -79,8 +81,8 @@ export function RetentionActivityCard({ gymId }: { gymId: number }) {
     const fetchData = async () => {
       try {
         const [eventsRes, enrollRes] = await Promise.all([
-          fetch(`${API_BASE}/api/gyms/${gymId}/retention/events?limit=6`, { credentials: "include" }),
-          fetch(`${API_BASE}/api/gyms/${gymId}/retention/enrollments?status=active`, { credentials: "include" }),
+          authFetch(`${API_BASE}/api/gyms/${gymId}/retention/events?limit=6`),
+          authFetch(`${API_BASE}/api/gyms/${gymId}/retention/enrollments?status=active`),
         ]);
 
         if (eventsRes.ok) {

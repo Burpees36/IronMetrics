@@ -10,6 +10,7 @@ import { Loader2, Plus, Users, Trash2, Search, UserCheck, X, ChevronLeft, Chevro
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { authFetch } from "@/lib/authFetch";
 import { OccupancyBadge, getClassColors, HOUR_HEIGHT, CALENDAR_START_HOUR, CALENDAR_END_HOUR, TYPE_LABELS, WEEKDAY_NAMES, to24Hour, from24Hour } from "./schedule/helpers";
 import { ScheduleDialogs } from "./schedule/ScheduleDialogs";
 import { AppointmentsPanel } from "./schedule/AppointmentsPanel";
@@ -434,11 +435,10 @@ export function Schedule() {
 
   function handleUpdateAttendanceStatus(attendanceId: number, newStatus: string) {
     if (!activeGymId || !detailClassId) return;
-    fetch(`/api/gyms/${activeGymId}/classes/${detailClassId}/attendance/${attendanceId}`, {
+    authFetch(`/api/gyms/${activeGymId}/classes/${detailClassId}/attendance/${attendanceId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status: newStatus }),
-      credentials: "include",
     }).then(async (res) => {
       if (res.ok) {
         toast({ title: "Status Updated" });
@@ -453,11 +453,10 @@ export function Schedule() {
 
   function handleDuplicateClass(classId: number) {
     if (!activeGymId) return;
-    fetch(`/api/gyms/${activeGymId}/classes/${classId}/duplicate`, {
+    authFetch(`/api/gyms/${activeGymId}/classes/${classId}/duplicate`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({}),
-      credentials: "include",
     }).then(async (res) => {
       if (res.ok) {
         toast({ title: "Class Duplicated", description: "A copy has been created." });
@@ -505,11 +504,10 @@ export function Schedule() {
   function handleClearWeek() {
     if (!activeGymId) return;
     setClearWeekPending(true);
-    fetch(`/api/gyms/${activeGymId}/classes/clear-week`, {
+    authFetch(`/api/gyms/${activeGymId}/classes/clear-week`, {
       method: "DELETE",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ weekStart: currentWeekStart.toISOString().split("T")[0] }),
-      credentials: "include",
     }).then(async (res) => {
       const data = await res.json().catch(() => ({}));
       if (res.ok) {

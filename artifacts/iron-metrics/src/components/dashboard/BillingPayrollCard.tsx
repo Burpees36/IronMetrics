@@ -3,6 +3,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Bot, ChevronDown, Phone, Mail, CreditCard, AlertCircle, Clock, DollarSign } from "lucide-react";
 import { Link } from "wouter";
 
+import { authFetch } from "@/lib/authFetch";
+
 const API_BASE = import.meta.env.VITE_API_URL || "";
 
 interface PayrollEntry {
@@ -132,7 +134,7 @@ export function BillingPayrollCard({ gymId }: { gymId: number }) {
   const loadData = () => {
     setLoading(true);
     setError(false);
-    fetch(`${API_BASE}/api/gyms/${gymId}/dashboard/billing-payroll`, { credentials: "include" })
+    authFetch(`${API_BASE}/api/gyms/${gymId}/dashboard/billing-payroll`)
       .then((r) => { if (!r.ok) throw new Error(); return r.json(); })
       .then((d) => setData(d))
       .catch(() => setError(true))

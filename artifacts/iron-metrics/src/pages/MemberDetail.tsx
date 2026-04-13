@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { authFetch } from "@/lib/authFetch";
 import { useGym } from "@/store/GymContext";
 import {
   useGetMember, useGetMemberTimeline, useUpdateMember, useAddMemberNote,
@@ -187,7 +188,7 @@ export function MemberDetail() {
   const { data: memberRecovery } = useQuery({
     queryKey: ["member-recovery", activeGymId, memberId],
     queryFn: async () => {
-      const res = await fetch(`${API_BASE_MD}/gyms/${activeGymId}/members/${memberId}/billing/recovery`, { credentials: "include" });
+      const res = await authFetch(`${API_BASE_MD}/gyms/${activeGymId}/members/${memberId}/billing/recovery`);
       if (!res.ok) return null;
       return res.json();
     },
@@ -198,9 +199,8 @@ export function MemberDetail() {
     if (!memberRecovery?.id || !activeGymId) return;
     setSendingRecoveryLink(true);
     try {
-      const res = await fetch(`${API_BASE_MD}/gyms/${activeGymId}/billing/recovery/${memberRecovery.id}/send-link`, {
+      const res = await authFetch(`${API_BASE_MD}/gyms/${activeGymId}/billing/recovery/${memberRecovery.id}/send-link`, {
         method: "POST",
-        credentials: "include",
         headers: { "Content-Type": "application/json" },
       });
       const data = await res.json();
@@ -221,9 +221,8 @@ export function MemberDetail() {
   const handleCopyRecoveryLink = async () => {
     if (!memberRecovery?.id || !activeGymId) return;
     try {
-      const res = await fetch(`${API_BASE_MD}/gyms/${activeGymId}/billing/recovery/generate-link`, {
+      const res = await authFetch(`${API_BASE_MD}/gyms/${activeGymId}/billing/recovery/generate-link`, {
         method: "POST",
-        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ memberId: memberRecovery.memberId, subscriptionId: memberRecovery.subscriptionId }),
       });

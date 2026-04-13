@@ -16,6 +16,8 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useGetGym } from "@workspace/api-client-react";
 
+import { authFetch } from "@/lib/authFetch";
+
 const API_BASE = import.meta.env.VITE_API_URL || "";
 
 interface SequenceStep {
@@ -89,7 +91,7 @@ const TYPE_COLORS: Record<string, string> = {
 };
 
 function apiFetch(url: string, opts?: RequestInit) {
-  return fetch(`${API_BASE}${url}`, { credentials: "include", ...opts });
+  return authFetch(`${API_BASE}${url}`, opts);
 }
 
 function formatDelay(minutes: number): string {

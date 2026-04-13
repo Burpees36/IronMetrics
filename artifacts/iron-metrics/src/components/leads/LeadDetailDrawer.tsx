@@ -16,10 +16,12 @@ import {
 } from "lucide-react";
 import { STAGE_CONFIG, PIPELINE_STAGES, SOURCE_OPTIONS, computeStale, timeInStage, formatRelativeDate, isFollowUpOverdue } from "./lead-utils";
 
+import { authFetch } from "@/lib/authFetch";
+
 const API_BASE = import.meta.env.VITE_API_URL || "";
 
 function apiFetchLocal(url: string, opts?: RequestInit) {
-  return fetch(`${API_BASE}${url}`, { credentials: "include", ...opts });
+  return authFetch(`${API_BASE}${url}`, opts);
 }
 
 interface SequenceEnrollmentStatus {

@@ -5,6 +5,7 @@ import {
   FileSpreadsheet, AlertTriangle, Loader2
 } from "lucide-react";
 import { useGym } from "@/store/GymContext";
+import { authFetch } from "@/lib/authFetch";
 
 interface SyncRun {
   id: number;
@@ -74,9 +75,7 @@ export function SyncStatusBanner({ onImport, memberCount }: { onImport: () => vo
     async function load() {
       try {
         const apiBase = import.meta.env.BASE_URL.replace(/\/$/, "");
-        const resp = await fetch(`${apiBase}/api/gyms/${activeGymId}/sync-runs?limit=10`, {
-          credentials: "include",
-        });
+        const resp = await authFetch(`${apiBase}/api/gyms/${activeGymId}/sync-runs?limit=10`);
         if (!resp.ok) throw new Error("Failed to fetch");
         const data = await resp.json();
         if (!cancelled) setRuns(data.runs || []);

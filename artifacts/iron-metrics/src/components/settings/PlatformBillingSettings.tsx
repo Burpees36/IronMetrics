@@ -7,6 +7,8 @@ import { useGym } from "@/store/GymContext";
 import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 
+import { authFetch } from "@/lib/authFetch";
+
 const API_BASE = import.meta.env.VITE_API_URL || "";
 
 interface PlatformBillingInfo {
@@ -41,12 +43,12 @@ const TIER_COLORS: Record<string, string> = {
   pro: "text-violet-400",
 };
 
-async function apiFetch(path: string, options?: RequestInit) {
-  const res = await fetch(`${API_BASE}${path}`, {
-    credentials: "include",
-    headers: { "Content-Type": "application/json", ...options?.headers },
-    ...options,
-  });
+async function apiFetchLocal(path: string, options?: RequestInit) {
+  const headers = new Headers(options?.headers);
+  if (!headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json");
+  }
+  const res = await authFetch(`${API_BASE}${path}`, { ...options, headers });
   if (!res.ok) {
     const body = await res.json().catch(() => ({ error: "Request failed" }));
     throw new Error(body.error || "Request failed");
@@ -66,7 +68,7 @@ export function PlatformBillingSettings() {
   useEffect(() => {
     if (!activeGymId) return;
     setLoading(true);
-    apiFetch(`/api/gyms/${activeGymId}/platform-billing`)
+    apiFetchLocal(`/api/gyms/${activeGymId}/platform-billing`)
       .then(setData)
       .catch(() => {})
       .finally(() => setLoading(false));
@@ -77,7 +79,7 @@ export function PlatformBillingSettings() {
     setPortalLoading(true);
     try {
       const baseUrl = window.location.origin;
-      const { url } = await apiFetch(`/api/gyms/${activeGymId}/platform-billing/portal`, {
+      const { url } = await apiFetchLocal(`/api/gyms/${activeGymId}/platform-billing/portal`, {
         method: "POST",
         body: JSON.stringify({ returnUrl: `${baseUrl}/settings` }),
       });
@@ -97,12 +99,12 @@ export function PlatformBillingSettings() {
     if (!confirm("Cancel your subscription? You'll keep access until the end of the current billing period.")) return;
     setCancelLoading(true);
     try {
-      await apiFetch(`/api/gyms/${activeGymId}/platform-billing/cancel`, { method: "POST" });
+      await apiFetchLocal(`/api/gyms/${activeGymId}/platform-billing/cancel`, { method: "POST" });
       toast({
         title: "Subscription cancellation scheduled",
         description: "Your access will continue until the end of the current billing period.",
       });
-      const updated = await apiFetch(`/api/gyms/${activeGymId}/platform-billing`);
+      const updated = await apiFetchLocal(`/api/gyms/${activeGymId}/platform-billing`);
       setData(updated);
     } catch (err: any) {
       toast({

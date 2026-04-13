@@ -3,6 +3,8 @@ import { motion } from "framer-motion";
 import { AlertTriangle, ChevronRight, Shield, Loader2 } from "lucide-react";
 import { Link } from "wouter";
 
+import { authFetch } from "@/lib/authFetch";
+
 const API_BASE = import.meta.env.VITE_API_URL || "";
 
 interface RiskMember {
@@ -26,7 +28,7 @@ export function AtRiskMembersCard({ gymId }: { gymId: number }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch(`${API_BASE}/api/gyms/${gymId}/intelligence/risk-radar`, { credentials: "include" })
+    authFetch(`${API_BASE}/api/gyms/${gymId}/intelligence/risk-radar`)
       .then((r) => (r.ok ? r.json() : []))
       .then((data) => {
         const list = Array.isArray(data) ? data : data.members || [];

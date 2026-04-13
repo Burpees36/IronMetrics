@@ -22,6 +22,8 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 
+import { authFetch } from "@/lib/authFetch";
+
 const COOLDOWN_MS = 15 * 60 * 1000;
 
 function getCooldownStorageKey(gymId: number, dayDate?: string, track?: string): string {
@@ -142,10 +144,9 @@ export function ShareWorkoutDialog({
       if (dayDate) body.date = dayDate;
       if (dayTrack && dayTrack !== "default") body.track = dayTrack;
 
-      const response = await fetch(`/api/gyms/${gymId}/notify-workout`, {
+      const response = await authFetch(`/api/gyms/${gymId}/notify-workout`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        credentials: "include",
         body: JSON.stringify(body),
       });
 

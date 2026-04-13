@@ -9,6 +9,8 @@ interface GymContextType {
   isOnboardingLoading: boolean;
   onboardingFetchFailed: boolean;
   refreshOnboarding: () => void;
+  subscriptionTier: string;
+  isBetaAccess: boolean;
 }
 
 const GymContext = createContext<GymContextType | undefined>(undefined);
@@ -36,6 +38,8 @@ export function GymProvider({ children }: { children: React.ReactNode }) {
   const [onboardingComplete, setOnboardingComplete] = useState<boolean | null>(null);
   const [isOnboardingLoading, setIsOnboardingLoading] = useState(false);
   const [onboardingFetchFailed, setOnboardingFetchFailed] = useState(false);
+  const [subscriptionTier, setSubscriptionTier] = useState("none");
+  const [isBetaAccess, setIsBetaAccess] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
 
   const preview = isPreviewMode();
@@ -74,6 +78,8 @@ export function GymProvider({ children }: { children: React.ReactNode }) {
         if (controller.signal.aborted) return;
         if (data) {
           setOnboardingComplete(data.isComplete === true);
+          setSubscriptionTier(data.subscriptionTier ?? "none");
+          setIsBetaAccess(data.isBetaAccess ?? false);
         }
       })
       .catch((err) => {
@@ -81,6 +87,8 @@ export function GymProvider({ children }: { children: React.ReactNode }) {
         if (!controller.signal.aborted) {
           setOnboardingComplete(null);
           setOnboardingFetchFailed(true);
+          setSubscriptionTier("none");
+          setIsBetaAccess(false);
         }
       })
       .finally(() => {
@@ -100,6 +108,8 @@ export function GymProvider({ children }: { children: React.ReactNode }) {
     setActiveGymIdRaw(id);
     setOnboardingComplete(null);
     setOnboardingFetchFailed(false);
+    setSubscriptionTier("none");
+    setIsBetaAccess(false);
   }, []);
 
   useEffect(() => {
@@ -169,6 +179,8 @@ export function GymProvider({ children }: { children: React.ReactNode }) {
       isOnboardingLoading,
       onboardingFetchFailed,
       refreshOnboarding,
+      subscriptionTier,
+      isBetaAccess,
     }}>
       {children}
     </GymContext.Provider>

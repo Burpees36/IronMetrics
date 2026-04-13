@@ -8,6 +8,7 @@ import {
   getListPaymentsQueryKey, getListRefundsQueryKey, getGetCancelledMembersQueryKey,
 } from "@workspace/api-client-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { authFetch } from "@/lib/authFetch";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
 import { motion } from "framer-motion";
@@ -100,7 +101,7 @@ export function Billing() {
   const { data: recoveries } = useQuery({
     queryKey: ["billing-recovery", activeGymId],
     queryFn: async () => {
-      const res = await fetch(`${API_BASE}/gyms/${activeGymId}/billing/recovery`, { credentials: "include" });
+      const res = await authFetch(`${API_BASE}/gyms/${activeGymId}/billing/recovery`);
       if (!res.ok) return [];
       return res.json();
     },
@@ -110,9 +111,8 @@ export function Billing() {
   const handleSendUpdateLink = async (recoveryId: number) => {
     setSendingLinkId(recoveryId);
     try {
-      const res = await fetch(`${API_BASE}/gyms/${activeGymId}/billing/recovery/${recoveryId}/send-link`, {
+      const res = await authFetch(`${API_BASE}/gyms/${activeGymId}/billing/recovery/${recoveryId}/send-link`, {
         method: "POST",
-        credentials: "include",
         headers: { "Content-Type": "application/json" },
       });
       const data = await res.json();
@@ -136,9 +136,8 @@ export function Billing() {
     ) || (recoveries as any[])?.find((r: any) => r.id === recoveryId);
     if (!recovery) return;
     try {
-      const res = await fetch(`${API_BASE}/gyms/${activeGymId}/billing/recovery/generate-link`, {
+      const res = await authFetch(`${API_BASE}/gyms/${activeGymId}/billing/recovery/generate-link`, {
         method: "POST",
-        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ memberId: recovery.memberId, subscriptionId: recovery.subscriptionId }),
       });

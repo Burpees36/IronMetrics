@@ -53,8 +53,10 @@ const ONBOARDING_EXEMPT = new Set(["/onboarding", "/select-gym", "/plan-selectio
 
 function ProtectedRoute({ component: Component }: { component: React.ElementType }) {
   const { isLoaded, isSignedIn } = useAuth();
-  const { activeGymId, setActiveGymId, isGymLoading, onboardingComplete, isOnboardingLoading, onboardingFetchFailed } = useGym();
+  const { activeGymId, setActiveGymId, isGymLoading, onboardingComplete, isOnboardingLoading, onboardingFetchFailed, subscriptionTier, isBetaAccess } = useGym();
   const [location, setLocation] = useLocation();
+
+  const needsPlan = subscriptionTier === "none" && !isBetaAccess;
 
   React.useEffect(() => {
     if (isLoaded && !isSignedIn) {
@@ -79,14 +81,19 @@ function ProtectedRoute({ component: Component }: { component: React.ElementType
     }
     if (onboardingComplete === false) {
       setLocation("/onboarding");
+      return;
     }
-  }, [isLoaded, isSignedIn, activeGymId, location, setLocation, setActiveGymId, onboardingComplete, onboardingFetchFailed]);
+    if (onboardingComplete === true && needsPlan && location !== "/plan-selection") {
+      setLocation("/plan-selection");
+    }
+  }, [isLoaded, isSignedIn, activeGymId, location, setLocation, setActiveGymId, onboardingComplete, onboardingFetchFailed, needsPlan]);
 
   if (!isLoaded || isGymLoading) return null;
   if (!isSignedIn) return null;
   if (isOnboardingLoading) return null;
   if (!activeGymId) return null;
   if (!ONBOARDING_EXEMPT.has(location) && onboardingComplete === false) return null;
+  if (!ONBOARDING_EXEMPT.has(location) && needsPlan) return null;
 
   return (
     <AppLayout>

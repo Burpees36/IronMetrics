@@ -1,4 +1,5 @@
 import React from "react";
+import { authFetch } from "@/lib/authFetch";
 import type { GymClass } from "@workspace/api-client-react";
 import { Loader2, AlertTriangle, Search, Users, UserCircle, CheckCircle, Link2, DollarSign, Plus, XCircle, Clock } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -375,7 +376,7 @@ export function MemberDialogs(props: MemberDialogsProps) {
                       if (!file) return;
                       try {
                         const baseUrl = import.meta.env.BASE_URL || "/";
-                        const res = await fetch(`${baseUrl}api/storage/uploads/request-url`, {
+                        const res = await authFetch(`${baseUrl}api/storage/uploads/request-url`, {
                           method: "POST",
                           headers: { "Content-Type": "application/json" },
                           body: JSON.stringify({ name: file.name, size: file.size, contentType: file.type }),

@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useGym } from "@/store/GymContext";
+import { authFetch } from "@/lib/authFetch";
 import { useToast } from "@/hooks/use-toast";
 import { useWodifySyncPolling } from "@/hooks/useWodifySyncPolling";
 import type { SyncProgress } from "@/hooks/useWodifySyncPolling";
@@ -266,11 +267,10 @@ export function ImportMembersDialog({
         wodifyAbortRef.current = controller;
         try {
           const apiBase = import.meta.env.BASE_URL.replace(/\/$/, "");
-          const resp = await fetch(`${apiBase}/api/gyms/${activeGymId}/members/import/wodify/preview`, {
+          const resp = await authFetch(`${apiBase}/api/gyms/${activeGymId}/members/import/wodify/preview`, {
             method: "POST",
             body: JSON.stringify({ rows }),
             headers: { "Content-Type": "application/json" },
-            credentials: "include",
             signal: controller.signal,
           });
           if (controller.signal.aborted) return;
@@ -320,11 +320,10 @@ export function ImportMembersDialog({
     setIsLoading(true);
     try {
       const apiBase = import.meta.env.BASE_URL.replace(/\/$/, "");
-      const resp = await fetch(`${apiBase}/api/gyms/${activeGymId}/members/import/preview`, {
+      const resp = await authFetch(`${apiBase}/api/gyms/${activeGymId}/members/import/preview`, {
         method: "POST",
         body: JSON.stringify({ rows: csvRows, mappings }),
         headers: { "Content-Type": "application/json" },
-        credentials: "include",
       });
       const data = await resp.json();
       if (!resp.ok) throw new Error(data.error || "Preview failed");
@@ -346,11 +345,10 @@ export function ImportMembersDialog({
     setStep(isWodify ? "wodify-importing" : "importing");
     try {
       const apiBase = import.meta.env.BASE_URL.replace(/\/$/, "");
-      const resp = await fetch(`${apiBase}/api/gyms/${activeGymId}/members/import/confirm`, {
+      const resp = await authFetch(`${apiBase}/api/gyms/${activeGymId}/members/import/confirm`, {
         method: "POST",
         body: JSON.stringify({ rows, source: isWodify ? "wodify" : "csv", fileName }),
         headers: { "Content-Type": "application/json" },
-        credentials: "include",
       });
       const data = await resp.json();
       if (!resp.ok) throw new Error(data.error || "Import failed");

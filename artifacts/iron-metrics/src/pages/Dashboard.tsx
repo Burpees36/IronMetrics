@@ -24,6 +24,8 @@ import { RetentionActivityCard } from "@/components/dashboard/RetentionActivityC
 import { PageError } from "@/components/ui/page-error";
 import { cn } from "@/lib/utils";
 
+import { authFetch } from "@/lib/authFetch";
+
 const API_BASE = import.meta.env.VITE_API_URL || "";
 const BASE_URL = import.meta.env.BASE_URL || "/";
 const BENCHMARK_API = `${BASE_URL}api`.replace(/\/+/g, "/");
@@ -31,7 +33,7 @@ const BENCHMARK_API = `${BASE_URL}api`.replace(/\/+/g, "/");
 function OnboardingBanner({ gymId }: { gymId: number }) {
   const [show, setShow] = useState(false);
   useEffect(() => {
-    fetch(`${API_BASE}/api/gyms/${gymId}/onboarding`, { credentials: "include" })
+    authFetch(`${API_BASE}/api/gyms/${gymId}/onboarding`)
       .then((r) => {
         if (!r.ok) return null;
         return r.json();
@@ -69,14 +71,14 @@ function OnboardingBanner({ gymId }: { gymId: number }) {
 function ConnectWodifyBanner({ gymId }: { gymId: number }) {
   const [show, setShow] = useState(false);
   useEffect(() => {
-    fetch(`${API_BASE}/api/gyms/${gymId}/integrations/wodify/sync-status`, { credentials: "include" })
+    authFetch(`${API_BASE}/api/gyms/${gymId}/integrations/wodify/sync-status`)
       .then((r) => {
         if (!r.ok) return null;
         return r.json();
       })
       .then((data) => {
         if (data && !data.hasApiKey) {
-          fetch(`${API_BASE}/api/gyms/${gymId}/members?limit=1`, { credentials: "include" })
+          authFetch(`${API_BASE}/api/gyms/${gymId}/members?limit=1`)
             .then((r) => r.ok ? r.json() : null)
             .then((members) => {
               const count = Array.isArray(members) ? members.length : members?.total ?? 0;
@@ -290,7 +292,7 @@ function BenchmarkHighlightsCard({ gymId }: { gymId: number }) {
   const { data } = useQuery({
     queryKey: ["benchmarks", gymId],
     queryFn: async () => {
-      const res = await fetch(`${BENCHMARK_API}/gyms/${gymId}/intelligence/benchmarks`, { credentials: "include" });
+      const res = await authFetch(`${BENCHMARK_API}/gyms/${gymId}/intelligence/benchmarks`);
       if (!res.ok) return null;
       return res.json();
     },
@@ -360,7 +362,7 @@ function FinancialSummaryCard({ gymId }: { gymId: number }) {
   const { data } = useQuery({
     queryKey: ["finances-dashboard-summary", gymId],
     queryFn: async () => {
-      const res = await fetch(`${FINANCE_API}/gyms/${gymId}/finances/summary`, { credentials: "include" });
+      const res = await authFetch(`${FINANCE_API}/gyms/${gymId}/finances/summary`);
       if (!res.ok) return null;
       return res.json();
     },
