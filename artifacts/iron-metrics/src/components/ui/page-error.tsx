@@ -1,4 +1,5 @@
 import { AlertTriangle, RefreshCw } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 interface PageErrorProps {
   title?: string;
@@ -20,13 +21,10 @@ export function PageError({
         <h2 className="text-lg font-semibold text-foreground mb-1">{title}</h2>
         <p className="text-sm text-muted-foreground leading-relaxed mb-4">{message}</p>
         {onRetry && (
-          <button
-            onClick={onRetry}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground hover:bg-primary/90 rounded-lg font-medium text-sm transition-colors"
-          >
-            <RefreshCw className="h-4 w-4" />
+          <Button onClick={onRetry} size="sm">
+            <RefreshCw className="h-4 w-4 mr-2" />
             Try Again
-          </button>
+          </Button>
         )}
       </div>
     </div>
