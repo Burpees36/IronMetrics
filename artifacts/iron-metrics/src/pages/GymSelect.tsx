@@ -21,9 +21,24 @@ export function GymSelect() {
   const [gymName, setGymName] = useState("");
   const [timezone, setTimezone] = useState("America/New_York");
 
+  const [selecting, setSelecting] = useState(false);
+
   const handleSelect = (id: number) => {
+    setSelecting(true);
     setActiveGymId(id);
-    setLocation("/dashboard");
+    fetch(`/api/gyms/${id}/onboarding`, { credentials: "include" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (data && data.isComplete === false) {
+          setLocation("/onboarding");
+        } else {
+          setLocation("/dashboard");
+        }
+      })
+      .catch(() => {
+        setLocation("/dashboard");
+      })
+      .finally(() => setSelecting(false));
   };
 
   const handleCreateGym = () => {
@@ -41,7 +56,7 @@ export function GymSelect() {
     });
   };
 
-  if (isLoading) {
+  if (isLoading || selecting) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <Loader2 className="h-8 w-8 text-primary animate-spin" />

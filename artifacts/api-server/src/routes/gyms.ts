@@ -29,7 +29,10 @@ router.get("/gyms", async (req, res): Promise<void> => {
     const allGyms = await db.select().from(gymsTable).limit(1);
     if (allGyms.length > 0) {
       const gym = allGyms[0];
-      await db.update(gymsTable).set({ ownerId: req.userId! }).where(eq(gymsTable.id, gym.id));
+      const hasOwner = !!gym.ownerId;
+      if (!hasOwner) {
+        await db.update(gymsTable).set({ ownerId: req.userId! }).where(eq(gymsTable.id, gym.id));
+      }
       let clerkUser: { firstName?: string | null; lastName?: string | null; emailAddresses?: { emailAddress: string }[] } = {};
       try { clerkUser = await clerkClient.users.getUser(req.userId!); } catch {}
       await db.insert(gymStaffTable).values({
@@ -38,7 +41,7 @@ router.get("/gyms", async (req, res): Promise<void> => {
         firstName: clerkUser.firstName || "Owner",
         lastName: clerkUser.lastName || "",
         email: clerkUser.emailAddresses?.[0]?.emailAddress || "",
-        role: "gym_owner",
+        role: hasOwner ? "staff" : "gym_owner",
       }).onConflictDoNothing();
       allGymIds.push(gym.id);
     } else {

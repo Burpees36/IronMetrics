@@ -49,10 +49,13 @@ const queryClient = new QueryClient({
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
+const ONBOARDING_EXEMPT = new Set(["/onboarding", "/select-gym", "/plan-selection", "/settings"]);
+
 function ProtectedRoute({ component: Component }: { component: React.ElementType }) {
   const { isLoaded, isSignedIn } = useAuth();
   const { activeGymId, isGymLoading } = useGym();
   const [location, setLocation] = useLocation();
+  const [onboardingChecked, setOnboardingChecked] = React.useState(false);
 
   React.useEffect(() => {
     if (isLoaded && !isSignedIn) {
@@ -66,8 +69,30 @@ function ProtectedRoute({ component: Component }: { component: React.ElementType
     }
   }, [isLoaded, isSignedIn, isGymLoading, activeGymId, location, setLocation]);
 
+  React.useEffect(() => {
+    if (!isLoaded || !isSignedIn || !activeGymId || ONBOARDING_EXEMPT.has(location)) {
+      setOnboardingChecked(true);
+      return;
+    }
+    let cancelled = false;
+    fetch(`/api/gyms/${activeGymId}/onboarding`, { credentials: "include" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (cancelled) return;
+        if (data && data.isComplete === false) {
+          setLocation("/onboarding");
+        }
+        setOnboardingChecked(true);
+      })
+      .catch(() => {
+        if (!cancelled) setOnboardingChecked(true);
+      });
+    return () => { cancelled = true; };
+  }, [isLoaded, isSignedIn, activeGymId, location, setLocation]);
+
   if (!isLoaded || isGymLoading) return null;
   if (!isSignedIn) return null;
+  if (!onboardingChecked) return null;
 
   return (
     <AppLayout>
