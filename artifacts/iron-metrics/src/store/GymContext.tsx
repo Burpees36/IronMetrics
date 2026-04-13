@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from "react";
+import React, { createContext, useContext, useState, useEffect, useRef } from "react";
 import { useAuth } from "@clerk/react";
 
 interface GymContextType {
@@ -8,6 +8,9 @@ interface GymContextType {
 }
 
 const GymContext = createContext<GymContextType | undefined>(undefined);
+
+const STORAGE_KEY = "iron_metrics_active_gym";
+const USER_KEY = "iron_metrics_user_id";
 
 function isPreviewMode(): boolean {
   try {
@@ -20,9 +23,10 @@ function isPreviewMode(): boolean {
 }
 
 export function GymProvider({ children }: { children: React.ReactNode }) {
-  const { isLoaded, isSignedIn } = useAuth();
+  const { isLoaded, isSignedIn, userId } = useAuth();
+  const prevUserId = useRef<string | null | undefined>(undefined);
   const [activeGymId, setActiveGymId] = useState<number | null>(() => {
-    const saved = localStorage.getItem("iron_metrics_active_gym");
+    const saved = localStorage.getItem(STORAGE_KEY);
     return saved ? parseInt(saved, 10) : null;
   });
 
@@ -33,10 +37,38 @@ export function GymProvider({ children }: { children: React.ReactNode }) {
   );
 
   useEffect(() => {
+    if (!isLoaded) return;
+    const previousId = prevUserId.current;
+    prevUserId.current = userId ?? null;
+    if (previousId === undefined) {
+      const storedUser = localStorage.getItem(USER_KEY);
+      if (userId && storedUser && storedUser !== userId) {
+        localStorage.removeItem(STORAGE_KEY);
+        localStorage.setItem(USER_KEY, userId);
+        setActiveGymId(null);
+        return;
+      }
+      if (userId) {
+        localStorage.setItem(USER_KEY, userId);
+      }
+      return;
+    }
+    if (previousId !== (userId ?? null)) {
+      localStorage.removeItem(STORAGE_KEY);
+      if (userId) {
+        localStorage.setItem(USER_KEY, userId);
+      } else {
+        localStorage.removeItem(USER_KEY);
+      }
+      setActiveGymId(null);
+    }
+  }, [isLoaded, userId]);
+
+  useEffect(() => {
     if (activeGymId) {
-      localStorage.setItem("iron_metrics_active_gym", activeGymId.toString());
+      localStorage.setItem(STORAGE_KEY, activeGymId.toString());
     } else {
-      localStorage.removeItem("iron_metrics_active_gym");
+      localStorage.removeItem(STORAGE_KEY);
     }
   }, [activeGymId]);
 

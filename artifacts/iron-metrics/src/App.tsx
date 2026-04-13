@@ -53,7 +53,7 @@ const ONBOARDING_EXEMPT = new Set(["/onboarding", "/select-gym", "/plan-selectio
 
 function ProtectedRoute({ component: Component }: { component: React.ElementType }) {
   const { isLoaded, isSignedIn } = useAuth();
-  const { activeGymId, isGymLoading } = useGym();
+  const { activeGymId, setActiveGymId, isGymLoading } = useGym();
   const [location, setLocation] = useLocation();
   const [onboardingChecked, setOnboardingChecked] = React.useState(false);
 
@@ -77,19 +77,30 @@ function ProtectedRoute({ component: Component }: { component: React.ElementType
     setOnboardingChecked(false);
     let cancelled = false;
     fetch(`/api/gyms/${activeGymId}/onboarding`, { credentials: "include" })
-      .then((r) => (r.ok ? r.json() : null))
+      .then((r) => {
+        if (cancelled) return null;
+        if (!r.ok) {
+          setActiveGymId(null);
+          setLocation("/select-gym");
+          return null;
+        }
+        return r.json();
+      })
       .then((data) => {
-        if (cancelled) return;
-        if (data && data.isComplete === false) {
+        if (cancelled || !data) return;
+        if (data.isComplete === false) {
           setLocation("/onboarding");
         }
         setOnboardingChecked(true);
       })
       .catch(() => {
-        if (!cancelled) setOnboardingChecked(true);
+        if (!cancelled) {
+          setActiveGymId(null);
+          setLocation("/select-gym");
+        }
       });
     return () => { cancelled = true; };
-  }, [isLoaded, isSignedIn, activeGymId, location, setLocation]);
+  }, [isLoaded, isSignedIn, activeGymId, location, setLocation, setActiveGymId]);
 
   if (!isLoaded || isGymLoading) return null;
   if (!isSignedIn) return null;
