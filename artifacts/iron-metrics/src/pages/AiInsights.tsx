@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from "react";
+import React, { useState, useMemo, useCallback, useEffect } from "react";
 import { useGym } from "@/store/GymContext";
 import {
   useGetIntelligenceOverview,
@@ -1308,6 +1308,10 @@ export function AiInsights() {
 
   const [showAllInterventions, setShowAllInterventions] = useState(false);
 
+  useEffect(() => {
+    if (activeInterventions.length <= 4) setShowAllInterventions(false);
+  }, [activeInterventions.length]);
+
   const topInterventions = useMemo(() => {
     if (activeInterventions.length <= 4) return activeInterventions;
     const byCategory = new Map<string, Intervention[]>();
@@ -1320,7 +1324,11 @@ export function AiInsights() {
       list.sort((a, b) => b.score - a.score);
     }
     const picked: Intervention[] = [];
-    const categoryKeys = [...byCategory.keys()];
+    const categoryKeys = [...byCategory.keys()].sort((a, b) => {
+      const topA = byCategory.get(a)![0].score;
+      const topB = byCategory.get(b)![0].score;
+      return topB - topA;
+    });
     const indices = new Map<string, number>(categoryKeys.map(k => [k, 0]));
     while (picked.length < 4) {
       let added = false;
