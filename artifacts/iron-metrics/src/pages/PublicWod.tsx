@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { useParams } from "wouter";
 import { motion } from "framer-motion";
-import { Loader2, Dumbbell, ChevronLeft, ChevronRight, Zap, FileText, Eye } from "lucide-react";
+import { Loader2, Dumbbell, ChevronLeft, ChevronRight, Zap, FileText } from "lucide-react";
 import { getSectionTypeInfo, type SectionType } from "@/components/programming/SectionEditor";
 
 const API_BASE = import.meta.env.VITE_API_URL || "";
@@ -151,20 +151,11 @@ export function PublicWod() {
 
   const [gymInfo, setGymInfo] = useState<GymInfo | null>(null);
   const [days, setDays] = useState<ProgrammingDay[]>([]);
-  const [previewDay, setPreviewDay] = useState<ProgrammingDay | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
 
   const urlParams = useMemo(() => new URLSearchParams(window.location.search), []);
   const selectedTrack = useMemo(() => urlParams.get("track"), [urlParams]);
-  const previewDayId = useMemo(() => {
-    const id = urlParams.get("preview");
-    if (!id) return null;
-    const parsed = parseInt(id, 10);
-    return isNaN(parsed) ? null : parsed;
-  }, [urlParams]);
-  const previewToken = useMemo(() => urlParams.get("token"), [urlParams]);
-  const isPreview = previewDayId !== null && previewToken !== null;
 
   const [selectedDate, setSelectedDate] = useState<Date>(() => {
     const dateParam = urlParams.get("date");
@@ -203,23 +194,6 @@ export function PublicWod() {
   useEffect(() => {
     if (!gymSlug || notFound || loading) return;
 
-    if (isPreview) {
-      const fetchPreview = async () => {
-        try {
-          const res = await fetch(
-            `${API_BASE}/api/public/wod/${gymSlug}/preview/${previewDayId}?token=${encodeURIComponent(previewToken!)}`
-          );
-          if (res.ok) {
-            const data = await res.json();
-            setPreviewDay(data);
-          }
-        } catch {
-        }
-      };
-      fetchPreview();
-      return;
-    }
-
     const fetchProgramming = async () => {
       try {
         const start = new Date(selectedDate);
@@ -240,12 +214,11 @@ export function PublicWod() {
     };
 
     fetchProgramming();
-  }, [gymSlug, notFound, loading, selectedDateStr, selectedTrack, isPreview, previewDayId, previewToken]);
+  }, [gymSlug, notFound, loading, selectedDateStr, selectedTrack]);
 
   const todayDays = useMemo(() => {
-    if (isPreview && previewDay) return [previewDay];
     return days.filter((d) => d.date === selectedDateStr);
-  }, [days, selectedDateStr, isPreview, previewDay]);
+  }, [days, selectedDateStr]);
 
   const isToday = useMemo(() => {
     const today = new Date();
@@ -286,9 +259,7 @@ export function PublicWod() {
     );
   }
 
-  const displayDate = isPreview && previewDay
-    ? previewDay.date
-    : selectedDateStr;
+  const displayDate = selectedDateStr;
 
   return (
     <div className="min-h-screen bg-background">
@@ -313,13 +284,6 @@ export function PublicWod() {
           )}
         </div>
 
-        {isPreview && (
-          <div className="flex items-center gap-2 mb-4 px-3 py-2 bg-amber-500/10 border border-amber-500/20 rounded-xl text-sm text-amber-700">
-            <Eye className="h-4 w-4 shrink-0" />
-            <span>Draft preview — this workout is not published yet</span>
-          </div>
-        )}
-
         <div className="space-y-4">
           <div className="flex items-center gap-3">
             <div className="h-8 w-8 bg-primary/20 rounded-lg flex items-center justify-center">
@@ -327,7 +291,7 @@ export function PublicWod() {
             </div>
             <div className="flex-1">
               <h2 className="text-lg font-bold text-foreground">
-                {isToday && !isPreview ? "Today's Workout" : "Workout"}
+                {isToday ? "Today's Workout" : "Workout"}
               </h2>
               <p className="text-xs text-muted-foreground" data-testid="selected-date">
                 {new Date(displayDate + "T00:00:00").toLocaleDateString("en-US", {
@@ -337,8 +301,7 @@ export function PublicWod() {
                 })}
               </p>
             </div>
-            {!isPreview && (
-              <div className="flex items-center gap-1">
+            <div className="flex items-center gap-1">
                 <button
                   onClick={() => navigate(-1)}
                   className="h-8 w-8 flex items-center justify-center rounded-lg border border-border hover:bg-accent transition-colors"
@@ -362,8 +325,7 @@ export function PublicWod() {
                 >
                   <ChevronRight className="h-4 w-4" />
                 </button>
-              </div>
-            )}
+            </div>
           </div>
 
           {todayDays.length > 0 ? (

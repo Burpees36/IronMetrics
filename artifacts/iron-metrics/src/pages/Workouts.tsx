@@ -259,7 +259,6 @@ export function Workouts() {
   const [isSaving, setIsSaving] = useState(false);
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const [shareDialogDay, setShareDialogDay] = useState<{ title?: string; date?: string; track?: string; dayId?: number; status?: string } | null>(null);
-  const [sharePreviewUrl, setSharePreviewUrl] = useState<string>("");
   const [notifyVersion, setNotifyVersion] = useState(0);
   const [selectedTrack, setSelectedTrack] = useState("default");
   const [trackDropdownOpen, setTrackDropdownOpen] = useState(false);
@@ -340,38 +339,6 @@ export function Workouts() {
     return allMembers.filter((m) => m.status === "active" && m.email && (m.tags as string[] | null)?.includes(trackTag)).length;
   }, [allMembers, activeMemberCount]);
 
-  useEffect(() => {
-    if (!shareDialogOpen || !shareDialogDay?.dayId || !activeGymId || !baseWodUrl) return;
-    if (shareDialogDay.status === "published") {
-      setSharePreviewUrl("");
-      return;
-    }
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await fetch(`/api/gyms/${activeGymId}/programming/${shareDialogDay.dayId}/preview-token`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-        });
-        if (res.ok && !cancelled) {
-          const data = await res.json() as { token: string; dayId: number };
-          const params = new URLSearchParams();
-          params.set("preview", String(data.dayId));
-          params.set("token", data.token);
-          if (shareDialogDay.date) params.set("date", shareDialogDay.date);
-          setSharePreviewUrl(`${baseWodUrl}?${params.toString()}`);
-        } else if (!cancelled) {
-          toast({ title: "Preview unavailable", description: "Could not generate preview link.", variant: "destructive" });
-        }
-      } catch {
-        if (!cancelled) {
-          toast({ title: "Preview unavailable", description: "Could not generate preview link.", variant: "destructive" });
-        }
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [shareDialogOpen, shareDialogDay, activeGymId, baseWodUrl, toast]);
 
   const currentMemberId = useMemo(() => {
     if (!currentUser?.email || allMembers.length === 0) return null;
@@ -483,12 +450,6 @@ export function Workouts() {
             title: "Week Generated",
             description: `${generated} days created${skipped > 0 ? `, ${skipped} days skipped (already exist)` : ""}. Review and edit before publishing.`,
           });
-          if (generated > 0 && baseWodUrl) {
-            const track = selectedTrack === "all" ? "default" : (selectedTrack || "default");
-            const resolved = resolveDayForShare(dateStr, track);
-            setShareDialogDay({ date: dateStr, track, ...resolved });
-            setShareDialogOpen(true);
-          }
         }
       } catch (error: unknown) {
         const err = error as { data?: { error?: string }; message?: string };
@@ -501,7 +462,7 @@ export function Workouts() {
         setIsGenerating(false);
       }
     },
-    [activeGymId, weekDates, generateWeekMutation, invalidateProgramming, toast, baseWodUrl, selectedTrack, dateStr, resolveDayForShare]
+    [activeGymId, weekDates, generateWeekMutation, invalidateProgramming, toast, baseWodUrl]
   );
 
   const daysByDate = useMemo(() => {
@@ -961,6 +922,10 @@ export function Workouts() {
               onClick={() => {
                 const track = selectedTrack === "all" ? "default" : (selectedTrack || "default");
                 const resolved = resolveDayForShare(dateStr, track);
+                if (resolved.dayId && resolved.status !== "published") {
+                  toast({ title: "Publish first", description: "Publish this workout before sharing it." });
+                  return;
+                }
                 setShareDialogDay({ date: dateStr, track, ...resolved });
                 setShareDialogOpen(true);
               }}
@@ -1248,13 +1213,8 @@ export function Workouts() {
       {baseWodUrl && activeGymId && (
         <ShareWorkoutDialog
           open={shareDialogOpen}
-          onOpenChange={(open) => {
-            setShareDialogOpen(open);
-            if (!open) setSharePreviewUrl("");
-          }}
+          onOpenChange={setShareDialogOpen}
           publicUrl={(() => {
-            const isDraftDay = shareDialogDay?.status !== "published" && !!shareDialogDay?.dayId;
-            if (isDraftDay) return sharePreviewUrl;
             const params = new URLSearchParams();
             if (shareDialogDay?.date) params.set("date", shareDialogDay.date);
             if (shareDialogDay?.track && shareDialogDay.track !== "default") params.set("track", shareDialogDay.track);
@@ -1266,7 +1226,6 @@ export function Workouts() {
           dayTitle={shareDialogDay?.title}
           dayDate={shareDialogDay?.date}
           dayTrack={shareDialogDay?.track}
-          isDraft={shareDialogDay?.status !== "published" && !!shareDialogDay?.dayId}
           trackMemberCount={shareDialogDay?.track ? getTrackMemberCount(shareDialogDay.track) : undefined}
           onNotifySuccess={(count) => { setNotifyVersion((v) => v + 1); toast({ title: "Notifications sent", description: `${count} member${count !== 1 ? "s" : ""} notified.` }); }}
           onNotifyError={(error) => toast({ title: "Notification failed", description: error, variant: "destructive" })}

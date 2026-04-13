@@ -13,6 +13,7 @@ import {
   Share,
   AlertCircle,
 } from "lucide-react";
+
 import {
   Dialog,
   DialogContent,
@@ -54,7 +55,6 @@ interface ShareWorkoutDialogProps {
   dayTitle?: string;
   dayDate?: string;
   dayTrack?: string;
-  isDraft?: boolean;
   trackMemberCount?: number;
   onNotifySuccess?: (count: number) => void;
   onNotifyError?: (error: string) => void;
@@ -69,7 +69,6 @@ export function ShareWorkoutDialog({
   dayTitle,
   dayDate,
   dayTrack,
-  isDraft,
   trackMemberCount,
   onNotifySuccess,
   onNotifyError,
@@ -200,11 +199,9 @@ export function ShareWorkoutDialog({
             Share Programming
           </DialogTitle>
           <DialogDescription>
-            {isDraft
-              ? `Preview "${dayTitle || "this workout"}" — publish it to share with members`
-              : dayTitle
-                ? `Share "${dayTitle}" with your members`
-                : "Share your public programming page with members"}
+            {dayTitle
+              ? `Share "${dayTitle}" with your members`
+              : "Share your public programming page with members"}
           </DialogDescription>
         </DialogHeader>
 
@@ -212,19 +209,18 @@ export function ShareWorkoutDialog({
           <div className="rounded-xl border border-primary/20 bg-primary/5 p-4 space-y-3">
             <label className="text-sm font-semibold text-foreground flex items-center gap-1.5">
               <ExternalLink className="h-3.5 w-3.5 text-primary" />
-              {isDraft ? "Preview Link" : "Public Programming Link"}
+              Public Programming Link
             </label>
             <div
               className="rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-foreground font-mono break-all select-all leading-relaxed cursor-text"
               title={publicUrl || undefined}
             >
-              {publicUrl || (isDraft ? "Generating preview link..." : "")}
+              {publicUrl}
             </div>
             <div className="flex flex-col gap-2">
               <button
                 onClick={handleCopyLink}
-                disabled={!publicUrl}
-                className="w-full flex items-center justify-center gap-2 h-10 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 font-medium text-sm transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full flex items-center justify-center gap-2 h-10 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 font-medium text-sm transition-all active:scale-[0.98]"
               >
                 <AnimatePresence mode="wait" initial={false}>
                   {copied ? (
@@ -264,23 +260,16 @@ export function ShareWorkoutDialog({
                     Share
                   </button>
                 )}
-                {isDraft && !publicUrl ? (
-                  <span className="flex-1 flex items-center justify-center gap-2 h-9 rounded-lg border border-border bg-muted/50 text-sm text-muted-foreground cursor-wait">
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    <span>Loading preview...</span>
-                  </span>
-                ) : (
-                  <a
-                    href={publicUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex-1 flex items-center justify-center gap-2 h-9 rounded-lg border border-border bg-background hover:bg-accent transition-colors text-sm text-muted-foreground hover:text-foreground"
-                    title="Open in new tab"
-                  >
-                    <ExternalLink className="h-4 w-4" />
-                    <span>Open</span>
-                  </a>
-                )}
+                <a
+                  href={publicUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex-1 flex items-center justify-center gap-2 h-9 rounded-lg border border-border bg-background hover:bg-accent transition-colors text-sm text-muted-foreground hover:text-foreground"
+                  title="Open in new tab"
+                >
+                  <ExternalLink className="h-4 w-4" />
+                  <span>Open</span>
+                </a>
               </div>
             </div>
           </div>

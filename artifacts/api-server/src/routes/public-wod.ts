@@ -1,7 +1,6 @@
 import { Router, type IRouter } from "express";
 import { eq, and, gte, lte, asc, desc, or, isNull } from "drizzle-orm";
 import { db, gymsTable, programmingDaysTable, programmingSectionsTable } from "@workspace/db";
-import { verifyPreviewToken } from "../utils/preview-token";
 
 const router: IRouter = Router();
 
@@ -100,58 +99,5 @@ router.get("/public/wod/:gymSlug/programming", async (req, res): Promise<void> =
     res.status(500).json({ error: "Failed to load programming" });
   }
 });
-
-router.get("/public/wod/:gymSlug/preview/:dayId", async (req, res): Promise<void> => {
-  try {
-    const { gymSlug, dayId: dayIdStr } = req.params;
-    const dayId = parseInt(dayIdStr, 10);
-    const token = req.query.token as string | undefined;
-
-    if (!gymSlug || isNaN(dayId) || !token) {
-      res.status(400).json({ error: "Missing parameters" });
-      return;
-    }
-
-    const [gym] = await db.select().from(gymsTable).where(eq(gymsTable.slug, gymSlug));
-    if (!gym) {
-      res.status(404).json({ error: "Gym not found" });
-      return;
-    }
-
-    if (!verifyPreviewToken(token, dayId, gym.id)) {
-      res.status(403).json({ error: "Invalid or expired preview token" });
-      return;
-    }
-
-    const [day] = await db
-      .select()
-      .from(programmingDaysTable)
-      .where(and(eq(programmingDaysTable.id, dayId), eq(programmingDaysTable.gymId, gym.id)));
-
-    if (!day) {
-      res.status(404).json({ error: "Day not found" });
-      return;
-    }
-
-    const sections = await db
-      .select()
-      .from(programmingSectionsTable)
-      .where(eq(programmingSectionsTable.dayId, day.id))
-      .orderBy(asc(programmingSectionsTable.orderIndex));
-
-    const filteredSections = sections.map((s) => {
-      const { coachNotes, ...rest } = s;
-      return rest;
-    });
-
-    const { coachNotes, ...dayRest } = day;
-    res.json({ ...dayRest, sections: filteredSections });
-  } catch (err: unknown) {
-    const error = err as Error;
-    console.error("[public-wod] GET preview error:", error.message);
-    res.status(500).json({ error: "Failed to load preview" });
-  }
-});
-
 
 export default router;

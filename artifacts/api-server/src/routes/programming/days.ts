@@ -3,7 +3,6 @@ import { eq, and, gte, lte, desc, asc, ne, inArray, or, isNull } from "drizzle-o
 import { db, programmingDaysTable, programmingSectionsTable } from "@workspace/db";
 import { requireProgrammingRead, requireProgrammingWrite, isStaffRole, stripCoachNotesFromDay } from "../../middlewares/programmingRbac";
 import { parseGymId, parseDayId, getDayWithSections } from "./helpers";
-import { generatePreviewToken } from "../../utils/preview-token";
 
 const router: IRouter = Router();
 
@@ -384,36 +383,6 @@ router.get(
     }
 
     res.json(Array.from(trackSet).sort());
-  }
-);
-
-router.post(
-  "/gyms/:gymId/programming/:dayId/preview-token",
-  requireProgrammingWrite(),
-  async (req, res): Promise<void> => {
-    const gymId = parseGymId(req.params);
-    const dayId = parseDayId(req.params);
-    if (!gymId || !dayId) {
-      res.status(400).json({ error: "Invalid IDs" });
-      return;
-    }
-
-    const [existing] = await db
-      .select()
-      .from(programmingDaysTable)
-      .where(and(eq(programmingDaysTable.id, dayId), eq(programmingDaysTable.gymId, gymId)));
-
-    if (!existing) {
-      res.status(404).json({ error: "Programming day not found" });
-      return;
-    }
-
-    const token = generatePreviewToken(dayId, gymId);
-    if (!token) {
-      res.status(503).json({ error: "Preview tokens are not configured" });
-      return;
-    }
-    res.json({ token, dayId, expiresInMinutes: 60 });
   }
 );
 
