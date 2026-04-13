@@ -648,7 +648,24 @@ router.get("/gyms/:gymId/intelligence/morning-briefing", async (req, res): Promi
     });
   } catch (err) {
     console.error("[intelligence/morning-briefing] Failed to generate briefing:", err);
-    res.status(500).json({ error: "Failed to generate morning briefing. Please try again." });
+    res.json({
+      items: [],
+      summary: null,
+      snapshot: {
+        rsiScore: null,
+        rsiBand: null,
+        engagementRate: 0,
+        atRiskCount: 0,
+        revenueAtRisk: 0,
+        staleLeads: 0,
+        newLeads: 0,
+        activeLeads: 0,
+        failedPayments: 0,
+        todayClasses: 0,
+        classFillRate: 0,
+      },
+      celebrations: [],
+    });
   }
 });
 

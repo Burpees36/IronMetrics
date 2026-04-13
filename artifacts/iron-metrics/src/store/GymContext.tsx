@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
+import { useAuth } from "@clerk/react";
 
 interface GymContextType {
   activeGymId: number | null;
@@ -19,14 +20,16 @@ function isPreviewMode(): boolean {
 }
 
 export function GymProvider({ children }: { children: React.ReactNode }) {
+  const { isLoaded, isSignedIn } = useAuth();
   const [activeGymId, setActiveGymId] = useState<number | null>(() => {
     const saved = localStorage.getItem("iron_metrics_active_gym");
     return saved ? parseInt(saved, 10) : null;
   });
 
   const preview = isPreviewMode();
+  const shouldAutoFetch = preview || (isLoaded && isSignedIn);
   const [isGymLoading, setIsGymLoading] = useState(
-    preview && activeGymId === null,
+    shouldAutoFetch && activeGymId === null,
   );
 
   useEffect(() => {
@@ -38,13 +41,13 @@ export function GymProvider({ children }: { children: React.ReactNode }) {
   }, [activeGymId]);
 
   useEffect(() => {
-    if (activeGymId || !preview) {
+    if (activeGymId || !shouldAutoFetch) {
       setIsGymLoading(false);
       return;
     }
 
     setIsGymLoading(true);
-    const headers: Record<string, string> = { "X-Preview": "1" };
+    const headers: Record<string, string> = preview ? { "X-Preview": "1" } : {};
     fetch("/api/gyms", { credentials: "include", headers })
       .then((res) => (res.ok ? res.json() : []))
       .then((gyms: { id: number }[]) => {
@@ -56,7 +59,7 @@ export function GymProvider({ children }: { children: React.ReactNode }) {
       .catch(() => {
         setIsGymLoading(false);
       });
-  }, [activeGymId, preview]);
+  }, [activeGymId, shouldAutoFetch, preview]);
 
   return (
     <GymContext.Provider value={{ activeGymId, setActiveGymId, isGymLoading }}>
