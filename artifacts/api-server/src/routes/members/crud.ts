@@ -20,10 +20,11 @@ router.get("/gyms/:gymId/members", async (req, res): Promise<void> => {
   const planIdParam = req.query.planId as string | undefined;
   const riskTiersParam = req.query.riskTiers as string | undefined;
   const planId = planIdParam ? parseInt(planIdParam, 10) : null;
+  const VALID_RISK_TIERS = new Set(["healthy", "low", "moderate", "high", "critical"]);
   const riskTiers = riskTiersParam
-    ? riskTiersParam.split(",").map(t => t.trim()).filter(Boolean)
+    ? riskTiersParam.split(",").map(t => t.trim()).filter(t => VALID_RISK_TIERS.has(t))
     : null;
-  const maxLimit = riskTiers ? 500 : 200;
+  const maxLimit = riskTiers && riskTiers.length > 0 ? 500 : 200;
   const limit = Math.min(parseInt(req.query.limit as string) || 50, maxLimit);
   const offset = parseInt(req.query.offset as string) || 0;
 
