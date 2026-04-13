@@ -100,7 +100,7 @@ export function DiscountManager() {
                   <span className="px-2 py-1 rounded bg-primary/15 text-primary font-mono text-sm font-medium">{code.code}</span>
                   <span className="text-foreground text-sm">{code.name}</span>
                 </div>
-                <button onClick={() => handleToggle(code.id, code.isActive)} className="text-muted-foreground hover:text-foreground">
+                <button onClick={() => handleToggle(code.id, code.isActive)} disabled={updateMutation.isPending} className="text-muted-foreground hover:text-foreground disabled:opacity-50">
                   {code.isActive ? <ToggleRight className="w-6 h-6 text-emerald-500" /> : <ToggleLeft className="w-6 h-6" />}
                 </button>
               </div>

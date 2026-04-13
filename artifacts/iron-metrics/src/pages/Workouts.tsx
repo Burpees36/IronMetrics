@@ -1186,6 +1186,7 @@ export function Workouts() {
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => deleteConfirmDay && handleDelete(deleteConfirmDay)}
+              disabled={deleteDayMutation.isPending}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               {deleteDayMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Delete"}
