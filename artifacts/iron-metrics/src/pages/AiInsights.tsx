@@ -1306,6 +1306,39 @@ export function AiInsights() {
     return (interventions as Intervention[]).filter(i => !dismissedInterventions.has(i.id));
   }, [interventions, dismissedInterventions]);
 
+  const [showAllInterventions, setShowAllInterventions] = useState(false);
+
+  const topInterventions = useMemo(() => {
+    if (activeInterventions.length <= 4) return activeInterventions;
+    const byCategory = new Map<string, Intervention[]>();
+    for (const item of activeInterventions) {
+      const list = byCategory.get(item.category) || [];
+      list.push(item);
+      byCategory.set(item.category, list);
+    }
+    for (const list of byCategory.values()) {
+      list.sort((a, b) => b.score - a.score);
+    }
+    const picked: Intervention[] = [];
+    const categoryKeys = [...byCategory.keys()];
+    const indices = new Map<string, number>(categoryKeys.map(k => [k, 0]));
+    while (picked.length < 4) {
+      let added = false;
+      for (const cat of categoryKeys) {
+        if (picked.length >= 4) break;
+        const list = byCategory.get(cat)!;
+        const idx = indices.get(cat)!;
+        if (idx < list.length) {
+          picked.push(list[idx]);
+          indices.set(cat, idx + 1);
+          added = true;
+        }
+      }
+      if (!added) break;
+    }
+    return picked;
+  }, [activeInterventions]);
+
   const dismissedInterventionList = useMemo(() => {
     if (!interventions) return [];
     return (interventions as Intervention[]).filter(i => dismissedInterventions.has(i.id));
@@ -1538,35 +1571,49 @@ export function AiInsights() {
                 <p className="text-sm text-muted-foreground mt-1">Please try refreshing the page.</p>
               </div>
             ) : (
-              <AnimatePresence mode="popLayout">
-                {activeInterventions.length > 0 ? (
-                  activeInterventions.map((intervention) => (
-                    <InterventionCard
-                      key={intervention.id}
-                      intervention={intervention}
-                      onDismiss={handleDismissIntervention}
-                      isExpanded={expandedInterventions.has(intervention.id)}
-                      onToggleExpand={handleToggleExpand}
-                    />
-                  ))
-                ) : (
-                  <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    className="bg-card border border-emerald-200 rounded-xl p-8 text-center"
+              <>
+                <AnimatePresence mode="popLayout">
+                  {activeInterventions.length > 0 ? (
+                    (showAllInterventions ? activeInterventions : topInterventions).map((intervention) => (
+                      <InterventionCard
+                        key={intervention.id}
+                        intervention={intervention}
+                        onDismiss={handleDismissIntervention}
+                        isExpanded={expandedInterventions.has(intervention.id)}
+                        onToggleExpand={handleToggleExpand}
+                      />
+                    ))
+                  ) : (
+                    <motion.div
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      className="bg-card border border-emerald-200 rounded-xl p-8 text-center"
+                    >
+                      <div className="h-14 w-14 rounded-2xl bg-emerald-50 flex items-center justify-center mx-auto mb-4">
+                        <CheckCircle2 className="h-8 w-8 text-emerald-500" />
+                      </div>
+                      <h3 className="font-semibold text-foreground text-lg">Nothing flagged</h3>
+                      <p className="text-sm text-muted-foreground mt-2 max-w-md mx-auto leading-relaxed">
+                        {dismissedInterventions.size > 0
+                          ? "Every recommendation handled. Metrics are clean — use the time to build."
+                          : "No issues detected. Metrics look clean. Use the time to build."}
+                      </p>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+                {activeInterventions.length > 4 && (
+                  <button
+                    onClick={() => setShowAllInterventions(!showAllInterventions)}
+                    className="w-full flex items-center justify-center gap-1.5 py-2 text-xs font-medium text-primary hover:text-primary/80 transition-colors"
                   >
-                    <div className="h-14 w-14 rounded-2xl bg-emerald-50 flex items-center justify-center mx-auto mb-4">
-                      <CheckCircle2 className="h-8 w-8 text-emerald-500" />
-                    </div>
-                    <h3 className="font-semibold text-foreground text-lg">Nothing flagged</h3>
-                    <p className="text-sm text-muted-foreground mt-2 max-w-md mx-auto leading-relaxed">
-                      {dismissedInterventions.size > 0
-                        ? "Every recommendation handled. Metrics are clean — use the time to build."
-                        : "No issues detected. Metrics look clean. Use the time to build."}
-                    </p>
-                  </motion.div>
+                    {showAllInterventions ? (
+                      <>Show top 4 <ChevronUp className="h-3.5 w-3.5" /></>
+                    ) : (
+                      <>View all {activeInterventions.length} recommendations <ChevronDown className="h-3.5 w-3.5" /></>
+                    )}
+                  </button>
                 )}
-              </AnimatePresence>
+              </>
             )}
           </div>
 
