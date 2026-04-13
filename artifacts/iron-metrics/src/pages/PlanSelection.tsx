@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useGym } from "@/store/GymContext";
 import { useLocation } from "wouter";
+import { useAuth } from "@clerk/react";
 import { motion } from "framer-motion";
 import { Check, Loader2, Zap, TrendingUp, Crown, ArrowRight } from "lucide-react";
 import { ForgeOSLogo } from "@/components/brand/ForgeOSLogo";
@@ -45,6 +46,7 @@ export function PlanSelection() {
   const { activeGymId } = useGym();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+  const { getToken } = useAuth();
   const [loading, setLoading] = useState<string | null>(null);
   const { tiers: apiTiers, isLoading: tiersLoading } = useGymTier();
 
@@ -53,11 +55,16 @@ export function PlanSelection() {
     setLoading(tierId);
 
     try {
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      try {
+        const token = await getToken();
+        if (token) headers["Authorization"] = `Bearer ${token}`;
+      } catch {}
       const baseUrl = window.location.origin;
       const res = await fetch(`${API_BASE}/api/gyms/${activeGymId}/platform-billing/checkout`, {
         method: "POST",
         credentials: "include",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify({
           tier: tierId,
           successUrl: `${baseUrl}/onboarding?subscribed=1`,
