@@ -47,6 +47,7 @@ import {
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import { useIsMobile } from "@/hooks/useMobile";
 import { useGymTier } from "@/hooks/useGymTier";
+import { PageError } from "@/components/ui/page-error";
 
 const BASE_URL = import.meta.env.BASE_URL || "/";
 const API_BASE = `${BASE_URL}api`.replace(/\/+/g, "/");
@@ -1083,11 +1084,11 @@ export function AiInsights() {
   const [trendWindow, setTrendWindow] = useState<"30d" | "90d" | "all">("90d");
   const [showRsiTrend, setShowRsiTrend] = useState(false);
 
-  const { data: intel, isLoading: intelLoading, isError: intelError } = useGetIntelligenceOverview(activeGymId as number, {
+  const { data: intel, isLoading: intelLoading, isError: intelError, refetch: refetchIntel } = useGetIntelligenceOverview(activeGymId as number, {
     query: { enabled: !!activeGymId, retry: 2, staleTime: 30000 }
   });
 
-  const { data: interventions, isLoading: interventionsLoading, isError: interventionsError } = useGetInterventions(activeGymId as number, {
+  const { data: interventions, isLoading: interventionsLoading, isError: interventionsError, refetch: refetchInterventions } = useGetInterventions(activeGymId as number, {
     query: { enabled: !!activeGymId, staleTime: 30000 }
   });
 
@@ -1116,7 +1117,7 @@ export function AiInsights() {
   const { data: rsiHistory } = useRsiHistory(activeGymId, trendWindow);
   const { data: benchmarkData } = useBenchmarks(activeGymId);
 
-  const { data: tasks, isLoading: tasksLoading, isError: tasksError } = useListAiTasks(activeGymId as number, {
+  const { data: tasks, isLoading: tasksLoading, isError: tasksError, refetch: refetchTasks } = useListAiTasks(activeGymId as number, {
     query: { enabled: !!activeGymId }
   });
 
@@ -1481,13 +1482,11 @@ export function AiInsights() {
 
   if (intelError || !intel) {
     return (
-      <div className="h-full flex items-center justify-center">
-        <div className="text-center">
-          <AlertCircle className="h-12 w-12 text-destructive/50 mx-auto mb-4" />
-          <h3 className="text-lg font-semibold text-foreground mb-1">Unable to load AI insights</h3>
-          <p className="text-sm text-muted-foreground">Please try refreshing the page.</p>
-        </div>
-      </div>
+      <PageError
+        title="Unable to load AI insights"
+        message="We couldn't load your intelligence data. Check your connection and try again."
+        onRetry={() => refetchIntel()}
+      />
     );
   }
 
@@ -1576,7 +1575,14 @@ export function AiInsights() {
               <div className="bg-card border border-border rounded-xl p-8 text-center">
                 <AlertCircle className="h-10 w-10 text-destructive/50 mx-auto mb-3" />
                 <h3 className="font-semibold text-foreground">Unable to load recommendations</h3>
-                <p className="text-sm text-muted-foreground mt-1">Please try refreshing the page.</p>
+                <p className="text-sm text-muted-foreground mt-1 mb-3">Check your connection and try again.</p>
+                <button
+                  onClick={() => refetchInterventions()}
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground hover:bg-primary/90 rounded-lg font-medium text-sm transition-colors"
+                >
+                  <RefreshCw className="h-4 w-4" />
+                  Try Again
+                </button>
               </div>
             ) : (
               <>
@@ -2005,7 +2011,14 @@ export function AiInsights() {
             <div className="text-center py-12 flex flex-col items-center">
               <X className="h-10 w-10 text-destructive/50 mb-3" />
               <h3 className="text-base font-semibold text-foreground">Failed to load tasks</h3>
-              <p className="text-muted-foreground text-sm mt-1">Please try refreshing the page.</p>
+              <p className="text-muted-foreground text-sm mt-1 mb-3">Check your connection and try again.</p>
+              <button
+                onClick={() => refetchTasks()}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground hover:bg-primary/90 rounded-lg font-medium text-sm transition-colors"
+              >
+                <RefreshCw className="h-4 w-4" />
+                Try Again
+              </button>
             </div>
           ) : taskView === "pending" ? (
             filteredPendingTasks.length > 0 ? (
