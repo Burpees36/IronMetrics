@@ -6,6 +6,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
 import { motion } from "framer-motion";
 import { Loader2, Search, Plus, Target, BarChart3, AlertTriangle, CalendarClock, Globe, Zap } from "lucide-react";
+import { PageError } from "@/components/ui/page-error";
 import { PipelineBoard } from "@/components/leads/PipelineBoard";
 import { LeadDetailDrawer } from "@/components/leads/LeadDetailDrawer";
 import { SummaryStrip } from "@/components/leads/SummaryStrip";
@@ -32,7 +33,7 @@ export function Leads() {
   const [showCaptureSettings, setShowCaptureSettings] = useState(false);
   const [, navigate] = useLocation();
 
-  const { data: leads, isLoading } = useListLeads(activeGymId as number, { search: search || undefined }, {
+  const { data: leads, isLoading, isError: leadsError, refetch: refetchLeads } = useListLeads(activeGymId as number, { search: search || undefined }, {
     query: { enabled: !!activeGymId, queryKey: getListLeadsQueryKey(activeGymId as number, { search: search || undefined }) }
   });
 
@@ -224,7 +225,13 @@ export function Leads() {
 
       <div className="flex-1 flex gap-4 min-h-0 overflow-hidden">
         <div className="flex-1 min-w-0 overflow-hidden flex flex-col">
-          {isLoading ? (
+          {leadsError && !leads ? (
+            <PageError
+              title="Unable to load leads"
+              message="We couldn't load your sales pipeline. Check your connection and try again."
+              onRetry={() => refetchLeads()}
+            />
+          ) : isLoading ? (
             <div className="flex-1 flex items-center justify-center">
               <Loader2 className="h-8 w-8 text-primary animate-spin" />
             </div>

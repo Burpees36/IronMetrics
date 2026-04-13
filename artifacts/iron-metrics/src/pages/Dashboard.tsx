@@ -21,6 +21,7 @@ import { SyncHealthBanner } from "@/components/dashboard/SyncHealthBanner";
 import { CelebrationsBanner } from "@/components/dashboard/CelebrationsBanner";
 import { AtRiskMembersCard } from "@/components/dashboard/AtRiskMembersCard";
 import { RetentionActivityCard } from "@/components/dashboard/RetentionActivityCard";
+import { PageError } from "@/components/ui/page-error";
 import { cn } from "@/lib/utils";
 
 const API_BASE = import.meta.env.VITE_API_URL || "";
@@ -415,10 +416,10 @@ function FinancialSummaryCard({ gymId }: { gymId: number }) {
 export function Dashboard() {
   const { user } = useAuth();
   const { activeGymId } = useGym();
-  const { data: stats, isLoading: statsLoading } = useGetDashboardStats(activeGymId as number, {
+  const { data: stats, isLoading: statsLoading, isError: statsError, refetch: refetchStats } = useGetDashboardStats(activeGymId as number, {
     query: { enabled: !!activeGymId }
   });
-  const { data: briefing, isLoading: briefingLoading } = useGetMorningBriefing(activeGymId as number, {
+  const { data: briefing, isLoading: briefingLoading, refetch: refetchBriefing } = useGetMorningBriefing(activeGymId as number, {
     query: { enabled: !!activeGymId }
   });
 
@@ -440,11 +441,13 @@ export function Dashboard() {
     );
   }
 
-  if (!stats) {
+  if (statsError || !stats) {
     return (
-      <div className="h-full flex items-center justify-center">
-        <p className="text-muted-foreground">Unable to load dashboard data.</p>
-      </div>
+      <PageError
+        title="Unable to load dashboard"
+        message="We couldn't load your dashboard data. Check your connection and try again."
+        onRetry={() => { refetchStats(); refetchBriefing(); }}
+      />
     );
   }
 

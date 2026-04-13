@@ -18,6 +18,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useGetGym } from "@workspace/api-client-react";
+import { PageError } from "@/components/ui/page-error";
 
 const API_BASE = import.meta.env.VITE_API_URL || "";
 
@@ -252,6 +253,7 @@ export function Retention() {
   const [enrollments, setEnrollments] = useState<Enrollment[]>([]);
   const [events, setEvents] = useState<SequenceEvent[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [selectedSequence, setSelectedSequence] = useState<Sequence | null>(null);
   const [activeTab, setActiveTab] = useState<"sequences" | "enrollments" | "activity">("sequences");
   const [showGuide, setShowGuide] = useState(true);
@@ -261,16 +263,22 @@ export function Retention() {
 
   const loadData = useCallback(async () => {
     if (!activeGymId) return;
+    setLoadError(false);
     try {
       const [seqRes, enrollRes, eventsRes] = await Promise.all([
         apiFetch(`/api/gyms/${activeGymId}/retention/sequences`),
         apiFetch(`/api/gyms/${activeGymId}/retention/enrollments`),
         apiFetch(`/api/gyms/${activeGymId}/retention/events?limit=30`),
       ]);
-      if (seqRes.ok) setSequences(await seqRes.json());
+      if (!seqRes.ok) {
+        setLoadError(true);
+      } else {
+        setSequences(await seqRes.json());
+      }
       if (enrollRes.ok) setEnrollments(await enrollRes.json());
       if (eventsRes.ok) setEvents(await eventsRes.json());
     } catch {
+      setLoadError(true);
     } finally {
       setLoading(false);
     }
@@ -350,6 +358,16 @@ export function Retention() {
       <div className="h-full flex items-center justify-center">
         <Loader2 className="h-8 w-8 text-primary animate-spin" />
       </div>
+    );
+  }
+
+  if (loadError && sequences.length === 0) {
+    return (
+      <PageError
+        title="Unable to load retention data"
+        message="We couldn't load your retention sequences. Check your connection and try again."
+        onRetry={() => { setLoading(true); loadData(); }}
+      />
     );
   }
 

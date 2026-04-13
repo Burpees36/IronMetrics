@@ -65,6 +65,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { ShareWorkoutDialog } from "@/components/programming/ShareWorkoutDialog";
 import { useGymTier } from "@/hooks/useGymTier";
+import { PageError } from "@/components/ui/page-error";
 
 function toDateString(d: Date): string {
   return d.toISOString().split("T")[0];
@@ -304,7 +305,7 @@ export function Workouts() {
   const endDate = isStaff ? staffEndDate : memberRangeEnd;
 
   const trackParam = isStaff && selectedTrack !== "all" ? selectedTrack : undefined;
-  const { data: programmingDays, isLoading: programmingLoading } = useListProgrammingDays(
+  const { data: programmingDays, isLoading: programmingLoading, isError: programmingError, refetch: refetchProgramming } = useListProgrammingDays(
     activeGymId as number,
     { startDate, endDate, track: trackParam },
     { query: { enabled: !!activeGymId && !roleLoading } }
@@ -746,6 +747,16 @@ export function Workouts() {
           Select a gym to view programming.
         </p>
       </div>
+    );
+  }
+
+  if (programmingError && !programmingDays) {
+    return (
+      <PageError
+        title="Unable to load programming"
+        message="We couldn't load your workouts. Check your connection and try again."
+        onRetry={() => refetchProgramming()}
+      />
     );
   }
 

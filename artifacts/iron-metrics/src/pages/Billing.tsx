@@ -26,6 +26,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { DiscountManager } from "@/components/billing/DiscountManager";
 import { TaxSettings } from "@/components/billing/TaxSettings";
+import { PageError } from "@/components/ui/page-error";
 
 type BillingTab = "plans" | "subscriptions" | "payments" | "refunds" | "cancelled" | "discounts" | "settings";
 
@@ -46,11 +47,11 @@ export function Billing() {
     query: { enabled: !!activeGymId }
   });
 
-  const { data: plans, isLoading: plansLoading } = useListMembershipPlans(activeGymId as number, {
+  const { data: plans, isLoading: plansLoading, isError: plansError, refetch: refetchPlans } = useListMembershipPlans(activeGymId as number, {
     query: { enabled: !!activeGymId }
   });
 
-  const { data: subscriptions, isLoading: subsLoading } = useListSubscriptions(activeGymId as number, {}, {
+  const { data: subscriptions, isLoading: subsLoading, isError: subsError, refetch: refetchSubs } = useListSubscriptions(activeGymId as number, {}, {
     query: { enabled: !!activeGymId }
   });
 
@@ -165,6 +166,7 @@ export function Billing() {
   }
 
   const isLoading = plansLoading || subsLoading;
+  const billingError = plansError || subsError;
 
   const summary = billingSummary;
   const mrr = summary?.mrr ?? 0;
@@ -179,6 +181,16 @@ export function Billing() {
       <div className="h-full flex items-center justify-center">
         <Loader2 className="h-8 w-8 text-primary animate-spin" />
       </div>
+    );
+  }
+
+  if (billingError && !plans && !subscriptions) {
+    return (
+      <PageError
+        title="Unable to load billing"
+        message="We couldn't load your billing data. Check your connection and try again."
+        onRetry={() => { refetchPlans(); refetchSubs(); }}
+      />
     );
   }
 

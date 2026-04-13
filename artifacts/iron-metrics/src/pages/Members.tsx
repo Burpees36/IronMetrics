@@ -19,6 +19,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
+import { PageError } from "@/components/ui/page-error";
 
 type MemberFromList = {
   id: number;
@@ -181,7 +182,7 @@ export function Members() {
     setSelectedIds(new Set());
   }, [currentPage]);
 
-  const { data, isLoading } = useListMembers(activeGymId as number, filterParams as any, {
+  const { data, isLoading, isError: membersError, refetch: refetchMembers } = useListMembers(activeGymId as number, filterParams as any, {
     query: { enabled: !!activeGymId, placeholderData: (prev: any) => prev } as any
   });
 
@@ -614,7 +615,13 @@ export function Members() {
       )}
 
       <div className="flex-1 bg-card border border-border rounded-2xl shadow-sm overflow-hidden flex flex-col">
-        {isLoading && !data ? (
+        {membersError && !data ? (
+          <PageError
+            title="Unable to load members"
+            message="We couldn't load your member list. Check your connection and try again."
+            onRetry={() => refetchMembers()}
+          />
+        ) : isLoading && !data ? (
           <div className="flex-1 flex items-center justify-center">
             <Loader2 className="h-8 w-8 text-primary animate-spin" />
           </div>
