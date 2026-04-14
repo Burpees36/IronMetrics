@@ -15,6 +15,10 @@ import {
   BarChart3,
   MessageSquare,
   Plus,
+  ChevronDown,
+  ChevronRight,
+  Scale,
+  StickyNote,
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 
@@ -124,6 +128,16 @@ export function SectionEditor({
   onMoveDown,
 }: SectionEditorProps) {
   const [showCoachNotes, setShowCoachNotes] = useState(!!section.coachNotes);
+  const [showDetails, setShowDetails] = useState(
+    !!(section.timeCap || section.stimulus || section.scalingNotes || section.memberNotes)
+  );
+
+  React.useEffect(() => {
+    const hasDetails = !!(section.timeCap || section.stimulus || section.scalingNotes || section.memberNotes);
+    setShowDetails(hasDetails);
+    setShowCoachNotes(!!section.coachNotes);
+  }, [section.id]);
+
   const typeInfo = getSectionTypeInfo(section.type);
   const letter = LETTERS[index] || String(index + 1);
 
@@ -188,15 +202,107 @@ export function SectionEditor({
           className="w-full rounded-lg border border-border/50 bg-muted/20 px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-1 focus:ring-primary/40 focus:border-primary/40 resize-y leading-relaxed font-mono"
         />
 
-        {!showCoachNotes ? (
-          <button
-            onClick={() => setShowCoachNotes(true)}
-            className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
-          >
-            <MessageSquare className="h-3 w-3" />
-            Add coach notes
-          </button>
-        ) : (
+        <div className="flex items-center gap-2 flex-wrap">
+          {!showDetails && (
+            <button
+              onClick={() => setShowDetails(true)}
+              className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <ChevronRight className="h-3 w-3" />
+              Add details
+            </button>
+          )}
+
+          {!showCoachNotes && (
+            <button
+              onClick={() => setShowCoachNotes(true)}
+              className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <MessageSquare className="h-3 w-3" />
+              Add coach notes
+            </button>
+          )}
+        </div>
+
+        {showDetails && (
+          <div className="space-y-2 border border-border/40 rounded-lg p-3 bg-muted/10">
+            <div className="flex items-center justify-between">
+              <button
+                onClick={() => setShowDetails(!showDetails)}
+                className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-1"
+              >
+                <ChevronDown className="h-3 w-3" />
+                Section Details
+              </button>
+              <button
+                onClick={() => {
+                  setShowDetails(false);
+                  update({ timeCap: "", stimulus: "", scalingNotes: "", memberNotes: "" });
+                }}
+                className="text-[10px] text-muted-foreground hover:text-destructive transition-colors"
+              >
+                Remove
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1">
+                <label className="text-[11px] font-medium text-muted-foreground flex items-center gap-1">
+                  <Timer className="h-3 w-3" />
+                  Time Cap
+                </label>
+                <input
+                  value={section.timeCap}
+                  onChange={(e) => update({ timeCap: e.target.value })}
+                  placeholder="e.g. 12 min"
+                  className="w-full rounded-md border border-border/50 bg-background px-2.5 py-1.5 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary/40"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[11px] font-medium text-muted-foreground flex items-center gap-1">
+                  <Target className="h-3 w-3" />
+                  Intended Stimulus
+                </label>
+                <input
+                  value={section.stimulus}
+                  onChange={(e) => update({ stimulus: e.target.value })}
+                  placeholder="e.g. Fast & unbroken"
+                  className="w-full rounded-md border border-border/50 bg-background px-2.5 py-1.5 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary/40"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-[11px] font-medium text-muted-foreground flex items-center gap-1">
+                <Scale className="h-3 w-3" />
+                Scaling Notes
+              </label>
+              <textarea
+                value={section.scalingNotes}
+                onChange={(e) => update({ scalingNotes: e.target.value })}
+                placeholder="Scaling options for different levels..."
+                rows={2}
+                className="w-full rounded-md border border-border/50 bg-background px-2.5 py-1.5 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary/40 resize-y"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-[11px] font-medium text-muted-foreground flex items-center gap-1">
+                <StickyNote className="h-3 w-3" />
+                Member Notes
+              </label>
+              <textarea
+                value={section.memberNotes}
+                onChange={(e) => update({ memberNotes: e.target.value })}
+                placeholder="Notes visible to members..."
+                rows={2}
+                className="w-full rounded-md border border-border/50 bg-background px-2.5 py-1.5 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary/40 resize-y"
+              />
+            </div>
+          </div>
+        )}
+
+        {showCoachNotes && (
           <div className="space-y-1">
             <div className="flex items-center justify-between">
               <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-1">

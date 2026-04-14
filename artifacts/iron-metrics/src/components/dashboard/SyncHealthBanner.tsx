@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback } from "react";
 import { motion } from "framer-motion";
 import { RefreshCw, CheckCircle2, AlertCircle, Clock, Database, AlertTriangle } from "lucide-react";
 
+import { authFetch } from "@/lib/authFetch";
+
 const API_BASE = import.meta.env.VITE_API_URL || "";
 
 interface SyncRun {
@@ -44,7 +46,7 @@ export function SyncHealthBanner({ gymId }: { gymId: number }) {
   const [syncing, setSyncing] = useState(false);
 
   const load = useCallback(() => {
-    fetch(`${API_BASE}/api/gyms/${gymId}/integrations/wodify/sync-status`, { credentials: "include" })
+    authFetch(`${API_BASE}/api/gyms/${gymId}/integrations/wodify/sync-status`)
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => { if (d) setData(d); })
       .catch(() => {});
@@ -54,9 +56,8 @@ export function SyncHealthBanner({ gymId }: { gymId: number }) {
 
   const triggerSync = () => {
     setSyncing(true);
-    fetch(`${API_BASE}/api/gyms/${gymId}/integrations/wodify/sync`, {
+    authFetch(`${API_BASE}/api/gyms/${gymId}/integrations/wodify/sync`, {
       method: "POST",
-      credentials: "include",
     })
       .then((r) => {
         if (r.status === 409) {

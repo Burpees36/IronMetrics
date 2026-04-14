@@ -1,4 +1,4 @@
-import { eq, and, sql, lte, asc } from "drizzle-orm";
+import { eq, and, sql, lte, asc, desc, or } from "drizzle-orm";
 import {
   db,
   leadSequencesTable,
@@ -6,13 +6,62 @@ import {
   leadSequenceEnrollmentsTable,
   leadSequenceEventsTable,
   leadsTable,
+  aiTasksTable,
+  gymsTable,
 } from "@workspace/db";
+import { isWithinQuietHours, getNextBusinessHourDate } from "./sequence-utils";
 
-export async function processLeadSequences(): Promise<{ processed: number; sent: number; completed: number; errors: number }> {
+async function createSequenceExhaustionAlert(
+  gymId: number,
+  enrollmentId: number,
+  leadId: number,
+  sequenceId: number,
+): Promise<void> {
+  try {
+    const [lead] = await db.select().from(leadsTable).where(eq(leadsTable.id, leadId));
+    if (!lead || lead.stage === "converted") return;
+
+    const [sequence] = await db.select().from(leadSequencesTable).where(eq(leadSequencesTable.id, sequenceId));
+    const sequenceName = sequence?.name || "Unknown Sequence";
+    const leadName = `${lead.firstName || ""} ${lead.lastName || ""}`.trim() || "Unknown Lead";
+
+    await db.insert(aiTasksTable).values({
+      gymId,
+      type: "outreach",
+      subtype: "sequence_exhaustion",
+      title: `Personal follow-up needed: ${leadName} completed ${sequenceName} without booking`,
+      description: `${leadName} has completed all steps of the "${sequenceName}" nurture sequence but hasn't converted (current stage: ${lead.stage}). A personal follow-up is recommended to prevent this lead from going cold.`,
+      priority: "high",
+      status: "pending",
+      targetId: leadId,
+      targetType: "lead",
+    });
+
+    await db.insert(leadSequenceEventsTable).values({
+      gymId,
+      enrollmentId,
+      leadId,
+      sequenceId,
+      eventType: "exhaustion_alert_created",
+      stepIndex: null,
+      details: `All steps completed without conversion — AI task created for personal follow-up`,
+    });
+
+    console.log(`[lead-sequence-engine] Created exhaustion alert for lead ${leadId} in sequence "${sequenceName}" (gym ${gymId})`);
+  } catch (err: any) {
+    console.error(`[lead-sequence-engine] Error creating exhaustion alert for enrollment ${enrollmentId}:`, err.message);
+  }
+}
+
+const RETRY_DELAY_MS = 5 * 60 * 1000;
+const BATCH_LIMIT = 20;
+
+export async function processLeadSequences(): Promise<{ processed: number; sent: number; completed: number; errors: number; deferred: number }> {
   let processed = 0;
   let sent = 0;
   let completed = 0;
   let errors = 0;
+  let deferred = 0;
 
   try {
     const now = new Date();
@@ -22,11 +71,14 @@ export async function processLeadSequences(): Promise<{ processed: number; sent:
       .from(leadSequenceEnrollmentsTable)
       .where(
         and(
-          eq(leadSequenceEnrollmentsTable.status, "active"),
+          or(
+            eq(leadSequenceEnrollmentsTable.status, "active"),
+            eq(leadSequenceEnrollmentsTable.status, "retry_pending")
+          ),
           lte(leadSequenceEnrollmentsTable.nextActionAt, now)
         )
       )
-      .limit(100);
+      .limit(BATCH_LIMIT);
 
     for (const enrollment of dueEnrollments) {
       processed++;
@@ -64,6 +116,7 @@ export async function processLeadSequences(): Promise<{ processed: number; sent:
               exitReason: "all_steps_done",
             })
             .where(eq(leadSequenceEnrollmentsTable.id, enrollment.id));
+          await createSequenceExhaustionAlert(enrollment.gymId, enrollment.id, enrollment.leadId, enrollment.sequenceId);
           completed++;
           continue;
         }
@@ -108,6 +161,25 @@ export async function processLeadSequences(): Promise<{ processed: number; sent:
           continue;
         }
 
+        const [gym] = await db
+          .select({ timezone: gymsTable.timezone })
+          .from(gymsTable)
+          .where(eq(gymsTable.id, enrollment.gymId));
+
+        const timezone = gym?.timezone || "America/New_York";
+        if (isWithinQuietHours(timezone)) {
+          const nextOpen = getNextBusinessHourDate(timezone);
+          await db
+            .update(leadSequenceEnrollmentsTable)
+            .set({ nextActionAt: nextOpen })
+            .where(eq(leadSequenceEnrollmentsTable.id, enrollment.id));
+          deferred++;
+          console.log(`[lead-sequence-engine] Deferred enrollment ${enrollment.id} to ${nextOpen.toISOString()} (quiet hours)`);
+          continue;
+        }
+
+        const isRetry = enrollment.status === "retry_pending";
+
         await db.insert(leadSequenceEventsTable).values({
           gymId: enrollment.gymId,
           enrollmentId: enrollment.id,
@@ -136,6 +208,7 @@ export async function processLeadSequences(): Promise<{ processed: number; sent:
               exitReason: "all_steps_done",
             })
             .where(eq(leadSequenceEnrollmentsTable.id, enrollment.id));
+          await createSequenceExhaustionAlert(enrollment.gymId, enrollment.id, enrollment.leadId, enrollment.sequenceId);
           completed++;
         } else {
           const nextStep = steps[nextStepIndex];
@@ -143,6 +216,7 @@ export async function processLeadSequences(): Promise<{ processed: number; sent:
           await db
             .update(leadSequenceEnrollmentsTable)
             .set({
+              status: "active",
               currentStepIndex: nextStepIndex,
               nextActionAt,
             })
@@ -150,14 +224,78 @@ export async function processLeadSequences(): Promise<{ processed: number; sent:
         }
       } catch (err: any) {
         errors++;
-        console.error(`[lead-sequence-engine] Error processing enrollment ${enrollment.id}:`, err.message);
+
+        const isRetry = enrollment.status === "retry_pending";
+        if (isRetry) {
+          console.error(`[lead-sequence-engine] Retry failed for enrollment ${enrollment.id}, marking step failed and advancing:`, err.message);
+
+          await db.insert(leadSequenceEventsTable).values({
+            gymId: enrollment.gymId,
+            enrollmentId: enrollment.id,
+            leadId: enrollment.leadId,
+            sequenceId: enrollment.sequenceId,
+            eventType: "step_failed",
+            stepIndex: enrollment.currentStepIndex,
+            details: `Step failed after retry: ${err.message}`,
+          });
+
+          const steps = await db
+            .select()
+            .from(leadSequenceStepsTable)
+            .where(eq(leadSequenceStepsTable.sequenceId, enrollment.sequenceId))
+            .orderBy(asc(leadSequenceStepsTable.stepOrder));
+
+          const nextStepIndex = enrollment.currentStepIndex + 1;
+          if (nextStepIndex >= steps.length) {
+            await db
+              .update(leadSequenceEnrollmentsTable)
+              .set({
+                status: "completed",
+                currentStepIndex: nextStepIndex,
+                completedAt: new Date(),
+                exitReason: "all_steps_done",
+              })
+              .where(eq(leadSequenceEnrollmentsTable.id, enrollment.id));
+          } else {
+            const nextStep = steps[nextStepIndex];
+            const nextActionAt = new Date(Date.now() + nextStep.delayMinutes * 60 * 1000);
+            await db
+              .update(leadSequenceEnrollmentsTable)
+              .set({
+                status: "active",
+                currentStepIndex: nextStepIndex,
+                nextActionAt,
+              })
+              .where(eq(leadSequenceEnrollmentsTable.id, enrollment.id));
+          }
+        } else {
+          console.error(`[lead-sequence-engine] Error processing enrollment ${enrollment.id}, scheduling retry:`, err.message);
+
+          await db.insert(leadSequenceEventsTable).values({
+            gymId: enrollment.gymId,
+            enrollmentId: enrollment.id,
+            leadId: enrollment.leadId,
+            sequenceId: enrollment.sequenceId,
+            eventType: "step_error",
+            stepIndex: enrollment.currentStepIndex,
+            details: `Error (will retry): ${err.message}`,
+          });
+
+          await db
+            .update(leadSequenceEnrollmentsTable)
+            .set({
+              status: "retry_pending",
+              nextActionAt: new Date(Date.now() + RETRY_DELAY_MS),
+            })
+            .where(eq(leadSequenceEnrollmentsTable.id, enrollment.id));
+        }
       }
     }
   } catch (err: any) {
     console.error("[lead-sequence-engine] Fatal error:", err.message);
   }
 
-  return { processed, sent, completed, errors };
+  return { processed, sent, completed, errors, deferred };
 }
 
 export async function enrollLeadInSequence(
@@ -190,7 +328,7 @@ export async function enrollLeadInSequence(
         and(
           eq(leadSequenceEnrollmentsTable.leadId, leadId),
           eq(leadSequenceEnrollmentsTable.sequenceId, sequence.id),
-          sql`${leadSequenceEnrollmentsTable.status} IN ('active', 'paused')`
+          sql`${leadSequenceEnrollmentsTable.status} IN ('active', 'paused', 'retry_pending')`
         )
       );
 
@@ -246,7 +384,7 @@ export async function pauseLeadSequences(
       and(
         eq(leadSequenceEnrollmentsTable.leadId, leadId),
         eq(leadSequenceEnrollmentsTable.gymId, gymId),
-        eq(leadSequenceEnrollmentsTable.status, "active")
+        sql`${leadSequenceEnrollmentsTable.status} IN ('active', 'retry_pending')`
       )
     );
 

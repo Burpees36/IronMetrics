@@ -406,6 +406,17 @@ async function refreshRiskScores(gymId: number): Promise<void> {
       await db.update(membersTable)
         .set({ riskScore: String(Math.round(freshScore)), riskTier: freshTier })
         .where(eq(membersTable.id, m.id));
+
+      if (freshTier === "healthy" || freshTier === "low") {
+        await db.update(aiTasksTable)
+          .set({ status: "dismissed" })
+          .where(and(
+            eq(aiTasksTable.targetId, m.id),
+            eq(aiTasksTable.targetType, "member"),
+            eq(aiTasksTable.type, "outreach"),
+            eq(aiTasksTable.status, "pending"),
+          ));
+      }
     }
   }
 }

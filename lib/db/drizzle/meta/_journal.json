@@ -29,6 +29,13 @@
       "when": 1775750749857,
       "tag": "0003_wise_banshee",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1775935316238,
+      "tag": "0004_fresh_mephisto",
+      "breakpoints": true
     }
   ]
 }

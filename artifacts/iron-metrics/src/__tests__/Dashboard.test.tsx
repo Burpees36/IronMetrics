@@ -1,9 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import React from "react";
 
 const mockFetch = vi.fn();
 global.fetch = mockFetch;
+
+vi.mock("@clerk/react", () => ({
+  useUser: () => ({ user: { firstName: "Test" } }),
+  useAuth: () => ({ isLoaded: true, isSignedIn: true, userId: "test-user" }),
+}));
 
 vi.mock("wouter", () => ({
   Link: ({ children, href }: any) => <a href={href}>{children}</a>,
@@ -54,6 +60,15 @@ vi.mock("lucide-react", () => ({
   Mail: (props: any) => <span {...props}>Mail</span>,
   MessageSquare: (props: any) => <span {...props}>MessageSquare</span>,
   ArrowRight: (props: any) => <span {...props}>ArrowRight</span>,
+  BarChart3: (props: any) => <span {...props}>BarChart3</span>,
+  Wallet: (props: any) => <span {...props}>Wallet</span>,
+  PiggyBank: (props: any) => <span {...props}>PiggyBank</span>,
+  PartyPopper: (props: any) => <span {...props}>PartyPopper</span>,
+  Cake: (props: any) => <span {...props}>Cake</span>,
+  Award: (props: any) => <span {...props}>Award</span>,
+  Flame: (props: any) => <span {...props}>Flame</span>,
+  RotateCcw: (props: any) => <span {...props}>RotateCcw</span>,
+  Star: (props: any) => <span {...props}>Star</span>,
 }));
 
 vi.mock("@/components/ui/button", () => ({
@@ -101,7 +116,17 @@ vi.mock("@workspace/api-client-react", () => ({
   useGetMorningBriefing: (...args: any[]) => mockUseGetMorningBriefing(...args),
 }));
 
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Dashboard } from "../pages/Dashboard";
+
+function renderWithProviders(ui: React.ReactElement) {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  return render(
+    <QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>
+  );
+}
 
 const MOCK_STATS = {
   activeMembers: 85,
@@ -154,6 +179,10 @@ const MOCK_BRIEFING = {
     staleLeads: 3,
     newLeads: 5,
   },
+  celebrations: [
+    { type: "birthday", memberName: "Jane Doe", detail: "Birthday today", memberId: 101 },
+    { type: "anniversary", memberName: "John Smith", detail: "2-year membership anniversary", memberId: 202 },
+  ],
 };
 
 describe("Dashboard", () => {
@@ -167,43 +196,43 @@ describe("Dashboard", () => {
     mockUseGym.mockReturnValue({ activeGymId: null });
     mockUseGetDashboardStats.mockReturnValue({ data: undefined, isLoading: false });
     mockUseGetMorningBriefing.mockReturnValue({ data: undefined, isLoading: false });
-    render(<Dashboard />);
-    expect(screen.getByText("Select a gym to view your dashboard.")).toBeInTheDocument();
+    renderWithProviders(<Dashboard />);
+    expect(screen.getByText("Select a business to view your dashboard.")).toBeInTheDocument();
   });
 
   it("shows loading spinner when data is loading", () => {
     mockUseGym.mockReturnValue({ activeGymId: 1 });
     mockUseGetDashboardStats.mockReturnValue({ data: undefined, isLoading: true });
-    render(<Dashboard />);
+    renderWithProviders(<Dashboard />);
     expect(screen.getByTestId("loader")).toBeInTheDocument();
   });
 
   it("shows error state when stats is null", () => {
     mockUseGym.mockReturnValue({ activeGymId: 1 });
     mockUseGetDashboardStats.mockReturnValue({ data: null, isLoading: false });
-    render(<Dashboard />);
+    renderWithProviders(<Dashboard />);
     expect(screen.getByText("Unable to load dashboard data.")).toBeInTheDocument();
   });
 
   it("renders MRR in the KPI sidebar", () => {
     mockUseGym.mockReturnValue({ activeGymId: 1 });
     mockUseGetDashboardStats.mockReturnValue({ data: MOCK_STATS, isLoading: false });
-    render(<Dashboard />);
+    renderWithProviders(<Dashboard />);
     expect(screen.getByText("Monthly Recurring Rev")).toBeInTheDocument();
-    expect(screen.getByText("$12.8k")).toBeInTheDocument();
+    expect(screen.getAllByText("$12.8k").length).toBeGreaterThanOrEqual(1);
   });
 
   it("renders active members count", () => {
     mockUseGym.mockReturnValue({ activeGymId: 1 });
     mockUseGetDashboardStats.mockReturnValue({ data: MOCK_STATS, isLoading: false });
-    render(<Dashboard />);
-    expect(screen.getByText("85")).toBeInTheDocument();
+    renderWithProviders(<Dashboard />);
+    expect(screen.getAllByText("85").length).toBeGreaterThanOrEqual(1);
   });
 
   it("renders retention rate with progress bar", () => {
     mockUseGym.mockReturnValue({ activeGymId: 1 });
     mockUseGetDashboardStats.mockReturnValue({ data: MOCK_STATS, isLoading: false });
-    render(<Dashboard />);
+    renderWithProviders(<Dashboard />);
     expect(screen.getByText("Retention Rate")).toBeInTheDocument();
     expect(screen.getByText("58.4%")).toBeInTheDocument();
   });
@@ -211,36 +240,68 @@ describe("Dashboard", () => {
   it("renders RSI score in sidebar", () => {
     mockUseGym.mockReturnValue({ activeGymId: 1 });
     mockUseGetDashboardStats.mockReturnValue({ data: MOCK_STATS, isLoading: false });
-    render(<Dashboard />);
-    expect(screen.getByText("74.3")).toBeInTheDocument();
-    expect(screen.getByText("Strong")).toBeInTheDocument();
+    renderWithProviders(<Dashboard />);
+    expect(screen.getAllByText("74.3").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText("Strong").length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("renders stat indicator chips in dashboard header", () => {
+    mockUseGym.mockReturnValue({ activeGymId: 1 });
+    mockUseGetDashboardStats.mockReturnValue({ data: MOCK_STATS, isLoading: false });
+    renderWithProviders(<Dashboard />);
+    expect(screen.getAllByText("$12.8k").length).toBeGreaterThanOrEqual(2);
+    expect(screen.getAllByText("+4.2%").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText("active")).toBeInTheDocument();
+    expect(screen.getAllByText("+9").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText("74.3").length).toBeGreaterThanOrEqual(2);
+    expect(screen.getAllByText("Strong").length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("renders stat chips with negative values correctly", () => {
+    mockUseGym.mockReturnValue({ activeGymId: 1 });
+    mockUseGetDashboardStats.mockReturnValue({
+      data: {
+        ...MOCK_STATS,
+        mrrGrowth: -2.5,
+        newMembersThisMonth: 2,
+        churnedThisMonth: 5,
+        rsiScore: 35.0,
+        rsiBand: "Weak",
+      },
+      isLoading: false,
+    });
+    renderWithProviders(<Dashboard />);
+    expect(screen.getAllByText("-2.5%").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText("-3").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText("35.0").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText("Weak").length).toBeGreaterThanOrEqual(1);
   });
 
   it("renders Revenue Trend chart", () => {
     mockUseGym.mockReturnValue({ activeGymId: 1 });
     mockUseGetDashboardStats.mockReturnValue({ data: MOCK_STATS, isLoading: false });
-    render(<Dashboard />);
+    renderWithProviders(<Dashboard />);
     expect(screen.getByText("Revenue Trend")).toBeInTheDocument();
   });
 
   it("renders Owner Console label", () => {
     mockUseGym.mockReturnValue({ activeGymId: 1 });
     mockUseGetDashboardStats.mockReturnValue({ data: MOCK_STATS, isLoading: false });
-    render(<Dashboard />);
+    renderWithProviders(<Dashboard />);
     expect(screen.getByText("Owner Console")).toBeInTheDocument();
   });
 
   it("renders Go to Billing button", () => {
     mockUseGym.mockReturnValue({ activeGymId: 1 });
     mockUseGetDashboardStats.mockReturnValue({ data: MOCK_STATS, isLoading: false });
-    render(<Dashboard />);
+    renderWithProviders(<Dashboard />);
     expect(screen.getByText(/Go to Billing/)).toBeInTheDocument();
   });
 
   it("renders AtRiskMembersCard and RetentionActivityCard", () => {
     mockUseGym.mockReturnValue({ activeGymId: 1 });
     mockUseGetDashboardStats.mockReturnValue({ data: MOCK_STATS, isLoading: false });
-    render(<Dashboard />);
+    renderWithProviders(<Dashboard />);
     expect(screen.getByTestId("at-risk-card")).toBeInTheDocument();
     expect(screen.getByTestId("retention-card")).toBeInTheDocument();
   });
@@ -249,7 +310,7 @@ describe("Dashboard", () => {
     mockUseGym.mockReturnValue({ activeGymId: 42 });
     mockUseGetDashboardStats.mockReturnValue({ data: undefined, isLoading: true });
     mockUseGetMorningBriefing.mockReturnValue({ data: undefined, isLoading: true });
-    render(<Dashboard />);
+    renderWithProviders(<Dashboard />);
     expect(mockUseGetDashboardStats).toHaveBeenCalledWith(42, expect.objectContaining({
       query: { enabled: true },
     }));
@@ -259,7 +320,7 @@ describe("Dashboard", () => {
     mockUseGym.mockReturnValue({ activeGymId: null });
     mockUseGetDashboardStats.mockReturnValue({ data: undefined, isLoading: false });
     mockUseGetMorningBriefing.mockReturnValue({ data: undefined, isLoading: false });
-    render(<Dashboard />);
+    renderWithProviders(<Dashboard />);
     expect(mockUseGetDashboardStats).toHaveBeenCalledWith(null, expect.objectContaining({
       query: { enabled: false },
     }));
@@ -268,12 +329,178 @@ describe("Dashboard", () => {
   it("renders action items from morning briefing", () => {
     mockUseGym.mockReturnValue({ activeGymId: 1 });
     mockUseGetDashboardStats.mockReturnValue({ data: MOCK_STATS, isLoading: false });
-    render(<Dashboard />);
+    renderWithProviders(<Dashboard />);
     expect(screen.getByText("Handle Now")).toBeInTheDocument();
     expect(screen.getByText(/Sarah Jenkins at risk/)).toBeInTheDocument();
     expect(screen.getByText("Follow Up Today")).toBeInTheDocument();
     expect(screen.getByText(/3 stale leads/)).toBeInTheDocument();
     expect(screen.getByText("Good News")).toBeInTheDocument();
     expect(screen.getByText(/4 members hit 1-year/)).toBeInTheDocument();
+  });
+
+  it("renders quick action buttons in header for critical and warning items", () => {
+    mockUseGym.mockReturnValue({ activeGymId: 1 });
+    mockUseGetDashboardStats.mockReturnValue({ data: MOCK_STATS, isLoading: false });
+    renderWithProviders(<Dashboard />);
+    const quickActions = screen.getByTestId("header-quick-actions");
+    expect(quickActions).toBeInTheDocument();
+    const links = quickActions.querySelectorAll("a");
+    expect(links.length).toBe(2);
+    expect(links[0]).toHaveAttribute("href", "/members/1");
+    expect(links[1]).toHaveAttribute("href", "/leads");
+  });
+
+  it("does not render quick action buttons when no critical or warning items", () => {
+    const noCriticalBriefing = {
+      ...MOCK_BRIEFING,
+      items: [
+        { priority: "positive", message: "All good", icon: "positive", action: "Celebrate", link: null },
+      ],
+    };
+    mockUseGym.mockReturnValue({ activeGymId: 1 });
+    mockUseGetDashboardStats.mockReturnValue({ data: MOCK_STATS, isLoading: false });
+    mockUseGetMorningBriefing.mockReturnValue({ data: noCriticalBriefing, isLoading: false });
+    renderWithProviders(<Dashboard />);
+    expect(screen.queryByTestId("header-quick-actions")).not.toBeInTheDocument();
+  });
+
+  it("renders celebrations banner when milestones exist", () => {
+    mockUseGym.mockReturnValue({ activeGymId: 1 });
+    mockUseGetDashboardStats.mockReturnValue({ data: MOCK_STATS, isLoading: false });
+    renderWithProviders(<Dashboard />);
+    expect(screen.getByTestId("celebrations-banner")).toBeInTheDocument();
+    expect(screen.getByText("2 Member Milestones Today")).toBeInTheDocument();
+    expect(screen.getByText("Jane Doe")).toBeInTheDocument();
+    expect(screen.getByText("Birthday today")).toBeInTheDocument();
+    expect(screen.getByText("Birthday")).toBeInTheDocument();
+    expect(screen.getByText("John Smith")).toBeInTheDocument();
+    expect(screen.getByText("2-year membership anniversary")).toBeInTheDocument();
+    expect(screen.getByText("Anniversary")).toBeInTheDocument();
+    const viewLinks = screen.getAllByText("View");
+    expect(viewLinks.length).toBe(2);
+    const link1 = viewLinks[0].closest("a");
+    const link2 = viewLinks[1].closest("a");
+    expect(link1?.getAttribute("href")).toBe("/members/101");
+    expect(link2?.getAttribute("href")).toBe("/members/202");
+  });
+
+  it("does not render celebrations banner when no milestones", () => {
+    mockUseGym.mockReturnValue({ activeGymId: 1 });
+    mockUseGetDashboardStats.mockReturnValue({ data: MOCK_STATS, isLoading: false });
+    mockUseGetMorningBriefing.mockReturnValue({
+      data: { ...MOCK_BRIEFING, celebrations: [] },
+      isLoading: false,
+    });
+    renderWithProviders(<Dashboard />);
+    expect(screen.queryByTestId("celebrations-banner")).not.toBeInTheDocument();
+  });
+
+  it("does not render celebrations banner when celebrations field is absent", () => {
+    mockUseGym.mockReturnValue({ activeGymId: 1 });
+    mockUseGetDashboardStats.mockReturnValue({ data: MOCK_STATS, isLoading: false });
+    const { celebrations, ...briefingWithout } = MOCK_BRIEFING;
+    mockUseGetMorningBriefing.mockReturnValue({
+      data: briefingWithout,
+      isLoading: false,
+    });
+    renderWithProviders(<Dashboard />);
+    expect(screen.queryByTestId("celebrations-banner")).not.toBeInTheDocument();
+  });
+
+  it("renders singular milestone text for one celebration", () => {
+    mockUseGym.mockReturnValue({ activeGymId: 1 });
+    mockUseGetDashboardStats.mockReturnValue({ data: MOCK_STATS, isLoading: false });
+    mockUseGetMorningBriefing.mockReturnValue({
+      data: {
+        ...MOCK_BRIEFING,
+        celebrations: [{ type: "birthday", memberName: "Alice Test", detail: "Birthday today", memberId: 303 }],
+      },
+      isLoading: false,
+    });
+    renderWithProviders(<Dashboard />);
+    expect(screen.getByText("1 Member Milestone Today")).toBeInTheDocument();
+    expect(screen.getByText("Alice Test")).toBeInTheDocument();
+  });
+
+  it("renders growth nudges when no action items", () => {
+    mockUseGym.mockReturnValue({ activeGymId: 1 });
+    mockUseGetDashboardStats.mockReturnValue({ data: MOCK_STATS, isLoading: false });
+    mockUseGetMorningBriefing.mockReturnValue({
+      data: {
+        date: "2026-04-02",
+        summary: "Nothing urgent. $12,750 MRR, 85 active members.",
+        items: [],
+        snapshot: { activeMembers: 85, mrr: 12750 },
+        growthNudges: [
+          {
+            id: "bring_a_friend",
+            icon: "community",
+            title: "Run a Bring-a-Friend day",
+            message: "Classes are at 55% capacity. Empty spots are wasted overhead.",
+            actionLabel: "View schedule",
+            actionLink: "/schedule",
+            source: "Two Brain Business",
+          },
+          {
+            id: "referral_sprint",
+            icon: "growth",
+            title: "Launch a referral sprint",
+            message: "Your members are showing up — now ask them to bring people.",
+            actionLabel: "View leads",
+            actionLink: "/leads",
+          },
+        ],
+      },
+      isLoading: false,
+    });
+    renderWithProviders(<Dashboard />);
+    expect(screen.getByText("Growth Playbook")).toBeInTheDocument();
+    expect(screen.getByText("Run a Bring-a-Friend day")).toBeInTheDocument();
+    expect(screen.getByText("Launch a referral sprint")).toBeInTheDocument();
+    expect(screen.getByText(/Two Brain Business/)).toBeInTheDocument();
+  });
+
+  it("does not show static empty state when nudges are present", () => {
+    mockUseGym.mockReturnValue({ activeGymId: 1 });
+    mockUseGetDashboardStats.mockReturnValue({ data: MOCK_STATS, isLoading: false });
+    mockUseGetMorningBriefing.mockReturnValue({
+      data: {
+        date: "2026-04-02",
+        summary: "Nothing urgent.",
+        items: [],
+        snapshot: { activeMembers: 85, mrr: 12750 },
+        growthNudges: [
+          {
+            id: "fallback_member_check",
+            icon: "community",
+            title: "Check in with 3 members today",
+            message: "Use this window to strengthen relationships.",
+            actionLabel: "View members",
+            actionLink: "/members",
+          },
+        ],
+      },
+      isLoading: false,
+    });
+    renderWithProviders(<Dashboard />);
+    expect(screen.getByText("Growth Playbook")).toBeInTheDocument();
+    expect(screen.getByText("Check in with 3 members today")).toBeInTheDocument();
+    expect(screen.queryByText("Nothing flagged")).not.toBeInTheDocument();
+  });
+
+  it("shows fallback 'Nothing flagged' only when no items and no nudges", () => {
+    mockUseGym.mockReturnValue({ activeGymId: 1 });
+    mockUseGetDashboardStats.mockReturnValue({ data: MOCK_STATS, isLoading: false });
+    mockUseGetMorningBriefing.mockReturnValue({
+      data: {
+        date: "2026-04-02",
+        summary: "Nothing urgent.",
+        items: [],
+        snapshot: { activeMembers: 85, mrr: 12750 },
+      },
+      isLoading: false,
+    });
+    renderWithProviders(<Dashboard />);
+    expect(screen.getByText("Nothing flagged")).toBeInTheDocument();
   });
 });

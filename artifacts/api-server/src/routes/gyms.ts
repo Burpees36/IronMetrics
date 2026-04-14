@@ -6,6 +6,7 @@ import { activeMemberCondition } from "../blendedMetrics";
 import { applyOwnerVoice, type CommunicationStyle } from "../services/ai-task-generation";
 import { getSmsService } from "../services/sms-service";
 import { ObjectStorageService } from "../lib/objectStorage";
+import { clerkClient } from "@clerk/express";
 
 const router: IRouter = Router();
 
@@ -13,12 +14,12 @@ router.get("/gyms", async (req, res): Promise<void> => {
   const staffEntries = await db
     .select({ gymId: gymStaffTable.gymId })
     .from(gymStaffTable)
-    .where(eq(gymStaffTable.userId, req.user!.id));
+    .where(eq(gymStaffTable.userId, req.userId!));
 
   const ownedGyms = await db
     .select()
     .from(gymsTable)
-    .where(eq(gymsTable.ownerId, req.user!.id));
+    .where(eq(gymsTable.ownerId, req.userId!));
 
   const staffGymIds = staffEntries.map((s) => s.gymId);
   const ownedGymIds = ownedGyms.map((g) => g.id);
@@ -28,14 +29,19 @@ router.get("/gyms", async (req, res): Promise<void> => {
     const allGyms = await db.select().from(gymsTable).limit(1);
     if (allGyms.length > 0) {
       const gym = allGyms[0];
-      await db.update(gymsTable).set({ ownerId: req.user!.id }).where(eq(gymsTable.id, gym.id));
+      const hasOwner = !!gym.ownerId;
+      if (!hasOwner) {
+        await db.update(gymsTable).set({ ownerId: req.userId! }).where(eq(gymsTable.id, gym.id));
+      }
+      let clerkUser: { firstName?: string | null; lastName?: string | null; emailAddresses?: { emailAddress: string }[] } = {};
+      try { clerkUser = await clerkClient.users.getUser(req.userId!); } catch {}
       await db.insert(gymStaffTable).values({
         gymId: gym.id,
-        userId: req.user!.id,
-        firstName: req.user!.firstName || "Owner",
-        lastName: req.user!.lastName || "",
-        email: req.user!.email || "",
-        role: "gym_owner",
+        userId: req.userId!,
+        firstName: clerkUser.firstName || "Owner",
+        lastName: clerkUser.lastName || "",
+        email: clerkUser.emailAddresses?.[0]?.emailAddress || "",
+        role: hasOwner ? "staff" : "gym_owner",
       }).onConflictDoNothing();
       allGymIds.push(gym.id);
     } else {
@@ -80,15 +86,17 @@ router.post("/gyms", async (req, res): Promise<void> => {
 
   const [gym] = await db
     .insert(gymsTable)
-    .values({ ...parsed.data, slug, ownerId: req.user!.id })
+    .values({ ...parsed.data, slug, ownerId: req.userId! })
     .returning();
 
+  let clerkUser: { firstName?: string | null; lastName?: string | null; emailAddresses?: { emailAddress: string }[] } = {};
+  try { clerkUser = await clerkClient.users.getUser(req.userId!); } catch {}
   await db.insert(gymStaffTable).values({
     gymId: gym.id,
-    userId: req.user!.id,
-    firstName: req.user!.firstName || "Owner",
-    lastName: req.user!.lastName || "",
-    email: req.user!.email || "",
+    userId: req.userId!,
+    firstName: clerkUser.firstName || "Owner",
+    lastName: clerkUser.lastName || "",
+    email: clerkUser.emailAddresses?.[0]?.emailAddress || "",
     role: "gym_owner",
   });
 
@@ -109,7 +117,7 @@ router.get("/gyms/:gymId", async (req, res): Promise<void> => {
     return;
   }
 
-  const isOwner = gym.ownerId === req.user!.id;
+  const isOwner = gym.ownerId === req.userId!;
 
   if (!gym.isActive && !isOwner) {
     res.status(403).json({ error: "This business has been deactivated by the owner.", code: "GYM_DEACTIVATED" });
@@ -117,7 +125,7 @@ router.get("/gyms/:gymId", async (req, res): Promise<void> => {
   }
 
   const [staffEntry] = await db.select().from(gymStaffTable).where(
-    and(eq(gymStaffTable.gymId, gymId), eq(gymStaffTable.userId, req.user!.id), eq(gymStaffTable.isActive, true))
+    and(eq(gymStaffTable.gymId, gymId), eq(gymStaffTable.userId, req.userId!), eq(gymStaffTable.isActive, true))
   );
   if (!isOwner && !staffEntry) {
     res.status(403).json({ error: "You do not have access to this gym" });
@@ -155,7 +163,7 @@ router.patch("/gyms/:gymId", async (req, res): Promise<void> => {
   }
 
   const [staffEntry] = await db.select().from(gymStaffTable).where(
-    and(eq(gymStaffTable.gymId, gymId), eq(gymStaffTable.userId, req.user!.id), eq(gymStaffTable.isActive, true))
+    and(eq(gymStaffTable.gymId, gymId), eq(gymStaffTable.userId, req.userId!), eq(gymStaffTable.isActive, true))
   );
   if (!staffEntry || !["gym_owner", "admin"].includes(staffEntry.role)) {
     res.status(403).json({ error: "Only owners and admins can update gym settings" });
@@ -219,7 +227,7 @@ router.post("/gyms/:gymId/preview-voice", async (req, res): Promise<void> => {
   }
 
   const [staffEntry] = await db.select().from(gymStaffTable).where(
-    and(eq(gymStaffTable.gymId, gymId), eq(gymStaffTable.userId, req.user!.id), eq(gymStaffTable.isActive, true))
+    and(eq(gymStaffTable.gymId, gymId), eq(gymStaffTable.userId, req.userId!), eq(gymStaffTable.isActive, true))
   );
   if (!staffEntry || !["gym_owner", "admin"].includes(staffEntry.role)) {
     res.status(403).json({ error: "Only owners and admins can preview voice settings" });
@@ -275,7 +283,7 @@ router.post("/gyms/:gymId/sms/test", async (req, res): Promise<void> => {
   if (!gym) { res.status(404).json({ error: "Gym not found" }); return; }
 
   const [staffEntry] = await db.select().from(gymStaffTable).where(
-    and(eq(gymStaffTable.gymId, gymId), eq(gymStaffTable.userId, req.user!.id), eq(gymStaffTable.isActive, true))
+    and(eq(gymStaffTable.gymId, gymId), eq(gymStaffTable.userId, req.userId!), eq(gymStaffTable.isActive, true))
   );
   if (!staffEntry || !["gym_owner", "admin"].includes(staffEntry.role)) {
     res.status(403).json({ error: "Only owners and admins can test SMS" });
@@ -327,7 +335,7 @@ router.post("/gyms/:gymId/logo", async (req, res): Promise<void> => {
   }
 
   const [staffEntry] = await db.select().from(gymStaffTable).where(
-    and(eq(gymStaffTable.gymId, gymId), eq(gymStaffTable.userId, req.user!.id), eq(gymStaffTable.isActive, true))
+    and(eq(gymStaffTable.gymId, gymId), eq(gymStaffTable.userId, req.userId!), eq(gymStaffTable.isActive, true))
   );
   if (!staffEntry || !["gym_owner", "admin"].includes(staffEntry.role)) {
     res.status(403).json({ error: "Only owners and admins can update the gym logo" });
@@ -373,7 +381,7 @@ router.put("/gyms/:gymId/logo", async (req, res): Promise<void> => {
   }
 
   const [staffEntry] = await db.select().from(gymStaffTable).where(
-    and(eq(gymStaffTable.gymId, gymId), eq(gymStaffTable.userId, req.user!.id), eq(gymStaffTable.isActive, true))
+    and(eq(gymStaffTable.gymId, gymId), eq(gymStaffTable.userId, req.userId!), eq(gymStaffTable.isActive, true))
   );
   if (!staffEntry || !["gym_owner", "admin"].includes(staffEntry.role)) {
     res.status(403).json({ error: "Only owners and admins can update the gym logo" });
@@ -413,7 +421,7 @@ router.delete("/gyms/:gymId/logo", async (req, res): Promise<void> => {
   }
 
   const [staffEntry] = await db.select().from(gymStaffTable).where(
-    and(eq(gymStaffTable.gymId, gymId), eq(gymStaffTable.userId, req.user!.id), eq(gymStaffTable.isActive, true))
+    and(eq(gymStaffTable.gymId, gymId), eq(gymStaffTable.userId, req.userId!), eq(gymStaffTable.isActive, true))
   );
   if (!staffEntry || !["gym_owner", "admin"].includes(staffEntry.role)) {
     res.status(403).json({ error: "Only owners and admins can remove the gym logo" });
@@ -443,7 +451,7 @@ router.post("/gyms/:gymId/deactivate", async (req, res): Promise<void> => {
     return;
   }
 
-  if (gym.ownerId !== req.user!.id) {
+  if (gym.ownerId !== req.userId!) {
     res.status(403).json({ error: "Only the gym owner can deactivate the business" });
     return;
   }
@@ -476,7 +484,7 @@ router.post("/gyms/:gymId/reactivate", async (req, res): Promise<void> => {
     return;
   }
 
-  if (gym.ownerId !== req.user!.id) {
+  if (gym.ownerId !== req.userId!) {
     res.status(403).json({ error: "Only the gym owner can reactivate the business" });
     return;
   }
@@ -586,7 +594,7 @@ router.delete("/gyms/:gymId", async (req, res): Promise<void> => {
     return;
   }
 
-  if (gym.ownerId !== req.user!.id) {
+  if (gym.ownerId !== req.userId!) {
     res.status(403).json({ error: "Only the gym owner can delete the business" });
     return;
   }

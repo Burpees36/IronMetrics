@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, and, gte, lte, desc, asc, ne } from "drizzle-orm";
+import { eq, and, gte, lte, desc, asc, ne, inArray, or, isNull } from "drizzle-orm";
 import { db, programmingDaysTable, programmingSectionsTable } from "@workspace/db";
 import { requireProgrammingRead, requireProgrammingWrite, isStaffRole, stripCoachNotesFromDay } from "../../middlewares/programmingRbac";
 import { parseGymId, parseDayId, getDayWithSections } from "./helpers";
@@ -17,7 +17,7 @@ router.get(
     }
 
     const role = req.programmingRole ?? "member";
-    const { startDate, endDate, status } = req.query;
+    const { startDate, endDate, status, track } = req.query;
 
     const conditions: any[] = [eq(programmingDaysTable.gymId, gymId)];
 
@@ -30,6 +30,31 @@ router.get(
       }
     } else {
       conditions.push(ne(programmingDaysTable.status, "archived"));
+    }
+
+    if (!isStaffRole(role) && req.memberAllowedTracks) {
+      const allowed = req.memberAllowedTracks;
+      if (allowed.includes("default")) {
+        conditions.push(
+          or(
+            inArray(programmingDaysTable.track, allowed),
+            isNull(programmingDaysTable.track)
+          )!
+        );
+      } else {
+        conditions.push(inArray(programmingDaysTable.track, allowed));
+      }
+    } else if (track && typeof track === "string") {
+      if (track === "default") {
+        conditions.push(
+          or(
+            eq(programmingDaysTable.track, "default"),
+            isNull(programmingDaysTable.track)
+          )!
+        );
+      } else {
+        conditions.push(eq(programmingDaysTable.track, track));
+      }
     }
 
     if (startDate && typeof startDate === "string") {
@@ -79,9 +104,18 @@ router.get(
       return;
     }
 
-    if (!isStaffRole(role) && dayWithSections.status !== "published") {
-      res.status(404).json({ error: "Programming day not found" });
-      return;
+    if (!isStaffRole(role)) {
+      if (dayWithSections.status !== "published") {
+        res.status(404).json({ error: "Programming day not found" });
+        return;
+      }
+      if (req.memberAllowedTracks) {
+        const dayTrack = dayWithSections.track || "default";
+        if (!req.memberAllowedTracks.includes(dayTrack)) {
+          res.status(404).json({ error: "Programming day not found" });
+          return;
+        }
+      }
     }
 
     res.json(stripCoachNotesFromDay(dayWithSections, role));
@@ -105,7 +139,7 @@ router.post(
       return;
     }
 
-    const userId = req.user?.id || null;
+    const userId = req.userId || null;
 
     const [day] = await db
       .insert(programmingDaysTable)
@@ -169,7 +203,7 @@ router.patch(
     }
 
     const { date, title, status, publicNotes, coachNotes, track } = req.body;
-    const userId = req.user?.id || null;
+    const userId = req.userId || null;
 
     const updates: any = { updatedBy: userId };
     if (date !== undefined) updates.date = date;
@@ -244,7 +278,7 @@ router.post(
 
     await db
       .update(programmingDaysTable)
-      .set({ status: newStatus, updatedBy: req.user?.id || null })
+      .set({ status: newStatus, updatedBy: req.userId || null })
       .where(eq(programmingDaysTable.id, dayId));
 
     const result = await getDayWithSections(dayId);
@@ -279,7 +313,7 @@ router.post(
       return;
     }
 
-    const userId = req.user?.id || null;
+    const userId = req.userId || null;
 
     const [newDay] = await db
       .insert(programmingDaysTable)
@@ -324,6 +358,31 @@ router.post(
 
     const result = await getDayWithSections(newDay.id);
     res.status(201).json(result);
+  }
+);
+
+router.get(
+  "/gyms/:gymId/programming-tracks",
+  requireProgrammingRead(),
+  async (req, res): Promise<void> => {
+    const gymId = parseGymId(req.params);
+    if (!gymId) {
+      res.status(400).json({ error: "Invalid gym ID" });
+      return;
+    }
+
+    const days = await db
+      .select({ track: programmingDaysTable.track })
+      .from(programmingDaysTable)
+      .where(and(eq(programmingDaysTable.gymId, gymId), ne(programmingDaysTable.status, "archived")));
+
+    const trackSet = new Set<string>();
+    trackSet.add("default");
+    for (const d of days) {
+      if (d.track) trackSet.add(d.track);
+    }
+
+    res.json(Array.from(trackSet).sort());
   }
 );
 

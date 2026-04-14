@@ -3,7 +3,7 @@ import { useGym } from "@/store/GymContext";
 import { useGetGym } from "@workspace/api-client-react";
 import { useLocation } from "wouter";
 import { motion } from "framer-motion";
-import { Building2, Users, Mail, CreditCard, Shield, ShieldOff, Palette, Puzzle, AlertTriangle, Settings as SettingsIcon, Dumbbell, MessageSquare } from "lucide-react";
+import { Building2, Users, Mail, CreditCard, Shield, ShieldOff, Palette, Puzzle, AlertTriangle, Settings as SettingsIcon, Dumbbell, MessageSquare, Loader2 } from "lucide-react";
 import { GeneralSettings } from "@/components/settings/GeneralSettings";
 import { StaffSettings } from "@/components/settings/StaffSettings";
 import { EmailSettings } from "@/components/settings/EmailSettings";
@@ -16,6 +16,7 @@ import { IntegrationsSettings } from "@/components/settings/IntegrationsSettings
 import { ProgrammingSettings } from "@/components/settings/ProgrammingSettings";
 import { DangerZone } from "@/components/settings/DangerZone";
 import { CommunicationStyleSettings } from "@/components/settings/CommunicationStyleSettings";
+import { PageError } from "@/components/ui/page-error";
 
 const SECTIONS = [
   { id: "general", label: "General", icon: Building2 },
@@ -37,7 +38,7 @@ type SectionId = (typeof SECTIONS)[number]["id"];
 export function Settings() {
   const { activeGymId } = useGym();
   const [activeSection, setActiveSection] = useState<SectionId>("general");
-  const { data: gym } = useGetGym(activeGymId as number, { query: { enabled: !!activeGymId } });
+  const { data: gym, isLoading: gymLoading, isError: gymError, refetch: refetchGym } = useGetGym(activeGymId as number, { query: { enabled: !!activeGymId } });
   const [location] = useLocation();
 
   useEffect(() => {
@@ -53,6 +54,24 @@ export function Settings() {
       <div className="h-full flex items-center justify-center">
         <p className="text-muted-foreground">Select a gym to view settings.</p>
       </div>
+    );
+  }
+
+  if (gymLoading) {
+    return (
+      <div className="h-full flex items-center justify-center">
+        <Loader2 className="h-8 w-8 text-primary animate-spin" />
+      </div>
+    );
+  }
+
+  if (gymError) {
+    return (
+      <PageError
+        title="Unable to load settings"
+        message="We couldn't load your gym settings. Check your connection and try again."
+        onRetry={() => refetchGym()}
+      />
     );
   }
 

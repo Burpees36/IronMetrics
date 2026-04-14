@@ -26,13 +26,13 @@ router.post("/gyms/:gymId/announcements", async (req, res): Promise<void> => {
   const parsed = CreateAnnouncementBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
 
-  const authorName = req.isAuthenticated() ? `${req.user.firstName || ""} ${req.user.lastName || ""}`.trim() || "Admin" : "System";
+  const authorName = req.userId ? "Admin" : "System";
 
   const [ann] = await db.insert(announcementsTable).values({
     ...parsed.data,
     gymId,
     authorName,
-    authorId: req.isAuthenticated() ? req.user.id : undefined,
+    authorId: req.userId,
   }).returning();
 
   res.status(201).json(ann);

@@ -11,8 +11,8 @@ export function paramStr(value: string | string[] | undefined): string {
 
 export function getActor(req: any) {
   return {
-    userId: req.user?.id,
-    name: req.user?.username || req.user?.name || undefined,
+    userId: req.userId,
+    name: undefined,
     source: "ui" as const,
   };
 }

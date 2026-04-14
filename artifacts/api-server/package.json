@@ -12,22 +12,21 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
+    "@clerk/express": "^2.1.0",
     "@google-cloud/storage": "^7.19.0",
     "@workspace/api-zod": "workspace:*",
     "@workspace/db": "workspace:*",
-    "cookie-parser": "^1.4.7",
+    "@workspace/integrations-openai-ai-server": "workspace:*",
     "cors": "^2",
     "date-fns": "^3.6.0",
     "drizzle-orm": "catalog:",
     "express": "^5",
     "express-rate-limit": "^8.3.1",
     "google-auth-library": "^10.6.2",
-    "openid-client": "^6.8.2",
-    "@workspace/integrations-openai-ai-server": "workspace:*",
+    "http-proxy-middleware": "^3.0.5",
     "zod": "catalog:"
   },
   "devDependencies": {
-    "@types/cookie-parser": "^1.4.10",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/node": "catalog:",

@@ -1,4 +1,4 @@
-import { useAuth } from "@workspace/replit-auth-web";
+import { useAuth } from "@clerk/react";
 import { useListStaff, useGetGym } from "@workspace/api-client-react";
 import { useGym } from "@/store/GymContext";
 
@@ -6,7 +6,7 @@ export type UserRole = "gym_owner" | "admin" | "coach" | "head_coach" | "front_d
 
 export function useUserRole(): { role: UserRole; isStaff: boolean; isLoading: boolean } {
   const { activeGymId } = useGym();
-  const { user, isLoading: userLoading } = useAuth();
+  const { userId, isLoaded } = useAuth();
   const { data: staffList, isLoading: staffLoading } = useListStaff(
     activeGymId as number,
     { query: { enabled: !!activeGymId } }
@@ -16,18 +16,18 @@ export function useUserRole(): { role: UserRole; isStaff: boolean; isLoading: bo
     { query: { enabled: !!activeGymId } }
   );
 
-  const isLoading = userLoading || staffLoading || gymLoading;
+  const isLoading = !isLoaded || staffLoading || gymLoading;
 
-  if (isLoading || !user || !staffList) {
+  if (isLoading || !userId || !staffList) {
     return { role: "member", isStaff: false, isLoading };
   }
 
-  if (gym && (gym as any).ownerId === user.id) {
+  if (gym && (gym as any).ownerId === userId) {
     return { role: "gym_owner", isStaff: true, isLoading: false };
   }
 
   const staffRecord = (staffList as any[]).find(
-    (s) => s.userId === user.id
+    (s) => s.userId === userId
   );
 
   if (staffRecord) {

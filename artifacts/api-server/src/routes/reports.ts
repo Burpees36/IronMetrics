@@ -36,141 +36,169 @@ router.get("/gyms/:gymId/reports/dashboard", async (req, res): Promise<void> => 
   const gymId = parseGymId(req.params);
   if (!gymId) { res.status(400).json({ error: "Invalid gym ID" }); return; }
 
-  const blended = await getBlendedGymMetrics(gymId);
-  const { mrr: mrrResult, engagement } = blended;
+  try {
+    const blended = await getBlendedGymMetrics(gymId);
+    const { mrr: mrrResult, engagement } = blended;
 
-  const [openLeadCount] = await db.select({ count: count() }).from(leadsTable).where(eq(leadsTable.gymId, gymId));
+    const [openLeadCount] = await db.select({ count: count() }).from(leadsTable).where(eq(leadsTable.gymId, gymId));
 
-  const now = new Date();
-  const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-  const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    const now = new Date();
+    const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
 
-  const [classesThisWeek] = await db.select({ count: count() }).from(classesTable).where(and(eq(classesTable.gymId, gymId), gte(classesTable.startTime, weekAgo)));
+    const [classesThisWeek] = await db.select({ count: count() }).from(classesTable).where(and(eq(classesTable.gymId, gymId), gte(classesTable.startTime, weekAgo)));
 
-  const newMembersThisMonth = await db.select({ count: count() }).from(membersTable).where(and(eq(membersTable.gymId, gymId), gte(membersTable.joinDate, monthAgo.toISOString().split("T")[0])));
-  const newCount = Number(newMembersThisMonth[0]?.count ?? 0);
+    const newMembersThisMonth = await db.select({ count: count() }).from(membersTable).where(and(eq(membersTable.gymId, gymId), gte(membersTable.joinDate, monthAgo.toISOString().split("T")[0])));
+    const newCount = Number(newMembersThisMonth[0]?.count ?? 0);
 
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-  const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-  const [churnedThisMonthCount] = await db.select({ count: count() }).from(subscriptionsTable).where(and(
-    eq(subscriptionsTable.gymId, gymId),
-    gte(subscriptionsTable.cancelledAt, monthStart),
-    lt(subscriptionsTable.cancelledAt, monthEnd),
-  ));
-  const churnedThisMonth = Number(churnedThisMonthCount?.count ?? 0);
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    const [churnedThisMonthCount] = await db.select({ count: count() }).from(subscriptionsTable).where(and(
+      eq(subscriptionsTable.gymId, gymId),
+      gte(subscriptionsTable.cancelledAt, monthStart),
+      lt(subscriptionsTable.cancelledAt, monthEnd),
+    ));
+    const churnedThisMonth = Number(churnedThisMonthCount?.count ?? 0);
 
-  const riskProfiles = await getRiskProfiles(gymId);
-  const criticalRiskCount = riskProfiles.filter(r => r.riskTier === "critical").length;
-  const highRiskCount = riskProfiles.filter(r => r.riskTier === "high").length;
-  const atRiskCount = criticalRiskCount + highRiskCount;
-  const revenueAtRisk = riskProfiles.reduce((sum, r) => sum + r.revenueAtRisk, 0);
-  const retentionRate = blended.activeBillableMembers > 0
-    ? Math.round(((blended.activeBillableMembers - atRiskCount) / blended.activeBillableMembers) * 1000) / 10
-    : 100;
+    const riskProfiles = await getRiskProfiles(gymId);
+    const criticalRiskCount = riskProfiles.filter(r => r.riskTier === "critical").length;
+    const highRiskCount = riskProfiles.filter(r => r.riskTier === "high").length;
+    const atRiskCount = criticalRiskCount + highRiskCount;
+    const revenueAtRisk = riskProfiles.reduce((sum, r) => sum + r.revenueAtRisk, 0);
+    const retentionRate = blended.activeBillableMembers > 0
+      ? Math.round(((blended.activeBillableMembers - atRiskCount) / blended.activeBillableMembers) * 1000) / 10
+      : 100;
 
-  const rsiResult = computeRSI(blended.churnRate, blended.avgRevPerMember, blended.netGrowth, blended.avgTenure, blended.totalMembers);
+    const rsiResult = computeRSI(blended.churnRate, blended.avgRevPerMember, blended.netGrowth, blended.avgTenure, blended.totalMembers);
 
-  const paidInvoices = await db.select().from(invoicesTable).where(and(eq(invoicesTable.gymId, gymId), eq(invoicesTable.status, "paid")));
-  const allInvoices = await db.select().from(invoicesTable).where(eq(invoicesTable.gymId, gymId));
-  const collectionRate = allInvoices.length > 0 ? Math.round((paidInvoices.length / allInvoices.length) * 1000) / 10 : 100;
+    const paidInvoices = await db.select().from(invoicesTable).where(and(eq(invoicesTable.gymId, gymId), eq(invoicesTable.status, "paid")));
+    const allInvoices = await db.select().from(invoicesTable).where(eq(invoicesTable.gymId, gymId));
+    const collectionRate = allInvoices.length > 0 ? Math.round((paidInvoices.length / allInvoices.length) * 1000) / 10 : 100;
 
-  const invoicesByMonth: Record<string, number> = {};
-  for (const inv of paidInvoices) {
-    if (!inv.paidAt) continue;
-    const monthKey = new Date(inv.paidAt).toISOString().slice(0, 7);
-    invoicesByMonth[monthKey] = (invoicesByMonth[monthKey] ?? 0) + parseFloat(inv.amount || "0");
-  }
-
-  const snapshotsByMonth = await getSnapshotsByMonth(gymId);
-
-  const months = [];
-  const currentMonthKey = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 7);
-  for (let i = 11; i >= 0; i--) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    const monthKey = d.toISOString().slice(0, 7);
-    if (monthKey === currentMonthKey) {
-      months.push({ month: monthKey, revenue: Math.round(mrrResult.totalMRR) });
-    } else {
-      const invoiceRev = invoicesByMonth[monthKey] ?? 0;
-      const snapshotRev = snapshotsByMonth[monthKey]?.totalMRR ?? 0;
-      const bestRev = Math.max(invoiceRev, snapshotRev);
-      months.push({ month: monthKey, revenue: bestRev > 0 ? Math.round(bestRev) : 0 });
+    const invoicesByMonth: Record<string, number> = {};
+    for (const inv of paidInvoices) {
+      if (!inv.paidAt) continue;
+      const monthKey = new Date(inv.paidAt).toISOString().slice(0, 7);
+      invoicesByMonth[monthKey] = (invoicesByMonth[monthKey] ?? 0) + parseFloat(inv.amount || "0");
     }
+
+    const snapshotsByMonth = await getSnapshotsByMonth(gymId);
+
+    const months = [];
+    const currentMonthKey = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 7);
+    for (let i = 11; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const monthKey = d.toISOString().slice(0, 7);
+      if (monthKey === currentMonthKey) {
+        months.push({ month: monthKey, revenue: Math.round(mrrResult.totalMRR) });
+      } else {
+        const invoiceRev = invoicesByMonth[monthKey] ?? 0;
+        const snapshotRev = snapshotsByMonth[monthKey]?.totalMRR ?? 0;
+        const bestRev = Math.max(invoiceRev, snapshotRev);
+        months.push({ month: monthKey, revenue: bestRev > 0 ? Math.round(bestRev) : 0 });
+      }
+    }
+
+    const hasSnapshotData = Object.keys(snapshotsByMonth).length > 0;
+    const nonZeroMonths = months.filter(m => m.revenue > 0);
+    const sparseData = hasSnapshotData && nonZeroMonths.length < 3;
+
+    const failedSubs = await db.select().from(subscriptionsTable).where(and(eq(subscriptionsTable.gymId, gymId), eq(subscriptionsTable.status, "past_due")));
+
+    const allAttendance = await db.select().from(attendanceTable).where(eq(attendanceTable.gymId, gymId));
+    const attendanceByDay: { date: string; count: number }[] = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
+      const dateStr = d.toISOString().split("T")[0];
+      const dayCount = allAttendance.filter(a => {
+        const aDate = new Date(a.checkinTime).toISOString().split("T")[0];
+        return aDate === dateStr;
+      }).length;
+      attendanceByDay.push({ date: dateStr, count: dayCount });
+    }
+
+    res.json({
+      activeMembers: blended.activeBillableMembers,
+      newMembersThisMonth: newCount,
+      churnedThisMonth,
+      mrr: mrrResult.totalMRR,
+      mrrGrowth: (() => {
+        const currentRev = months[months.length - 1]?.revenue ?? 0;
+        const prevRev = months[months.length - 2]?.revenue ?? 0;
+        if (prevRev > 0) return Math.round(((currentRev - prevRev) / prevRev) * 1000) / 10;
+        return null;
+      })(),
+      totalRevenue: mrrResult.totalMRR * 12,
+      revenueGrowth: null,
+      engagementRate: engagement.engagementRate,
+      engagementChange: engagement.engagementChange,
+      classesThisWeek: Number(classesThisWeek?.count ?? 0),
+      openLeads: Number(openLeadCount?.count ?? 0),
+      atRiskMembers: atRiskCount,
+      atRiskCritical: criticalRiskCount,
+      atRiskHigh: highRiskCount,
+      revenueAtRisk: Math.round(revenueAtRisk),
+      retentionRate,
+      failedPayments: failedSubs.length,
+      collectionRate,
+      rsiScore: rsiResult.score !== null ? Math.round(rsiResult.score * 10) / 10 : null,
+      rsiBand: rsiResult.band,
+      ...await (async () => {
+        if (rsiResult.score === null) return { rsiTrend30d: null, rsiTrendInsufficient: true };
+        const snapshots = await db.select()
+          .from(rsiSnapshotsTable)
+          .where(eq(rsiSnapshotsTable.gymId, gymId))
+          .orderBy(asc(rsiSnapshotsTable.recordedAt));
+        if (snapshots.length < 7) return { rsiTrend30d: null, rsiTrendInsufficient: true };
+        const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+        const snapshot30d = snapshots
+          .filter(s => s.recordedAt <= thirtyDaysAgo)
+          .sort((a, b) => b.recordedAt.localeCompare(a.recordedAt))[0];
+        if (!snapshot30d) return { rsiTrend30d: null, rsiTrendInsufficient: true };
+        return {
+          rsiTrend30d: Math.round((rsiResult.score - parseFloat(snapshot30d.score)) * 10) / 10,
+          rsiTrendInsufficient: false,
+        };
+      })(),
+      revenueByMonth: sparseData ? nonZeroMonths : months,
+      revenueTrendSparse: sparseData,
+      attendanceByDay,
+      memberStatusBreakdown: [
+        { status: "active", count: blended.activeBillableMembers },
+        { status: "hold", count: blended.holdMembers },
+        { status: "cancelled", count: blended.cancelledMembers },
+      ],
+      revenueSource: mrrResult.revenueSource,
+      attendanceSource: engagement.attendanceSource,
+      hasSubscriptionData: mrrResult.hasSubscriptionData,
+    });
+  } catch (err) {
+    console.error("[reports/dashboard] Failed to compute dashboard stats:", err);
+    const now = new Date();
+    const attendanceByDay = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
+      attendanceByDay.push({ date: d.toISOString().split("T")[0], count: 0 });
+    }
+    res.json({
+      activeMembers: 0, newMembersThisMonth: 0, churnedThisMonth: 0,
+      mrr: 0, mrrGrowth: null, totalRevenue: 0, revenueGrowth: null,
+      engagementRate: 0, engagementChange: null,
+      classesThisWeek: 0, openLeads: 0,
+      atRiskMembers: 0, atRiskCritical: 0, atRiskHigh: 0, revenueAtRisk: 0,
+      retentionRate: 100, failedPayments: 0, collectionRate: 100,
+      rsiScore: null, rsiBand: null, rsiTrend30d: null, rsiTrendInsufficient: true,
+      revenueByMonth: [], revenueTrendSparse: false,
+      attendanceByDay,
+      memberStatusBreakdown: [
+        { status: "active", count: 0 },
+        { status: "hold", count: 0 },
+        { status: "cancelled", count: 0 },
+      ],
+      revenueSource: "members_table", attendanceSource: "none",
+      hasSubscriptionData: false,
+    });
   }
-
-  const hasSnapshotData = Object.keys(snapshotsByMonth).length > 0;
-  const nonZeroMonths = months.filter(m => m.revenue > 0);
-  const sparseData = hasSnapshotData && nonZeroMonths.length < 3;
-
-  const failedSubs = await db.select().from(subscriptionsTable).where(and(eq(subscriptionsTable.gymId, gymId), eq(subscriptionsTable.status, "past_due")));
-
-  const allAttendance = await db.select().from(attendanceTable).where(eq(attendanceTable.gymId, gymId));
-  const attendanceByDay: { date: string; count: number }[] = [];
-  for (let i = 6; i >= 0; i--) {
-    const d = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
-    const dateStr = d.toISOString().split("T")[0];
-    const dayCount = allAttendance.filter(a => {
-      const aDate = new Date(a.checkinTime).toISOString().split("T")[0];
-      return aDate === dateStr;
-    }).length;
-    attendanceByDay.push({ date: dateStr, count: dayCount });
-  }
-
-  res.json({
-    activeMembers: blended.activeBillableMembers,
-    newMembersThisMonth: newCount,
-    churnedThisMonth,
-    mrr: mrrResult.totalMRR,
-    mrrGrowth: (() => {
-      const currentRev = months[months.length - 1]?.revenue ?? 0;
-      const prevRev = months[months.length - 2]?.revenue ?? 0;
-      if (prevRev > 0) return Math.round(((currentRev - prevRev) / prevRev) * 1000) / 10;
-      return null;
-    })(),
-    totalRevenue: mrrResult.totalMRR * 12,
-    revenueGrowth: null,
-    engagementRate: engagement.engagementRate,
-    engagementChange: engagement.engagementChange,
-    classesThisWeek: Number(classesThisWeek?.count ?? 0),
-    openLeads: Number(openLeadCount?.count ?? 0),
-    atRiskMembers: atRiskCount,
-    atRiskCritical: criticalRiskCount,
-    atRiskHigh: highRiskCount,
-    revenueAtRisk: Math.round(revenueAtRisk),
-    retentionRate,
-    failedPayments: failedSubs.length,
-    collectionRate,
-    rsiScore: rsiResult.score !== null ? Math.round(rsiResult.score * 10) / 10 : null,
-    rsiBand: rsiResult.band,
-    ...await (async () => {
-      if (rsiResult.score === null) return { rsiTrend30d: null, rsiTrendInsufficient: true };
-      const snapshots = await db.select()
-        .from(rsiSnapshotsTable)
-        .where(eq(rsiSnapshotsTable.gymId, gymId))
-        .orderBy(asc(rsiSnapshotsTable.recordedAt));
-      if (snapshots.length < 7) return { rsiTrend30d: null, rsiTrendInsufficient: true };
-      const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
-      const snapshot30d = snapshots
-        .filter(s => s.recordedAt <= thirtyDaysAgo)
-        .sort((a, b) => b.recordedAt.localeCompare(a.recordedAt))[0];
-      if (!snapshot30d) return { rsiTrend30d: null, rsiTrendInsufficient: true };
-      return {
-        rsiTrend30d: Math.round((rsiResult.score - parseFloat(snapshot30d.score)) * 10) / 10,
-        rsiTrendInsufficient: false,
-      };
-    })(),
-    revenueByMonth: sparseData ? nonZeroMonths : months,
-    revenueTrendSparse: sparseData,
-    attendanceByDay,
-    memberStatusBreakdown: [
-      { status: "active", count: blended.activeBillableMembers },
-      { status: "hold", count: blended.holdMembers },
-      { status: "cancelled", count: blended.cancelledMembers },
-    ],
-    revenueSource: mrrResult.revenueSource,
-    attendanceSource: engagement.attendanceSource,
-    hasSubscriptionData: mrrResult.hasSubscriptionData,
-  });
 });
 
 router.get("/gyms/:gymId/reports/membership", async (req, res): Promise<void> => {

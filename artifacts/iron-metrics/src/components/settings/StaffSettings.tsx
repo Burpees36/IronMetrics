@@ -214,7 +214,7 @@ export function StaffSettings({ gymId }: Props) {
                       <DropdownMenuItem onClick={() => setDetailStaff(s)}>View Details</DropdownMenuItem>
                       {!isOwner && (
                         <>
-                          <DropdownMenuItem onClick={() => handleToggleActive(s)}>
+                          <DropdownMenuItem onClick={() => handleToggleActive(s)} disabled={updateMutation.isPending}>
                             {s.isActive ? "Suspend Access" : "Restore Access"}
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
@@ -370,7 +370,9 @@ export function StaffSettings({ gymId }: Props) {
                     disabled={updateMutation.isPending}
                     className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-border text-foreground hover:bg-secondary transition-colors disabled:opacity-50"
                   >
-                    {detailStaff.isActive ? (
+                    {updateMutation.isPending ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : detailStaff.isActive ? (
                       <><UserX className="h-4 w-4" /> Suspend Access</>
                     ) : (
                       <><Shield className="h-4 w-4" /> Restore Access</>
@@ -400,7 +402,7 @@ export function StaffSettings({ gymId }: Props) {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleRemove} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+            <AlertDialogAction onClick={handleRemove} disabled={removeMutation.isPending} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
               {removeMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
               Remove
             </AlertDialogAction>

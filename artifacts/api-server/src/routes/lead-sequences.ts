@@ -458,6 +458,15 @@ router.put("/gyms/:gymId/lead-sequences/:sequenceId", async (req, res): Promise<
 
     const { name, description, isEnabled, triggerStage, steps } = req.body;
 
+    const [activeEnrollmentCount] = await db.select({ count: count() })
+      .from(leadSequenceEnrollmentsTable)
+      .where(and(
+        eq(leadSequenceEnrollmentsTable.sequenceId, sequenceId),
+        sql`${leadSequenceEnrollmentsTable.status} IN ('active', 'retry_pending')`
+      ));
+
+    const activeCount = Number(activeEnrollmentCount.count);
+
     const [updated] = await db.update(leadSequencesTable).set({
       ...(name !== undefined ? { name } : {}),
       ...(description !== undefined ? { description } : {}),
@@ -466,6 +475,13 @@ router.put("/gyms/:gymId/lead-sequences/:sequenceId", async (req, res): Promise<
     }).where(eq(leadSequencesTable.id, sequenceId)).returning();
 
     if (steps && Array.isArray(steps)) {
+      const oldSteps = await db.select().from(leadSequenceStepsTable)
+        .where(eq(leadSequenceStepsTable.sequenceId, sequenceId))
+        .orderBy(asc(leadSequenceStepsTable.stepOrder));
+
+      const oldStepCount = oldSteps.length;
+      const newStepCount = steps.length;
+
       await db.delete(leadSequenceStepsTable).where(eq(leadSequenceStepsTable.sequenceId, sequenceId));
       for (const step of steps) {
         await db.insert(leadSequenceStepsTable).values({
@@ -477,13 +493,41 @@ router.put("/gyms/:gymId/lead-sequences/:sequenceId", async (req, res): Promise<
           messageContent: step.messageContent || "",
         });
       }
+
+      if (activeCount > 0 && oldStepCount !== newStepCount) {
+        const activeEnrollments = await db.select()
+          .from(leadSequenceEnrollmentsTable)
+          .where(and(
+            eq(leadSequenceEnrollmentsTable.sequenceId, sequenceId),
+            sql`${leadSequenceEnrollmentsTable.status} IN ('active', 'retry_pending')`
+          ));
+
+        for (const enrollment of activeEnrollments) {
+          let newIndex = enrollment.currentStepIndex;
+          if (newIndex >= newStepCount) {
+            newIndex = Math.max(0, newStepCount - 1);
+          }
+          if (newIndex !== enrollment.currentStepIndex) {
+            await db.update(leadSequenceEnrollmentsTable).set({
+              currentStepIndex: newIndex,
+            }).where(eq(leadSequenceEnrollmentsTable.id, enrollment.id));
+          }
+        }
+      }
     }
 
-    res.json(updated);
+    const responseData: any = { ...updated };
+    if (activeCount > 0 && steps) {
+      responseData._warning = `This sequence has ${activeCount} active enrollment(s). Step indices have been adjusted for in-flight enrollments.`;
+      responseData._activeEnrollments = activeCount;
+    }
+
+    res.json(responseData);
 
     if (isEnabled === true && !existing.isEnabled) {
       const effectiveTriggerStage = updated.triggerStage;
       if (effectiveTriggerStage) {
+        const ENROLLMENT_BATCH = 20;
         (async () => {
           try {
             const matchingLeads = await db.select({ id: leadsTable.id })
@@ -494,8 +538,11 @@ router.put("/gyms/:gymId/lead-sequences/:sequenceId", async (req, res): Promise<
               ));
 
             let totalEnrolled = 0;
-            for (const lead of matchingLeads) {
-              totalEnrolled += await enrollLeadInSequence(lead.id, gymId, effectiveTriggerStage, sequenceId);
+            for (let i = 0; i < matchingLeads.length; i++) {
+              if (i > 0 && i % ENROLLMENT_BATCH === 0) {
+                await new Promise(resolve => setTimeout(resolve, 1000));
+              }
+              totalEnrolled += await enrollLeadInSequence(matchingLeads[i].id, gymId, effectiveTriggerStage, sequenceId);
             }
             console.log(`[lead-sequences] Immediate enrollment scan: ${totalEnrolled} leads enrolled in sequence ${sequenceId}`);
           } catch (err: any) {

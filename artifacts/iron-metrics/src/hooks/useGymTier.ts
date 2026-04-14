@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useGym } from "@/store/GymContext";
+import { useAuth } from "@clerk/react";
 
 const API_BASE = import.meta.env.VITE_API_URL || "";
 
@@ -20,9 +21,15 @@ interface GymTierInfo {
   tiers: TierDefinition[];
 }
 
-async function fetchGymTier(gymId: number): Promise<GymTierInfo> {
+async function fetchGymTier(gymId: number, tokenFn: () => Promise<string | null>): Promise<GymTierInfo> {
+  const headers: Record<string, string> = {};
+  try {
+    const token = await tokenFn();
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+  } catch {}
   const res = await fetch(`${API_BASE}/api/gyms/${gymId}/platform-billing`, {
     credentials: "include",
+    headers,
   });
   if (!res.ok) throw new Error("Failed to fetch tier info");
   return res.json();
@@ -30,10 +37,11 @@ async function fetchGymTier(gymId: number): Promise<GymTierInfo> {
 
 export function useGymTier() {
   const { activeGymId } = useGym();
+  const { getToken } = useAuth();
 
   const { data, isLoading } = useQuery({
     queryKey: ["gym-tier", activeGymId],
-    queryFn: () => fetchGymTier(activeGymId!),
+    queryFn: () => fetchGymTier(activeGymId!, getToken),
     enabled: !!activeGymId,
     staleTime: 60_000,
     retry: false,

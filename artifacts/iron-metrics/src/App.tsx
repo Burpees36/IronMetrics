@@ -1,9 +1,9 @@
-import React from "react";
+import React, { useEffect, useRef } from "react";
 import { Switch, Route, Router as WouterRouter, useLocation } from "wouter";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
+import { ClerkProvider, SignIn, SignUp, useAuth } from "@clerk/react";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { useAuth } from "@workspace/replit-auth-web";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import NotFound from "@/pages/NotFound";
 
@@ -11,7 +11,6 @@ import { GymProvider, useGym } from "@/store/GymContext";
 import { ThemeProvider } from "@/store/ThemeContext";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { LandingPage } from "@/pages/LandingPage";
-import { Login } from "@/pages/Login";
 import { GymSelect } from "@/pages/GymSelect";
 import { Dashboard } from "@/pages/Dashboard";
 import { AiInsights } from "@/pages/AiInsights";
@@ -48,25 +47,53 @@ const queryClient = new QueryClient({
   },
 });
 
+const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+
+const ONBOARDING_EXEMPT = new Set(["/onboarding", "/select-gym", "/plan-selection", "/settings"]);
+
 function ProtectedRoute({ component: Component }: { component: React.ElementType }) {
-  const { isAuthenticated, isLoading } = useAuth();
-  const { activeGymId, isGymLoading } = useGym();
+  const { isLoaded, isSignedIn } = useAuth();
+  const { activeGymId, setActiveGymId, isGymLoading, onboardingComplete, isOnboardingLoading, onboardingFetchFailed, subscriptionTier, isBetaAccess } = useGym();
   const [location, setLocation] = useLocation();
 
-  React.useEffect(() => {
-    if (!isLoading && !isAuthenticated) {
-      setLocation("/login");
-    }
-  }, [isLoading, isAuthenticated, setLocation]);
+  const needsPlan = subscriptionTier === "none" && !isBetaAccess;
 
   React.useEffect(() => {
-    if (!isLoading && isAuthenticated && !isGymLoading && !activeGymId && location !== "/select-gym") {
+    if (isLoaded && !isSignedIn) {
+      setLocation("/sign-in");
+    }
+  }, [isLoaded, isSignedIn, setLocation]);
+
+  React.useEffect(() => {
+    if (isLoaded && isSignedIn && !isGymLoading && !activeGymId && location !== "/select-gym") {
       setLocation("/select-gym");
     }
-  }, [isLoading, isAuthenticated, isGymLoading, activeGymId, location, setLocation]);
+  }, [isLoaded, isSignedIn, isGymLoading, activeGymId, location, setLocation]);
 
-  if (isLoading || isGymLoading) return null;
-  if (!isAuthenticated) return null;
+  React.useEffect(() => {
+    if (!isLoaded || !isSignedIn || !activeGymId || ONBOARDING_EXEMPT.has(location)) {
+      return;
+    }
+    if (onboardingFetchFailed) {
+      setActiveGymId(null);
+      setLocation("/select-gym");
+      return;
+    }
+    if (onboardingComplete === false) {
+      setLocation("/onboarding");
+      return;
+    }
+    if (onboardingComplete === true && needsPlan && location !== "/plan-selection") {
+      setLocation("/plan-selection");
+    }
+  }, [isLoaded, isSignedIn, activeGymId, location, setLocation, setActiveGymId, onboardingComplete, onboardingFetchFailed, needsPlan]);
+
+  if (!isLoaded || isGymLoading) return null;
+  if (!isSignedIn) return null;
+  if (isOnboardingLoading) return null;
+  if (!activeGymId) return null;
+  if (!ONBOARDING_EXEMPT.has(location) && onboardingComplete === false) return null;
+  if (!ONBOARDING_EXEMPT.has(location) && needsPlan) return null;
 
   return (
     <AppLayout>
@@ -78,23 +105,42 @@ function ProtectedRoute({ component: Component }: { component: React.ElementType
 }
 
 function Router() {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isLoaded, isSignedIn } = useAuth();
 
-  if (isLoading) {
+  if (!isLoaded) {
     return <div className="min-h-screen bg-background" />;
   }
 
   return (
     <Switch>
-      <Route path="/login" component={Login} />
+      <Route path="/sign-in/:rest*">
+        <div className="min-h-screen w-full flex items-center justify-center bg-background">
+          <SignIn routing="path" path={`${BASE}/sign-in`} signUpUrl={`${BASE}/sign-up`} fallbackRedirectUrl={`${BASE}/dashboard`} />
+        </div>
+      </Route>
+      <Route path="/sign-in">
+        <div className="min-h-screen w-full flex items-center justify-center bg-background">
+          <SignIn routing="path" path={`${BASE}/sign-in`} signUpUrl={`${BASE}/sign-up`} fallbackRedirectUrl={`${BASE}/dashboard`} />
+        </div>
+      </Route>
+      <Route path="/sign-up/:rest*">
+        <div className="min-h-screen w-full flex items-center justify-center bg-background">
+          <SignUp routing="path" path={`${BASE}/sign-up`} signInUrl={`${BASE}/sign-in`} fallbackRedirectUrl={`${BASE}/select-gym`} />
+        </div>
+      </Route>
+      <Route path="/sign-up">
+        <div className="min-h-screen w-full flex items-center justify-center bg-background">
+          <SignUp routing="path" path={`${BASE}/sign-up`} signInUrl={`${BASE}/sign-in`} fallbackRedirectUrl={`${BASE}/select-gym`} />
+        </div>
+      </Route>
+      <Route path="/login">{() => <RedirectTo to="/sign-in" />}</Route>
       <Route path="/select-gym" component={GymSelect} />
       <Route path="/update-payment" component={UpdatePayment} />
       <Route path="/join/:gymSlug" component={LeadCapture} />
       <Route path="/wod/:gymSlug" component={PublicWod} />
       
-      {/* Protected Routes */}
       <Route path="/">
-        {isAuthenticated ? (
+        {isSignedIn ? (
           <ProtectedRoute component={() => {
              const [, setLoc] = useLocation();
              React.useEffect(() => setLoc("/dashboard"), []);
@@ -116,7 +162,7 @@ function Router() {
       <Route path="/retention" component={() => <ProtectedRoute component={Retention} />} />
       <Route path="/billing" component={() => <ProtectedRoute component={Billing} />} />
       <Route path="/finances" component={() => <ProtectedRoute component={Finances} />} />
-      <Route path="/workouts" component={() => <ProtectedRoute component={() => <TierGate routeGroup="workouts" feature="Workouts & Programming" requiredTier="growth"><Workouts /></TierGate>} />} />
+      <Route path="/workouts" component={() => <ProtectedRoute component={() => <TierGate routeGroup="workouts" feature="Workouts & Programming" requiredTier="insights"><Workouts /></TierGate>} />} />
       <Route path="/resources" component={() => <ProtectedRoute component={Resources} />} />
       <Route path="/settings" component={() => <ProtectedRoute component={Settings} />} />
       <Route path="/onboarding" component={() => <ProtectedRoute component={Onboarding} />} />
@@ -129,20 +175,38 @@ function Router() {
   );
 }
 
+function ClerkQueryClientCacheInvalidator() {
+  const { userId } = useAuth();
+  const qc = useQueryClient();
+  const prevUserId = useRef(userId);
+
+  useEffect(() => {
+    if (prevUserId.current !== userId) {
+      qc.clear();
+      prevUserId.current = userId;
+    }
+  }, [userId, qc]);
+
+  return null;
+}
+
 function App() {
   return (
-    <ThemeProvider>
-      <QueryClientProvider client={queryClient}>
-        <GymProvider>
-          <TooltipProvider>
-            <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-              <Router />
-            </WouterRouter>
-            <Toaster />
-          </TooltipProvider>
-        </GymProvider>
-      </QueryClientProvider>
-    </ThemeProvider>
+    <ClerkProvider publishableKey={import.meta.env.VITE_CLERK_PUBLISHABLE_KEY}>
+      <ThemeProvider>
+        <QueryClientProvider client={queryClient}>
+          <ClerkQueryClientCacheInvalidator />
+          <GymProvider>
+            <TooltipProvider>
+              <WouterRouter base={BASE}>
+                <Router />
+              </WouterRouter>
+              <Toaster />
+            </TooltipProvider>
+          </GymProvider>
+        </QueryClientProvider>
+      </ThemeProvider>
+    </ClerkProvider>
   );
 }
 

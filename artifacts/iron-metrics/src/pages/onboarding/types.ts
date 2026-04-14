@@ -41,11 +41,30 @@ export interface StepProps {
 
 const API_BASE = import.meta.env.VITE_API_URL || "";
 
+async function getClerkToken(): Promise<string | null> {
+  try {
+    const clerk = (window as Record<string, unknown>).Clerk as
+      | { session?: { getToken: () => Promise<string | null> } }
+      | undefined;
+    if (clerk?.session) {
+      return await clerk.session.getToken();
+    }
+  } catch {}
+  return null;
+}
+
 export async function apiFetch(path: string, options?: RequestInit) {
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  const token = await getClerkToken();
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+  const existingHeaders = options?.headers;
+  if (existingHeaders) {
+    new Headers(existingHeaders).forEach((v, k) => { headers[k] = v; });
+  }
   const res = await fetch(`${API_BASE}${path}`, {
     credentials: "include",
-    headers: { "Content-Type": "application/json", ...options?.headers },
     ...options,
+    headers,
   });
   if (!res.ok) {
     const body = await res.json().catch(() => ({ error: "Request failed" }));

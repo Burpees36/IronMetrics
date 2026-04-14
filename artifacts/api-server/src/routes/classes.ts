@@ -1,8 +1,9 @@
 import { Router, type IRouter } from "express";
 import { eq, and, gte, lte, desc, sql, lt } from "drizzle-orm";
-import { db, classesTable, attendanceTable, gymStaffTable, scheduledHoldsTable, gymsTable } from "@workspace/db";
+import { db, classesTable, attendanceTable, gymStaffTable, scheduledHoldsTable, gymsTable, membersTable } from "@workspace/db";
 import { CreateClassBody, UpdateClassBody } from "@workspace/api-zod";
 import { requireScheduleManage, requireScheduleOperate, canManageSchedule, type ScheduleRole } from "../middlewares/scheduleRbac";
+import { calculateRiskScore, getRiskTier } from "./intelligence/computations";
 
 async function checkMemberBillingStatus(memberId: number, gymId: number): Promise<{ allowed: boolean; reason?: string }> {
   const activeHolds = await db.select().from(scheduledHoldsTable)
@@ -89,7 +90,7 @@ router.post("/gyms/:gymId/classes", requireScheduleManage(), async (req, res): P
     coachName = `${staff.firstName} ${staff.lastName}`;
   }
 
-  const userId = req.user?.id || null;
+  const userId = req.userId || null;
 
   const [gymClass] = await db.insert(classesTable).values({
     ...parsed.data,
@@ -153,7 +154,7 @@ router.patch("/gyms/:gymId/classes/:classId", requireScheduleManage(), async (re
     updateData.coachName = null;
   }
 
-  updateData.updatedBy = req.user?.id || null;
+  updateData.updatedBy = req.userId || null;
 
   const [gymClass] = await db.update(classesTable).set(updateData).where(and(eq(classesTable.id, classId), eq(classesTable.gymId, gymId))).returning();
   if (!gymClass) { res.status(404).json({ error: "Class not found" }); return; }
@@ -232,7 +233,7 @@ router.post("/gyms/:gymId/classes/:classId/duplicate", requireScheduleManage(), 
     endTime = new Date(startTime.getTime() + duration);
   }
 
-  const userId = req.user?.id || null;
+  const userId = req.userId || null;
 
   const [duplicate] = await db.insert(classesTable).values({
     gymId,
@@ -267,7 +268,6 @@ router.post("/gyms/:gymId/classes/:classId/checkin", requireScheduleOperate(), a
   const memberId = req.body.memberId;
   const status = req.body.status || "checked_in";
 
-  const { membersTable } = await import("@workspace/db");
   const [member] = await db.select().from(membersTable).where(and(eq(membersTable.id, memberId), eq(membersTable.gymId, gymId)));
   if (!member) { res.status(404).json({ error: "Member not found" }); return; }
 
@@ -304,7 +304,13 @@ router.post("/gyms/:gymId/classes/:classId/checkin", requireScheduleOperate(), a
         .where(eq(classesTable.id, classId));
     }
 
-    await db.update(membersTable).set({ lastVisitDate: new Date() }).where(eq(membersTable.id, memberId));
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const [countResult] = await db.select({ count: sql<number>`count(*)` }).from(attendanceTable)
+      .where(and(eq(attendanceTable.memberId, memberId), gte(attendanceTable.checkinTime, thirtyDaysAgo)));
+    const newAttendanceCount = Number(countResult.count);
+    const freshRiskScore = calculateRiskScore(0, newAttendanceCount);
+    const freshRiskTier = getRiskTier(freshRiskScore);
+    await db.update(membersTable).set({ lastVisitDate: new Date(), attendanceCount30d: newAttendanceCount, riskScore: String(Math.round(freshRiskScore)), riskTier: freshRiskTier }).where(eq(membersTable.id, memberId));
     res.json(updated);
     return;
   }
@@ -347,7 +353,13 @@ router.post("/gyms/:gymId/classes/:classId/checkin", requireScheduleOperate(), a
     checkinTime: new Date(), status,
   }).returning();
 
-  await db.update(membersTable).set({ lastVisitDate: new Date() }).where(eq(membersTable.id, memberId));
+  const thirtyDaysAgo2 = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+  const [countResult2] = await db.select({ count: sql<number>`count(*)` }).from(attendanceTable)
+    .where(and(eq(attendanceTable.memberId, memberId), gte(attendanceTable.checkinTime, thirtyDaysAgo2)));
+  const newAttendanceCount2 = Number(countResult2.count);
+  const freshRiskScore2 = calculateRiskScore(0, newAttendanceCount2);
+  const freshRiskTier2 = getRiskTier(freshRiskScore2);
+  await db.update(membersTable).set({ lastVisitDate: new Date(), attendanceCount30d: newAttendanceCount2, riskScore: String(Math.round(freshRiskScore2)), riskTier: freshRiskTier2 }).where(eq(membersTable.id, memberId));
   res.status(201).json(attendance);
 });
 
@@ -359,7 +371,6 @@ router.post("/gyms/:gymId/classes/:classId/book", async (req, res): Promise<void
   const memberId = req.body.memberId;
   if (!memberId) { res.status(400).json({ error: "memberId required" }); return; }
 
-  const { membersTable } = await import("@workspace/db");
   const [member] = await db.select().from(membersTable).where(and(eq(membersTable.id, memberId), eq(membersTable.gymId, gymId)));
   if (!member) { res.status(404).json({ error: "Member not found" }); return; }
 
@@ -507,8 +518,13 @@ router.patch("/gyms/:gymId/classes/:classId/attendance/:attendanceId", requireSc
   }
 
   if (newStatus === "checked_in") {
-    const { membersTable } = await import("@workspace/db");
-    await db.update(membersTable).set({ lastVisitDate: new Date() }).where(eq(membersTable.id, existing.memberId));
+    const thirtyDaysAgoStatus = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const [countResultStatus] = await db.select({ count: sql<number>`count(*)` }).from(attendanceTable)
+      .where(and(eq(attendanceTable.memberId, existing.memberId), gte(attendanceTable.checkinTime, thirtyDaysAgoStatus)));
+    const newCount = Number(countResultStatus.count);
+    const riskScore = calculateRiskScore(0, newCount);
+    const riskTier = getRiskTier(riskScore);
+    await db.update(membersTable).set({ lastVisitDate: new Date(), attendanceCount30d: newCount, riskScore: String(Math.round(riskScore)), riskTier }).where(eq(membersTable.id, existing.memberId));
   }
 
   res.json(updated);

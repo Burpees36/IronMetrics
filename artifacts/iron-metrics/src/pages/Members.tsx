@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useGym } from "@/store/GymContext";
-import { useListMembers, useUpdateMember, useAddMemberNote, getListMembersQueryKey, useListMembershipPlans } from "@workspace/api-client-react";
+import { useListMembers, useUpdateMember, useAddMemberNote, getListMembersQueryKey, useListMembershipPlans, useListProgrammingTracks } from "@workspace/api-client-react";
 import type { ApiError } from "@workspace/api-client-react/custom-fetch";
 import { useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
-import { Loader2, Search, Plus, Filter, MoreHorizontal, UserCircle, Upload, FileSpreadsheet, ShieldAlert, Users, X as XIcon, ChevronLeft, ChevronRight } from "lucide-react";
+import { Loader2, Search, Plus, Filter, MoreHorizontal, UserCircle, Upload, FileSpreadsheet, ShieldAlert, Users, X as XIcon, ChevronLeft, ChevronRight, GitBranch } from "lucide-react";
 import { ImportMembersDialog } from "@/components/members/ImportMembersDialog";
 import { SyncStatusBanner } from "@/components/members/SyncStatusBanner";
 import { AddMemberWizard } from "@/components/members/AddMemberWizard";
@@ -19,6 +19,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
+import { PageError } from "@/components/ui/page-error";
 
 type MemberFromList = {
   id: number;
@@ -133,6 +134,12 @@ export function Members() {
 
   const [noteContent, setNoteContent] = useState("");
 
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [trackDialogOpen, setTrackDialogOpen] = useState(false);
+  const [trackAction, setTrackAction] = useState<"assign" | "remove">("assign");
+  const [selectedTrack, setSelectedTrack] = useState("");
+  const [bulkUpdating, setBulkUpdating] = useState(false);
+
   const [tempStatusFilter, setTempStatusFilter] = useState<string[]>([]);
   const [tempRiskFilter, setTempRiskFilter] = useState<string[]>([]);
   const [riskFilter, setRiskFilter] = useState<string[]>([]);
@@ -140,6 +147,10 @@ export function Members() {
   const [tempPlanFilter, setTempPlanFilter] = useState<string>(urlPlan || "");
 
   const { data: plans } = useListMembershipPlans(activeGymId as number, {
+    query: { enabled: !!activeGymId }
+  });
+
+  const { data: tracksData } = useListProgrammingTracks(activeGymId as number, {
     query: { enabled: !!activeGymId }
   });
 
@@ -152,7 +163,10 @@ export function Members() {
   if (statusFilter.length === 1) filterParams.status = statusFilter[0];
   if (planFilter) filterParams.planId = parseInt(planFilter, 10);
   if (riskViewActive) {
-    filterParams.limit = 200;
+    const tiers = riskFilter.length > 0 ? riskFilter.join(",") : "critical,high,moderate";
+    filterParams.riskTiers = tiers;
+    filterParams.status = "active";
+    filterParams.limit = 500;
     filterParams.offset = 0;
   } else if (idsFilter) {
     filterParams.limit = 200;
@@ -164,9 +178,14 @@ export function Members() {
 
   useEffect(() => {
     setCurrentPage(1);
+    setSelectedIds(new Set());
   }, [search, statusFilter, planFilter]);
 
-  const { data, isLoading } = useListMembers(activeGymId as number, filterParams as any, {
+  useEffect(() => {
+    setSelectedIds(new Set());
+  }, [currentPage]);
+
+  const { data, isLoading, isError: membersError, refetch: refetchMembers } = useListMembers(activeGymId as number, filterParams as any, {
     query: { enabled: !!activeGymId, placeholderData: (prev: any) => prev } as any
   });
 
@@ -304,6 +323,68 @@ export function Members() {
     setStatusChangeOpen(true);
   };
 
+  const toggleSelectMember = (id: number) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === displayMembers.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(displayMembers.map((m: MemberFromList) => m.id)));
+    }
+  };
+
+  const availableTracks = useMemo(() => {
+    const tracks = (tracksData as string[] | undefined) ?? [];
+    return tracks.filter(t => t !== "default");
+  }, [tracksData]);
+
+  const handleBulkTrackAssign = async () => {
+    if (!selectedTrack || selectedIds.size === 0) return;
+    setBulkUpdating(true);
+    const members = (data?.members ?? []) as MemberFromList[];
+    const targetMembers = members.filter(m => selectedIds.has(m.id));
+    const tagKey = `track:${selectedTrack}`;
+
+    let successCount = 0;
+    for (const member of targetMembers) {
+      const currentTags = member.tags ?? [];
+      let newTags: string[];
+      if (trackAction === "assign") {
+        if (currentTags.includes(tagKey)) { successCount++; continue; }
+        newTags = [...currentTags, tagKey];
+      } else {
+        if (!currentTags.includes(tagKey)) { successCount++; continue; }
+        newTags = currentTags.filter(t => t !== tagKey);
+      }
+      try {
+        await updateMemberMutation.mutateAsync({
+          gymId,
+          memberId: member.id,
+          data: { tags: newTags },
+        });
+        successCount++;
+      } catch {
+        // continue with remaining
+      }
+    }
+
+    queryClient.invalidateQueries({ queryKey: getListMembersQueryKey(gymId) });
+    toast({
+      title: trackAction === "assign" ? "Track assigned" : "Track removed",
+      description: `${successCount} member${successCount !== 1 ? "s" : ""} updated.`,
+    });
+    setBulkUpdating(false);
+    setTrackDialogOpen(false);
+    setSelectedIds(new Set());
+    setSelectedTrack("");
+  };
+
   const openFilter = () => {
     setTempStatusFilter([...statusFilter]);
     setTempRiskFilter([...riskFilter]);
@@ -375,11 +456,8 @@ export function Members() {
   const displayMembers = React.useMemo(() => {
     const members = data?.members ?? [];
     if (!riskViewActive) return members;
-    const tiers = riskFilter.length > 0 ? riskFilter : ["critical", "high", "moderate"];
-    return members
-      .filter((m: any) => tiers.includes(m.riskTier))
-      .sort((a: any, b: any) => (b.riskScore ?? 0) - (a.riskScore ?? 0));
-  }, [data?.members, riskViewActive, riskFilter]);
+    return [...members].sort((a: any, b: any) => (b.riskScore ?? 0) - (a.riskScore ?? 0));
+  }, [data?.members, riskViewActive]);
 
   const RowActions = ({ member }: { member: MemberFromList }) => (
     <DropdownMenu>
@@ -456,6 +534,38 @@ export function Members() {
 
       <SyncStatusBanner key={syncRefreshKey} onImport={() => setImportOpen(true)} memberCount={data?.total ?? 0} />
 
+      {selectedIds.size > 0 && (
+        <div className="flex items-center gap-3 px-4 py-3 bg-primary/5 border border-primary/20 rounded-xl">
+          <GitBranch className="h-5 w-5 text-primary shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-foreground">
+              {selectedIds.size} member{selectedIds.size !== 1 ? "s" : ""} selected
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => { setTrackAction("assign"); setSelectedTrack(""); setTrackDialogOpen(true); }}
+              className="px-3 py-1.5 text-xs font-medium bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
+            >
+              Assign Track
+            </button>
+            <button
+              onClick={() => { setTrackAction("remove"); setSelectedTrack(""); setTrackDialogOpen(true); }}
+              className="px-3 py-1.5 text-xs font-medium bg-card border border-border text-foreground rounded-lg hover:bg-muted transition-colors"
+            >
+              Remove Track
+            </button>
+            <button
+              onClick={() => setSelectedIds(new Set())}
+              className="p-1.5 hover:bg-primary/10 rounded-lg transition-colors"
+              aria-label="Clear selection"
+            >
+              <XIcon className="h-4 w-4 text-muted-foreground" />
+            </button>
+          </div>
+        </div>
+      )}
+
       {riskViewActive && (
         <div className="flex items-center gap-3 px-4 py-3 bg-destructive/5 border border-destructive/20 rounded-xl">
           <ShieldAlert className="h-5 w-5 text-destructive shrink-0" />
@@ -505,7 +615,13 @@ export function Members() {
       )}
 
       <div className="flex-1 bg-card border border-border rounded-2xl shadow-sm overflow-hidden flex flex-col">
-        {isLoading && !data ? (
+        {membersError && !data ? (
+          <PageError
+            title="Unable to load members"
+            message="We couldn't load your member list. Check your connection and try again."
+            onRetry={() => refetchMembers()}
+          />
+        ) : isLoading && !data ? (
           <div className="flex-1 flex items-center justify-center">
             <Loader2 className="h-8 w-8 text-primary animate-spin" />
           </div>
@@ -520,6 +636,13 @@ export function Members() {
                 className="p-4 active:bg-secondary transition-colors"
               >
                 <div className="flex items-center gap-3">
+                  <div className="shrink-0" onClick={e => e.stopPropagation()}>
+                    <Checkbox
+                      checked={selectedIds.has(member.id)}
+                      onCheckedChange={() => toggleSelectMember(member.id)}
+                      aria-label={`Select ${member.firstName} ${member.lastName}`}
+                    />
+                  </div>
                   <Link href={`/members/${member.id}`} className="h-10 w-10 bg-muted rounded-full overflow-hidden flex items-center justify-center shrink-0">
                     {member.profileImageUrl ? (
                       <img src={member.profileImageUrl} alt={member.firstName} className="w-full h-full object-cover" />
@@ -536,7 +659,7 @@ export function Members() {
                     </div>
                     <div className="flex items-center justify-between mt-1">
                       <span className="text-xs text-muted-foreground truncate">{member.email}</span>
-                      {member.riskTier ? (
+                      {member.riskTier && member.status === "active" ? (
                         <span className={`flex items-center gap-1 text-[10px] font-semibold shrink-0 ${riskColor(member.riskTier)}`}>
                           <div className="h-1.5 w-1.5 rounded-full bg-current" />
                           {member.riskTier.toUpperCase()}
@@ -594,27 +717,34 @@ export function Members() {
             <table className="w-full text-sm text-left">
               <thead className="text-xs text-muted-foreground uppercase bg-muted/30 border-b border-border sticky top-0 z-10 backdrop-blur-md">
                 <tr>
-                  <th className="px-6 py-4 font-semibold">Member</th>
-                  <th className="px-6 py-4 font-semibold">Status</th>
+                  <th className="pl-4 pr-2 py-2.5 w-10">
+                    <Checkbox
+                      checked={displayMembers.length > 0 && selectedIds.size === displayMembers.length}
+                      onCheckedChange={toggleSelectAll}
+                      aria-label="Select all members"
+                    />
+                  </th>
+                  <th className="px-4 py-2.5 font-semibold">Member</th>
+                  <th className="px-4 py-2.5 font-semibold">Status</th>
                   {idsFilter ? (
                     <>
-                      <th className="px-6 py-4 font-semibold">Cancelled</th>
-                      <th className="px-6 py-4 font-semibold">Plan</th>
-                      <th className="px-6 py-4 font-semibold">Revenue Lost</th>
+                      <th className="px-4 py-2.5 font-semibold">Cancelled</th>
+                      <th className="px-4 py-2.5 font-semibold">Plan</th>
+                      <th className="px-4 py-2.5 font-semibold">Revenue Lost</th>
                     </>
                   ) : riskViewActive ? (
                     <>
-                      <th className="px-6 py-4 font-semibold">Risk</th>
-                      <th className="px-6 py-4 font-semibold">Last Visit</th>
-                      <th className="px-6 py-4 font-semibold">Revenue</th>
+                      <th className="px-4 py-2.5 font-semibold">Risk</th>
+                      <th className="px-4 py-2.5 font-semibold">Last Visit</th>
+                      <th className="px-4 py-2.5 font-semibold">Revenue</th>
                     </>
                   ) : (
                     <>
-                      <th className="px-6 py-4 font-semibold">Membership</th>
-                      <th className="px-6 py-4 font-semibold">Risk Tier</th>
+                      <th className="px-4 py-2.5 font-semibold">Membership</th>
+                      <th className="px-4 py-2.5 font-semibold">Risk Tier</th>
                     </>
                   )}
-                  <th className="px-6 py-4 font-semibold text-right">Actions</th>
+                  <th className="px-4 py-2.5 font-semibold text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
@@ -627,13 +757,20 @@ export function Members() {
                     className="hover:bg-secondary transition-colors group cursor-pointer"
                     onClick={() => navigate(`/members/${member.id}`)}
                   >
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-3">
-                        <div className="h-10 w-10 bg-muted rounded-full overflow-hidden flex items-center justify-center">
+                    <td className="pl-4 pr-2 py-2 w-10" onClick={e => e.stopPropagation()}>
+                      <Checkbox
+                        checked={selectedIds.has(member.id)}
+                        onCheckedChange={() => toggleSelectMember(member.id)}
+                        aria-label={`Select ${member.firstName} ${member.lastName}`}
+                      />
+                    </td>
+                    <td className="px-4 py-2">
+                      <div className="flex items-center gap-2.5">
+                        <div className="h-8 w-8 bg-muted rounded-full overflow-hidden flex items-center justify-center shrink-0">
                           {member.profileImageUrl ? (
                             <img src={member.profileImageUrl} alt={member.firstName} className="w-full h-full object-cover" />
                           ) : (
-                            <UserCircle className="h-6 w-6 text-muted-foreground" />
+                            <UserCircle className="h-5 w-5 text-muted-foreground" />
                           )}
                         </div>
                         <div>
@@ -642,14 +779,14 @@ export function Members() {
                         </div>
                       </div>
                     </td>
-                    <td className="px-6 py-4">
-                      <span className={`px-2.5 py-1 rounded-full text-xs font-medium border ${statusBadge(member.status)}`}>
+                    <td className="px-4 py-2">
+                      <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium border ${statusBadge(member.status)}`}>
                         {member.status.charAt(0).toUpperCase() + member.status.slice(1)}
                       </span>
                     </td>
                     {idsFilter ? (
                       <>
-                        <td className="px-6 py-4">
+                        <td className="px-4 py-2">
                           {member.updatedAt ? (
                             <span className="text-xs text-foreground">
                               {new Date(member.updatedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
@@ -660,10 +797,10 @@ export function Members() {
                             </span>
                           ) : <span className="text-muted-foreground">-</span>}
                         </td>
-                        <td className="px-6 py-4 text-muted-foreground">
+                        <td className="px-4 py-2 text-muted-foreground">
                           {member.membershipType || "—"}
                         </td>
-                        <td className="px-6 py-4">
+                        <td className="px-4 py-2">
                           {member.monthlyRevenue ? (
                             <span className="text-xs font-semibold text-destructive">${parseFloat(String(member.monthlyRevenue)).toFixed(0)}/mo</span>
                           ) : <span className="text-muted-foreground">-</span>}
@@ -671,8 +808,8 @@ export function Members() {
                       </>
                     ) : riskViewActive ? (
                       <>
-                        <td className="px-6 py-4">
-                          {member.riskTier ? (
+                        <td className="px-4 py-2">
+                          {member.riskTier && member.status === "active" ? (
                             <div className="flex items-center gap-2">
                               <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold uppercase ${
                                 member.riskTier === "critical" ? "bg-destructive/10 text-destructive" :
@@ -688,7 +825,7 @@ export function Members() {
                             </div>
                           ) : <span className="text-muted-foreground">-</span>}
                         </td>
-                        <td className="px-6 py-4">
+                        <td className="px-4 py-2">
                           {(() => {
                             const days = daysSince(member.lastVisitDate);
                             if (days === null) return <span className="text-muted-foreground">No visits</span>;
@@ -699,7 +836,7 @@ export function Members() {
                             );
                           })()}
                         </td>
-                        <td className="px-6 py-4">
+                        <td className="px-4 py-2">
                           {member.monthlyRevenue ? (
                             <span className="text-xs font-semibold text-foreground">${parseFloat(String(member.monthlyRevenue)).toFixed(0)}/mo</span>
                           ) : <span className="text-muted-foreground">-</span>}
@@ -707,11 +844,11 @@ export function Members() {
                       </>
                     ) : (
                       <>
-                        <td className="px-6 py-4 text-muted-foreground">
+                        <td className="px-4 py-2 text-muted-foreground">
                           {member.membershipType || "None"}
                         </td>
-                        <td className="px-6 py-4">
-                          {member.riskTier ? (
+                        <td className="px-4 py-2">
+                          {member.riskTier && member.status === "active" ? (
                             <span className={`flex items-center gap-1.5 text-xs font-semibold ${riskColor(member.riskTier)}`}>
                               <div className="h-2 w-2 rounded-full bg-current" />
                               {member.riskTier.toUpperCase()}
@@ -720,7 +857,7 @@ export function Members() {
                         </td>
                       </>
                     )}
-                    <td className="px-6 py-4 text-right">
+                    <td className="px-4 py-2 text-right">
                       <div className="opacity-0 group-hover:opacity-100">
                         <RowActions member={member} />
                       </div>
@@ -983,6 +1120,49 @@ export function Members() {
           </div>
         </SheetContent>
       </Sheet>
+
+      <Dialog open={trackDialogOpen} onOpenChange={setTrackDialogOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>{trackAction === "assign" ? "Assign Track" : "Remove Track"}</DialogTitle>
+            <DialogDescription>
+              {trackAction === "assign"
+                ? `Assign a programming track to ${selectedIds.size} selected member${selectedIds.size !== 1 ? "s" : ""}.`
+                : `Remove a programming track from ${selectedIds.size} selected member${selectedIds.size !== 1 ? "s" : ""}.`}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <Label className="text-sm text-foreground mb-2 block">Track</Label>
+            {availableTracks.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No tracks available. Create tracks in the Workouts section first.</p>
+            ) : (
+              <Select value={selectedTrack} onValueChange={setSelectedTrack}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a track" />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableTracks.map(track => (
+                    <SelectItem key={track} value={track}>
+                      {track.charAt(0).toUpperCase() + track.slice(1)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          </div>
+          <DialogFooter>
+            <button onClick={() => setTrackDialogOpen(false)} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors">Cancel</button>
+            <button
+              onClick={handleBulkTrackAssign}
+              disabled={!selectedTrack || bulkUpdating}
+              className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            >
+              {bulkUpdating && <Loader2 className="h-4 w-4 animate-spin" />}
+              {trackAction === "assign" ? "Assign" : "Remove"}
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <ImportMembersDialog
         open={importOpen}

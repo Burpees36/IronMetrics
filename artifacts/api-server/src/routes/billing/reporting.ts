@@ -47,7 +47,7 @@ router.get("/gyms/:gymId/cancelled-members", requireBillingRead(), async (req, r
     ))
     .orderBy(desc(subscriptionsTable.cancelledAt));
 
-  const cancelledMemberRows = await db
+  const membersWithSubCancelled = await db
     .select({
       id: membersTable.id,
       firstName: membersTable.firstName,
@@ -66,14 +66,31 @@ router.get("/gyms/:gymId/cancelled-members", requireBillingRead(), async (req, r
       lt(subscriptionsTable.cancelledAt, endDate),
     ))
     .where(eq(membersTable.gymId, gymId))
-    .groupBy(membersTable.id)
-    .orderBy(desc(sql`MAX(${subscriptionsTable.cancelledAt})`));
+    .groupBy(membersTable.id);
 
-  const lostRevenue = cancelledSubs.reduce((sum, s) => sum + parseFloat(s.amount || "0"), 0);
+  const memberIdsWithSubCancelled = new Set(membersWithSubCancelled.map((m) => m.id));
 
-  res.json({
-    cancelledSubscriptions: cancelledSubs.map((s) => ({ ...s, amount: parseFloat(s.amount) })),
-    cancelledMembers: cancelledMemberRows.map((m) => ({
+  const membersWithoutSubCancelled = await db
+    .select({
+      id: membersTable.id,
+      firstName: membersTable.firstName,
+      lastName: membersTable.lastName,
+      email: membersTable.email,
+      phone: membersTable.phone,
+      membershipType: membersTable.membershipType,
+      joinDate: membersTable.joinDate,
+      updatedAt: membersTable.updatedAt,
+    })
+    .from(membersTable)
+    .where(and(
+      eq(membersTable.gymId, gymId),
+      eq(membersTable.status, "cancelled"),
+      gte(membersTable.updatedAt, startDate),
+      lt(membersTable.updatedAt, endDate),
+    ));
+
+  const cancelledMemberRows = [
+    ...membersWithSubCancelled.map((m) => ({
       id: m.id,
       firstName: m.firstName,
       lastName: m.lastName,
@@ -83,6 +100,31 @@ router.get("/gyms/:gymId/cancelled-members", requireBillingRead(), async (req, r
       joinDate: m.joinDate,
       cancelledAt: m.cancelledAt,
     })),
+    ...membersWithoutSubCancelled
+      .filter((m) => !memberIdsWithSubCancelled.has(m.id))
+      .map((m) => ({
+        id: m.id,
+        firstName: m.firstName,
+        lastName: m.lastName,
+        email: m.email,
+        phone: m.phone,
+        membershipType: m.membershipType,
+        joinDate: m.joinDate,
+        cancelledAt: m.updatedAt?.toISOString() ?? null,
+      })),
+  ];
+
+  cancelledMemberRows.sort((a, b) => {
+    const dateA = a.cancelledAt ? new Date(a.cancelledAt).getTime() : 0;
+    const dateB = b.cancelledAt ? new Date(b.cancelledAt).getTime() : 0;
+    return dateB - dateA;
+  });
+
+  const lostRevenue = cancelledSubs.reduce((sum, s) => sum + parseFloat(s.amount || "0"), 0);
+
+  res.json({
+    cancelledSubscriptions: cancelledSubs.map((s) => ({ ...s, amount: parseFloat(s.amount) })),
+    cancelledMembers: cancelledMemberRows,
     lostRevenue,
     period: {
       startDate: startDate.toISOString(),

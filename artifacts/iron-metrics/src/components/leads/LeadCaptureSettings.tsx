@@ -8,6 +8,8 @@ import {
   Sparkles, Share2, Palette, BarChart3, HelpCircle, X, Smartphone
 } from "lucide-react";
 
+import { authFetch } from "@/lib/authFetch";
+
 const API_BASE = import.meta.env.VITE_API_URL || "";
 
 interface LeadCaptureConfig {
@@ -208,8 +210,8 @@ export function LeadCaptureSettings({ onClose }: { onClose: () => void }) {
   useEffect(() => {
     if (!activeGymId) return;
     Promise.all([
-      fetch(`${API_BASE}/api/gyms/${activeGymId}/lead-capture-config`, { credentials: "include" }).then(r => r.ok ? r.json() : null),
-      fetch(`${API_BASE}/api/gyms/${activeGymId}/lead-capture-analytics`, { credentials: "include" }).then(r => r.ok ? r.json() : null),
+      authFetch(`${API_BASE}/api/gyms/${activeGymId}/lead-capture-config`).then(r => r.ok ? r.json() : null),
+      authFetch(`${API_BASE}/api/gyms/${activeGymId}/lead-capture-analytics`).then(r => r.ok ? r.json() : null),
     ]).then(([cfg, ana]) => {
       if (cfg) setConfig(cfg);
       if (ana) {
@@ -235,10 +237,9 @@ export function LeadCaptureSettings({ onClose }: { onClose: () => void }) {
     if (!activeGymId || !config) return;
     setSaving(true);
     try {
-      const res = await fetch(`${API_BASE}/api/gyms/${activeGymId}/lead-capture-config`, {
+      const res = await authFetch(`${API_BASE}/api/gyms/${activeGymId}/lead-capture-config`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        credentials: "include",
         body: JSON.stringify(config),
       });
       if (res.ok) {
@@ -261,10 +262,9 @@ export function LeadCaptureSettings({ onClose }: { onClose: () => void }) {
     setConfig(updated);
     if (!activeGymId) return;
     try {
-      await fetch(`${API_BASE}/api/gyms/${activeGymId}/lead-capture-config`, {
+      await authFetch(`${API_BASE}/api/gyms/${activeGymId}/lead-capture-config`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        credentials: "include",
         body: JSON.stringify(updated),
       });
       toast({ title: updated.isEnabled ? "Form is now live" : "Form disabled" });

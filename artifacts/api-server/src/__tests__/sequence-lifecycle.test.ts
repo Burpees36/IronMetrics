@@ -46,6 +46,7 @@ function makeTable(name: string): Record<string, unknown> {
 
 let mockMembers: Record<string, unknown>[] = [];
 let mockLeads: Record<string, unknown>[] = [];
+let mockSubscriptions: Record<string, unknown>[] = [];
 let lastUpdatedMember: Record<string, unknown> | null = null;
 
 vi.mock("@workspace/db", () => {
@@ -73,6 +74,7 @@ vi.mock("@workspace/db", () => {
               return mockMembers;
             }
             if (table._name === "leads") return mockLeads;
+            if (table._name === "subscriptions") return mockSubscriptions;
             return [];
           });
         },
@@ -90,6 +92,10 @@ vi.mock("@workspace/db", () => {
             if (table._name === "leads") {
               const l = mockLeads[0] || {};
               return [{ ...l, ...data }];
+            }
+            if (table._name === "subscriptions") {
+              const s = mockSubscriptions[0] || {};
+              return [{ ...s, ...data }];
             }
             return [data];
           });
@@ -138,6 +144,16 @@ vi.mock("../../stripeService", () => ({
   stripeService: { createCustomer: vi.fn(), createSubscription: vi.fn() },
 }));
 vi.mock("../../stripeClient", () => ({ getStripeClient: vi.fn() }));
+vi.mock("../stripeClient", () => ({
+  getStripeClient: vi.fn(),
+  getStripeSync: vi.fn(),
+  getUncachableStripeClient: vi.fn().mockResolvedValue({
+    subscriptions: {
+      update: vi.fn().mockResolvedValue({}),
+      cancel: vi.fn().mockResolvedValue({}),
+    },
+  }),
+}));
 vi.mock("../../services/member-sms", () => ({ sendMemberSms: vi.fn(), sendLeadSms: vi.fn() }));
 vi.mock("../../middlewares/billingRbac", () => ({
   requireBillingPermission: () => (_r: unknown, _s: unknown, n: () => void) => n(),
@@ -146,11 +162,22 @@ vi.mock("../../middlewares/billingRbac", () => ({
 vi.mock("../../billingAuditLogger", () => ({
   billingAuditLogger: { log: vi.fn().mockResolvedValue(undefined) },
 }));
+vi.mock("../billingAuditLogger", () => ({
+  billingAuditLogger: { log: vi.fn().mockResolvedValue(undefined) },
+}));
+vi.mock("../services/billing-recovery", () => ({
+  billingRecoveryService: {},
+}));
+vi.mock("../tierConfig", () => ({
+  getTierFromPriceId: vi.fn(),
+}));
 vi.mock("@workspace/api-zod", () => ({
   CreateMemberBody: { safeParse: (d: unknown) => ({ success: true, data: d }) },
   UpdateMemberBody: { safeParse: (d: unknown) => ({ success: true, data: d }) },
   CreateLeadBody: { safeParse: (d: unknown) => ({ success: true, data: d }) },
   UpdateLeadBody: { safeParse: (d: unknown) => ({ success: true, data: d }) },
+  CreateSubscriptionBody: { safeParse: (d: unknown) => ({ success: true, data: d }) },
+  UpdateSubscriptionBody: { safeParse: (d: unknown) => ({ success: true, data: d }) },
 }));
 
 function makeReq(params: Record<string, string>, body: Record<string, unknown>) {
@@ -198,6 +225,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   mockMembers = [];
   mockLeads = [];
+  mockSubscriptions = [];
   lastUpdatedMember = null;
 });
 
@@ -309,5 +337,114 @@ describe("POST /gyms/:gymId/leads/:leadId/convert — sequence transitions", () 
     await handler!(req, res);
 
     expect(callOrder).toEqual(["pause", "evaluate"]);
+  });
+});
+
+describe("PATCH /gyms/:gymId/subscriptions/:subscriptionId — sequence exit on cancel/pause", () => {
+  it("calls exitMemberSequences when subscription status set to cancelled", async () => {
+    mockSubscriptions = [
+      { id: 1, gymId: 10, memberId: 42, status: "active", amount: "50.00" },
+    ];
+
+    const mod = await import("../routes/billing/subscriptions");
+    const handler = findHandler(mod.default as unknown as { stack: StackLayer[] }, "patch", /subscriptions/);
+    expect(handler).not.toBeNull();
+
+    const req = makeReq({ gymId: "10", subscriptionId: "1" }, { status: "cancelled" });
+    const res = makeRes();
+    await handler!(req, res);
+
+    expect(spyExitMemberSequences).toHaveBeenCalledTimes(1);
+    expect(spyExitMemberSequences).toHaveBeenCalledWith(42, 10, "member_inactive");
+  });
+
+  it("calls exitMemberSequences when subscription status set to paused", async () => {
+    mockSubscriptions = [
+      { id: 1, gymId: 10, memberId: 42, status: "active", amount: "50.00" },
+    ];
+
+    const mod = await import("../routes/billing/subscriptions");
+    const handler = findHandler(mod.default as unknown as { stack: StackLayer[] }, "patch", /subscriptions/);
+    expect(handler).not.toBeNull();
+
+    const req = makeReq({ gymId: "10", subscriptionId: "1" }, { status: "paused" });
+    const res = makeRes();
+    await handler!(req, res);
+
+    expect(spyExitMemberSequences).toHaveBeenCalledTimes(1);
+    expect(spyExitMemberSequences).toHaveBeenCalledWith(42, 10, "member_inactive");
+  });
+
+  it("does NOT call exitMemberSequences when subscription status set to active", async () => {
+    mockSubscriptions = [
+      { id: 1, gymId: 10, memberId: 42, status: "paused", amount: "50.00" },
+    ];
+
+    const mod = await import("../routes/billing/subscriptions");
+    const handler = findHandler(mod.default as unknown as { stack: StackLayer[] }, "patch", /subscriptions/);
+    expect(handler).not.toBeNull();
+
+    const req = makeReq({ gymId: "10", subscriptionId: "1" }, { status: "active" });
+    const res = makeRes();
+    await handler!(req, res);
+
+    expect(spyExitMemberSequences).not.toHaveBeenCalled();
+  });
+});
+
+describe("Stripe webhook handleSubscriptionDeleted — sequence exit on cancel", () => {
+  it("calls exitMemberSequences when a subscription is deleted via webhook", async () => {
+    mockSubscriptions = [
+      { id: 1, gymId: 10, memberId: 42, status: "active", stripeSubscriptionId: "sub_123", cancelledAt: null, amount: "50.00" },
+    ];
+
+    const mod = await import("../webhookHandlers");
+    const handler = (mod as unknown as { _handleSubscriptionDeleted: (sub: { id: string }) => Promise<void> })._handleSubscriptionDeleted;
+    expect(handler).toBeDefined();
+
+    await handler({ id: "sub_123" });
+
+    expect(spyExitMemberSequences).toHaveBeenCalledTimes(1);
+    expect(spyExitMemberSequences).toHaveBeenCalledWith(42, 10, "member_inactive");
+  });
+
+  it("does NOT call exitMemberSequences when subscription not found in DB", async () => {
+    mockSubscriptions = [];
+
+    const mod = await import("../webhookHandlers");
+    const handler = (mod as unknown as { _handleSubscriptionDeleted: (sub: { id: string }) => Promise<void> })._handleSubscriptionDeleted;
+
+    await handler({ id: "sub_nonexistent" });
+
+    expect(spyExitMemberSequences).not.toHaveBeenCalled();
+  });
+});
+
+describe("StripeService.cancelSubscription — sequence exit on immediate cancel", () => {
+  it("calls exitMemberSequences when cancelAtPeriodEnd is false", async () => {
+    mockSubscriptions = [
+      { id: 1, gymId: 10, memberId: 42, status: "active", stripeSubscriptionId: "sub_123", cancelledAt: null, amount: "50.00" },
+    ];
+
+    const mod = await import("../stripeService");
+    const service = mod.stripeService;
+
+    await service.cancelSubscription(1, 10, false, "Test reason");
+
+    expect(spyExitMemberSequences).toHaveBeenCalledTimes(1);
+    expect(spyExitMemberSequences).toHaveBeenCalledWith(42, 10, "member_inactive");
+  });
+
+  it("does NOT call exitMemberSequences when cancelAtPeriodEnd is true", async () => {
+    mockSubscriptions = [
+      { id: 1, gymId: 10, memberId: 42, status: "active", stripeSubscriptionId: "sub_123", cancelledAt: null, amount: "50.00" },
+    ];
+
+    const mod = await import("../stripeService");
+    const service = mod.stripeService;
+
+    await service.cancelSubscription(1, 10, true, "Test reason");
+
+    expect(spyExitMemberSequences).not.toHaveBeenCalled();
   });
 });

@@ -68,7 +68,8 @@ async function resolveUserRole(userId: string, gymId: number): Promise<string | 
 
 export function requireBillingPermission(...requiredPerms: BillingPermission[]) {
   return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    if (!req.isAuthenticated()) {
+    const userId = req.userId;
+    if (!userId) {
       res.status(401).json({ error: "Unauthorized" });
       return;
     }
@@ -81,7 +82,6 @@ export function requireBillingPermission(...requiredPerms: BillingPermission[]) 
       return;
     }
 
-    const userId = req.user!.id;
     const role = await resolveUserRole(userId, gymId);
 
     if (!role) {

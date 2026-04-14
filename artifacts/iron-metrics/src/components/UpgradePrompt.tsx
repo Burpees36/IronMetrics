@@ -1,16 +1,23 @@
 import React from "react";
 import { useLocation } from "wouter";
-import { Lock, ArrowUpRight, TrendingUp, Crown } from "lucide-react";
+import { Lock, ArrowUpRight, Zap, TrendingUp, Crown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { motion } from "framer-motion";
 
 interface UpgradePromptProps {
   feature: string;
-  requiredTier?: "growth" | "pro";
+  requiredTier?: "insights" | "growth" | "pro";
   className?: string;
 }
 
 const TIER_INFO = {
+  insights: {
+    name: "Insights",
+    price: "$99/month",
+    icon: Zap,
+    color: "text-blue-400",
+    bgColor: "bg-blue-400/10",
+  },
   growth: {
     name: "Growth",
     price: "$199/month",

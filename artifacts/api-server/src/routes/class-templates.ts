@@ -288,7 +288,7 @@ router.post("/gyms/:gymId/class-templates", requireScheduleManage(), async (req,
     return;
   }
 
-  const userId = req.user?.id || null;
+  const userId = req.userId || null;
 
   const [template] = await db.insert(classTemplatesTable).values({
     gymId,

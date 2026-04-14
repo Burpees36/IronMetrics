@@ -384,7 +384,7 @@ function _generateConversationalBriefingItem(
       return {
         message: `${data.count} member${data.count !== 1 ? "s at" : " at"} critical risk${revenueStr}. Call ${data.count === 1 ? "them" : "each one"} today. Not tomorrow. A 2-minute check-in is the cheapest save you'll ever make.`,
         action: "View at-risk members",
-        link: "/retention",
+        link: "/members?filter=at-risk",
       };
     }
     case "failed_payments": {

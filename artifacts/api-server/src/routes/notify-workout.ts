@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, and, gte, lte, asc } from "drizzle-orm";
+import { eq, and, gte, lte, asc, or, isNull } from "drizzle-orm";
 import { db, gymsTable, membersTable, programmingDaysTable, programmingSectionsTable } from "@workspace/db";
 import { sendMemberEmail } from "../services/member-email";
 import { requireProgrammingWrite } from "../middlewares/programmingRbac";
@@ -31,7 +31,7 @@ router.post("/gyms/:gymId/notify-workout", requireProgrammingWrite(), async (req
       return;
     }
 
-    const { date, startDate, endDate } = req.body as { date?: string; startDate?: string; endDate?: string };
+    const { date, startDate, endDate, track } = req.body as { date?: string; startDate?: string; endDate?: string; track?: string };
 
     if (date && !DATE_REGEX.test(date)) {
       res.status(400).json({ error: "Invalid date format. Expected YYYY-MM-DD." });
@@ -46,7 +46,7 @@ router.post("/gyms/:gymId/notify-workout", requireProgrammingWrite(), async (req
       return;
     }
 
-    const cooldownKey = getCooldownKey(gymId, date || startDate);
+    const cooldownKey = getCooldownKey(gymId, date || startDate) + (track && track !== "default" ? `:${track}` : "");
     const lastSent = lastNotifyTimestamps.get(cooldownKey);
     if (lastSent && Date.now() - lastSent < COOLDOWN_MS) {
       const remainingMin = Math.ceil((COOLDOWN_MS - (Date.now() - lastSent)) / 60000);
@@ -86,6 +86,17 @@ router.post("/gyms/:gymId/notify-workout", requireProgrammingWrite(), async (req
       conditions.push(lte(programmingDaysTable.date, weekEnd));
     }
 
+    if (track && track !== "default") {
+      conditions.push(eq(programmingDaysTable.track, track));
+    } else {
+      conditions.push(
+        or(
+          eq(programmingDaysTable.track, "default"),
+          isNull(programmingDaysTable.track)
+        )!
+      );
+    }
+
     const publishedDays = await db
       .select()
       .from(programmingDaysTable)
@@ -113,15 +124,30 @@ router.post("/gyms/:gymId/notify-workout", requireProgrammingWrite(), async (req
       .from(membersTable)
       .where(and(eq(membersTable.gymId, gymId), eq(membersTable.status, "active")));
 
-    const membersWithEmail = activeMembers.filter((m) => m.email && m.email.trim().length > 0);
+    let membersWithEmail = activeMembers.filter((m) => m.email && m.email.trim().length > 0);
+
+    if (track && track !== "default") {
+      const trackTag = `track:${track}`;
+      membersWithEmail = membersWithEmail.filter((m) => {
+        const tags = m.tags as string[] | null;
+        return tags && tags.includes(trackTag);
+      });
+    }
 
     if (membersWithEmail.length === 0) {
-      res.status(400).json({ error: "No active members with email addresses found." });
+      res.status(400).json({ error: track && track !== "default"
+        ? `No active members on the "${track}" track with email addresses found.`
+        : "No active members with email addresses found." });
       return;
     }
 
     const baseUrl = getPublicBaseUrl();
-    const publicUrl = `${baseUrl}/wod/${gym.slug}`;
+    const isNonDefaultTrack = track && track !== "default";
+    const firstDate = publishedDays[0]?.date;
+    const dateParam = firstDate ? `date=${firstDate}` : "";
+    const trackParam = isNonDefaultTrack ? `track=${encodeURIComponent(track)}` : "";
+    const queryString = [dateParam, trackParam].filter(Boolean).join("&");
+    const publicUrl = `${baseUrl}/wod/${gym.slug}${queryString ? `?${queryString}` : ""}`;
 
     const workoutSummary = daySections
       .map(({ day, sections }) => {
@@ -144,7 +170,7 @@ router.post("/gyms/:gymId/notify-workout", requireProgrammingWrite(), async (req
 
     const textBody = `New programming has been published at ${gym.name}!\n\n${workoutSummary}\n\nView the full programming:\n${publicUrl}\n`;
 
-    const htmlBody = buildNotificationHtml(gym.name, daySections, publicUrl, gym.logoUrl);
+    const htmlBody = buildNotificationHtml(gym.name, daySections, publicUrl, gym.logoUrl, !!isNonDefaultTrack);
 
     let emailsSent = 0;
     const errors: string[] = [];
@@ -195,6 +221,7 @@ function buildNotificationHtml(
   daySections: Array<{ day: { title: string; date: string }; sections: Array<{ title: string; instructions: string | null; sectionType: string }> }>,
   publicUrl: string,
   logoUrl: string | null,
+  isTrackSpecific: boolean = false,
 ): string {
   const dayBlocks = daySections
     .map(({ day, sections }) => {
@@ -243,7 +270,7 @@ function buildNotificationHtml(
           ${dayBlocks}
           <div style="margin-top:24px;text-align:center;">
             <a href="${escapeHtml(publicUrl)}" style="display:inline-block;padding:12px 32px;background:#6366f1;color:white;text-decoration:none;border-radius:8px;font-weight:600;font-size:14px;">
-              View Full Programming
+              ${isTrackSpecific ? "View Your Programming" : "View Full Programming"}
             </a>
           </div>
         </div>

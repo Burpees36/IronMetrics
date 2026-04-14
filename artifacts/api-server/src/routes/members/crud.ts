@@ -18,8 +18,14 @@ router.get("/gyms/:gymId/members", async (req, res): Promise<void> => {
   const search = req.query.search as string | undefined;
   const idsParam = req.query.ids as string | undefined;
   const planIdParam = req.query.planId as string | undefined;
+  const riskTiersParam = req.query.riskTiers as string | undefined;
   const planId = planIdParam ? parseInt(planIdParam, 10) : null;
-  const limit = Math.min(parseInt(req.query.limit as string) || 50, 200);
+  const VALID_RISK_TIERS = new Set(["healthy", "low", "moderate", "high", "critical"]);
+  const riskTiers = riskTiersParam
+    ? riskTiersParam.split(",").map(t => t.trim()).filter(t => VALID_RISK_TIERS.has(t))
+    : null;
+  const maxLimit = riskTiers && riskTiers.length > 0 ? 500 : 200;
+  const limit = Math.min(parseInt(req.query.limit as string) || 50, maxLimit);
   const offset = parseInt(req.query.offset as string) || 0;
 
   let conditions = [eq(membersTable.gymId, gymId)];
@@ -30,6 +36,9 @@ router.get("/gyms/:gymId/members", async (req, res): Promise<void> => {
     }
   }
   if (status) conditions.push(eq(membersTable.status, status));
+  if (riskTiers && riskTiers.length > 0) {
+    conditions.push(inArray(membersTable.riskTier, riskTiers));
+  }
   if (search) {
     conditions.push(
       or(
@@ -372,31 +381,45 @@ router.patch("/gyms/:gymId/members/:memberId", async (req, res): Promise<void> =
     data.email = data.email.trim().toLowerCase();
   }
 
+  const updateData = (data.status === "cancelled" || data.status === "inactive")
+    ? { ...data, riskScore: null, riskTier: null }
+    : data;
+
   const [member] = await db
     .update(membersTable)
-    .set(data)
+    .set(updateData)
     .where(and(eq(membersTable.id, memberId), eq(membersTable.gymId, gymId)))
     .returning();
 
   if (!member) { res.status(404).json({ error: "Member not found" }); return; }
 
-  if (data.status === "cancelled") {
+  if (data.status === "cancelled" || data.status === "inactive") {
+    const cancelledNow = new Date();
+    const cancelReason = data.status === "cancelled" ? "Member cancelled by staff" : "Member set to inactive by staff";
     await db.update(subscriptionsTable)
       .set({
         status: "cancelled",
-        cancelledAt: new Date(),
-        cancelReason: "Member cancelled by staff",
+        cancelledAt: cancelledNow,
+        cancelReason,
       })
       .where(and(
         eq(subscriptionsTable.memberId, memberId),
         eq(subscriptionsTable.gymId, gymId),
-        inArray(subscriptionsTable.status, ["active", "past_due", "cancel_at_period_end"]),
+        inArray(subscriptionsTable.status, ["active", "past_due", "cancel_at_period_end", "pending"]),
+      ));
+    await db.update(subscriptionsTable)
+      .set({ cancelledAt: cancelledNow, cancelReason })
+      .where(and(
+        eq(subscriptionsTable.memberId, memberId),
+        eq(subscriptionsTable.gymId, gymId),
+        eq(subscriptionsTable.status, "cancelled"),
+        sql`${subscriptionsTable.cancelledAt} IS NULL`,
       ));
     try {
       await exitMemberSequences(memberId, gymId, "member_inactive");
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
-      console.error(`[members] Failed to exit sequences for cancelled member ${memberId}:`, msg);
+      console.error(`[members] Failed to exit sequences for ${data.status} member ${memberId}:`, msg);
     }
   }
 

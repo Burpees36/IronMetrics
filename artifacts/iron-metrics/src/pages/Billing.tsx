@@ -8,6 +8,7 @@ import {
   getListPaymentsQueryKey, getListRefundsQueryKey, getGetCancelledMembersQueryKey,
 } from "@workspace/api-client-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { authFetch } from "@/lib/authFetch";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
 import { motion } from "framer-motion";
@@ -26,6 +27,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { DiscountManager } from "@/components/billing/DiscountManager";
 import { TaxSettings } from "@/components/billing/TaxSettings";
+import { PageError } from "@/components/ui/page-error";
 
 type BillingTab = "plans" | "subscriptions" | "payments" | "refunds" | "cancelled" | "discounts" | "settings";
 
@@ -46,11 +48,11 @@ export function Billing() {
     query: { enabled: !!activeGymId }
   });
 
-  const { data: plans, isLoading: plansLoading } = useListMembershipPlans(activeGymId as number, {
+  const { data: plans, isLoading: plansLoading, isError: plansError, refetch: refetchPlans } = useListMembershipPlans(activeGymId as number, {
     query: { enabled: !!activeGymId }
   });
 
-  const { data: subscriptions, isLoading: subsLoading } = useListSubscriptions(activeGymId as number, {}, {
+  const { data: subscriptions, isLoading: subsLoading, isError: subsError, refetch: refetchSubs } = useListSubscriptions(activeGymId as number, {}, {
     query: { enabled: !!activeGymId }
   });
 
@@ -99,7 +101,7 @@ export function Billing() {
   const { data: recoveries } = useQuery({
     queryKey: ["billing-recovery", activeGymId],
     queryFn: async () => {
-      const res = await fetch(`${API_BASE}/gyms/${activeGymId}/billing/recovery`, { credentials: "include" });
+      const res = await authFetch(`${API_BASE}/gyms/${activeGymId}/billing/recovery`);
       if (!res.ok) return [];
       return res.json();
     },
@@ -109,9 +111,8 @@ export function Billing() {
   const handleSendUpdateLink = async (recoveryId: number) => {
     setSendingLinkId(recoveryId);
     try {
-      const res = await fetch(`${API_BASE}/gyms/${activeGymId}/billing/recovery/${recoveryId}/send-link`, {
+      const res = await authFetch(`${API_BASE}/gyms/${activeGymId}/billing/recovery/${recoveryId}/send-link`, {
         method: "POST",
-        credentials: "include",
         headers: { "Content-Type": "application/json" },
       });
       const data = await res.json();
@@ -135,9 +136,8 @@ export function Billing() {
     ) || (recoveries as any[])?.find((r: any) => r.id === recoveryId);
     if (!recovery) return;
     try {
-      const res = await fetch(`${API_BASE}/gyms/${activeGymId}/billing/recovery/generate-link`, {
+      const res = await authFetch(`${API_BASE}/gyms/${activeGymId}/billing/recovery/generate-link`, {
         method: "POST",
-        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ memberId: recovery.memberId, subscriptionId: recovery.subscriptionId }),
       });
@@ -165,8 +165,9 @@ export function Billing() {
   }
 
   const isLoading = plansLoading || subsLoading;
+  const billingError = plansError || subsError;
 
-  const summary = billingSummary as any;
+  const summary = billingSummary;
   const mrr = summary?.mrr ?? 0;
   const activeBillableMembers = summary?.activeBillableMembers ?? summary?.activeSubscriptions ?? 0;
   const activeSubs = summary?.activeSubscriptions ?? 0;
@@ -179,6 +180,16 @@ export function Billing() {
       <div className="h-full flex items-center justify-center">
         <Loader2 className="h-8 w-8 text-primary animate-spin" />
       </div>
+    );
+  }
+
+  if (billingError && !plans && !subscriptions) {
+    return (
+      <PageError
+        title="Unable to load billing"
+        message="We couldn't load your billing data. Check your connection and try again."
+        onRetry={() => { refetchPlans(); refetchSubs(); }}
+      />
     );
   }
 
@@ -818,11 +829,11 @@ export function Billing() {
                 </button>
               </div>
             </div>
-            {(cancelledData as any)?.lostRevenue > 0 && (
+            {(cancelledData?.lostRevenue ?? 0) > 0 && (
               <div className="mt-4 p-3 rounded-xl bg-destructive/5 border border-destructive/20 flex items-center gap-3">
                 <AlertTriangle className="h-5 w-5 text-destructive flex-shrink-0" />
                 <p className="text-sm text-destructive">
-                  <span className="font-semibold">${(cancelledData as any)?.lostRevenue?.toLocaleString()}/mo</span> in lost recurring revenue this period
+                  <span className="font-semibold">${cancelledData?.lostRevenue?.toLocaleString()}/mo</span> in lost recurring revenue this period
                 </p>
               </div>
             )}
@@ -831,11 +842,11 @@ export function Billing() {
             <div className="p-12 flex justify-center"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>
           ) : (
             <>
-              {(cancelledData as any)?.cancelledSubscriptions?.length > 0 && (
+              {(cancelledData?.cancelledSubscriptions?.length ?? 0) > 0 && (
                 <div className="p-6 border-b border-border">
                   <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-4">Cancellation Details</h4>
                   <div className="space-y-3">
-                    {(cancelledData as any)?.cancelledSubscriptions?.map((cs: any) => (
+                    {cancelledData?.cancelledSubscriptions?.map((cs) => (
                       <div key={cs.subscriptionId} className="flex items-center justify-between p-4 rounded-xl bg-muted/20 border border-border">
                         <div className="flex items-center gap-4">
                           <div className="h-10 w-10 rounded-full bg-destructive/10 flex items-center justify-center">
@@ -859,7 +870,7 @@ export function Billing() {
               )}
               <div className="p-6">
                 <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-4">All Cancelled Members</h4>
-                {(cancelledData as any)?.cancelledMembers?.length > 0 ? (
+                {(cancelledData?.cancelledMembers?.length ?? 0) > 0 ? (
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm text-left">
                       <thead className="text-xs text-muted-foreground uppercase bg-muted/30 border-b border-border">
@@ -872,7 +883,7 @@ export function Billing() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-border">
-                        {(cancelledData as any)?.cancelledMembers?.map((m: any) => (
+                        {cancelledData?.cancelledMembers?.map((m) => (
                           <tr key={m.id} className="hover:bg-secondary transition-colors cursor-pointer" onClick={() => navigate(`/members/${m.id}`)}>
                             <td className="px-4 py-3 font-medium text-foreground">{m.firstName} {m.lastName}</td>
                             <td className="px-4 py-3 text-muted-foreground">{m.email}</td>

@@ -154,8 +154,24 @@ export async function processAutopilotTasks(
         .from(membersTable)
         .where(and(eq(membersTable.id, task.targetId), eq(membersTable.gymId, gymId)));
       if (!member) { skippedCount++; continue; }
-      recipientEmail = member.email;
-      recipientPhone = member.phone;
+
+      if ((channelPref === "email" || channelPref === "both") && member.tags?.includes("email-opt-out")) {
+        if (channelPref === "email") {
+          skippedCount++;
+          console.log(`[autopilot] Skipping task ${task.id} — member ${member.id} opted out of email`);
+          continue;
+        }
+      }
+      if ((channelPref === "sms" || channelPref === "both") && member.tags?.includes("sms-opt-out")) {
+        if (channelPref === "sms") {
+          skippedCount++;
+          console.log(`[autopilot] Skipping task ${task.id} — member ${member.id} opted out of SMS`);
+          continue;
+        }
+      }
+
+      recipientEmail = member.tags?.includes("email-opt-out") ? null : member.email;
+      recipientPhone = member.tags?.includes("sms-opt-out") ? null : member.phone;
       recipientName = `${member.firstName} ${member.lastName}`;
     } else if (task.targetType === "lead") {
       const [lead] = await db

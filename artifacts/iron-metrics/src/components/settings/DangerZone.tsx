@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { useDeactivateGym, useReactivateGym, useDeleteGym, useGetGym, getListGymsQueryKey, getGetGymQueryKey } from "@workspace/api-client-react";
 import { useGym } from "@/store/GymContext";
-import { useAuth } from "@workspace/replit-auth-web";
+import { useAuth } from "@clerk/react";
 import { useLocation } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 
@@ -17,7 +17,7 @@ interface Props {
 export function DangerZone({ gymName }: Props) {
   const { toast } = useToast();
   const { activeGymId, setActiveGymId } = useGym();
-  const { user } = useAuth();
+  const { userId } = useAuth();
   const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
   const [confirmAction, setConfirmAction] = useState<string | null>(null);
@@ -25,7 +25,7 @@ export function DangerZone({ gymName }: Props) {
 
   const { data: gym } = useGetGym(activeGymId as number, { query: { enabled: !!activeGymId } });
   const isDeactivated = gym?.isActive === false;
-  const isOwner = !!(gym?.ownerId && user?.id && gym.ownerId === user.id);
+  const isOwner = !!(gym?.ownerId && userId && gym.ownerId === userId);
 
   const deactivateMutation = useDeactivateGym();
   const reactivateMutation = useReactivateGym();

@@ -1,46 +1,20 @@
-/**
- * @module app
- * Express application entry point for the API server.
- *
- * Sets up the full middleware pipeline in a specific order:
- *   1. Stripe webhook (raw body, before JSON parsing)
- *   2. CORS, cookie parsing, JSON/URL-encoded body parsing
- *   3. Rate limiters (auth, payment-update, general API)
- *   4. Public routes (payment update — no auth required)
- *   5. Authentication middleware (all subsequent routes require auth)
- *   6. Protected API routes (gym-scoped, role-checked)
- *   7. Global error handler
- *
- * The Stripe webhook route is intentionally mounted before body-parsing
- * middleware because Stripe signature verification requires the raw
- * request body as a Buffer.
- *
- * CORS is configured via the ALLOWED_ORIGINS environment variable
- * (comma-separated list of allowed origins). When not set, it defaults
- * to allowing *.replit.dev and localhost for development.
- */
 import express, { type Express } from "express";
 import cors from "cors";
-import cookieParser from "cookie-parser";
 import rateLimit, { type Options } from "express-rate-limit";
-import { authMiddleware } from "./middlewares/authMiddleware";
+import { clerkMiddleware } from "@clerk/express";
+import { CLERK_PROXY_PATH, clerkProxyMiddleware } from "./middlewares/clerkProxyMiddleware";
 import { previewMiddleware } from "./middlewares/previewMiddleware";
 import { WebhookHandlers } from "./webhookHandlers";
 import router from "./routes";
 import paymentUpdatePublicRouter from "./routes/payment-update-public";
 import leadCaptureRouter from "./routes/lead-capture";
 import publicWodRouter from "./routes/public-wod";
+import unsubscribeRouter from "./routes/unsubscribe";
 
 const app: Express = express();
 
-// Trust the first proxy hop (required for rate limiting behind a reverse proxy)
 app.set("trust proxy", 1);
 
-/**
- * Stripe webhook endpoint — mounted before JSON body parsing.
- * Uses express.raw() so the body arrives as a Buffer for signature verification.
- * Stripe sends a `stripe-signature` header that is validated against the raw payload.
- */
 app.post(
   "/api/stripe/webhook",
   express.raw({ type: "application/json" }),
@@ -53,7 +27,6 @@ app.post(
     }
 
     try {
-      // If multiple signature headers are present, use the first one
       const sig = Array.isArray(signature) ? signature[0] : signature;
 
       if (!Buffer.isBuffer(req.body)) {
@@ -71,7 +44,8 @@ app.post(
   }
 );
 
-// --- Global middleware ---
+app.use(CLERK_PROXY_PATH, clerkProxyMiddleware());
+
 const allowedOrigins: (string | RegExp)[] = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(",").map((o) => o.trim())
   : process.env.NODE_ENV === "production"
@@ -93,13 +67,11 @@ app.use(cors({
     callback(null, allowed);
   },
 }));
-app.use(cookieParser());
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
-// --- Rate limiters ---
+app.use(clerkMiddleware());
 
-/** General API rate limiter: 120 requests per 60-second window. */
 const apiLimiter = rateLimit({
   windowMs: 60 * 1000,
   limit: 120,
@@ -109,7 +81,6 @@ const apiLimiter = rateLimit({
   validate: { ip: false, trustProxy: false },
 } as Partial<Options>);
 
-/** Auth route limiter: 30 attempts per 15-minute window (brute-force protection). */
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   limit: 30,
@@ -119,7 +90,6 @@ const authLimiter = rateLimit({
   validate: { ip: false, trustProxy: false },
 } as Partial<Options>);
 
-/** Payment update limiter: 15 requests per 15-minute window (tighter for sensitive ops). */
 const paymentUpdateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   limit: 15,
@@ -129,7 +99,6 @@ const paymentUpdateLimiter = rateLimit({
   validate: { ip: false, trustProxy: false },
 } as Partial<Options>);
 
-/** Lead capture limiter: 20 requests per 15-minute window (spam prevention for public forms). */
 const leadCaptureLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   limit: 20,
@@ -139,32 +108,22 @@ const leadCaptureLimiter = rateLimit({
   validate: { ip: false, trustProxy: false },
 } as Partial<Options>);
 
-// Health check — mounted before rate limiters and auth so deployment probes always succeed
 import healthRouter from "./routes/health";
 app.use("/api", healthRouter);
 
-// Apply rate limiters to their respective route prefixes
-app.use("/api/login", authLimiter);
-app.use("/api/callback", authLimiter);
 app.use("/api/payment-update", paymentUpdateLimiter);
 app.use("/api/lead-capture", leadCaptureLimiter);
 app.use("/api", apiLimiter);
 
-// Public routes that do not require authentication (e.g., payment update links, lead capture, public WOD)
 app.use("/api", paymentUpdatePublicRouter);
 app.use("/api", leadCaptureRouter);
 app.use("/api", publicWodRouter);
+app.use("/api", unsubscribeRouter);
 
-// Dev-only preview bypass — must run before authMiddleware
 app.use(previewMiddleware);
 
-// Authentication middleware — everything below this point requires a valid session
-app.use(authMiddleware);
-
-// Protected API routes — gym-scoped routes are further guarded by requireGymAccess
 app.use("/api", router);
 
-/** Global error handler — catches unhandled errors from any route or middleware. */
 app.use((err: any, _req: any, res: any, _next: any) => {
   console.error("Unhandled error:", err);
   res.status(500).json({ error: "Internal server error" });

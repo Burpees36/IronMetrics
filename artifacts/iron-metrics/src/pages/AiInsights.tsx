@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from "react";
+import React, { useState, useMemo, useCallback, useEffect } from "react";
 import { useGym } from "@/store/GymContext";
 import {
   useGetIntelligenceOverview,
@@ -47,6 +47,9 @@ import {
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import { useIsMobile } from "@/hooks/useMobile";
 import { useGymTier } from "@/hooks/useGymTier";
+import { PageError } from "@/components/ui/page-error";
+
+import { authFetch } from "@/lib/authFetch";
 
 const BASE_URL = import.meta.env.BASE_URL || "/";
 const API_BASE = `${BASE_URL}api`.replace(/\/+/g, "/");
@@ -123,7 +126,7 @@ function useBenchmarks(gymId: number | null) {
   return useQuery({
     queryKey: ["benchmarks", gymId],
     queryFn: async () => {
-      const res = await fetch(`${API_BASE}/gyms/${gymId}/intelligence/benchmarks`, { credentials: "include" });
+      const res = await authFetch(`${API_BASE}/gyms/${gymId}/intelligence/benchmarks`);
       if (!res.ok) return null;
       return res.json();
     },
@@ -136,7 +139,7 @@ function useRsiHistory(gymId: number | null, window: string) {
   return useQuery({
     queryKey: ["rsi-history", gymId, window],
     queryFn: async () => {
-      const res = await fetch(`${API_BASE}/gyms/${gymId}/intelligence/rsi/history?window=${window}`, { credentials: "include" });
+      const res = await authFetch(`${API_BASE}/gyms/${gymId}/intelligence/rsi/history?window=${window}`);
       if (!res.ok) return { window, dataPoints: [], insufficient: true };
       return res.json();
     },
@@ -1083,11 +1086,11 @@ export function AiInsights() {
   const [trendWindow, setTrendWindow] = useState<"30d" | "90d" | "all">("90d");
   const [showRsiTrend, setShowRsiTrend] = useState(false);
 
-  const { data: intel, isLoading: intelLoading, isError: intelError } = useGetIntelligenceOverview(activeGymId as number, {
+  const { data: intel, isLoading: intelLoading, isError: intelError, refetch: refetchIntel } = useGetIntelligenceOverview(activeGymId as number, {
     query: { enabled: !!activeGymId, retry: 2, staleTime: 30000 }
   });
 
-  const { data: interventions, isLoading: interventionsLoading, isError: interventionsError } = useGetInterventions(activeGymId as number, {
+  const { data: interventions, isLoading: interventionsLoading, isError: interventionsError, refetch: refetchInterventions } = useGetInterventions(activeGymId as number, {
     query: { enabled: !!activeGymId, staleTime: 30000 }
   });
 
@@ -1116,7 +1119,7 @@ export function AiInsights() {
   const { data: rsiHistory } = useRsiHistory(activeGymId, trendWindow);
   const { data: benchmarkData } = useBenchmarks(activeGymId);
 
-  const { data: tasks, isLoading: tasksLoading, isError: tasksError } = useListAiTasks(activeGymId as number, {
+  const { data: tasks, isLoading: tasksLoading, isError: tasksError, refetch: refetchTasks } = useListAiTasks(activeGymId as number, {
     query: { enabled: !!activeGymId }
   });
 
@@ -1306,6 +1309,47 @@ export function AiInsights() {
     return (interventions as Intervention[]).filter(i => !dismissedInterventions.has(i.id));
   }, [interventions, dismissedInterventions]);
 
+  const [showAllInterventions, setShowAllInterventions] = useState(false);
+
+  useEffect(() => {
+    if (activeInterventions.length <= 4) setShowAllInterventions(false);
+  }, [activeInterventions.length]);
+
+  const topInterventions = useMemo(() => {
+    if (activeInterventions.length <= 4) return activeInterventions;
+    const byCategory = new Map<string, Intervention[]>();
+    for (const item of activeInterventions) {
+      const list = byCategory.get(item.category) || [];
+      list.push(item);
+      byCategory.set(item.category, list);
+    }
+    for (const list of byCategory.values()) {
+      list.sort((a, b) => b.score - a.score);
+    }
+    const picked: Intervention[] = [];
+    const categoryKeys = [...byCategory.keys()].sort((a, b) => {
+      const topA = byCategory.get(a)![0].score;
+      const topB = byCategory.get(b)![0].score;
+      return topB - topA;
+    });
+    const indices = new Map<string, number>(categoryKeys.map(k => [k, 0]));
+    while (picked.length < 4) {
+      let added = false;
+      for (const cat of categoryKeys) {
+        if (picked.length >= 4) break;
+        const list = byCategory.get(cat)!;
+        const idx = indices.get(cat)!;
+        if (idx < list.length) {
+          picked.push(list[idx]);
+          indices.set(cat, idx + 1);
+          added = true;
+        }
+      }
+      if (!added) break;
+    }
+    return picked;
+  }, [activeInterventions]);
+
   const dismissedInterventionList = useMemo(() => {
     if (!interventions) return [];
     return (interventions as Intervention[]).filter(i => dismissedInterventions.has(i.id));
@@ -1440,13 +1484,11 @@ export function AiInsights() {
 
   if (intelError || !intel) {
     return (
-      <div className="h-full flex items-center justify-center">
-        <div className="text-center">
-          <AlertCircle className="h-12 w-12 text-destructive/50 mx-auto mb-4" />
-          <h3 className="text-lg font-semibold text-foreground mb-1">Unable to load AI insights</h3>
-          <p className="text-sm text-muted-foreground">Please try refreshing the page.</p>
-        </div>
-      </div>
+      <PageError
+        title="Unable to load AI insights"
+        message="We couldn't load your intelligence data. Check your connection and try again."
+        onRetry={() => refetchIntel()}
+      />
     );
   }
 
@@ -1535,38 +1577,59 @@ export function AiInsights() {
               <div className="bg-card border border-border rounded-xl p-8 text-center">
                 <AlertCircle className="h-10 w-10 text-destructive/50 mx-auto mb-3" />
                 <h3 className="font-semibold text-foreground">Unable to load recommendations</h3>
-                <p className="text-sm text-muted-foreground mt-1">Please try refreshing the page.</p>
+                <p className="text-sm text-muted-foreground mt-1 mb-3">Check your connection and try again.</p>
+                <button
+                  onClick={() => refetchInterventions()}
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground hover:bg-primary/90 rounded-lg font-medium text-sm transition-colors"
+                >
+                  <RefreshCw className="h-4 w-4" />
+                  Try Again
+                </button>
               </div>
             ) : (
-              <AnimatePresence mode="popLayout">
-                {activeInterventions.length > 0 ? (
-                  activeInterventions.map((intervention) => (
-                    <InterventionCard
-                      key={intervention.id}
-                      intervention={intervention}
-                      onDismiss={handleDismissIntervention}
-                      isExpanded={expandedInterventions.has(intervention.id)}
-                      onToggleExpand={handleToggleExpand}
-                    />
-                  ))
-                ) : (
-                  <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    className="bg-card border border-emerald-200 rounded-xl p-8 text-center"
+              <>
+                <AnimatePresence mode="popLayout">
+                  {activeInterventions.length > 0 ? (
+                    (showAllInterventions ? activeInterventions : topInterventions).map((intervention) => (
+                      <InterventionCard
+                        key={intervention.id}
+                        intervention={intervention}
+                        onDismiss={handleDismissIntervention}
+                        isExpanded={expandedInterventions.has(intervention.id)}
+                        onToggleExpand={handleToggleExpand}
+                      />
+                    ))
+                  ) : (
+                    <motion.div
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      className="bg-card border border-emerald-200 rounded-xl p-8 text-center"
+                    >
+                      <div className="h-14 w-14 rounded-2xl bg-emerald-50 flex items-center justify-center mx-auto mb-4">
+                        <CheckCircle2 className="h-8 w-8 text-emerald-500" />
+                      </div>
+                      <h3 className="font-semibold text-foreground text-lg">Nothing flagged</h3>
+                      <p className="text-sm text-muted-foreground mt-2 max-w-md mx-auto leading-relaxed">
+                        {dismissedInterventions.size > 0
+                          ? "Every recommendation handled. Metrics are clean — use the time to build."
+                          : "No issues detected. Metrics look clean. Use the time to build."}
+                      </p>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+                {activeInterventions.length > 4 && (
+                  <button
+                    onClick={() => setShowAllInterventions(!showAllInterventions)}
+                    className="w-full flex items-center justify-center gap-1.5 py-2 text-xs font-medium text-primary hover:text-primary/80 transition-colors"
                   >
-                    <div className="h-14 w-14 rounded-2xl bg-emerald-50 flex items-center justify-center mx-auto mb-4">
-                      <CheckCircle2 className="h-8 w-8 text-emerald-500" />
-                    </div>
-                    <h3 className="font-semibold text-foreground text-lg">Nothing flagged</h3>
-                    <p className="text-sm text-muted-foreground mt-2 max-w-md mx-auto leading-relaxed">
-                      {dismissedInterventions.size > 0
-                        ? "Every recommendation handled. Metrics are clean — use the time to build."
-                        : "No issues detected. Metrics look clean. Use the time to build."}
-                    </p>
-                  </motion.div>
+                    {showAllInterventions ? (
+                      <>Show top 4 <ChevronUp className="h-3.5 w-3.5" /></>
+                    ) : (
+                      <>View all {activeInterventions.length} recommendations <ChevronDown className="h-3.5 w-3.5" /></>
+                    )}
+                  </button>
                 )}
-              </AnimatePresence>
+              </>
             )}
           </div>
 
@@ -1950,7 +2013,14 @@ export function AiInsights() {
             <div className="text-center py-12 flex flex-col items-center">
               <X className="h-10 w-10 text-destructive/50 mb-3" />
               <h3 className="text-base font-semibold text-foreground">Failed to load tasks</h3>
-              <p className="text-muted-foreground text-sm mt-1">Please try refreshing the page.</p>
+              <p className="text-muted-foreground text-sm mt-1 mb-3">Check your connection and try again.</p>
+              <button
+                onClick={() => refetchTasks()}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground hover:bg-primary/90 rounded-lg font-medium text-sm transition-colors"
+              >
+                <RefreshCw className="h-4 w-4" />
+                Try Again
+              </button>
             </div>
           ) : taskView === "pending" ? (
             filteredPendingTasks.length > 0 ? (

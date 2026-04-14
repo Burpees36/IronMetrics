@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from "react";
+import React, { useState, useMemo, useCallback, useEffect } from "react";
 import { useGym } from "@/store/GymContext";
 import {
   useListProgrammingDays,
@@ -17,9 +17,12 @@ import {
   useGenerateProgrammingWeek,
   getListProgrammingDaysQueryKey,
   useGetGym,
+  useListProgrammingTracks,
+  getListProgrammingTracksQueryKey,
 } from "@workspace/api-client-react";
 import type { ProgrammingDayWithSections, SectionType as ApiSectionType } from "@workspace/api-client-react";
-import { useAuth } from "@workspace/replit-auth-web";
+import { authFetch } from "@/lib/authFetch";
+import { useUser } from "@clerk/react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { motion, AnimatePresence } from "framer-motion";
@@ -34,6 +37,11 @@ import {
   Sparkles,
   Wand2,
   Share2,
+  GitBranch,
+  ChevronDown,
+  Check,
+  Users,
+  Info,
 } from "lucide-react";
 
 import { DateNavigation } from "@/components/programming/DateNavigation";
@@ -57,6 +65,8 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ShareWorkoutDialog } from "@/components/programming/ShareWorkoutDialog";
+import { useGymTier } from "@/hooks/useGymTier";
+import { PageError } from "@/components/ui/page-error";
 
 function toDateString(d: Date): string {
   return d.toISOString().split("T")[0];
@@ -110,6 +120,7 @@ function programmingDayToData(day: ProgrammingDayWithSections): ProgrammingDayDa
     date: day.date,
     title: day.title,
     status: (day.status === "archived" ? "draft" : day.status) as "draft" | "published",
+    track: day.track || "default",
     sections,
   };
 }
@@ -238,6 +249,8 @@ export function Workouts() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const { isStaff, isLoading: roleLoading } = useUserRole();
+  const { canAccess } = useGymTier();
+  const canUseAiProgramming = canAccess("ai-programming");
 
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [viewMode, setViewMode] = useState<"day" | "week">("day");
@@ -247,13 +260,29 @@ export function Workouts() {
   const [overwriteConfirm, setOverwriteConfirm] = useState<{ date: string } | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
-  const [shareDialogDay, setShareDialogDay] = useState<{ title?: string; date?: string } | null>(null);
+  const [shareDialogDay, setShareDialogDay] = useState<{ title?: string; date?: string; track?: string; dayId?: number; status?: string } | null>(null);
+  const [notifyVersion, setNotifyVersion] = useState(0);
+  const [selectedTrack, setSelectedTrack] = useState("default");
+  const [trackDropdownOpen, setTrackDropdownOpen] = useState(false);
+  const [showNewTrackInline, setShowNewTrackInline] = useState(false);
+  const [newTrackInlineName, setNewTrackInlineName] = useState("");
+  const [trackOverviewOpen, setTrackOverviewOpen] = useState(false);
 
   const { data: gym } = useGetGym(activeGymId as number, { query: { enabled: !!activeGymId } });
   const gymSlug = (gym as { slug?: string } | undefined)?.slug;
-  const publicWodUrl = gymSlug
+  const baseWodUrl = gymSlug
     ? `${window.location.origin}${import.meta.env.BASE_URL.replace(/\/$/, "")}/wod/${gymSlug}`
     : "";
+
+  const { data: tracksList } = useListProgrammingTracks(
+    activeGymId as number,
+    { query: { enabled: !!activeGymId && !roleLoading } }
+  );
+  const availableTracks = useMemo(() => {
+    if (!tracksList) return ["default"];
+    const tracks = tracksList as string[];
+    return tracks.length > 0 ? tracks : ["default"];
+  }, [tracksList]);
 
   const dateStr = toDateString(selectedDate);
   const weekDates = useMemo(() => getWeekDates(selectedDate), [dateStr]);
@@ -276,13 +305,20 @@ export function Workouts() {
   const startDate = isStaff ? staffStartDate : memberRangeStart;
   const endDate = isStaff ? staffEndDate : memberRangeEnd;
 
-  const { data: programmingDays, isLoading: programmingLoading } = useListProgrammingDays(
+  const trackParam = isStaff && selectedTrack !== "all" ? selectedTrack : undefined;
+  const { data: programmingDays, isLoading: programmingLoading, isError: programmingError, refetch: refetchProgramming } = useListProgrammingDays(
     activeGymId as number,
-    { startDate, endDate },
+    { startDate, endDate, track: trackParam },
     { query: { enabled: !!activeGymId && !roleLoading } }
   );
 
-  const { user: currentUser } = useAuth();
+  const { data: allDaysForCurrentDate } = useListProgrammingDays(
+    activeGymId as number,
+    { startDate: dateStr, endDate: dateStr },
+    { query: { enabled: !!activeGymId && !roleLoading && isStaff } }
+  );
+
+  const { user: currentUser } = useUser();
   const { data: membersList } = useListMembers(
     activeGymId as number,
     undefined,
@@ -296,14 +332,45 @@ export function Workouts() {
   }, [membersList]);
 
   const activeMemberCount = useMemo(() => {
-    return allMembers.filter((m) => m.status === "active").length;
+    return allMembers.filter((m) => m.status === "active" && m.email).length;
   }, [allMembers]);
 
+  const getTrackMemberCount = useCallback((track: string | null | undefined): number => {
+    if (!track || track === "default") return activeMemberCount;
+    const trackTag = `track:${track}`;
+    return allMembers.filter((m) => m.status === "active" && m.email && (m.tags as string[] | null)?.includes(trackTag)).length;
+  }, [allMembers, activeMemberCount]);
+
+
   const currentMemberId = useMemo(() => {
-    if (!currentUser?.email || allMembers.length === 0) return null;
-    const match = allMembers.find((m) => m.email === currentUser.email);
+    const email = currentUser?.primaryEmailAddress?.emailAddress;
+    if (!email || allMembers.length === 0) return null;
+    const match = allMembers.find((m) => m.email === email);
     return match?.id ?? null;
   }, [currentUser, allMembers]);
+
+  const dateHasDefaultTrackDay = useMemo(() => {
+    const daysToCheck = allDaysForCurrentDate || programmingDays;
+    if (!daysToCheck) return false;
+    return (daysToCheck as ProgrammingDayWithSections[]).some(
+      (d) => d.date === dateStr && (!d.track || d.track === "default")
+    );
+  }, [allDaysForCurrentDate, programmingDays, dateStr]);
+
+  const suggestedTrackForNewDay = useMemo(() => {
+    if (!dateHasDefaultTrackDay) return undefined;
+    const nonDefaultTracks = availableTracks.filter((t) => t !== "default");
+    return nonDefaultTracks.length > 0 ? nonDefaultTracks[0] : undefined;
+  }, [dateHasDefaultTrackDay, availableTracks]);
+
+  const resolveDayForShare = useCallback((date: string, track: string): { dayId?: number; status?: string } => {
+    const days = (programmingDays || []) as ProgrammingDayWithSections[];
+    const match = days.find((d) => {
+      const dayTrack = d.track || "default";
+      return d.date === date && dayTrack === track;
+    });
+    return match ? { dayId: match.id, status: match.status } : {};
+  }, [programmingDays]);
 
   const createDayMutation = useCreateProgrammingDay();
   const updateDayMutation = useUpdateProgrammingDay();
@@ -323,6 +390,9 @@ export function Workouts() {
     if (activeGymId) {
       queryClient.invalidateQueries({
         queryKey: getListProgrammingDaysQueryKey(activeGymId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: getListProgrammingTracksQueryKey(activeGymId),
       });
     }
   }, [activeGymId, queryClient]);
@@ -383,10 +453,6 @@ export function Workouts() {
             title: "Week Generated",
             description: `${generated} days created${skipped > 0 ? `, ${skipped} days skipped (already exist)` : ""}. Review and edit before publishing.`,
           });
-          if (generated > 0 && publicWodUrl) {
-            setShareDialogDay(null);
-            setShareDialogOpen(true);
-          }
         }
       } catch (error: unknown) {
         const err = error as { data?: { error?: string }; message?: string };
@@ -399,14 +465,15 @@ export function Workouts() {
         setIsGenerating(false);
       }
     },
-    [activeGymId, weekDates, generateWeekMutation, invalidateProgramming, toast, publicWodUrl]
+    [activeGymId, weekDates, generateWeekMutation, invalidateProgramming, toast, baseWodUrl]
   );
 
   const daysByDate = useMemo(() => {
-    const map: Record<string, ProgrammingDayWithSections> = {};
+    const map: Record<string, ProgrammingDayWithSections[]> = {};
     if (!programmingDays) return map;
     for (const day of programmingDays as ProgrammingDayWithSections[]) {
-      map[day.date] = day;
+      if (!map[day.date]) map[day.date] = [];
+      map[day.date].push(day);
     }
     return map;
   }, [programmingDays]);
@@ -425,6 +492,7 @@ export function Workouts() {
               date: data.date,
               title: data.title,
               status: data.status,
+              track: data.track || null,
             },
           });
 
@@ -482,16 +550,27 @@ export function Workouts() {
               date: data.date,
               title: data.title,
               status: data.status,
+              track: data.track || null,
               sections: data.sections.map((s, idx) => sectionDataToApiBody(s, idx)),
             },
           });
         }
 
+        const isNewTrack = data.track && data.track !== "default" && !availableTracks.includes(data.track);
         invalidateProgramming();
         toast({
           title: data.status === "published" ? "Programming Published" : "Draft Saved",
           description: `${data.title} for ${new Date(data.date + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })} has been saved.`,
         });
+        if (isNewTrack) {
+          setTimeout(() => {
+            toast({
+              title: `New track "${data.track}" created`,
+              description: "Members need to be assigned to this track (via their profile) to see its programming.",
+              duration: 8000,
+            });
+          }, 500);
+        }
         setPanelOpen(false);
         setEditData(null);
       } catch (error: any) {
@@ -504,7 +583,7 @@ export function Workouts() {
         setIsSaving(false);
       }
     },
-    [activeGymId, programmingDays, createDayMutation, updateDayMutation, deleteSectionMutation, updateSectionMutation, addSectionMutation, reorderSectionsMutation, invalidateProgramming, toast]
+    [activeGymId, programmingDays, availableTracks, createDayMutation, updateDayMutation, deleteSectionMutation, updateSectionMutation, addSectionMutation, reorderSectionsMutation, invalidateProgramming, toast]
   );
 
   const handleTogglePublish = useCallback(
@@ -521,8 +600,8 @@ export function Workouts() {
           title: wasPublishing ? "Published" : "Unpublished",
           description: `Programming for ${new Date(day.date + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })} has been ${wasPublishing ? "published" : "unpublished"}.`,
         });
-        if (wasPublishing && publicWodUrl) {
-          setShareDialogDay({ title: day.title, date: day.date });
+        if (wasPublishing && baseWodUrl) {
+          setShareDialogDay({ title: day.title, date: day.date, track: day.track || "default", dayId: day.id, status: "published" });
           setShareDialogOpen(true);
         }
       } catch (error: any) {
@@ -533,7 +612,7 @@ export function Workouts() {
         });
       }
     },
-    [activeGymId, togglePublishMutation, invalidateProgramming, toast, publicWodUrl]
+    [activeGymId, togglePublishMutation, invalidateProgramming, toast, baseWodUrl]
   );
 
   const handleDelete = useCallback(
@@ -647,10 +726,9 @@ export function Workouts() {
     async (dayId: number, sectionId: number, resultId: number, result: { result: string; notes: string; isRx: boolean; isPr: boolean }) => {
       if (!activeGymId) return;
       try {
-        const response = await fetch(`/api/gyms/${activeGymId}/programming/${dayId}/sections/${sectionId}/results/${resultId}`, {
+        const response = await authFetch(`/api/gyms/${activeGymId}/programming/${dayId}/sections/${sectionId}/results/${resultId}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          credentials: "include",
           body: JSON.stringify(result),
         });
         if (!response.ok) throw new Error("Failed to update result");
@@ -670,6 +748,16 @@ export function Workouts() {
           Select a gym to view programming.
         </p>
       </div>
+    );
+  }
+
+  if (programmingError && !programmingDays) {
+    return (
+      <PageError
+        title="Unable to load programming"
+        message="We couldn't load your workouts. Check your connection and try again."
+        onRetry={() => refetchProgramming()}
+      />
     );
   }
 
@@ -730,16 +818,127 @@ export function Workouts() {
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
+          <div className="relative">
+            <button
+              onClick={() => { setTrackDropdownOpen(!trackDropdownOpen); setTrackOverviewOpen(false); }}
+              className="flex items-center gap-2 px-3 py-2.5 border border-border bg-background hover:bg-accent rounded-xl font-medium transition-colors text-sm text-foreground"
+            >
+              <GitBranch className="h-4 w-4 text-muted-foreground" />
+              <span className="capitalize">{selectedTrack === "all" ? "All Tracks" : selectedTrack}</span>
+              <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+            </button>
+            {trackDropdownOpen && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => { setTrackDropdownOpen(false); setShowNewTrackInline(false); setNewTrackInlineName(""); }} />
+                <div className="absolute right-0 top-full mt-1 z-50 bg-popover border border-border rounded-xl shadow-lg py-1 min-w-[220px]">
+                  {availableTracks.length > 1 && (
+                    <button
+                      onClick={() => { setSelectedTrack("all"); setTrackDropdownOpen(false); }}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-accent text-left"
+                    >
+                      {selectedTrack === "all" && <Check className="h-3.5 w-3.5 text-primary" />}
+                      <span className={selectedTrack !== "all" ? "pl-5.5" : ""}>All Tracks</span>
+                    </button>
+                  )}
+                  {availableTracks.map((t) => (
+                    <button
+                      key={t}
+                      onClick={() => { setSelectedTrack(t); setTrackDropdownOpen(false); }}
+                      className="w-full flex items-center justify-between px-3 py-2 text-sm hover:bg-accent text-left"
+                    >
+                      <span className="flex items-center gap-2">
+                        {selectedTrack === t && <Check className="h-3.5 w-3.5 text-primary" />}
+                        <span className={selectedTrack !== t ? "pl-5.5 capitalize" : "capitalize"}>{t}</span>
+                      </span>
+                      <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                        <Users className="h-3 w-3" />
+                        {getTrackMemberCount(t)}
+                      </span>
+                    </button>
+                  ))}
+                  <div className="border-t border-border mt-1 pt-1">
+                    {!showNewTrackInline ? (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setShowNewTrackInline(true); }}
+                        className="w-full flex items-center gap-2 px-3 py-2 text-sm text-primary hover:bg-accent text-left font-medium"
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                        New Track
+                      </button>
+                    ) : (
+                      <div className="px-3 py-2 space-y-2" onClick={(e) => e.stopPropagation()}>
+                        <input
+                          autoFocus
+                          value={newTrackInlineName}
+                          onChange={(e) => setNewTrackInlineName(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "-"))}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" && newTrackInlineName.trim()) {
+                              setSelectedTrack(newTrackInlineName.trim());
+                              setEditData(null);
+                              setPanelOpen(true);
+                              setTrackDropdownOpen(false);
+                              setShowNewTrackInline(false);
+                              setNewTrackInlineName("");
+                            }
+                            if (e.key === "Escape") {
+                              setShowNewTrackInline(false);
+                              setNewTrackInlineName("");
+                            }
+                          }}
+                          placeholder="e.g. competitors"
+                          className="w-full text-sm px-2 py-1.5 rounded-lg border border-input bg-muted/30 focus:outline-none focus:ring-1 focus:ring-ring"
+                        />
+                        <p className="text-[11px] text-muted-foreground leading-tight">
+                          Type a name and press Enter to create a new programming track.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                  <div className="border-t border-border mt-1 pt-1">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setTrackOverviewOpen(!trackOverviewOpen); }}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-sm text-muted-foreground hover:bg-accent text-left"
+                    >
+                      <Info className="h-3.5 w-3.5" />
+                      Track Overview
+                    </button>
+                    {trackOverviewOpen && (
+                      <div className="px-3 pb-2 pt-1 space-y-1.5">
+                        {availableTracks.map((t) => (
+                          <div key={t} className="flex items-center justify-between text-xs py-1 px-2 bg-muted/40 rounded-lg">
+                            <span className="font-medium capitalize text-foreground">{t}</span>
+                            <span className="text-muted-foreground flex items-center gap-1">
+                              <Users className="h-3 w-3" />
+                              {getTrackMemberCount(t)} member{getTrackMemberCount(t) !== 1 ? "s" : ""}
+                            </span>
+                          </div>
+                        ))}
+                        <p className="text-[11px] text-muted-foreground leading-tight pt-1">
+                          Assign members to tracks from their profile page.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
           {isGenerating && (
             <div className="flex items-center gap-2 text-sm text-muted-foreground animate-pulse">
               <Loader2 className="h-4 w-4 animate-spin" />
               <span>Generating...</span>
             </div>
           )}
-          {publicWodUrl && (
+          {baseWodUrl && (
             <button
               onClick={() => {
-                setShareDialogDay(null);
+                const track = selectedTrack === "all" ? "default" : (selectedTrack || "default");
+                const resolved = resolveDayForShare(dateStr, track);
+                if (resolved.dayId && resolved.status !== "published") {
+                  toast({ title: "Publish first", description: "Publish this workout before sharing it." });
+                  return;
+                }
+                setShareDialogDay({ date: dateStr, track, ...resolved });
                 setShareDialogOpen(true);
               }}
               className="flex items-center gap-2 px-4 py-2.5 border border-border bg-background hover:bg-accent rounded-xl font-medium transition-colors text-foreground"
@@ -749,22 +948,35 @@ export function Workouts() {
               <span className="hidden sm:inline">Share</span>
             </button>
           )}
-          <button
-            onClick={() => handleGenerateDay()}
-            disabled={isGenerating}
-            className="flex items-center gap-2 px-4 py-2.5 bg-violet-600 text-white hover:bg-violet-700 rounded-xl font-medium transition-colors shadow-lg shadow-violet-600/20 disabled:opacity-50"
-          >
-            <Wand2 className="h-4 w-4" />
-            <span className="hidden sm:inline">Generate Day</span>
-          </button>
-          <button
-            onClick={handleGenerateWeek}
-            disabled={isGenerating}
-            className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-violet-600 to-purple-600 text-white hover:from-violet-700 hover:to-purple-700 rounded-xl font-medium transition-colors shadow-lg shadow-purple-600/20 disabled:opacity-50"
-          >
-            <Sparkles className="h-4 w-4" />
-            <span className="hidden sm:inline">Generate Week</span>
-          </button>
+          {canUseAiProgramming ? (
+            <>
+              <button
+                onClick={() => handleGenerateDay()}
+                disabled={isGenerating}
+                className="flex items-center gap-2 px-4 py-2.5 bg-violet-600 text-white hover:bg-violet-700 rounded-xl font-medium transition-colors shadow-lg shadow-violet-600/20 disabled:opacity-50"
+              >
+                <Wand2 className="h-4 w-4" />
+                <span className="hidden sm:inline">Generate Day</span>
+              </button>
+              <button
+                onClick={handleGenerateWeek}
+                disabled={isGenerating}
+                className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-violet-600 to-purple-600 text-white hover:from-violet-700 hover:to-purple-700 rounded-xl font-medium transition-colors shadow-lg shadow-purple-600/20 disabled:opacity-50"
+              >
+                <Sparkles className="h-4 w-4" />
+                <span className="hidden sm:inline">Generate Week</span>
+              </button>
+            </>
+          ) : (
+            <button
+              onClick={() => toast({ title: "Upgrade Required", description: "AI workout generation is available on the Growth plan and above." })}
+              className="flex items-center gap-2 px-4 py-2.5 bg-violet-600/50 text-white/70 rounded-xl font-medium transition-colors cursor-not-allowed"
+            >
+              <Wand2 className="h-4 w-4" />
+              <span className="hidden sm:inline">AI Generate</span>
+              <span className="text-xs bg-white/20 px-1.5 py-0.5 rounded">Growth</span>
+            </button>
+          )}
           <button
             onClick={() => {
               setEditData(null);
@@ -794,15 +1006,16 @@ export function Workouts() {
         />
       ) : viewMode === "day" ? (
         <div className="space-y-4">
-          {daysByDate[dateStr] ? (
-            (() => {
-              const day = daysByDate[dateStr];
+          {daysByDate[dateStr]?.length ? (
+            daysByDate[dateStr].map((day) => {
               const hasTrackableSections = day.sections.some(s => s.resultTrackingEnabled);
               return (
-                <>
+                <div key={day.id} className="space-y-4">
                   <DayCard
                     day={day}
                     isStaff={isStaff}
+                    gymId={activeGymId}
+                    notifyVersion={notifyVersion}
                     onEdit={() => {
                       setEditData(programmingDayToData(day));
                       setPanelOpen(true);
@@ -810,7 +1023,11 @@ export function Workouts() {
                     onDuplicate={() => handleDuplicate(day)}
                     onTogglePublish={() => handleTogglePublish(day)}
                     onDelete={() => setDeleteConfirmDay(day)}
-                    publicWodUrl={publicWodUrl}
+                    onNotify={() => {
+                      setShareDialogDay({ title: day.title, date: day.date, track: day.track || "default", dayId: day.id, status: day.status });
+                      setShareDialogOpen(true);
+                    }}
+                    publicWodUrl={baseWodUrl}
                     onCopyLink={(msg) => toast({ title: "Link Copied", description: msg })}
                   />
                   {hasTrackableSections && (
@@ -828,9 +1045,9 @@ export function Workouts() {
                       showNavigation={false}
                     />
                   )}
-                </>
+                </div>
               );
-            })()
+            })
           ) : (
             <motion.div
               initial={{ opacity: 0 }}
@@ -874,8 +1091,8 @@ export function Workouts() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {weekDates.map((d, i) => {
-            const day = daysByDate[d];
-            if (!day) {
+            const daysForDate = daysByDate[d];
+            if (!daysForDate?.length) {
               return (
                 <motion.div
                   key={d}
@@ -909,21 +1126,31 @@ export function Workouts() {
             }
 
             return (
-              <DayCard
-                key={d}
-                day={day}
-                isStaff={isStaff}
-                animationDelay={i * 0.05}
-                onEdit={() => {
-                  setEditData(programmingDayToData(day));
-                  setPanelOpen(true);
-                }}
-                onDuplicate={() => handleDuplicate(day)}
-                onTogglePublish={() => handleTogglePublish(day)}
-                onDelete={() => setDeleteConfirmDay(day)}
-                publicWodUrl={publicWodUrl}
-                onCopyLink={(msg) => toast({ title: "Link Copied", description: msg })}
-              />
+              <div key={d} className="space-y-4">
+                {daysForDate.map((day) => (
+                  <DayCard
+                    key={day.id}
+                    day={day}
+                    isStaff={isStaff}
+                    gymId={activeGymId}
+                    notifyVersion={notifyVersion}
+                    animationDelay={i * 0.05}
+                    onEdit={() => {
+                      setEditData(programmingDayToData(day));
+                      setPanelOpen(true);
+                    }}
+                    onDuplicate={() => handleDuplicate(day)}
+                    onTogglePublish={() => handleTogglePublish(day)}
+                    onDelete={() => setDeleteConfirmDay(day)}
+                    onNotify={() => {
+                      setShareDialogDay({ title: day.title, date: day.date, track: day.track || "default", dayId: day.id, status: day.status });
+                      setShareDialogOpen(true);
+                    }}
+                    publicWodUrl={baseWodUrl}
+                    onCopyLink={(msg) => toast({ title: "Link Copied", description: msg })}
+                  />
+                ))}
+              </div>
             );
           })}
         </div>
@@ -939,6 +1166,10 @@ export function Workouts() {
         isSaving={isSaving}
         initialDate={dateStr}
         initialData={editData}
+        availableTracks={availableTracks}
+        defaultTrack={selectedTrack !== "all" ? selectedTrack : "default"}
+        suggestAlternateTrack={!editData ? suggestedTrackForNewDay : undefined}
+        dateHasDefaultTrackDay={dateHasDefaultTrackDay}
       />
 
       <AlertDialog
@@ -956,6 +1187,7 @@ export function Workouts() {
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => deleteConfirmDay && handleDelete(deleteConfirmDay)}
+              disabled={deleteDayMutation.isPending}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               {deleteDayMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Delete"}
@@ -991,15 +1223,25 @@ export function Workouts() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {publicWodUrl && activeGymId && (
+      {baseWodUrl && activeGymId && (
         <ShareWorkoutDialog
           open={shareDialogOpen}
           onOpenChange={setShareDialogOpen}
-          publicUrl={publicWodUrl}
+          publicUrl={(() => {
+            const params = new URLSearchParams();
+            if (shareDialogDay?.date) params.set("date", shareDialogDay.date);
+            if (shareDialogDay?.track && shareDialogDay.track !== "default") params.set("track", shareDialogDay.track);
+            const qs = params.toString();
+            return qs ? `${baseWodUrl}?${qs}` : baseWodUrl;
+          })()}
           gymId={activeGymId}
           activeMemberCount={activeMemberCount}
           dayTitle={shareDialogDay?.title}
           dayDate={shareDialogDay?.date}
+          dayTrack={shareDialogDay?.track}
+          trackMemberCount={shareDialogDay?.track ? getTrackMemberCount(shareDialogDay.track) : undefined}
+          onNotifySuccess={(count) => { setNotifyVersion((v) => v + 1); toast({ title: "Notifications sent", description: `${count} member${count !== 1 ? "s" : ""} notified.` }); }}
+          onNotifyError={(error) => toast({ title: "Notification failed", description: error, variant: "destructive" })}
         />
       )}
     </div>

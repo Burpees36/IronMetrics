@@ -9,6 +9,20 @@ export type BodyType<T> = T;
 const NO_BODY_STATUS = new Set([204, 205, 304]);
 const DEFAULT_JSON_ACCEPT = "application/json, application/problem+json";
 
+async function getClerkToken(): Promise<string | null> {
+  try {
+    const clerk = (window as Record<string, unknown>).Clerk as
+      | { session?: { getToken: () => Promise<string | null> } }
+      | undefined;
+    if (clerk?.session) {
+      return await clerk.session.getToken();
+    }
+  } catch {
+    // Clerk not available
+  }
+  return null;
+}
+
 function isRequest(input: RequestInfo | URL): input is Request {
   return typeof Request !== "undefined" && input instanceof Request;
 }
@@ -297,9 +311,16 @@ export async function customFetch<T = unknown>(
     headers.set("accept", DEFAULT_JSON_ACCEPT);
   }
 
+  if (!headers.has("authorization")) {
+    const token = await getClerkToken();
+    if (token) {
+      headers.set("authorization", `Bearer ${token}`);
+    }
+  }
+
   const requestInfo = { method, url: resolveUrl(input) };
 
-  const response = await fetch(input, { ...init, method, headers });
+  const response = await fetch(input, { ...init, method, headers, credentials: "include" });
 
   if (!response.ok) {
     const errorData = await parseErrorBody(response, method);

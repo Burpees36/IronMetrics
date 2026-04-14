@@ -1,9 +1,12 @@
 import { db, gymsTable, membersTable, retentionSequencesTable, retentionSequenceStepsTable, memberSequenceEnrollmentsTable, retentionSequenceEventsTable, attendanceTable, aiTasksTable } from "@workspace/db";
 import { sendMemberEmail } from "../services/member-email";
-import { eq, and, sql, lte, ne, desc, gte, count, asc } from "drizzle-orm";
+import { eq, and, sql, lte, ne, desc, gte, count, asc, or } from "drizzle-orm";
 import { getEmailService } from "../services/email-service";
+import { isWithinQuietHours, getNextBusinessHourDate, isMemberOptedOut, getSequencePriority, buildUnsubscribeUrl } from "../services/sequence-utils";
 
 const RETENTION_INTERVAL_MS = 2 * 60 * 60 * 1000;
+const RETRY_DELAY_MS = 5 * 60 * 1000;
+const ENROLLMENT_BATCH_LIMIT = 20;
 
 let schedulerTimer: ReturnType<typeof setInterval> | null = null;
 
@@ -69,10 +72,17 @@ async function evaluateTriggersForGym(gymId: number, opts?: number | EvaluateTri
     joinDate: membersTable.joinDate,
     createdAt: membersTable.createdAt,
     status: membersTable.status,
+    tags: membersTable.tags,
   }).from(membersTable)
     .where(and(...memberConditions));
 
-  for (const sequence of sequences) {
+  const sortedSequences = [...sequences].sort(
+    (a, b) => getSequencePriority(b.type) - getSequencePriority(a.type)
+  );
+
+  let enrolledThisTick = 0;
+
+  for (const sequence of sortedSequences) {
     const trigger = sequence.triggerConfig as TriggerConfig;
     if (!trigger || !trigger.type) continue;
 
@@ -83,18 +93,67 @@ async function evaluateTriggersForGym(gymId: number, opts?: number | EvaluateTri
     if (steps.length === 0) continue;
 
     for (const member of activeMembers) {
+      if (enrolledThisTick >= ENROLLMENT_BATCH_LIMIT) {
+        console.log(`[retention-engine] Enrollment batch limit (${ENROLLMENT_BATCH_LIMIT}) reached for gym ${gymId}, deferring rest`);
+        return;
+      }
+
       const shouldEnroll = evaluateTrigger(trigger, member);
       if (!shouldEnroll) continue;
+
+      if (member.tags.includes("email-opt-out")) continue;
 
       const [existingActive] = await db.select({ id: memberSequenceEnrollmentsTable.id })
         .from(memberSequenceEnrollmentsTable)
         .where(and(
           eq(memberSequenceEnrollmentsTable.memberId, member.id),
           eq(memberSequenceEnrollmentsTable.sequenceId, sequence.id),
-          eq(memberSequenceEnrollmentsTable.status, "active")
+          sql`${memberSequenceEnrollmentsTable.status} IN ('active', 'retry_pending')`
         )).limit(1);
 
       if (existingActive) continue;
+
+      const [anyActiveRetention] = await db.select({
+        id: memberSequenceEnrollmentsTable.id,
+        sequenceId: memberSequenceEnrollmentsTable.sequenceId,
+      }).from(memberSequenceEnrollmentsTable)
+        .innerJoin(retentionSequencesTable, eq(memberSequenceEnrollmentsTable.sequenceId, retentionSequencesTable.id))
+        .where(and(
+          eq(memberSequenceEnrollmentsTable.memberId, member.id),
+          eq(memberSequenceEnrollmentsTable.gymId, gymId),
+          sql`${memberSequenceEnrollmentsTable.status} IN ('active', 'retry_pending')`
+        )).limit(1);
+
+      if (anyActiveRetention) {
+        const [activeSeq] = await db.select({ type: retentionSequencesTable.type })
+          .from(retentionSequencesTable)
+          .where(eq(retentionSequencesTable.id, anyActiveRetention.sequenceId));
+
+        const activePriority = activeSeq ? getSequencePriority(activeSeq.type) : 0;
+        const newPriority = getSequencePriority(sequence.type);
+
+        if (newPriority <= activePriority) {
+          continue;
+        }
+
+        await db.update(memberSequenceEnrollmentsTable).set({
+          status: "exited",
+          exitReason: "superseded",
+          completedAt: new Date(),
+        }).where(eq(memberSequenceEnrollmentsTable.id, anyActiveRetention.id));
+
+        await db.insert(retentionSequenceEventsTable).values({
+          gymId,
+          enrollmentId: anyActiveRetention.id,
+          memberId: member.id,
+          sequenceId: anyActiveRetention.sequenceId,
+          eventType: "exit_superseded",
+          stepIndex: 0,
+          details: `Superseded by higher-priority sequence "${sequence.name}" (${sequence.type})`,
+        });
+
+        console.log(`[retention-engine] Superseded enrollment ${anyActiveRetention.id} for member ${member.id} with higher-priority ${sequence.type}`);
+      }
 
       const [recentExit] = await db.select({ completedAt: memberSequenceEnrollmentsTable.completedAt })
         .from(memberSequenceEnrollmentsTable)
@@ -134,6 +193,7 @@ async function evaluateTriggersForGym(gymId: number, opts?: number | EvaluateTri
         details: `Auto-enrolled via ${trigger.type} trigger`,
       });
 
+      enrolledThisTick++;
       console.log(`[retention-engine] Enrolled member ${member.id} in sequence "${sequence.name}" (gym ${gymId})`);
     }
   }
@@ -185,15 +245,37 @@ function evaluateTrigger(trigger: TriggerConfig, member: {
 async function advanceDueSteps(gymId: number): Promise<void> {
   const now = new Date();
 
+  const [gym] = await db.select().from(gymsTable).where(eq(gymsTable.id, gymId));
+  const timezone = gym?.timezone || "America/New_York";
+
+  if (isWithinQuietHours(timezone)) {
+    const nextOpen = getNextBusinessHourDate(timezone);
+    const deferCount = await db.update(memberSequenceEnrollmentsTable).set({
+      nextActionAt: nextOpen,
+    }).where(and(
+      eq(memberSequenceEnrollmentsTable.gymId, gymId),
+      sql`${memberSequenceEnrollmentsTable.status} IN ('active', 'retry_pending')`,
+      lte(memberSequenceEnrollmentsTable.nextActionAt, now)
+    ));
+    console.log(`[retention-engine] Quiet hours for gym ${gymId} (${timezone}), deferred due steps to ${nextOpen.toISOString()}`);
+    return;
+  }
+
   const dueEnrollments = await db.select().from(memberSequenceEnrollmentsTable)
     .where(and(
       eq(memberSequenceEnrollmentsTable.gymId, gymId),
-      eq(memberSequenceEnrollmentsTable.status, "active"),
+      or(
+        eq(memberSequenceEnrollmentsTable.status, "active"),
+        eq(memberSequenceEnrollmentsTable.status, "retry_pending")
+      ),
       lte(memberSequenceEnrollmentsTable.nextActionAt, now)
-    ));
+    ))
+    .limit(ENROLLMENT_BATCH_LIMIT);
 
   for (const enrollment of dueEnrollments) {
     try {
+      const isRetry = enrollment.status === "retry_pending";
+
       const [member] = await db.select().from(membersTable)
         .where(eq(membersTable.id, enrollment.memberId));
 
@@ -223,7 +305,33 @@ async function advanceDueSteps(gymId: number): Promise<void> {
       }
 
       const currentStep = steps[enrollment.currentStepIndex];
-      const [gym] = await db.select().from(gymsTable).where(eq(gymsTable.id, gymId));
+
+      if (currentStep.actionType === "email" && member.tags.includes("email-opt-out")) {
+        console.log(`[retention-engine] Skipping email step for opted-out member ${member.id}`);
+        await db.insert(retentionSequenceEventsTable).values({
+          gymId,
+          enrollmentId: enrollment.id,
+          memberId: member.id,
+          sequenceId: enrollment.sequenceId,
+          eventType: "step_skipped",
+          stepIndex: enrollment.currentStepIndex,
+          details: "Skipped: member opted out of email",
+        });
+
+        const nextStepIndex = enrollment.currentStepIndex + 1;
+        if (nextStepIndex >= steps.length) {
+          await exitEnrollment(enrollment.id, gymId, enrollment.memberId, enrollment.sequenceId, nextStepIndex, "completed");
+        } else {
+          const nextStep = steps[nextStepIndex];
+          const nextActionAt = new Date(now.getTime() + nextStep.delayDays * 24 * 60 * 60 * 1000);
+          await db.update(memberSequenceEnrollmentsTable).set({
+            status: "active",
+            currentStepIndex: nextStepIndex,
+            nextActionAt,
+          }).where(eq(memberSequenceEnrollmentsTable.id, enrollment.id));
+        }
+        continue;
+      }
 
       const templateVars: Record<string, string> = {
         first_name: member.firstName,
@@ -233,7 +341,29 @@ async function advanceDueSteps(gymId: number): Promise<void> {
       };
 
       const stepConfig = currentStep.config as Record<string, any>;
-      await executeStep(currentStep.actionType, stepConfig, templateVars, member, gym, gymId, enrollment.id, enrollment.sequenceId, enrollment.currentStepIndex);
+      const sendResult = await executeStep(currentStep.actionType, stepConfig, templateVars, member, gym, gymId, enrollment.id, enrollment.sequenceId, enrollment.currentStepIndex);
+
+      if (sendResult === "failed") {
+        if (isRetry) {
+          console.error(`[retention-engine] Retry failed for enrollment ${enrollment.id}, advancing past failed step`);
+          await db.insert(retentionSequenceEventsTable).values({
+            gymId,
+            enrollmentId: enrollment.id,
+            memberId: member.id,
+            sequenceId: enrollment.sequenceId,
+            eventType: "step_failed",
+            stepIndex: enrollment.currentStepIndex,
+            details: "Step failed after retry, advancing to next step",
+          });
+        } else {
+          console.log(`[retention-engine] Step send failed for enrollment ${enrollment.id}, scheduling retry`);
+          await db.update(memberSequenceEnrollmentsTable).set({
+            status: "retry_pending",
+            nextActionAt: new Date(now.getTime() + RETRY_DELAY_MS),
+          }).where(eq(memberSequenceEnrollmentsTable.id, enrollment.id));
+          continue;
+        }
+      }
 
       const nextStepIndex = enrollment.currentStepIndex + 1;
       if (nextStepIndex >= steps.length) {
@@ -242,21 +372,57 @@ async function advanceDueSteps(gymId: number): Promise<void> {
         const nextStep = steps[nextStepIndex];
         const nextActionAt = new Date(now.getTime() + nextStep.delayDays * 24 * 60 * 60 * 1000);
         await db.update(memberSequenceEnrollmentsTable).set({
+          status: "active",
           currentStepIndex: nextStepIndex,
           nextActionAt,
         }).where(eq(memberSequenceEnrollmentsTable.id, enrollment.id));
       }
     } catch (err: any) {
       console.error(`[retention-engine] Error advancing enrollment ${enrollment.id}:`, err.message);
-      await db.insert(retentionSequenceEventsTable).values({
-        gymId,
-        enrollmentId: enrollment.id,
-        memberId: enrollment.memberId,
-        sequenceId: enrollment.sequenceId,
-        eventType: "step_error",
-        stepIndex: enrollment.currentStepIndex,
-        details: `Error: ${err.message}`,
-      });
+
+      const isRetry = enrollment.status === "retry_pending";
+      if (isRetry) {
+        await db.insert(retentionSequenceEventsTable).values({
+          gymId,
+          enrollmentId: enrollment.id,
+          memberId: enrollment.memberId,
+          sequenceId: enrollment.sequenceId,
+          eventType: "step_failed",
+          stepIndex: enrollment.currentStepIndex,
+          details: `Failed after retry: ${err.message}`,
+        });
+
+        const steps = await db.select().from(retentionSequenceStepsTable)
+          .where(eq(retentionSequenceStepsTable.sequenceId, enrollment.sequenceId))
+          .orderBy(asc(retentionSequenceStepsTable.stepOrder));
+
+        const nextStepIndex = enrollment.currentStepIndex + 1;
+        if (nextStepIndex >= steps.length) {
+          await exitEnrollment(enrollment.id, gymId, enrollment.memberId, enrollment.sequenceId, nextStepIndex, "completed");
+        } else {
+          const nextStep = steps[nextStepIndex];
+          await db.update(memberSequenceEnrollmentsTable).set({
+            status: "active",
+            currentStepIndex: nextStepIndex,
+            nextActionAt: new Date(Date.now() + nextStep.delayDays * 24 * 60 * 60 * 1000),
+          }).where(eq(memberSequenceEnrollmentsTable.id, enrollment.id));
+        }
+      } else {
+        await db.insert(retentionSequenceEventsTable).values({
+          gymId,
+          enrollmentId: enrollment.id,
+          memberId: enrollment.memberId,
+          sequenceId: enrollment.sequenceId,
+          eventType: "step_error",
+          stepIndex: enrollment.currentStepIndex,
+          details: `Error (will retry): ${err.message}`,
+        });
+
+        await db.update(memberSequenceEnrollmentsTable).set({
+          status: "retry_pending",
+          nextActionAt: new Date(Date.now() + RETRY_DELAY_MS),
+        }).where(eq(memberSequenceEnrollmentsTable.id, enrollment.id));
+      }
     }
   }
 }
@@ -271,20 +437,25 @@ async function executeStep(
   enrollmentId: number,
   sequenceId: number,
   stepIndex: number,
-): Promise<void> {
+): Promise<"success" | "failed" | "skipped"> {
   if (actionType === "email") {
     const subject = renderTemplate(config.subject || "", vars);
     const body = renderTemplate(config.body || "", vars);
     const emailService = getEmailService();
 
     if (emailService.isConfigured()) {
+      const unsubscribeUrl = buildUnsubscribeUrl(member.id, gymId);
+      const unsubscribeFooter = `<div style="text-align:center;padding:16px;font-size:12px;color:#9ca3af;"><a href="${unsubscribeUrl}" style="color:#9ca3af;text-decoration:underline;">Unsubscribe from these emails</a></div>`;
+
+      const htmlBody = `<div style="font-family:sans-serif;white-space:pre-line;">${body}</div>${unsubscribeFooter}`;
+
       const result = await sendMemberEmail({
         memberId: member.id,
         gymId,
         to: member.email,
         subject,
-        text: body,
-        html: `<div style="font-family:sans-serif;white-space:pre-line;">${body}</div>`,
+        text: body + `\n\nUnsubscribe: ${unsubscribeUrl}`,
+        html: htmlBody,
         fromEmail: gym?.fromEmail || undefined,
         fromName: gym?.fromName || gym?.name || undefined,
         emailType: "retention",
@@ -301,6 +472,8 @@ async function executeStep(
         details: result.success ? `Email sent: ${subject}` : `Email failed: ${result.error}`,
         metadata: { messageId: result.messageId },
       });
+
+      return result.success ? "success" : "failed";
     } else {
       await db.insert(retentionSequenceEventsTable).values({
         gymId,
@@ -311,6 +484,7 @@ async function executeStep(
         stepIndex,
         details: "No email service configured",
       });
+      return "skipped";
     }
   } else if (actionType === "task") {
     const title = renderTemplate(config.title || "", vars);
@@ -336,7 +510,9 @@ async function executeStep(
       stepIndex,
       details: `Task created: ${title}`,
     });
+    return "success";
   }
+  return "skipped";
 }
 
 async function exitEnrollment(
@@ -382,8 +558,6 @@ async function runRetentionForAllGyms(): Promise<void> {
     return;
   }
 
-  let totalEnrolled = 0;
-  let totalAdvanced = 0;
   let totalErrors = 0;
 
   for (const gym of gyms) {
@@ -434,7 +608,7 @@ async function exitMemberSequences(memberId: number, gymId: number, reason: stri
     .where(and(
       eq(memberSequenceEnrollmentsTable.memberId, memberId),
       eq(memberSequenceEnrollmentsTable.gymId, gymId),
-      eq(memberSequenceEnrollmentsTable.status, "active")
+      sql`${memberSequenceEnrollmentsTable.status} IN ('active', 'retry_pending')`
     ));
 
   for (const enrollment of activeEnrollments) {

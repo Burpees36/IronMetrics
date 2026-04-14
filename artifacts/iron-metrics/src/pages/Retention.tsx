@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useGym } from "@/store/GymContext";
 import { useToast } from "@/hooks/use-toast";
 import { motion, AnimatePresence } from "framer-motion";
@@ -7,9 +7,20 @@ import {
   Users, Mail, ClipboardList, Clock, Trash2, Play, Square,
   UserMinus, ArrowLeft, AlertCircle, CheckCircle2, XCircle,
   Zap, Shield, Heart, Sparkles, Settings2, Activity,
-  HelpCircle, X, Info, PauseCircle, UserPlus
+  HelpCircle, X, Info, PauseCircle, UserPlus,
+  ChevronDown, ChevronUp, ArrowUp, ArrowDown, Eye, EyeOff,
+  ExternalLink, AlertTriangle
 } from "lucide-react";
+import { Link } from "wouter";
 import { EnrollMemberDialog } from "@/components/EnrollMemberDialog";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { useGetGym } from "@workspace/api-client-react";
+import { PageError } from "@/components/ui/page-error";
+
+import { authFetch } from "@/lib/authFetch";
 
 const API_BASE = import.meta.env.VITE_API_URL || "";
 
@@ -67,9 +78,11 @@ interface SequenceEvent {
   eventType: string;
   stepIndex: number | null;
   details: string | null;
+  metadata?: Record<string, any> | null;
   createdAt: string;
   memberFirstName: string;
   memberLastName: string;
+  sequenceName?: string;
 }
 
 const TYPE_ICONS: Record<string, typeof Zap> = {
@@ -91,7 +104,7 @@ const TYPE_COLORS: Record<string, string> = {
 };
 
 function apiFetch(url: string, opts?: RequestInit) {
-  return fetch(`${API_BASE}${url}`, { credentials: "include", ...opts });
+  return authFetch(`${API_BASE}${url}`, opts);
 }
 
 function TabHint({ children }: { children: React.ReactNode }) {
@@ -242,24 +255,32 @@ export function Retention() {
   const [enrollments, setEnrollments] = useState<Enrollment[]>([]);
   const [events, setEvents] = useState<SequenceEvent[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [selectedSequence, setSelectedSequence] = useState<Sequence | null>(null);
   const [activeTab, setActiveTab] = useState<"sequences" | "enrollments" | "activity">("sequences");
   const [showGuide, setShowGuide] = useState(true);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [showEnrollDialog, setShowEnrollDialog] = useState(false);
+  const [expandedEventId, setExpandedEventId] = useState<number | null>(null);
 
   const loadData = useCallback(async () => {
     if (!activeGymId) return;
+    setLoadError(false);
     try {
       const [seqRes, enrollRes, eventsRes] = await Promise.all([
         apiFetch(`/api/gyms/${activeGymId}/retention/sequences`),
         apiFetch(`/api/gyms/${activeGymId}/retention/enrollments`),
         apiFetch(`/api/gyms/${activeGymId}/retention/events?limit=30`),
       ]);
-      if (seqRes.ok) setSequences(await seqRes.json());
+      if (!seqRes.ok) {
+        setLoadError(true);
+      } else {
+        setSequences(await seqRes.json());
+      }
       if (enrollRes.ok) setEnrollments(await enrollRes.json());
       if (eventsRes.ok) setEvents(await eventsRes.json());
     } catch {
+      setLoadError(true);
     } finally {
       setLoading(false);
     }
@@ -339,6 +360,16 @@ export function Retention() {
       <div className="h-full flex items-center justify-center">
         <Loader2 className="h-8 w-8 text-primary animate-spin" />
       </div>
+    );
+  }
+
+  if (loadError && sequences.length === 0) {
+    return (
+      <PageError
+        title="Unable to load retention data"
+        message="We couldn't load your retention sequences. Check your connection and try again."
+        onRetry={() => { setLoading(true); loadData(); }}
+      />
     );
   }
 
@@ -608,22 +639,117 @@ export function Retention() {
                   </p>
                 </div>
               ) : (
-                events.map(event => (
-                  <div key={event.id} className="bg-card border border-border rounded-xl px-4 py-3 flex items-center gap-3">
-                    <div className={`h-7 w-7 rounded-lg flex items-center justify-center shrink-0 ${getEventStyle(event.eventType)}`}>
-                      {getEventIcon(event.eventType)}
+                events.map(event => {
+                  const isFail = isFailureEventType(event.eventType);
+                  const isExpanded = expandedEventId === event.id;
+                  const seqName = event.sequenceName || sequences.find(s => s.id === event.sequenceId)?.name;
+
+                  return (
+                    <div key={event.id} className={`bg-card border rounded-xl overflow-hidden transition-colors duration-150 ${isFail ? "border-red-500/30" : "border-border"}`}>
+                      <button
+                        type="button"
+                        onClick={() => setExpandedEventId(isExpanded ? null : event.id)}
+                        className={`w-full px-4 py-3 flex items-center gap-3 text-left transition-colors duration-150 cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-inset
+                          ${isFail ? "hover:bg-red-500/5" : "hover:bg-muted/30"}
+                          ${isExpanded ? (isFail ? "bg-red-500/5" : "bg-muted/20") : ""}
+                        `}
+                      >
+                        <div className={`h-7 w-7 rounded-lg flex items-center justify-center shrink-0 ${getEventStyle(event.eventType)}`}>
+                          {getEventIcon(event.eventType)}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs text-foreground">
+                            <Link href={`/members/${event.memberId}`}>
+                              <span className="font-medium text-primary hover:text-primary/80 hover:underline transition-colors" onClick={(e) => e.stopPropagation()}>
+                                {event.memberFirstName} {event.memberLastName}
+                              </span>
+                            </Link>
+                            {" "}&mdash;{" "}
+                            <span className={isFail ? "text-red-600 dark:text-red-400 font-medium" : ""}>
+                              {event.details || event.eventType.replace(/_/g, " ")}
+                            </span>
+                          </p>
+                          {seqName && (
+                            <Link href="/retention">
+                              <p className="text-[10px] text-primary/70 hover:text-primary hover:underline mt-0.5 truncate transition-colors" onClick={(e) => e.stopPropagation()}>
+                                {seqName}
+                              </p>
+                            </Link>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span className="text-[10px] text-muted-foreground whitespace-nowrap">
+                            {new Date(event.createdAt).toLocaleString()}
+                          </span>
+                          <ChevronDown className={`h-3.5 w-3.5 text-muted-foreground transition-transform duration-200 ${isExpanded ? "rotate-180" : ""}`} />
+                        </div>
+                      </button>
+
+                      <AnimatePresence>
+                        {isExpanded && (
+                          <motion.div
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: "auto", opacity: 1 }}
+                            exit={{ height: 0, opacity: 0 }}
+                            transition={{ duration: 0.2 }}
+                            className="overflow-hidden"
+                          >
+                            <div className="px-4 pb-3 pt-1 ml-10 space-y-2 border-t border-border/50">
+                              <div className="flex items-center gap-2 pt-2">
+                                <span className="text-[10px] text-muted-foreground w-16 shrink-0">Member</span>
+                                <Link href={`/members/${event.memberId}`}>
+                                  <span className="text-[11px] font-medium text-primary hover:text-primary/80 hover:underline inline-flex items-center gap-0.5 transition-colors">
+                                    {event.memberFirstName} {event.memberLastName}
+                                    <ExternalLink className="h-2.5 w-2.5" />
+                                  </span>
+                                </Link>
+                              </div>
+                              {seqName && (
+                                <div className="flex items-center gap-2">
+                                  <span className="text-[10px] text-muted-foreground w-16 shrink-0">Sequence</span>
+                                  <Link href="/retention">
+                                    <span className="text-[11px] font-medium text-primary hover:text-primary/80 hover:underline inline-flex items-center gap-0.5 transition-colors">
+                                      {seqName}
+                                      <ExternalLink className="h-2.5 w-2.5" />
+                                    </span>
+                                  </Link>
+                                </div>
+                              )}
+                              {event.stepIndex != null && (
+                                <div className="flex items-center gap-2">
+                                  <span className="text-[10px] text-muted-foreground w-16 shrink-0">Step</span>
+                                  <span className="text-[11px] text-foreground">#{event.stepIndex + 1}</span>
+                                </div>
+                              )}
+                              {event.details && (
+                                <div className="flex items-start gap-2">
+                                  <span className="text-[10px] text-muted-foreground w-16 shrink-0">Details</span>
+                                  <span className={`text-[11px] ${isFail ? "text-red-500" : "text-foreground"}`}>
+                                    {event.details}
+                                  </span>
+                                </div>
+                              )}
+                              {event.metadata && typeof event.metadata === "object" && Object.keys(event.metadata).length > 0 && (
+                                <div className="flex items-start gap-2">
+                                  <span className="text-[10px] text-muted-foreground w-16 shrink-0">Metadata</span>
+                                  <span className="text-[10px] text-muted-foreground font-mono">
+                                    {Object.entries(event.metadata).map(([k, v]) => `${k}: ${typeof v === "object" ? JSON.stringify(v) : String(v)}`).join(", ")}
+                                  </span>
+                                </div>
+                              )}
+                              <div className="flex items-center gap-2">
+                                <span className="text-[10px] text-muted-foreground w-16 shrink-0">Time</span>
+                                <span className="text-[10px] text-muted-foreground">
+                                  {new Date(event.createdAt).toLocaleString()}
+                                </span>
+                              </div>
+                            </div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs text-foreground">
-                        <span className="font-medium">{event.memberFirstName} {event.memberLastName}</span>
-                        {" "}&mdash; {event.details || event.eventType}
-                      </p>
-                      <p className="text-[10px] text-muted-foreground mt-0.5">
-                        {new Date(event.createdAt).toLocaleString()}
-                      </p>
-                    </div>
-                  </div>
-                ))
+                  );
+                })
               )}
             </motion.div>
           )}
@@ -656,6 +782,7 @@ function getTriggerSummary(trigger: TriggerConfig): string {
 
 function getEventStyle(type: string): string {
   if (type.includes("email_sent")) return "bg-blue-500/15 text-blue-500";
+  if (type.includes("email_failed") || type.includes("email_skipped")) return "bg-red-500/15 text-red-500";
   if (type.includes("task")) return "bg-amber-500/15 text-amber-500";
   if (type.includes("enrolled")) return "bg-emerald-500/15 text-emerald-500";
   if (type.includes("exit") || type.includes("completed")) return "bg-muted/30 text-muted-foreground";
@@ -664,16 +791,102 @@ function getEventStyle(type: string): string {
 }
 
 function getEventIcon(type: string) {
+  if (type.includes("failed") || type.includes("skipped") || type.includes("error")) return <AlertTriangle className="h-3.5 w-3.5" />;
   if (type.includes("email")) return <Mail className="h-3.5 w-3.5" />;
   if (type.includes("task")) return <ClipboardList className="h-3.5 w-3.5" />;
   if (type.includes("enrolled")) return <Play className="h-3.5 w-3.5" />;
   if (type.includes("exit") || type.includes("completed")) return <Square className="h-3.5 w-3.5" />;
-  if (type.includes("error")) return <AlertCircle className="h-3.5 w-3.5" />;
   return <Activity className="h-3.5 w-3.5" />;
+}
+
+function isFailureEventType(type: string): boolean {
+  return type === "email_failed" || type === "email_skipped" || type === "step_error";
+}
+
+const TEMPLATE_VARIABLES = [
+  { label: "first_name", value: "{{first_name}}" },
+  { label: "last_name", value: "{{last_name}}" },
+  { label: "gym_name", value: "{{gym_name}}" },
+  { label: "member_email", value: "{{member_email}}" },
+];
+
+function getSampleData(gymName?: string): Record<string, string> {
+  return {
+    "{{first_name}}": "Sarah",
+    "{{last_name}}": "Johnson",
+    "{{gym_name}}": gymName || "Your Gym",
+    "{{member_email}}": "sarah@example.com",
+  };
+}
+
+function insertAtCursor(ref: React.RefObject<HTMLTextAreaElement | null>, value: string, currentValue: string, onChange: (val: string) => void) {
+  const el = ref.current;
+  if (!el) {
+    onChange(currentValue + value);
+    return;
+  }
+  const start = el.selectionStart;
+  const end = el.selectionEnd;
+  const newValue = currentValue.substring(0, start) + value + currentValue.substring(end);
+  onChange(newValue);
+  requestAnimationFrame(() => {
+    el.focus();
+    el.selectionStart = el.selectionEnd = start + value.length;
+  });
+}
+
+function VariableChips({ textareaRef, currentValue, onChange }: {
+  textareaRef: React.RefObject<HTMLTextAreaElement | null>;
+  currentValue: string;
+  onChange: (val: string) => void;
+}) {
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {TEMPLATE_VARIABLES.map((v) => (
+        <button
+          key={v.label}
+          type="button"
+          onClick={() => insertAtCursor(textareaRef, v.value, currentValue, onChange)}
+          className="px-2 py-0.5 rounded-md bg-primary/10 text-primary text-xs font-mono hover:bg-primary/20 transition-colors"
+        >
+          {v.value}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function renderPreview(text: string, gymName?: string): string {
+  let result = text;
+  for (const [key, val] of Object.entries(getSampleData(gymName))) {
+    result = result.split(key).join(val);
+  }
+  return result;
+}
+
+function EmailPreview({ subject, body, gymName }: { subject: string; body: string; gymName?: string }) {
+  return (
+    <div className="bg-muted/30 border border-border rounded-lg p-4 space-y-2">
+      <div className="flex items-center gap-2 mb-2">
+        <Eye className="h-3.5 w-3.5 text-muted-foreground" />
+        <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Preview with sample data</span>
+      </div>
+      {subject && (
+        <div className="pb-2 border-b border-border/50">
+          <span className="text-xs text-muted-foreground">Subject: </span>
+          <span className="text-sm font-medium text-foreground">{renderPreview(subject, gymName)}</span>
+        </div>
+      )}
+      <div className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">
+        {renderPreview(body, gymName) || <span className="text-muted-foreground italic">No body content</span>}
+      </div>
+    </div>
+  );
 }
 
 function CreateSequenceForm({ gymId, onBack }: { gymId: number; onBack: () => void }) {
   const { toast } = useToast();
+  const { data: gym } = useGetGym(gymId, { query: { enabled: !!gymId } });
   const [saving, setSaving] = useState(false);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -687,6 +900,10 @@ function CreateSequenceForm({ gymId, onBack }: { gymId: number; onBack: () => vo
     { actionType: "email", delayDays: 0, config: { subject: "", body: "" } },
   ]);
 
+  const bodyRefs = useRef<Record<number, HTMLTextAreaElement | null>>({});
+  const descRefs = useRef<Record<number, HTMLTextAreaElement | null>>({});
+  const [previewStepIndex, setPreviewStepIndex] = useState<number | null>(null);
+
   const addStep = (type: string) => {
     setSteps(prev => [...prev, {
       actionType: type,
@@ -697,6 +914,18 @@ function CreateSequenceForm({ gymId, onBack }: { gymId: number; onBack: () => vo
 
   const removeStep = (index: number) => {
     setSteps(prev => prev.filter((_, i) => i !== index));
+    if (previewStepIndex === index) setPreviewStepIndex(null);
+    else if (previewStepIndex !== null && previewStepIndex > index) setPreviewStepIndex(previewStepIndex - 1);
+  };
+
+  const swapSteps = (a: number, b: number) => {
+    setSteps(prev => {
+      const next = [...prev];
+      [next[a], next[b]] = [next[b], next[a]];
+      return next;
+    });
+    if (previewStepIndex === a) setPreviewStepIndex(b);
+    else if (previewStepIndex === b) setPreviewStepIndex(a);
   };
 
   const handleCreate = async () => {
@@ -825,25 +1054,35 @@ function CreateSequenceForm({ gymId, onBack }: { gymId: number; onBack: () => vo
         <div className="bg-card border border-border rounded-xl p-4 space-y-3">
           <div>
             <h3 className="text-sm font-medium text-foreground">Steps</h3>
-            <p className="text-[10px] text-muted-foreground mt-0.5">
-              Build the sequence of actions. Use {"{{first_name}}"}, {"{{last_name}}"}, {"{{gym_name}}"} — these are replaced with real values when sent.
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Build the sequence of actions. Use the variable chips below each field to insert placeholders.
             </p>
           </div>
           {steps.map((step, i) => (
-            <div key={i} className="border border-border rounded-lg p-3 space-y-2">
+            <div key={i} className="border border-border rounded-lg p-3 space-y-2.5">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-medium text-foreground flex items-center gap-1.5">
+                <span className="text-sm font-medium text-foreground flex items-center gap-1.5">
                   {step.actionType === "email" ? <Mail className="h-3.5 w-3.5 text-blue-500" /> : <ClipboardList className="h-3.5 w-3.5 text-amber-500" />}
                   Step {i + 1}: {step.actionType === "email" ? "Send Email" : "Create Staff Task"}
                 </span>
                 <div className="flex items-center gap-2">
-                  <label className="text-[10px] text-muted-foreground">Wait:</label>
+                  {i > 0 && (
+                    <button type="button" onClick={() => swapSteps(i, i - 1)} className="p-1 rounded hover:bg-muted/50 text-muted-foreground hover:text-foreground transition-colors" title="Move up">
+                      <ArrowUp className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                  {i < steps.length - 1 && (
+                    <button type="button" onClick={() => swapSteps(i, i + 1)} className="p-1 rounded hover:bg-muted/50 text-muted-foreground hover:text-foreground transition-colors" title="Move down">
+                      <ArrowDown className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                  <label className="text-xs text-muted-foreground">Delay:</label>
                   <input type="number" value={step.delayDays}
                     onChange={(e) => setSteps(prev => prev.map((s, idx) => idx === i ? { ...s, delayDays: Number(e.target.value) } : s))}
-                    className="w-14 px-2 py-1 bg-background border border-border rounded text-xs text-center focus:outline-none focus:ring-1 focus:ring-primary" />
-                  <span className="text-[10px] text-muted-foreground">days</span>
+                    className="w-14 px-2 py-1 bg-background border border-border rounded text-sm text-center focus:outline-none focus:ring-1 focus:ring-primary" />
+                  <span className="text-xs text-muted-foreground">days</span>
                   <button onClick={() => removeStep(i)} className="p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors">
-                    <Trash2 className="h-3 w-3" />
+                    <Trash2 className="h-3.5 w-3.5" />
                   </button>
                 </div>
               </div>
@@ -851,20 +1090,45 @@ function CreateSequenceForm({ gymId, onBack }: { gymId: number; onBack: () => vo
                 <>
                   <input value={step.config.subject || ""} onChange={(e) => {
                     const newSteps = [...steps]; newSteps[i] = { ...step, config: { ...step.config, subject: e.target.value } }; setSteps(newSteps);
-                  }} placeholder="Email subject line" className="w-full px-2 py-1.5 bg-background border border-border rounded text-xs focus:outline-none focus:ring-1 focus:ring-primary" />
-                  <textarea value={step.config.body || ""} onChange={(e) => {
-                    const newSteps = [...steps]; newSteps[i] = { ...step, config: { ...step.config, body: e.target.value } }; setSteps(newSteps);
-                  }} rows={4} placeholder="Hey {{first_name}}, we've missed seeing you at {{gym_name}}..."
-                    className="w-full px-2 py-1.5 bg-background border border-border rounded text-xs focus:outline-none focus:ring-1 focus:ring-primary resize-none" />
+                  }} placeholder="Email subject line" className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary" />
+                  <textarea
+                    ref={(el) => { bodyRefs.current[i] = el; }}
+                    value={step.config.body || ""} onChange={(e) => {
+                      const newSteps = [...steps]; newSteps[i] = { ...step, config: { ...step.config, body: e.target.value } }; setSteps(newSteps);
+                    }} rows={8} placeholder="Hey {{first_name}}, we've missed seeing you at {{gym_name}}..."
+                    className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm leading-relaxed focus:outline-none focus:ring-1 focus:ring-primary resize-y min-h-[160px]" />
+                  <VariableChips
+                    textareaRef={{ current: bodyRefs.current[i] ?? null }}
+                    currentValue={step.config.body || ""}
+                    onChange={(val) => { const newSteps = [...steps]; newSteps[i] = { ...step, config: { ...step.config, body: val } }; setSteps(newSteps); }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setPreviewStepIndex(previewStepIndex === i ? null : i)}
+                    className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    {previewStepIndex === i ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                    {previewStepIndex === i ? "Hide Preview" : "Preview"}
+                  </button>
+                  {previewStepIndex === i && (
+                    <EmailPreview subject={step.config.subject || ""} body={step.config.body || ""} gymName={gym?.name} />
+                  )}
                 </>
               ) : (
                 <>
                   <input value={step.config.title || ""} onChange={(e) => {
                     const newSteps = [...steps]; newSteps[i] = { ...step, config: { ...step.config, title: e.target.value } }; setSteps(newSteps);
-                  }} placeholder="Task title for your staff" className="w-full px-2 py-1.5 bg-background border border-border rounded text-xs focus:outline-none focus:ring-1 focus:ring-primary" />
-                  <textarea value={step.config.description || ""} onChange={(e) => {
-                    const newSteps = [...steps]; newSteps[i] = { ...step, config: { ...step.config, description: e.target.value } }; setSteps(newSteps);
-                  }} rows={2} placeholder="What should the staff do?" className="w-full px-2 py-1.5 bg-background border border-border rounded text-xs focus:outline-none focus:ring-1 focus:ring-primary resize-none" />
+                  }} placeholder="Task title for your staff" className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary" />
+                  <textarea
+                    ref={(el) => { descRefs.current[i] = el; }}
+                    value={step.config.description || ""} onChange={(e) => {
+                      const newSteps = [...steps]; newSteps[i] = { ...step, config: { ...step.config, description: e.target.value } }; setSteps(newSteps);
+                    }} rows={5} placeholder="What should the staff do?" className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm leading-relaxed focus:outline-none focus:ring-1 focus:ring-primary resize-y min-h-[100px]" />
+                  <VariableChips
+                    textareaRef={{ current: descRefs.current[i] ?? null }}
+                    currentValue={step.config.description || ""}
+                    onChange={(val) => { const newSteps = [...steps]; newSteps[i] = { ...step, config: { ...step.config, description: val } }; setSteps(newSteps); }}
+                  />
                 </>
               )}
             </div>
@@ -893,18 +1157,33 @@ function CreateSequenceForm({ gymId, onBack }: { gymId: number; onBack: () => vo
 
 function SequenceDetail({ sequence, onBack, gymId }: { sequence: Sequence; onBack: () => void; gymId: number }) {
   const { toast } = useToast();
+  const { data: gym } = useGetGym(gymId, { query: { enabled: !!gymId } });
   const [editMode, setEditMode] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [name, setName] = useState(sequence.name);
   const [description, setDescription] = useState(sequence.description || "");
   const [triggerConfig, setTriggerConfig] = useState<TriggerConfig>(sequence.triggerConfig as TriggerConfig);
   const [cooldownDays, setCooldownDays] = useState(sequence.cooldownDays);
   const [steps, setSteps] = useState<SequenceStep[]>(sequence.steps || []);
   const [showEnrollDialog, setShowEnrollDialog] = useState(false);
+  const editBodyRefs = useRef<Record<number, HTMLTextAreaElement | null>>({});
+  const editDescRefs = useRef<Record<number, HTMLTextAreaElement | null>>({});
+  const [editPreviewIndex, setEditPreviewIndex] = useState<number | null>(null);
 
   const Icon = TYPE_ICONS[sequence.type] || Settings2;
   const colorClass = TYPE_COLORS[sequence.type] || TYPE_COLORS.custom;
+
+  const swapEditSteps = (a: number, b: number) => {
+    setSteps(prev => {
+      const next = [...prev];
+      [next[a], next[b]] = [next[b], next[a]];
+      return next.map((s, idx) => ({ ...s, stepOrder: idx }));
+    });
+    if (editPreviewIndex === a) setEditPreviewIndex(b);
+    else if (editPreviewIndex === b) setEditPreviewIndex(a);
+  };
 
   const handleSave = async () => {
     setSaving(true);
@@ -968,7 +1247,7 @@ function SequenceDetail({ sequence, onBack, gymId }: { sequence: Sequence; onBac
                 Enroll
               </button>
               <button
-                onClick={handleDelete}
+                onClick={() => setShowDeleteConfirm(true)}
                 disabled={deleting}
                 className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
                 title="Delete sequence"
@@ -991,7 +1270,7 @@ function SequenceDetail({ sequence, onBack, gymId }: { sequence: Sequence; onBac
       {editMode ? (
         <div className="space-y-4">
           <TabHint>
-            Edit your sequence settings below. The {"{{first_name}}"}, {"{{last_name}}"}, and {"{{gym_name}}"} placeholders will be replaced with real values when emails are sent — you don't need to type actual names.
+            Edit your sequence settings below. Use the variable chips below each field to insert placeholders — they'll be replaced with real values when sent.
           </TabHint>
 
           <div className="bg-card border border-border rounded-xl p-4 space-y-3">
@@ -1058,36 +1337,72 @@ function SequenceDetail({ sequence, onBack, gymId }: { sequence: Sequence; onBac
           <div className="bg-card border border-border rounded-xl p-4 space-y-3">
             <div>
               <h3 className="text-sm font-medium text-foreground">Steps ({steps.length})</h3>
-              <p className="text-[10px] text-muted-foreground mt-0.5">Available placeholders: {"{{first_name}}"}, {"{{last_name}}"}, {"{{gym_name}}"}, {"{{member_email}}"}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Use the variable chips below each field to insert placeholders.</p>
             </div>
             {steps.map((step, i) => (
-              <div key={i} className="border border-border rounded-lg p-3 space-y-2">
+              <div key={i} className="border border-border rounded-lg p-3 space-y-2.5">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-medium text-foreground flex items-center gap-1.5">
+                  <span className="text-sm font-medium text-foreground flex items-center gap-1.5">
                     {step.actionType === "email" ? <Mail className="h-3.5 w-3.5 text-blue-500" /> : <ClipboardList className="h-3.5 w-3.5 text-amber-500" />}
                     Step {i + 1}: {step.actionType === "email" ? "Send Email" : "Create Task"}
                   </span>
                   <div className="flex items-center gap-2">
-                    <label className="text-[10px] text-muted-foreground">Delay:</label>
+                    {i > 0 && (
+                      <button type="button" onClick={() => swapEditSteps(i, i - 1)} className="p-1 rounded hover:bg-muted/50 text-muted-foreground hover:text-foreground transition-colors" title="Move up">
+                        <ArrowUp className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                    {i < steps.length - 1 && (
+                      <button type="button" onClick={() => swapEditSteps(i, i + 1)} className="p-1 rounded hover:bg-muted/50 text-muted-foreground hover:text-foreground transition-colors" title="Move down">
+                        <ArrowDown className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                    <label className="text-xs text-muted-foreground">Delay:</label>
                     <input type="number" value={step.delayDays} onChange={(e) => setSteps(prev => prev.map((s, idx) => idx === i ? { ...s, delayDays: Number(e.target.value) } : s))}
-                      className="w-14 px-2 py-1 bg-background border border-border rounded text-xs text-center focus:outline-none focus:ring-1 focus:ring-primary" />
-                    <span className="text-[10px] text-muted-foreground">days</span>
+                      className="w-14 px-2 py-1 bg-background border border-border rounded text-sm text-center focus:outline-none focus:ring-1 focus:ring-primary" />
+                    <span className="text-xs text-muted-foreground">days</span>
                   </div>
                 </div>
                 {step.actionType === "email" && (
                   <>
                     <input value={step.config.subject || ""} onChange={(e) => updateStepConfig(i, "subject", e.target.value)}
-                      placeholder="Subject" className="w-full px-2 py-1.5 bg-background border border-border rounded text-xs focus:outline-none focus:ring-1 focus:ring-primary" />
-                    <textarea value={step.config.body || ""} onChange={(e) => updateStepConfig(i, "body", e.target.value)}
-                      rows={4} placeholder="Hey {{first_name}}, we've missed seeing you at {{gym_name}}..." className="w-full px-2 py-1.5 bg-background border border-border rounded text-xs focus:outline-none focus:ring-1 focus:ring-primary resize-none" />
+                      placeholder="Subject" className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary" />
+                    <textarea
+                      ref={(el) => { editBodyRefs.current[i] = el; }}
+                      value={step.config.body || ""} onChange={(e) => updateStepConfig(i, "body", e.target.value)}
+                      rows={8} placeholder="Hey {{first_name}}, we've missed seeing you at {{gym_name}}..."
+                      className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm leading-relaxed focus:outline-none focus:ring-1 focus:ring-primary resize-y min-h-[160px]" />
+                    <VariableChips
+                      textareaRef={{ current: editBodyRefs.current[i] ?? null }}
+                      currentValue={step.config.body || ""}
+                      onChange={(val) => updateStepConfig(i, "body", val)}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setEditPreviewIndex(editPreviewIndex === i ? null : i)}
+                      className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      {editPreviewIndex === i ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                      {editPreviewIndex === i ? "Hide Preview" : "Preview"}
+                    </button>
+                    {editPreviewIndex === i && (
+                      <EmailPreview subject={step.config.subject || ""} body={step.config.body || ""} gymName={gym?.name} />
+                    )}
                   </>
                 )}
                 {step.actionType === "task" && (
                   <>
                     <input value={step.config.title || ""} onChange={(e) => updateStepConfig(i, "title", e.target.value)}
-                      placeholder="Task title" className="w-full px-2 py-1.5 bg-background border border-border rounded text-xs focus:outline-none focus:ring-1 focus:ring-primary" />
-                    <textarea value={step.config.description || ""} onChange={(e) => updateStepConfig(i, "description", e.target.value)}
-                      rows={2} placeholder="Task description" className="w-full px-2 py-1.5 bg-background border border-border rounded text-xs focus:outline-none focus:ring-1 focus:ring-primary resize-none" />
+                      placeholder="Task title" className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary" />
+                    <textarea
+                      ref={(el) => { editDescRefs.current[i] = el; }}
+                      value={step.config.description || ""} onChange={(e) => updateStepConfig(i, "description", e.target.value)}
+                      rows={5} placeholder="Task description" className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm leading-relaxed focus:outline-none focus:ring-1 focus:ring-primary resize-y min-h-[100px]" />
+                    <VariableChips
+                      textareaRef={{ current: editDescRefs.current[i] ?? null }}
+                      currentValue={step.config.description || ""}
+                      onChange={(val) => updateStepConfig(i, "description", val)}
+                    />
                   </>
                 )}
               </div>
@@ -1110,27 +1425,9 @@ function SequenceDetail({ sequence, onBack, gymId }: { sequence: Sequence; onBac
 
           <div className="bg-card border border-border rounded-xl p-4">
             <h3 className="text-sm font-medium text-foreground mb-3">Steps ({steps.length})</h3>
-            <div className="space-y-3">
+            <div className="space-y-0">
               {steps.map((step, i) => (
-                <div key={i} className="flex items-start gap-3">
-                  <div className="flex flex-col items-center">
-                    <div className={`h-7 w-7 rounded-lg flex items-center justify-center ${
-                      step.actionType === "email" ? "bg-blue-500/15 text-blue-500" : "bg-amber-500/15 text-amber-500"
-                    }`}>
-                      {step.actionType === "email" ? <Mail className="h-3.5 w-3.5" /> : <ClipboardList className="h-3.5 w-3.5" />}
-                    </div>
-                    {i < steps.length - 1 && <div className="w-px h-8 bg-border mt-1" />}
-                  </div>
-                  <div>
-                    <p className="text-xs font-medium text-foreground">
-                      {step.actionType === "email" ? "Send Email" : "Create Staff Task"}
-                      {step.delayDays > 0 && <span className="text-muted-foreground font-normal"> (after {step.delayDays} days)</span>}
-                    </p>
-                    <p className="text-xs text-muted-foreground mt-0.5 truncate max-w-md">
-                      {step.config.subject || step.config.title || ""}
-                    </p>
-                  </div>
-                </div>
+                <RetentionStepDetailCard key={i} step={step} index={i} isLast={i === steps.length - 1} gymName={gym?.name} />
               ))}
             </div>
           </div>
@@ -1156,6 +1453,27 @@ function SequenceDetail({ sequence, onBack, gymId }: { sequence: Sequence; onBac
         </div>
       )}
 
+      <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this sequence?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Members currently enrolled will be removed. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDelete}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleting ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <EnrollMemberDialog
         open={showEnrollDialog}
         onClose={() => setShowEnrollDialog(false)}
@@ -1167,6 +1485,82 @@ function SequenceDetail({ sequence, onBack, gymId }: { sequence: Sequence; onBac
           onBack();
         }}
       />
+    </div>
+  );
+}
+
+function RetentionStepDetailCard({ step, index, isLast, gymName }: { step: SequenceStep; index: number; isLast: boolean; gymName?: string }) {
+  const [expanded, setExpanded] = useState(true);
+  const [showPreview, setShowPreview] = useState(false);
+  const isEmail = step.actionType === "email";
+  const body = isEmail ? (step.config.body || "") : (step.config.description || "");
+  const subject = isEmail ? (step.config.subject || "") : (step.config.title || "");
+  const isLongMessage = body.split("\n").length > 6 || body.length > 400;
+  const colorClass = isEmail ? "bg-blue-500/15 text-blue-600" : "bg-amber-500/15 text-amber-600";
+
+  return (
+    <div className="relative">
+      <div className="flex gap-4">
+        <div className="flex flex-col items-center shrink-0">
+          <div className={`h-8 w-8 rounded-full flex items-center justify-center text-xs font-bold ${colorClass}`}>
+            {index + 1}
+          </div>
+          {!isLast && <div className="w-px flex-1 bg-border mt-1" />}
+        </div>
+
+        <div className="flex-1 min-w-0 pb-4">
+          <div className="bg-muted/20 border border-border rounded-xl p-4">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <span className={`px-2 py-0.5 rounded-md text-xs font-medium uppercase ${colorClass}`}>
+                  {isEmail ? "email" : "task"}
+                </span>
+                <span className="text-xs text-muted-foreground flex items-center gap-1">
+                  <Clock className="h-3.5 w-3.5" />
+                  {index === 0 ? (step.delayDays > 0 ? `After ${step.delayDays} days` : "Immediately") : `+${step.delayDays} days`}
+                </span>
+              </div>
+              <div className="flex items-center gap-1">
+                {isEmail && (
+                  <button
+                    onClick={() => setShowPreview(!showPreview)}
+                    className="flex items-center gap-1 px-2 py-1 rounded-md text-xs text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+                  >
+                    {showPreview ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                    {showPreview ? "Hide Preview" : "Preview"}
+                  </button>
+                )}
+                {isLongMessage && (
+                  <button
+                    onClick={() => setExpanded(!expanded)}
+                    className="flex items-center gap-1 px-2 py-1 rounded-md text-xs text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+                  >
+                    {expanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                    {expanded ? "Collapse" : "Expand"}
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {subject && (
+              <div className="mb-2 pb-2 border-b border-border/50">
+                <span className="text-xs text-muted-foreground">{isEmail ? "Subject: " : "Title: "}</span>
+                <span className="text-sm font-medium text-foreground">{subject}</span>
+              </div>
+            )}
+
+            {showPreview && isEmail ? (
+              <EmailPreview subject={subject} body={body} gymName={gymName} />
+            ) : (
+              <div className={`text-sm text-muted-foreground whitespace-pre-wrap leading-relaxed ${
+                !expanded ? "line-clamp-6" : ""
+              }`}>
+                {body || <span className="italic">No content</span>}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

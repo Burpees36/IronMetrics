@@ -21,7 +21,7 @@ function buildHeader(branding: GymBranding, primaryColor: string): string {
   `;
 }
 
-function buildFooter(branding: GymBranding): string {
+function buildFooter(branding: GymBranding, unsubscribeUrl?: string): string {
   const contactLines: string[] = [];
   if (branding.email) contactLines.push(`Email: ${branding.email}`);
   if (branding.phone) contactLines.push(`Phone: ${branding.phone}`);
@@ -29,15 +29,20 @@ function buildFooter(branding: GymBranding): string {
     ? `<p style="margin:8px 0 0;font-size:13px;color:#9ca3af;">${contactLines.join(" &bull; ")}</p>`
     : "";
 
+  const unsubHtml = unsubscribeUrl
+    ? `<p style="margin:8px 0 0;font-size:12px;"><a href="${unsubscribeUrl}" style="color:#9ca3af;text-decoration:underline;">Unsubscribe from marketing emails</a></p>`
+    : "";
+
   return `
     <div style="text-align:center;padding:24px;background:#f9fafb;border-radius:0 0 12px 12px;border-top:1px solid #e5e7eb;">
       <p style="margin:0;font-size:13px;color:#9ca3af;">${branding.name}</p>
       ${contactHtml}
+      ${unsubHtml}
     </div>
   `;
 }
 
-function wrapEmail(branding: GymBranding, bodyContent: string): string {
+function wrapEmail(branding: GymBranding, bodyContent: string, unsubscribeUrl?: string): string {
   const primaryColor = "#10B981";
   return `
 <!DOCTYPE html>
@@ -49,7 +54,7 @@ function wrapEmail(branding: GymBranding, bodyContent: string): string {
     <div style="padding:32px 24px;">
       ${bodyContent}
     </div>
-    ${buildFooter(branding)}
+    ${buildFooter(branding, unsubscribeUrl)}
   </div>
 </body>
 </html>`;

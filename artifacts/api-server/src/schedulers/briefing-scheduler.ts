@@ -201,6 +201,7 @@ async function processBriefingForGym(gymId: number): Promise<void> {
     type: m.milestoneType,
     memberName: `${m.memberFirstName} ${m.memberLastName}`,
     detail: m.detail,
+    memberId: m.memberId,
   }));
 
   const dashboardUrl = process.env.REPLIT_DEV_DOMAIN

@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import { authFetch } from "@/lib/authFetch";
 
 export interface SyncProgress {
   phase: "fetching-clients" | "fetching-memberships" | "processing" | "writing" | "complete" | "failed";
@@ -95,9 +96,7 @@ export function useWodifySyncPolling({
   const fetchStatus = useCallback(async (): Promise<SyncStatusData | null> => {
     if (!gymId) return null;
     try {
-      const resp = await fetch(`${apiBase}/api/gyms/${gymId}/integrations/wodify/sync-status`, {
-        credentials: "include",
-      });
+      const resp = await authFetch(`${apiBase}/api/gyms/${gymId}/integrations/wodify/sync-status`);
       if (!resp.ok) return null;
       const data: SyncStatusData = await resp.json();
       if (mountedRef.current) setSyncStatus(data);
@@ -198,10 +197,9 @@ export function useWodifySyncPolling({
     setIsSyncing(true);
     setCompletedResult(null);
     try {
-      const resp = await fetch(`${apiBase}/api/gyms/${gymId}/integrations/wodify/sync`, {
+      const resp = await authFetch(`${apiBase}/api/gyms/${gymId}/integrations/wodify/sync`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        credentials: "include",
       });
       const data = await resp.json();
       if (resp.status === 409 && data.syncRunId) {

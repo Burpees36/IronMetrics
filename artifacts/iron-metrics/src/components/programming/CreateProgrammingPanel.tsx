@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect } from "react";
-import { X, Plus, Loader2, AlertTriangle } from "lucide-react";
+import { X, Plus, Loader2, AlertTriangle, GitBranch, Info } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -29,6 +29,10 @@ interface CreateProgrammingPanelProps {
   isSaving: boolean;
   initialDate: string;
   initialData?: ProgrammingDayData | null;
+  availableTracks?: string[];
+  defaultTrack?: string;
+  suggestAlternateTrack?: string;
+  dateHasDefaultTrackDay?: boolean;
 }
 
 export interface ProgrammingDayData {
@@ -36,6 +40,7 @@ export interface ProgrammingDayData {
   date: string;
   title: string;
   status: "draft" | "published";
+  track?: string;
   sections: SectionData[];
 }
 
@@ -46,39 +51,50 @@ export function CreateProgrammingPanel({
   isSaving,
   initialDate,
   initialData,
+  availableTracks = ["default"],
+  defaultTrack = "default",
+  suggestAlternateTrack,
+  dateHasDefaultTrackDay,
 }: CreateProgrammingPanelProps) {
   const [date, setDate] = useState(initialData?.date || initialDate);
   const [title, setTitle] = useState(initialData?.title || "");
   const [status, setStatus] = useState<"draft" | "published">(
     initialData?.status || "draft"
   );
+  const [track, setTrack] = useState(initialData?.track || defaultTrack);
   const [sections, setSections] = useState<SectionData[]>(
     initialData?.sections || []
   );
   const [showTypePicker, setShowTypePicker] = useState(false);
   const [showDiscardDialog, setShowDiscardDialog] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [newTrackInput, setNewTrackInput] = useState("");
+  const [showNewTrackInput, setShowNewTrackInput] = useState(false);
 
   useEffect(() => {
     if (open) {
       setDate(initialData?.date || initialDate);
       setTitle(initialData?.title || "");
       setStatus(initialData?.status || "draft");
+      setTrack(initialData?.track || defaultTrack);
       setSections(initialData?.sections || []);
       setShowTypePicker(false);
+      setShowNewTrackInput(false);
+      setNewTrackInput("");
       setErrors({});
     }
-  }, [open, initialData, initialDate]);
+  }, [open, initialData, initialDate, defaultTrack]);
 
   const hasChanges = (() => {
     if (title !== (initialData?.title || "")) return true;
     if (date !== (initialData?.date || initialDate)) return true;
+    if (track !== (initialData?.track || defaultTrack)) return true;
     const origSections = initialData?.sections || [];
     if (sections.length !== origSections.length) return true;
     for (let i = 0; i < sections.length; i++) {
       const s = sections[i];
       const o = origSections[i];
-      if (s.title !== o.title || s.instructions !== o.instructions || s.type !== o.type || s.coachNotes !== o.coachNotes || s.trackResults !== o.trackResults) return true;
+      if (s.title !== o.title || s.instructions !== o.instructions || s.type !== o.type || s.coachNotes !== o.coachNotes || s.trackResults !== o.trackResults || s.timeCap !== o.timeCap || s.stimulus !== o.stimulus || s.scalingNotes !== o.scalingNotes || s.memberNotes !== o.memberNotes) return true;
     }
     return false;
   })();
@@ -113,6 +129,7 @@ export function CreateProgrammingPanel({
       date,
       title: title.trim(),
       status: publishStatus,
+      track,
       sections,
     });
   };
@@ -238,6 +255,76 @@ export function CreateProgrammingPanel({
                     </p>
                   )}
                 </div>
+              </div>
+
+              <div className="space-y-2 p-3 bg-muted/20 rounded-xl border border-border">
+                <div className="flex items-center gap-2">
+                  <GitBranch className="h-4 w-4 text-primary" />
+                  <Label className="text-sm font-medium text-foreground">Track</Label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <select
+                    value={showNewTrackInput ? "__new__" : track}
+                    onChange={(e) => {
+                      if (e.target.value === "__new__") {
+                        setShowNewTrackInput(true);
+                      } else {
+                        setShowNewTrackInput(false);
+                        setTrack(e.target.value);
+                      }
+                    }}
+                    className="flex h-9 w-full rounded-lg border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring capitalize"
+                  >
+                    {availableTracks.map((t) => (
+                      <option key={t} value={t} className="capitalize">
+                        {t}
+                      </option>
+                    ))}
+                    <option value="__new__">+ New track...</option>
+                  </select>
+                  {showNewTrackInput && (
+                    <Input
+                      autoFocus
+                      value={newTrackInput}
+                      onChange={(e) => setNewTrackInput(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "-"))}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && newTrackInput.trim()) {
+                          setTrack(newTrackInput.trim());
+                          setShowNewTrackInput(false);
+                          setNewTrackInput("");
+                        }
+                      }}
+                      onBlur={() => {
+                        if (newTrackInput.trim()) {
+                          setTrack(newTrackInput.trim());
+                        }
+                        setShowNewTrackInput(false);
+                        setNewTrackInput("");
+                      }}
+                      placeholder="e.g. competition"
+                      className="bg-background max-w-[180px]"
+                    />
+                  )}
+                </div>
+                <p className="text-[11px] text-muted-foreground leading-relaxed">
+                  Tracks let you publish different programming for different groups of athletes.
+                </p>
+                {suggestAlternateTrack && !initialData && track === "default" && dateHasDefaultTrackDay && (
+                  <div className="flex items-start gap-2 p-2 bg-primary/5 border border-primary/20 rounded-lg">
+                    <Info className="h-3.5 w-3.5 text-primary mt-0.5 shrink-0" />
+                    <div className="text-[11px] text-primary leading-relaxed">
+                      <span>This date already has programming on the default track. </span>
+                      <button
+                        type="button"
+                        onClick={() => setTrack(suggestAlternateTrack)}
+                        className="font-semibold underline underline-offset-2 hover:opacity-80"
+                      >
+                        Switch to "{suggestAlternateTrack}"
+                      </button>
+                      <span> instead?</span>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {errors.sections && (

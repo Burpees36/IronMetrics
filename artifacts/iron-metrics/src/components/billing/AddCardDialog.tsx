@@ -1,5 +1,6 @@
 import React, { useRef, useEffect, useState, useCallback } from "react";
 import { loadStripeJs } from "@/lib/stripe";
+import { authFetch } from "@/lib/authFetch";
 import { useGym } from "@/store/GymContext";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter
@@ -54,7 +55,7 @@ export function AddCardDialog({ open, onOpenChange, clientSecret, onSuccess }: A
     setError("");
 
     try {
-      const res = await fetch(`${API_BASE}/gyms/${activeGymId}/stripe/publishable-key`);
+      const res = await authFetch(`${API_BASE}/gyms/${activeGymId}/stripe/publishable-key`);
       if (!res.ok) { setError("Failed to load payment system."); setLoading(false); return; }
       const { publishableKey } = await res.json();
 

@@ -1,4 +1,4 @@
-import { db, subscriptionsTable, paymentsTable, refundsTable } from "@workspace/db";
+import { db, subscriptionsTable, paymentsTable, refundsTable, membersTable } from "@workspace/db";
 import { eq, and, gte, lt, desc } from "drizzle-orm";
 import { computeBlendedMRR, type BlendedMRRResult } from "./blendedMetrics";
 
@@ -69,9 +69,25 @@ export async function computeBillingSummary(gymId: number, asOfDate?: Date): Pro
 
   const refundsThisMonth = monthRefunds.reduce((sum, r) => sum + parseFloat(r.amount), 0);
 
-  const cancelledThisMonth = allSubs.filter((s) =>
+  const subsCancelledThisMonth = allSubs.filter((s) =>
     s.cancelledAt && s.cancelledAt >= monthStart && s.cancelledAt < monthEnd
   );
+  const memberIdsFromSubs = new Set(subsCancelledThisMonth.map((s) => s.memberId));
+
+  const cancelledMembersThisMonth = await db
+    .select({ id: membersTable.id })
+    .from(membersTable)
+    .where(and(
+      eq(membersTable.gymId, gymId),
+      eq(membersTable.status, "cancelled"),
+      gte(membersTable.updatedAt, monthStart),
+      lt(membersTable.updatedAt, monthEnd),
+    ));
+
+  const additionalCancelled = cancelledMembersThisMonth.filter(
+    (m) => !memberIdsFromSubs.has(m.id)
+  );
+  const cancelledThisMonthCount = memberIdsFromSubs.size + additionalCancelled.length;
 
   return {
     mrr: blended.totalMRR,
@@ -84,7 +100,7 @@ export async function computeBillingSummary(gymId: number, asOfDate?: Date): Pro
     overdueAccounts: overdueSubs.length,
     collectionsThisMonth,
     refundsThisMonth,
-    cancelledThisMonth: cancelledThisMonth.length,
+    cancelledThisMonth: cancelledThisMonthCount,
     revenueSource: blended.revenueSource,
     hasSubscriptionData: blended.hasSubscriptionData,
   };

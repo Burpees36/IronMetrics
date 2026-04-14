@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { useAuth } from "@workspace/replit-auth-web";
+import { useUser } from "@clerk/react";
 import { useGym } from "@/store/GymContext";
 import { useGetDashboardStats, useGetMorningBriefing } from "@workspace/api-client-react";
 import { useQuery } from "@tanstack/react-query";
@@ -18,9 +18,13 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { SyncHealthBanner } from "@/components/dashboard/SyncHealthBanner";
+import { CelebrationsBanner } from "@/components/dashboard/CelebrationsBanner";
 import { AtRiskMembersCard } from "@/components/dashboard/AtRiskMembersCard";
 import { RetentionActivityCard } from "@/components/dashboard/RetentionActivityCard";
+import { PageError } from "@/components/ui/page-error";
 import { cn } from "@/lib/utils";
+
+import { authFetch } from "@/lib/authFetch";
 
 const API_BASE = import.meta.env.VITE_API_URL || "";
 const BASE_URL = import.meta.env.BASE_URL || "/";
@@ -29,7 +33,7 @@ const BENCHMARK_API = `${BASE_URL}api`.replace(/\/+/g, "/");
 function OnboardingBanner({ gymId }: { gymId: number }) {
   const [show, setShow] = useState(false);
   useEffect(() => {
-    fetch(`${API_BASE}/api/gyms/${gymId}/onboarding`, { credentials: "include" })
+    authFetch(`${API_BASE}/api/gyms/${gymId}/onboarding`)
       .then((r) => {
         if (!r.ok) return null;
         return r.json();
@@ -67,14 +71,14 @@ function OnboardingBanner({ gymId }: { gymId: number }) {
 function ConnectWodifyBanner({ gymId }: { gymId: number }) {
   const [show, setShow] = useState(false);
   useEffect(() => {
-    fetch(`${API_BASE}/api/gyms/${gymId}/integrations/wodify/sync-status`, { credentials: "include" })
+    authFetch(`${API_BASE}/api/gyms/${gymId}/integrations/wodify/sync-status`)
       .then((r) => {
         if (!r.ok) return null;
         return r.json();
       })
       .then((data) => {
         if (data && !data.hasApiKey) {
-          fetch(`${API_BASE}/api/gyms/${gymId}/members?limit=1`, { credentials: "include" })
+          authFetch(`${API_BASE}/api/gyms/${gymId}/members?limit=1`)
             .then((r) => r.ok ? r.json() : null)
             .then((members) => {
               const count = Array.isArray(members) ? members.length : members?.total ?? 0;
@@ -120,6 +124,12 @@ const iconMap: Record<string, React.ElementType> = {
   retention: ShieldCheck,
   clock: Clock,
   usercheck: UserCheck,
+  community: Users,
+  marketing: MessageSquare,
+  growth: Rocket,
+  revenue: TrendingUp,
+  coaching: BrainCircuit,
+  schedule: Clock,
 };
 
 function getGreeting(): string {
@@ -282,7 +292,7 @@ function BenchmarkHighlightsCard({ gymId }: { gymId: number }) {
   const { data } = useQuery({
     queryKey: ["benchmarks", gymId],
     queryFn: async () => {
-      const res = await fetch(`${BENCHMARK_API}/gyms/${gymId}/intelligence/benchmarks`, { credentials: "include" });
+      const res = await authFetch(`${BENCHMARK_API}/gyms/${gymId}/intelligence/benchmarks`);
       if (!res.ok) return null;
       return res.json();
     },
@@ -352,7 +362,7 @@ function FinancialSummaryCard({ gymId }: { gymId: number }) {
   const { data } = useQuery({
     queryKey: ["finances-dashboard-summary", gymId],
     queryFn: async () => {
-      const res = await fetch(`${FINANCE_API}/gyms/${gymId}/finances/summary`, { credentials: "include" });
+      const res = await authFetch(`${FINANCE_API}/gyms/${gymId}/finances/summary`);
       if (!res.ok) return null;
       return res.json();
     },
@@ -406,12 +416,12 @@ function FinancialSummaryCard({ gymId }: { gymId: number }) {
 }
 
 export function Dashboard() {
-  const { user } = useAuth();
+  const { user } = useUser();
   const { activeGymId } = useGym();
-  const { data: stats, isLoading: statsLoading } = useGetDashboardStats(activeGymId as number, {
+  const { data: stats, isLoading: statsLoading, isError: statsError, refetch: refetchStats } = useGetDashboardStats(activeGymId as number, {
     query: { enabled: !!activeGymId }
   });
-  const { data: briefing, isLoading: briefingLoading } = useGetMorningBriefing(activeGymId as number, {
+  const { data: briefing, isLoading: briefingLoading, refetch: refetchBriefing } = useGetMorningBriefing(activeGymId as number, {
     query: { enabled: !!activeGymId }
   });
 
@@ -433,17 +443,21 @@ export function Dashboard() {
     );
   }
 
-  if (!stats) {
+  if (statsError || !stats) {
     return (
-      <div className="h-full flex items-center justify-center">
-        <p className="text-muted-foreground">Unable to load dashboard data.</p>
-      </div>
+      <PageError
+        title="Unable to load dashboard"
+        message="We couldn't load your dashboard data. Check your connection and try again."
+        onRetry={() => { refetchStats(); refetchBriefing(); }}
+      />
     );
   }
 
   const snapshot = briefing?.snapshot;
   const briefingItems = briefing?.items || [];
   const briefingSummary = briefing?.summary || null;
+  const growthNudges = briefing?.growthNudges || [];
+  const celebrations = briefing?.celebrations || [];
   const actionItems = buildActionItems(briefingItems, snapshot || {});
 
   const criticalItems = actionItems.filter(i => i.category === "critical");
@@ -467,7 +481,10 @@ export function Dashboard() {
             <p className="text-xs font-mono text-muted-foreground uppercase tracking-wider">Owner Console</p>
           </div>
           <h1 className="text-3xl md:text-4xl font-display font-bold text-foreground mb-2">
-            {getGreeting()}, {user?.firstName || "Boss"}.
+            {(() => {
+              const name = user?.firstName || user?.fullName?.split(" ")[0] || user?.username;
+              return name ? `${getGreeting()}, ${name}.` : `${getGreeting()}.`;
+            })()}
           </h1>
           <p className="text-lg text-muted-foreground max-w-2xl leading-relaxed">
             {briefingSummary ? (
@@ -488,6 +505,81 @@ export function Dashboard() {
               </>
             )}
           </p>
+
+          <div className="flex flex-wrap items-center gap-2 mt-3">
+            <div className={cn(
+              "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border",
+              stats.mrrGrowth == null
+                ? "bg-muted text-muted-foreground border-border"
+                : stats.mrrGrowth >= 0
+                  ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20"
+                  : "bg-destructive/10 text-destructive border-destructive/20"
+            )}>
+              <TrendingUp className="w-3 h-3" />
+              <span className="font-semibold">{mrrFormatted}</span>
+              {mrrChange && (
+                <>
+                  {stats.mrrGrowth >= 0 ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
+                  <span>{mrrChange}</span>
+                </>
+              )}
+            </div>
+
+            <div className={cn(
+              "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border",
+              (stats.newMembersThisMonth - stats.churnedThisMonth) >= 0
+                ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20"
+                : "bg-destructive/10 text-destructive border-destructive/20"
+            )}>
+              <Users className="w-3 h-3" />
+              <span className="font-semibold">{stats.activeMembers}</span>
+              <span>active</span>
+              <span className="font-semibold">
+                {(stats.newMembersThisMonth - stats.churnedThisMonth) >= 0 ? "+" : ""}
+                {stats.newMembersThisMonth - stats.churnedThisMonth}
+              </span>
+            </div>
+
+            {stats.rsiScore != null && (
+            <div className={cn(
+              "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border",
+              stats.rsiScore >= 70
+                ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20"
+                : stats.rsiScore >= 40
+                  ? "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 border-yellow-500/20"
+                  : "bg-destructive/10 text-destructive border-destructive/20"
+            )}>
+              <BrainCircuit className="w-3 h-3" />
+              <span className="font-semibold">{stats.rsiScore.toFixed(1)}</span>
+              <span>{stats.rsiBand}</span>
+            </div>
+            )}
+          </div>
+          {(() => {
+            const urgentItems = [...criticalItems, ...warningItems].filter(i => i.actionLink).slice(0, 2);
+            if (urgentItems.length === 0) return null;
+            return (
+              <div className="flex flex-wrap gap-2 mt-2" data-testid="header-quick-actions">
+                {urgentItems.map((item) => (
+                  <Link key={item.id} href={item.actionLink!}>
+                    <Button
+                      size="sm"
+                      variant={item.category === "critical" ? "destructive" : "outline"}
+                      className={cn(
+                        "text-xs font-semibold gap-1.5",
+                        item.category === "warning" && "border-amber-500/50 bg-amber-500/10 text-amber-700 hover:bg-amber-500/20 dark:text-amber-400 dark:border-amber-400/50 dark:bg-amber-400/10 dark:hover:bg-amber-400/20"
+                      )}
+                    >
+                      <item.icon className="w-3.5 h-3.5" />
+                      {item.actionLabel}
+                      {item.impact && <span className="opacity-70">· {item.impact}</span>}
+                      <ArrowRight className="w-3 h-3" />
+                    </Button>
+                  </Link>
+                ))}
+              </div>
+            );
+          })()}
         </div>
 
         <div className="flex items-center gap-4 pb-1">
@@ -505,6 +597,8 @@ export function Dashboard() {
           </Link>
         </div>
       </header>
+
+      <CelebrationsBanner celebrations={celebrations} />
 
       <main className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         <div className="lg:col-span-8 space-y-6">
@@ -554,7 +648,56 @@ export function Dashboard() {
             </section>
           )}
 
-          {actionItems.length === 0 && (
+          {actionItems.length === 0 && growthNudges.length > 0 && (
+            <section>
+              <div className="flex items-center gap-3 mb-4">
+                <div className="flex items-center justify-center w-6 h-6 rounded bg-primary/10 text-primary">
+                  <Rocket className="w-4 h-4" />
+                </div>
+                <h2 className="text-lg font-semibold text-foreground">Growth Playbook</h2>
+                <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 text-[11px] font-medium">
+                  No fires — time to build
+                </Badge>
+              </div>
+              <div className="space-y-3">
+                {growthNudges.map((nudge) => {
+                  const NudgeIcon = iconMap[nudge.icon] || Rocket;
+                  return (
+                    <Card key={nudge.id} className="shadow-sm overflow-hidden">
+                      <CardContent className="p-4">
+                        <div className="flex items-start gap-3">
+                          <div className="flex-shrink-0 w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center mt-0.5">
+                            <NudgeIcon className="w-4 h-4 text-primary" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1">
+                              <h3 className="text-sm font-semibold text-foreground">{nudge.title}</h3>
+                            </div>
+                            <p className="text-sm text-muted-foreground leading-relaxed mb-3">{nudge.message}</p>
+                            <div className="flex items-center justify-between">
+                              <Link href={nudge.actionLink}>
+                                <Button size="sm" variant="outline" className="h-7 text-xs border-primary/30 text-primary hover:bg-primary/10">
+                                  {nudge.actionLabel}
+                                  <ArrowRight className="w-3 h-3 ml-1.5" />
+                                </Button>
+                              </Link>
+                              {nudge.source && (
+                                <span className="text-[10px] text-muted-foreground/60 italic truncate max-w-[180px]">
+                                  via {nudge.source}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
+            </section>
+          )}
+
+          {actionItems.length === 0 && growthNudges.length === 0 && (
             <div className="text-center py-12 text-muted-foreground">
               <CheckCircle2 className="w-10 h-10 mx-auto mb-3 text-emerald-500" />
               <p className="text-lg font-medium text-foreground">Nothing flagged</p>
@@ -611,9 +754,11 @@ export function Dashboard() {
                   <BrainCircuit className="w-4 h-4" /> RSI Score
                 </p>
                 <div className="flex items-end justify-between mt-2">
-                  <p className="text-xl font-bold text-foreground">{stats.rsiScore.toFixed(1)}</p>
+                  <p className="text-xl font-bold text-foreground">{stats.rsiScore != null ? stats.rsiScore.toFixed(1) : "—"}</p>
                   <div className="text-right">
-                    {stats.rsiTrendInsufficient ? (
+                    {stats.rsiScore == null ? (
+                      <span className="text-xs text-muted-foreground">No data yet</span>
+                    ) : stats.rsiTrendInsufficient ? (
                       <Link href="/intelligence">
                         <span className="text-xs text-primary font-medium hover:underline cursor-pointer">{stats.rsiBand}</span>
                       </Link>

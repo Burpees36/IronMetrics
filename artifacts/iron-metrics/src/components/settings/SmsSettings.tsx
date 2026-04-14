@@ -7,6 +7,8 @@ import { Loader2, Save, MessageSquare, CheckCircle2, AlertCircle, Send, Phone } 
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
+import { authFetch } from "@/lib/authFetch";
+
 const BASE_URL = import.meta.env.BASE_URL || "/";
 const API_BASE = `${BASE_URL}api`.replace(/\/+/g, "/");
 
@@ -104,10 +106,9 @@ export function SmsSettings({ gymId }: Props) {
 
     setTestSending(true);
     try {
-      const response = await fetch(`${API_BASE}/gyms/${gymId}/sms/test`, {
+      const response = await authFetch(`${API_BASE}/gyms/${gymId}/sms/test`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        credentials: "include",
         body: JSON.stringify({ to: testPhone }),
       });
 

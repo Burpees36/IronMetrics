@@ -15,7 +15,7 @@ ForgeOS is a pnpm workspace monorepo built with TypeScript, Node.js 24, and Type
 **Monorepo Structure:**
 - `artifacts/api-server/`: Express 5 API server.
 - `artifacts/iron-metrics/`: React + Vite frontend.
-- `lib/`: Shared libraries for OpenAPI spec, generated API clients, Drizzle ORM schema, and Replit Auth hooks.
+- `lib/`: Shared libraries for OpenAPI spec, generated API clients, and Drizzle ORM schema.
 
 **Technology Stack:**
 - **API:** Express 5.
@@ -23,7 +23,7 @@ ForgeOS is a pnpm workspace monorepo built with TypeScript, Node.js 24, and Type
 - **Database:** PostgreSQL with Drizzle ORM.
 - **Validation:** Zod.
 - **API Codegen:** Orval (from OpenAPI spec).
-- **Authentication:** Replit Auth (OIDC with PKCE).
+- **Authentication:** Clerk (email/password + social login). Backend uses `@clerk/express` middleware; frontend uses `@clerk/react` with `ClerkProvider`, `SignIn`/`SignUp` components, and `useAuth`/`useUser` hooks.
 
 **UI/UX Design:**
 A premium SaaS theme featuring light/dark mode, 2xl rounded corners, and a glass-panel effect. The primary accent color is emerald green, with violet for Pro tier features and amber/yellow for warnings. The theme context persists to `localStorage` and respects `prefers-color-scheme`.
@@ -37,11 +37,12 @@ A premium SaaS theme featuring light/dark mode, 2xl rounded corners, and a glass
 -   **Class Scheduling:** Weekly calendar with RBAC, capacity tracking, check-ins, and Google Calendar-style overlap rendering.
 -   **Personal Training & Appointments:** Booking system for 1-on-1 appointments with coach availability, appointment type configuration, and automated reminders.
 -   **Billing:** Comprehensive command center for plans, subscriptions, payments, refunds, and Stripe integration. Includes audit logs, payment method management, and discount codes.
--   **Programming Hub:** Daily workout builder with section-based programming, result logging, and AI-generated workout capabilities using OpenAI. AI generation considers gym methodology, equipment, and periodization, producing drafts for review with a post-generation validation layer and movement alias resolution.
+-   **Programming Hub:** Daily workout builder with section-based programming, result logging, and AI-generated workout capabilities using OpenAI. AI generation considers gym methodology, equipment, and periodization, producing drafts for review with a post-generation validation layer and movement alias resolution. Supports **per-client workout tracks** — programming days have a `track` field (defaults to "default"), members are assigned to tracks via `track:` prefixed tags, and the public WOD page only shows the "default" track. Staff can filter by track in the Programming Hub header and assign tracks in the CreateProgrammingPanel.
 -   **AI Insights (Strategic Ops Board):** Displays AI-generated interventions sorted by urgency/score, key metrics (RSI gauge, Risk Radar), and a full AI Action Center (formerly AI Task Inbox). Features a dynamic intervention engine and "Smart Actions" for automated task execution. Includes Milestone Celebrations Auto-Pilot (birthday, anniversary, attendance milestone, streak, comeback detection with personalized messages and cooldown dedup) and Morning Briefing delivery (configurable daily email/SMS with gym snapshot, overnight autopilot report, and milestone celebrations). Intervention cards and risk badges use dark-mode-aware colors. Risk score bars use dynamic coloring (green/yellow/orange/red by score range).
 -   **SMS / Text Messaging:** Twilio-based SMS sending for manual messages from member/lead profiles and automated tasks, with gym-level configuration.
--   **Retention Automations:** Automated retention sequences (e.g., "Miss You", "Win Back") with built-in templates and a scheduler engine.
--   **Lead Nurture Sequences:** Automated multi-step lead nurture flows triggered by pipeline stage changes, with a sequence builder UI, execution engine, and templates.
+-   **Retention Automations:** Automated retention sequences (e.g., "Miss You", "Win Back") with built-in templates and a scheduler engine. Includes: step retry on transient failure (retry once after 5min delay), cross-sequence overlap guard (priority-based: win_back > miss_you > check_in > onboarding > custom), quiet hours enforcement (8am-8pm in gym timezone, defers to next business hour), safe sequence editing (adjusts in-flight step indices), bulk enrollment throttling (20 per tick), and opt-out compliance (checks email-opt-out/sms-opt-out tags, includes unsubscribe footer).
+-   **Lead Nurture Sequences:** Automated multi-step lead nurture flows triggered by pipeline stage changes, with a sequence builder UI, execution engine, and templates. Includes same resilience safeguards as retention: retry, quiet hours, safe editing, and bulk throttling.
+-   **Unsubscribe System:** Public `/api/unsubscribe` endpoint with base64url token, adds `email-opt-out` tag to member. All marketing/automated emails include unsubscribe link in footer via `sequence-utils.ts`.
 -   **Financial Intelligence & Owner Pay:** Expense tracking, payroll ratio monitoring, owner take-home calculation, and monthly trend charts.
 -   **Intelligence Hub:** KPI dashboards, RSI scores, risk radar, and intervention recommendations.
 -   **Blended Metrics:** Service combining subscription data with Wodify imports for accurate MRR, active members, and engagement rate.
@@ -50,6 +51,7 @@ A premium SaaS theme featuring light/dark mode, 2xl rounded corners, and a glass
 -   **Communication Style (Owner Voice):** Settings for gym owners to configure communication tone (e.g., Casual & Friendly, Professional), define custom word-replacement rules, and provide writing samples for AI task generation.
 -   **Danger Zone (Deactivate & Delete):** Settings Danger Zone allows gym owners to deactivate (temporarily disable, blocking staff/member access) or permanently delete a business and all associated data. Includes owner-only authorization enforcement, deactivated-gym middleware guard, and a frontend deactivation banner.
 -   **Onboarding Wizard:** A streamlined 3-step guided setup for new gyms.
+-   **Error & Empty States:** Reusable `PageError` component (`page-error.tsx`) with retry button, used across Dashboard, Members, Billing, Workouts, Leads, Retention, AiInsights, and Settings pages. Each page checks for API errors (`isError`/`loadError`) and shows `PageError` with a contextual message and retry callback. Pages with full-page data dependencies (Dashboard, Billing, Workouts, Settings, Retention) render loading before error checks. Inline sections (Members table, Leads pipeline) check error first since loading is conditional on prior data.
 -   **Error Handling:** Centralized error handling with structured responses and logging.
 -   **Rate Limiting:** `express-rate-limit` for API protection.
 -   **Data Integrity:** Drizzle numeric fields handled as strings, PostgreSQL `COUNT(*)` wrapped with `Number()`, and robust tenure calculations.

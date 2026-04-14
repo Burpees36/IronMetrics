@@ -13,6 +13,7 @@ import {
   generateConversationalBriefingItem,
   generateConversationalSummary,
 } from "./insights-copy-engine";
+import { generateGrowthNudges } from "./growth-nudge-engine";
 
 const router: IRouter = Router();
 
@@ -396,10 +397,13 @@ router.get("/gyms/:gymId/intelligence/morning-briefing", async (req, res): Promi
     const engagementRate = blendedEngagement.engagementRate;
 
     const todayStr = now.toISOString().split("T")[0];
+    const endOfToday = new Date(now);
+    endOfToday.setHours(23, 59, 59, 999);
     const allClasses = await db.select().from(classesTable).where(eq(classesTable.gymId, gymId));
     const todayClasses = allClasses.filter(c => {
-      const classDate = new Date(c.startTime).toISOString().split("T")[0];
-      return classDate === todayStr;
+      const classEnd = new Date(c.endTime).getTime();
+      const classStart = new Date(c.startTime).getTime();
+      return classEnd >= now.getTime() && classStart <= endOfToday.getTime();
     });
     const totalCapacity = todayClasses.reduce((sum, c) => sum + (c.capacity || 0), 0);
     const totalEnrolled = todayClasses.reduce((sum, c) => sum + (c.enrolled || 0), 0);
@@ -566,7 +570,7 @@ router.get("/gyms/:gymId/intelligence/morning-briefing", async (req, res): Promi
     };
     const summary = generateConversationalSummary(briefingSnapshot);
 
-    let celebrations: { type: string; memberName: string; detail: string }[] = [];
+    let celebrations: { type: string; memberName: string; detail: string; memberId: number }[] = [];
     try {
       const [opSettings] = await db.select().from(aiOperatorSettingsTable).where(eq(aiOperatorSettingsTable.gymId, gymId));
       const cooldown = opSettings?.cooldownCelebrations ?? 90;
@@ -575,6 +579,7 @@ router.get("/gyms/:gymId/intelligence/morning-briefing", async (req, res): Promi
         type: m.milestoneType,
         memberName: `${m.memberFirstName} ${m.memberLastName}`,
         detail: m.detail,
+        memberId: m.memberId,
       }));
     } catch (err: any) {
       console.error("[intelligence/morning-briefing] Celebration detection error:", err.message);
@@ -588,6 +593,30 @@ router.get("/gyms/:gymId/intelligence/morning-briefing", async (req, res): Promi
         action: "View celebrations",
         link: "/ai-insights",
       });
+    }
+
+    let growthNudges: { id: string; icon: string; title: string; message: string; actionLabel: string; actionLink: string; source?: string }[] = [];
+    if (items.length === 0) {
+      try {
+        const churnRate = metrics.churnRate ?? 0;
+        const retentionRate = 100 - churnRate;
+        growthNudges = await generateGrowthNudges({
+          activeMembers: metrics.active,
+          mrr: Math.round(metrics.totalRev),
+          engagementRate,
+          classFillRate,
+          retentionRate,
+          atRiskCount,
+          activeLeads: activeLeads.length,
+          staleLeads: staleLeads.length,
+          arm: avgRevPerMember,
+          rsiScore: rsi.score,
+          rsiBand: rsi.band,
+          churnRate,
+        }, gymId);
+      } catch (err: any) {
+        console.error("[intelligence/morning-briefing] Growth nudge generation error:", err.message);
+      }
     }
 
     res.json({
@@ -615,10 +644,34 @@ router.get("/gyms/:gymId/intelligence/morning-briefing", async (req, res): Promi
         classFillRate,
       },
       celebrations,
+      ...(growthNudges.length > 0 ? { growthNudges } : {}),
     });
   } catch (err) {
     console.error("[intelligence/morning-briefing] Failed to generate briefing:", err);
-    res.status(500).json({ error: "Failed to generate morning briefing. Please try again." });
+    const todayStr = new Date().toISOString().split("T")[0];
+    res.json({
+      date: todayStr,
+      items: [],
+      summary: null,
+      snapshot: {
+        activeMembers: 0,
+        mrr: 0,
+        rsiScore: null,
+        rsiBand: null,
+        atRiskMembers: 0,
+        atRiskCritical: 0,
+        atRiskHigh: 0,
+        revenueAtRisk: 0,
+        engagementRate: 0,
+        staleLeads: 0,
+        newLeads: 0,
+        activeLeads: 0,
+        failedPayments: 0,
+        todayClasses: 0,
+        classFillRate: 0,
+      },
+      celebrations: [],
+    });
   }
 });
 

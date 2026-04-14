@@ -5,7 +5,7 @@ import { getStripeClient } from "../../stripeClient";
 import { requireBillingPermission, requireBillingRead } from "../../middlewares/billingRbac";
 import { billingAuditLogger } from "../../billingAuditLogger";
 import { parseGymId, paramStr } from "./helpers";
-import { exitMemberSequences } from "../../schedulers/retention-engine";
+import { exitMemberSequences, evaluateTriggersForGym } from "../../schedulers/retention-engine";
 
 const router: IRouter = Router();
 
@@ -46,7 +46,7 @@ router.post("/gyms/:gymId/members/:memberId/holds", requireBillingPermission("bi
     gymId, memberId, subscriptionId: parseInt(String(subscriptionId), 10),
     status: isImmediate ? "active" : "scheduled",
     startDate, endDate: endDate || null, reason: reason || null,
-    createdBy: req.user?.id, createdByName: req.user?.firstName || "Staff",
+    createdBy: req.userId, createdByName: "Staff",
     ...(isImmediate ? { activatedAt: new Date() } : {}),
   }).returning();
 
@@ -74,7 +74,7 @@ router.post("/gyms/:gymId/members/:memberId/holds", requireBillingPermission("bi
   }
 
   await billingAuditLogger.log({
-    gymId, memberId, actorUserId: req.user?.id, actorName: req.user?.firstName || "Unknown",
+    gymId, memberId, actorUserId: req.userId, actorName: "Staff",
     action: isImmediate ? "hold.started" : "hold.scheduled",
     entityType: "hold", entityId: String(hold.id), source: "ui",
     afterValue: { startDate, endDate, reason, status: hold.status },
@@ -104,7 +104,7 @@ router.patch("/gyms/:gymId/holds/:holdId", requireBillingPermission("billing.cre
     .where(eq(scheduledHoldsTable.id, holdId)).returning();
 
   await billingAuditLogger.log({
-    gymId, memberId: hold.memberId, actorUserId: req.user?.id, actorName: req.user?.firstName || "Unknown",
+    gymId, memberId: hold.memberId, actorUserId: req.userId, actorName: "Staff",
     action: "hold.updated", entityType: "hold", entityId: String(holdId), source: "ui",
     beforeValue: { endDate: hold.endDate, reason: hold.reason },
     afterValue: { endDate: updated.endDate, reason: updated.reason },
@@ -138,6 +138,13 @@ router.post("/gyms/:gymId/holds/:holdId/cancel", requireBillingPermission("billi
         res.status(500).json({ error: "Failed to resume subscription in Stripe" }); return;
       }
     }
+
+    try {
+      await evaluateTriggersForGym(gymId, { onlyMemberId: hold.memberId });
+      console.log(`[billing] Triggered retention evaluation for member ${hold.memberId} after manual hold cancel (gym ${gymId})`);
+    } catch (retentionErr: any) {
+      console.error(`[billing] Error evaluating retention triggers for member ${hold.memberId}:`, (retentionErr as Error).message);
+    }
   }
 
   const [updated] = await db.update(scheduledHoldsTable)
@@ -145,7 +152,7 @@ router.post("/gyms/:gymId/holds/:holdId/cancel", requireBillingPermission("billi
     .where(eq(scheduledHoldsTable.id, holdId)).returning();
 
   await billingAuditLogger.log({
-    gymId, memberId: hold.memberId, actorUserId: req.user?.id, actorName: req.user?.firstName || "Unknown",
+    gymId, memberId: hold.memberId, actorUserId: req.userId, actorName: "Staff",
     action: "hold.cancelled", entityType: "hold", entityId: String(holdId), source: "ui",
     afterValue: { previousStatus: hold.status },
   });

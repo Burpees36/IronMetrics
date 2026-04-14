@@ -9,19 +9,6 @@ export interface HealthStatus {
   status: string;
 }
 
-export interface AuthUser {
-  id: string;
-  /** @nullable */
-  email?: string | null;
-  /** @nullable */
-  firstName?: string | null;
-  /** @nullable */
-  lastName?: string | null;
-  /** @nullable */
-  profileImageUrl?: string | null;
-  isAuthenticated: boolean;
-}
-
 export interface Gym {
   id: number;
   name: string;
@@ -1554,11 +1541,31 @@ export interface MorningBriefingSnapshot {
   classFillRate?: number;
 }
 
+export interface GrowthNudge {
+  id: string;
+  icon: string;
+  title: string;
+  message: string;
+  actionLabel: string;
+  actionLink: string;
+  /** @nullable */
+  source?: string | null;
+}
+
+export interface MorningBriefingCelebration {
+  type: string;
+  memberName: string;
+  detail: string;
+  memberId: number;
+}
+
 export interface MorningBriefing {
   date: string;
   summary: string;
   items: MorningBriefingItem[];
   snapshot: MorningBriefingSnapshot;
+  growthNudges?: GrowthNudge[];
+  celebrations?: MorningBriefingCelebration[];
 }
 
 export interface LeadCaptureBody {
@@ -2705,6 +2712,7 @@ export type ListProgrammingDaysParams = {
   startDate?: string;
   endDate?: string;
   status?: ListProgrammingDaysStatus;
+  track?: string;
 };
 
 export type ListProgrammingDaysStatus =

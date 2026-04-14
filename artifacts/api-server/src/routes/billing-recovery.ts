@@ -60,8 +60,8 @@ router.post("/gyms/:gymId/billing/recovery/:recoveryId/send-link", requireBillin
     await billingAuditLogger.log({
       gymId,
       memberId: recovery.memberId,
-      actorUserId: req.user?.id,
-      actorName: req.user?.firstName && req.user?.lastName ? `${req.user.firstName} ${req.user.lastName}` : undefined,
+      actorUserId: req.userId,
+      actorName: undefined,
       action: "recovery.link_generated",
       entityType: "billing_recovery",
       entityId: String(recoveryId),
@@ -113,8 +113,8 @@ router.post("/gyms/:gymId/billing/recovery/generate-link", requireBillingPermiss
     await billingAuditLogger.log({
       gymId,
       memberId: parseInt(String(memberId), 10),
-      actorUserId: req.user?.id,
-      actorName: req.user?.firstName && req.user?.lastName ? `${req.user.firstName} ${req.user.lastName}` : undefined,
+      actorUserId: req.userId,
+      actorName: undefined,
       action: "recovery.link_generated",
       entityType: "payment_update_token",
       entityId: token.substring(0, 8),
@@ -159,8 +159,8 @@ router.post("/gyms/:gymId/billing/recovery/maintenance", requireBillingPermissio
 
     await billingAuditLogger.log({
       gymId,
-      actorUserId: req.user?.id,
-      actorName: req.user?.firstName && req.user?.lastName ? `${req.user.firstName} ${req.user.lastName}` : undefined,
+      actorUserId: req.userId,
+      actorName: undefined,
       action: "maintenance.tokens_cleaned",
       entityType: "system",
       source: "ui",

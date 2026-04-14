@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Link, useLocation } from "wouter";
-import { useAuth } from "@workspace/replit-auth-web";
+import { useAuth, useUser } from "@clerk/react";
 import { 
   LayoutDashboard, BrainCircuit, Users, CalendarDays, 
   Target, CreditCard, Activity, LogOut, Menu, BookOpen,
@@ -139,10 +139,10 @@ function SidebarContent({ location, gym, gymLoading, user, logout, onNavigate, c
         </div>
         <div className="flex items-center gap-3 px-3 py-2 rounded-xl bg-secondary border border-border">
           <div className="h-8 w-8 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold text-sm">
-            {user?.firstName?.[0] || user?.email?.[0] || "U"}
+            {user?.firstName?.[0] || user?.primaryEmailAddress?.emailAddress?.[0] || "U"}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-foreground truncate">{user?.firstName || user?.email}</p>
+            <p className="text-sm font-medium text-foreground truncate">{user?.firstName || user?.primaryEmailAddress?.emailAddress}</p>
             <p className="text-xs text-muted-foreground truncate">Admin</p>
           </div>
           <button onClick={() => logout()} className="p-1.5 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center" aria-label="Sign out">
@@ -156,7 +156,8 @@ function SidebarContent({ location, gym, gymLoading, user, logout, onNavigate, c
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
-  const { user, logout } = useAuth();
+  const { signOut } = useAuth();
+  const { user } = useUser();
   const { activeGymId } = useGym();
   const isMobile = useIsMobile();
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -167,6 +168,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   });
 
   const isDeactivated = gym?.isActive === false;
+  const logout = () => signOut();
 
   if (!activeGymId) return <>{children}</>;
 

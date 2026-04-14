@@ -3,6 +3,8 @@ import { motion } from "framer-motion";
 import { UserMinus, ChevronDown, Mail, Phone, AlertCircle } from "lucide-react";
 import { Link } from "wouter";
 
+import { authFetch } from "@/lib/authFetch";
+
 const API_BASE = import.meta.env.VITE_API_URL || "";
 
 interface CancellationEntry {
@@ -96,7 +98,7 @@ export function RecentCancellationsCard({ gymId }: { gymId: number }) {
   const loadData = () => {
     setLoading(true);
     setError(false);
-    fetch(`${API_BASE}/api/gyms/${gymId}/dashboard/recent-cancellations`, { credentials: "include" })
+    authFetch(`${API_BASE}/api/gyms/${gymId}/dashboard/recent-cancellations`)
       .then((r) => { if (!r.ok) throw new Error(); return r.json(); })
       .then((d) => setData(d))
       .catch(() => setError(true))

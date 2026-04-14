@@ -31,7 +31,7 @@ class ResendEmailService implements EmailService {
       } else if (params.fromEmail) {
         from = params.fromEmail;
       } else {
-        from = "ForgeOS <onboarding@resend.dev>";
+        from = "ForgeOS <notifications@forgeos.app>";
       }
 
       const response = await fetch("https://api.resend.com/emails", {

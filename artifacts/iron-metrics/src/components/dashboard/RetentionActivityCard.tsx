@@ -1,16 +1,29 @@
 import { useState, useEffect } from "react";
-import { motion } from "framer-motion";
-import { Activity, ChevronRight, Mail, ClipboardList, UserCheck, Loader2, Zap } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { Activity, ChevronRight, ChevronDown, Mail, ClipboardList, UserCheck, Loader2, Zap, AlertTriangle, ExternalLink } from "lucide-react";
 import { Link } from "wouter";
+
+import { authFetch } from "@/lib/authFetch";
 
 const API_BASE = import.meta.env.VITE_API_URL || "";
 
-interface RetentionEvent {
+interface ApiRetentionEvent {
   id: number;
   eventType: string;
   sequenceName?: string;
-  memberName?: string;
+  memberFirstName?: string;
+  memberLastName?: string;
+  memberId?: number;
+  sequenceId?: number;
+  enrollmentId?: number;
+  stepIndex?: number | null;
+  details?: string | null;
+  metadata?: Record<string, unknown> | null;
   createdAt: string;
+}
+
+interface RetentionEvent extends Omit<ApiRetentionEvent, "memberFirstName" | "memberLastName"> {
+  memberName?: string;
 }
 
 interface EnrollmentSummary {
@@ -20,9 +33,12 @@ interface EnrollmentSummary {
 
 const eventIcons: Record<string, React.ElementType> = {
   email_sent: Mail,
+  email_failed: AlertTriangle,
+  email_skipped: AlertTriangle,
   task_created: ClipboardList,
   enrolled: UserCheck,
   step_advanced: Zap,
+  step_error: AlertTriangle,
 };
 
 function timeAgo(dateStr: string): string {
@@ -39,31 +55,52 @@ function timeAgo(dateStr: string): string {
 function eventLabel(type: string): string {
   switch (type) {
     case "email_sent": return "Email sent";
+    case "email_failed": return "Email failed";
+    case "email_skipped": return "Email skipped";
     case "task_created": return "Task created";
     case "enrolled": return "Member enrolled";
     case "step_advanced": return "Step advanced";
     case "completed": return "Sequence completed";
     case "exited": return "Exited sequence";
+    case "step_error": return "Step error";
     default: return type.replace(/_/g, " ");
   }
+}
+
+function isFailureEvent(type: string): boolean {
+  return type === "email_failed" || type === "email_skipped" || type === "step_error";
 }
 
 export function RetentionActivityCard({ gymId }: { gymId: number }) {
   const [events, setEvents] = useState<RetentionEvent[]>([]);
   const [enrollments, setEnrollments] = useState<EnrollmentSummary>({ active: 0, completed: 0 });
   const [loading, setLoading] = useState(true);
+  const [expandedId, setExpandedId] = useState<number | null>(null);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
         const [eventsRes, enrollRes] = await Promise.all([
-          fetch(`${API_BASE}/api/gyms/${gymId}/retention/events?limit=6`, { credentials: "include" }),
-          fetch(`${API_BASE}/api/gyms/${gymId}/retention/enrollments?status=active`, { credentials: "include" }),
+          authFetch(`${API_BASE}/api/gyms/${gymId}/retention/events?limit=6`),
+          authFetch(`${API_BASE}/api/gyms/${gymId}/retention/enrollments?status=active`),
         ]);
 
         if (eventsRes.ok) {
           const evData = await eventsRes.json();
-          setEvents(Array.isArray(evData) ? evData.slice(0, 6) : []);
+          const raw: ApiRetentionEvent[] = Array.isArray(evData) ? evData.slice(0, 6) : [];
+          setEvents(raw.map((e) => ({
+            id: e.id,
+            eventType: e.eventType,
+            sequenceName: e.sequenceName,
+            memberId: e.memberId,
+            sequenceId: e.sequenceId,
+            enrollmentId: e.enrollmentId,
+            stepIndex: e.stepIndex,
+            details: e.details,
+            metadata: e.metadata,
+            createdAt: e.createdAt,
+            memberName: [e.memberFirstName, e.memberLastName].filter(Boolean).join(" ") || undefined,
+          })));
         }
 
         if (enrollRes.ok) {
@@ -134,22 +171,122 @@ export function RetentionActivityCard({ gymId }: { gymId: number }) {
         ) : (
           <div className="divide-y divide-border/50">
             {events.map((evt) => {
+              const isFail = isFailureEvent(evt.eventType);
               const Icon = eventIcons[evt.eventType] || Activity;
+              const isExpanded = expandedId === evt.id;
+
               return (
-                <div key={evt.id} className="px-4 py-2.5 flex items-start gap-3">
-                  <div className="mt-0.5 p-1 rounded bg-muted/30 shrink-0">
-                    <Icon className="h-3 w-3 text-muted-foreground" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs text-foreground">
-                      <span className="font-medium">{eventLabel(evt.eventType)}</span>
-                      {evt.memberName && <span className="text-muted-foreground"> · {evt.memberName}</span>}
-                    </p>
-                    {evt.sequenceName && (
-                      <p className="text-[10px] text-muted-foreground truncate">{evt.sequenceName}</p>
+                <div key={evt.id}>
+                  <button
+                    type="button"
+                    onClick={() => setExpandedId(isExpanded ? null : evt.id)}
+                    className={`w-full px-4 py-2.5 flex items-start gap-3 text-left transition-colors duration-150 cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-inset
+                      ${isFail ? "bg-red-500/5 hover:bg-red-500/10" : "hover:bg-muted/30"}
+                      ${isExpanded ? (isFail ? "bg-red-500/10" : "bg-muted/30") : ""}
+                    `}
+                  >
+                    <div className={`mt-0.5 p-1 rounded shrink-0 ${isFail ? "bg-red-500/15" : "bg-muted/30"}`}>
+                      <Icon className={`h-3 w-3 ${isFail ? "text-red-500" : "text-muted-foreground"}`} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs text-foreground">
+                        <span className={`font-medium ${isFail ? "text-red-600 dark:text-red-400" : ""}`}>
+                          {eventLabel(evt.eventType)}
+                        </span>
+                        {evt.memberName && evt.memberId ? (
+                          <span className="text-muted-foreground"> · </span>
+                        ) : evt.memberName ? (
+                          <span className="text-muted-foreground"> · {evt.memberName}</span>
+                        ) : null}
+                        {evt.memberName && evt.memberId && (
+                          <Link href={`/members/${evt.memberId}`}>
+                            <span className="text-primary hover:text-primary/80 hover:underline transition-colors" onClick={(e) => e.stopPropagation()}>
+                              {evt.memberName}
+                            </span>
+                          </Link>
+                        )}
+                      </p>
+                      {evt.sequenceName && (
+                        <Link href="/retention">
+                          <p className="text-[10px] text-primary/70 hover:text-primary hover:underline truncate transition-colors" onClick={(e) => e.stopPropagation()}>
+                            {evt.sequenceName}
+                          </p>
+                        </Link>
+                      )}
+                      {isFail && evt.details && (
+                        <p className="text-[10px] text-red-500 mt-0.5 truncate">{evt.details}</p>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <span className="text-[10px] text-muted-foreground whitespace-nowrap">{timeAgo(evt.createdAt)}</span>
+                      <ChevronDown className={`h-3 w-3 text-muted-foreground transition-transform duration-200 ${isExpanded ? "rotate-180" : ""}`} />
+                    </div>
+                  </button>
+
+                  <AnimatePresence>
+                    {isExpanded && (
+                      <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: "auto", opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: 0.2 }}
+                        className="overflow-hidden"
+                      >
+                        <div className="px-4 pb-3 pt-1 ml-7 space-y-1.5 border-l-2 border-border/50">
+                          {evt.memberName && evt.memberId && (
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-[10px] text-muted-foreground w-14 shrink-0">Member</span>
+                              <Link href={`/members/${evt.memberId}`}>
+                                <span className="text-[11px] font-medium text-primary hover:text-primary/80 hover:underline inline-flex items-center gap-0.5 transition-colors">
+                                  {evt.memberName}
+                                  <ExternalLink className="h-2.5 w-2.5" />
+                                </span>
+                              </Link>
+                            </div>
+                          )}
+                          {evt.sequenceName && (
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-[10px] text-muted-foreground w-14 shrink-0">Sequence</span>
+                              <Link href="/retention">
+                                <span className="text-[11px] font-medium text-primary hover:text-primary/80 hover:underline inline-flex items-center gap-0.5 transition-colors">
+                                  {evt.sequenceName}
+                                  <ExternalLink className="h-2.5 w-2.5" />
+                                </span>
+                              </Link>
+                            </div>
+                          )}
+                          {evt.stepIndex != null && (
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-[10px] text-muted-foreground w-14 shrink-0">Step</span>
+                              <span className="text-[11px] text-foreground">#{evt.stepIndex + 1}</span>
+                            </div>
+                          )}
+                          {evt.details && (
+                            <div className="flex items-start gap-1.5">
+                              <span className="text-[10px] text-muted-foreground w-14 shrink-0">Details</span>
+                              <span className={`text-[11px] ${isFail ? "text-red-500" : "text-foreground"}`}>
+                                {evt.details}
+                              </span>
+                            </div>
+                          )}
+                          {evt.metadata && Object.keys(evt.metadata).length > 0 && (
+                            <div className="flex items-start gap-1.5">
+                              <span className="text-[10px] text-muted-foreground w-14 shrink-0">Info</span>
+                              <span className="text-[10px] text-muted-foreground font-mono">
+                                {Object.entries(evt.metadata).map(([k, v]) => `${k}: ${typeof v === "object" ? JSON.stringify(v) : String(v)}`).join(", ")}
+                              </span>
+                            </div>
+                          )}
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[10px] text-muted-foreground w-14 shrink-0">Time</span>
+                            <span className="text-[10px] text-muted-foreground">
+                              {new Date(evt.createdAt).toLocaleString()}
+                            </span>
+                          </div>
+                        </div>
+                      </motion.div>
                     )}
-                  </div>
-                  <span className="text-[10px] text-muted-foreground whitespace-nowrap shrink-0">{timeAgo(evt.createdAt)}</span>
+                  </AnimatePresence>
                 </div>
               );
             })}

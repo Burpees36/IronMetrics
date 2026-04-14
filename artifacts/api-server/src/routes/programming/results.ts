@@ -37,7 +37,7 @@ router.post(
     }
 
     const role = req.programmingRole as ProgrammingRole;
-    const userId = req.user!.id;
+    const userId = req.userId!;
     const { membersTable } = await import("@workspace/db");
     const [member] = await db
       .select()
@@ -195,7 +195,7 @@ router.patch(
     }
 
     const role = req.programmingRole as ProgrammingRole;
-    const userId = req.user!.id;
+    const userId = req.userId!;
     if (!isStaffRole(role)) {
       const { membersTable } = await import("@workspace/db");
       const [member] = await db

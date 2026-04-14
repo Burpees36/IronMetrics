@@ -13,6 +13,7 @@ import {
   Share,
   AlertCircle,
 } from "lucide-react";
+
 import {
   Dialog,
   DialogContent,
@@ -21,14 +22,17 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 
+import { authFetch } from "@/lib/authFetch";
+
 const COOLDOWN_MS = 15 * 60 * 1000;
 
-function getCooldownStorageKey(gymId: number, dayDate?: string): string {
-  return `im_notify_cooldown_${gymId}_${dayDate || "all"}`;
+function getCooldownStorageKey(gymId: number, dayDate?: string, track?: string): string {
+  const trackSuffix = track && track !== "default" ? `:${track}` : "";
+  return `im_notify_cooldown_${gymId}_${dayDate || "all"}${trackSuffix}`;
 }
 
-function getStoredCooldownRemaining(gymId: number, dayDate?: string): number {
-  const key = getCooldownStorageKey(gymId, dayDate);
+function getStoredCooldownRemaining(gymId: number, dayDate?: string, track?: string): number {
+  const key = getCooldownStorageKey(gymId, dayDate, track);
   const stored = localStorage.getItem(key);
   if (!stored) return 0;
   const ts = parseInt(stored, 10);
@@ -52,6 +56,10 @@ interface ShareWorkoutDialogProps {
   activeMemberCount: number;
   dayTitle?: string;
   dayDate?: string;
+  dayTrack?: string;
+  trackMemberCount?: number;
+  onNotifySuccess?: (count: number) => void;
+  onNotifyError?: (error: string) => void;
 }
 
 export function ShareWorkoutDialog({
@@ -62,6 +70,10 @@ export function ShareWorkoutDialog({
   activeMemberCount,
   dayTitle,
   dayDate,
+  dayTrack,
+  trackMemberCount,
+  onNotifySuccess,
+  onNotifyError,
 }: ShareWorkoutDialogProps) {
   const [copied, setCopied] = useState(false);
   const [notifyState, setNotifyState] = useState<"idle" | "loading" | "success" | "cooldown" | "error">("idle");
@@ -70,15 +82,19 @@ export function ShareWorkoutDialog({
   const [cooldownMinutes, setCooldownMinutes] = useState(0);
   const webShareSupported = useWebShareSupported();
 
+  const notifyTargetCount = dayTrack && dayTrack !== "default" && trackMemberCount !== undefined
+    ? trackMemberCount
+    : activeMemberCount;
+
   useEffect(() => {
     if (!open) return;
-    const remaining = getStoredCooldownRemaining(gymId, dayDate);
+    const remaining = getStoredCooldownRemaining(gymId, dayDate, dayTrack);
     if (remaining > 0) {
       setCooldownMinutes(Math.ceil(remaining / 60000));
       setNotifyState("cooldown");
       setNotifyError(`Notification was sent recently. Please wait ${Math.ceil(remaining / 60000)} minute${Math.ceil(remaining / 60000) !== 1 ? "s" : ""} before sending again.`);
     }
-  }, [open, gymId, dayDate]);
+  }, [open, gymId, dayDate, dayTrack]);
 
   useEffect(() => {
     if (notifyState === "success") {
@@ -126,11 +142,11 @@ export function ShareWorkoutDialog({
     try {
       const body: Record<string, string> = {};
       if (dayDate) body.date = dayDate;
+      if (dayTrack && dayTrack !== "default") body.track = dayTrack;
 
-      const response = await fetch(`/api/gyms/${gymId}/notify-workout`, {
+      const response = await authFetch(`/api/gyms/${gymId}/notify-workout`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        credentials: "include",
         body: JSON.stringify(body),
       });
 
@@ -138,10 +154,12 @@ export function ShareWorkoutDialog({
         const data = await response.json() as { error?: string; cooldownMinutes?: number };
         if (response.status === 429) {
           setNotifyState("cooldown");
-          setNotifyError(data.error || "Notification was recently sent. Please wait before sending again.");
+          const cooldownMsg = data.error || "Notification was recently sent. Please wait before sending again.";
+          setNotifyError(cooldownMsg);
           if (data.cooldownMinutes) {
             setCooldownMinutes(data.cooldownMinutes);
           }
+          onNotifyError?.(cooldownMsg);
           return;
         }
         throw new Error(data.error || "Failed to notify members");
@@ -150,15 +168,17 @@ export function ShareWorkoutDialog({
       const data = await response.json() as { emailsSent: number };
       setNotifyCount(data.emailsSent);
       setNotifyState("success");
+      onNotifySuccess?.(data.emailsSent);
 
-      const key = getCooldownStorageKey(gymId, dayDate);
+      const key = getCooldownStorageKey(gymId, dayDate, dayTrack);
       localStorage.setItem(key, String(Date.now()));
     } catch (err: unknown) {
       const error = err as Error;
       setNotifyState("error");
       setNotifyError(error.message || "Failed to send notifications");
+      onNotifyError?.(error.message || "Failed to send notifications");
     }
-  }, [gymId, dayDate]);
+  }, [gymId, dayDate, dayTrack, onNotifySuccess, onNotifyError]);
 
   const handleOpenChange = useCallback((open: boolean) => {
     if (!open) {
@@ -194,7 +214,7 @@ export function ShareWorkoutDialog({
             </label>
             <div
               className="rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-foreground font-mono break-all select-all leading-relaxed cursor-text"
-              title={publicUrl}
+              title={publicUrl || undefined}
             >
               {publicUrl}
             </div>
@@ -271,14 +291,16 @@ export function ShareWorkoutDialog({
               </div>
               <div className="flex items-center gap-1.5 text-xs text-muted-foreground bg-muted/50 px-2 py-1 rounded-full">
                 <Users className="h-3.5 w-3.5" />
-                <span>{activeMemberCount} active</span>
+                <span>{notifyTargetCount} {dayTrack && dayTrack !== "default" ? `on ${dayTrack}` : "active"}</span>
               </div>
             </div>
 
             <p className="text-xs text-muted-foreground leading-relaxed">
-              {dayTitle
-                ? `Send an email to all active members with a link to "${dayTitle}".`
-                : "Send an email to all active members with a link to your published programming."}
+              {dayTrack && dayTrack !== "default"
+                ? `Send an email to ${notifyTargetCount} member${notifyTargetCount !== 1 ? "s" : ""} on the "${dayTrack}" track${dayTitle ? ` with a link to "${dayTitle}"` : ""}.`
+                : dayTitle
+                  ? `Send an email to all active members with a link to "${dayTitle}".`
+                  : "Send an email to all active members with a link to your published programming."}
             </p>
 
             <AnimatePresence mode="wait">
@@ -290,11 +312,11 @@ export function ShareWorkoutDialog({
                   exit={{ opacity: 0, y: -4 }}
                   transition={{ duration: 0.15 }}
                   onClick={handleNotifyMembers}
-                  disabled={activeMemberCount === 0}
+                  disabled={notifyTargetCount === 0}
                   className="w-full flex items-center justify-center gap-2 px-4 py-2.5 border border-border bg-background hover:bg-accent rounded-lg font-medium text-sm transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Send className="h-4 w-4" />
-                  Notify {activeMemberCount} Member{activeMemberCount !== 1 ? "s" : ""}
+                  Notify {notifyTargetCount} Member{notifyTargetCount !== 1 ? "s" : ""}
                 </motion.button>
               )}
 

@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { eq, and, lte, ne } from "drizzle-orm";
 import { db, programmingPreferencesTable, programmingDaysTable, programmingSectionsTable } from "@workspace/db";
 import { requireProgrammingWrite } from "../../middlewares/programmingRbac";
+import { requireTierAccess } from "../../middlewares/requireTierAccess";
 import { parseGymId } from "./helpers";
 import { generateDay, generateWeek, buildValidationMeta } from "../../services/programmingAI";
 import { validateGeneratedDay, ProgrammingValidationError } from "../../services/programmingValidation";
@@ -93,6 +94,7 @@ const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 router.post(
   "/gyms/:gymId/programming/generate-day",
+  requireTierAccess("ai-programming"),
   requireProgrammingWrite(),
   async (req, res): Promise<void> => {
     const gymId = parseGymId(req.params);
@@ -139,7 +141,7 @@ router.post(
       const generated = result.day;
       const validationMeta = buildValidationMeta(result.validation, result.retries);
 
-      const userId = req.user?.id || null;
+      const userId = req.userId || null;
       const [day] = await db
         .insert(programmingDaysTable)
         .values({
@@ -193,6 +195,7 @@ router.post(
 
 router.post(
   "/gyms/:gymId/programming/generate-week",
+  requireTierAccess("ai-programming"),
   requireProgrammingWrite(),
   async (req, res): Promise<void> => {
     const gymId = parseGymId(req.params);
@@ -221,7 +224,7 @@ router.post(
         return;
       }
 
-      const userId = req.user?.id || null;
+      const userId = req.userId || null;
       const results = [];
 
       for (const { day: generated, validationMeta } of generatedDays) {

@@ -6,6 +6,7 @@ import {
   ArrowRight, Zap, ExternalLink, RotateCcw, ShieldAlert
 } from "lucide-react";
 import { useGym } from "@/store/GymContext";
+import { authFetch } from "@/lib/authFetch";
 import { useToast } from "@/hooks/use-toast";
 import { useWodifySyncPolling } from "@/hooks/useWodifySyncPolling";
 import type { SyncProgress } from "@/hooks/useWodifySyncPolling";
@@ -118,9 +119,7 @@ export function WodifyConnectionCard() {
 
   useEffect(() => {
     if (!activeGymId) return;
-    fetch(`${apiBase}/api/gyms/${activeGymId}/integrations/wodify/sync-status`, {
-      credentials: "include",
-    })
+    authFetch(`${apiBase}/api/gyms/${activeGymId}/integrations/wodify/sync-status`)
       .then(r => r.ok ? r.json() : null)
       .then(data => {
         if (!data) { setState("disconnected"); return; }
@@ -153,10 +152,9 @@ export function WodifyConnectionCard() {
     setState("validating");
     setErrorMsg("");
     try {
-      const resp = await fetch(`${apiBase}/api/gyms/${activeGymId}/integrations/wodify/validate-key`, {
+      const resp = await authFetch(`${apiBase}/api/gyms/${activeGymId}/integrations/wodify/validate-key`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        credentials: "include",
         body: JSON.stringify({ apiKey: apiKey.trim() }),
       });
       const data = await resp.json();
@@ -198,10 +196,9 @@ export function WodifyConnectionCard() {
   const handleDisconnect = async () => {
     if (!activeGymId) return;
     try {
-      const resp = await fetch(`${apiBase}/api/gyms/${activeGymId}/integrations/wodify/disconnect`, {
+      const resp = await authFetch(`${apiBase}/api/gyms/${activeGymId}/integrations/wodify/disconnect`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        credentials: "include",
       });
       if (!resp.ok) throw new Error("Failed to disconnect");
       toast({ title: "Wodify disconnected" });

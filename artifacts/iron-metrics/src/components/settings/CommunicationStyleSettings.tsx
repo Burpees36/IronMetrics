@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useGetGym, useUpdateGym, getGetGymQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
+import { authFetch } from "@/lib/authFetch";
 import { useToast } from "@/hooks/use-toast";
 import { motion, AnimatePresence } from "framer-motion";
 import { Loader2, Save, Plus, X, Eye, MessageSquare, Sparkles } from "lucide-react";
@@ -122,10 +123,9 @@ export function CommunicationStyleSettings({ gymId }: Props) {
     setPreviewLoading(true);
     try {
       const baseUrl = import.meta.env.BASE_URL || "/";
-      const res = await fetch(`${baseUrl}api/gyms/${gymId}/preview-voice`, {
+      const res = await authFetch(`${baseUrl}api/gyms/${gymId}/preview-voice`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        credentials: "include",
         body: JSON.stringify({ tone, rules, samples }),
       });
       if (!res.ok) throw new Error("Preview failed");

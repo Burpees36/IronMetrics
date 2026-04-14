@@ -16,10 +16,12 @@ import {
 } from "lucide-react";
 import { STAGE_CONFIG, PIPELINE_STAGES, SOURCE_OPTIONS, computeStale, timeInStage, formatRelativeDate, isFollowUpOverdue } from "./lead-utils";
 
+import { authFetch } from "@/lib/authFetch";
+
 const API_BASE = import.meta.env.VITE_API_URL || "";
 
 function apiFetchLocal(url: string, opts?: RequestInit) {
-  return fetch(`${API_BASE}${url}`, { credentials: "include", ...opts });
+  return authFetch(`${API_BASE}${url}`, opts);
 }
 
 interface SequenceEnrollmentStatus {
@@ -474,7 +476,7 @@ export function LeadDetailDrawer({ lead, gymId, open, onClose, onMoveStage, onCo
                   <div className="flex gap-2">
                     <button onClick={() => setShowFollowUp(false)} className="px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors">Cancel</button>
                     {followUpDate && (
-                      <button onClick={() => { setFollowUpDate(""); handleScheduleFollowUp(); }} className="px-3 py-1.5 text-xs text-red-600 dark:text-red-400 hover:text-red-500 dark:hover:text-red-300 transition-colors">Clear</button>
+                      <button onClick={() => { setFollowUpDate(""); handleScheduleFollowUp(); }} disabled={updateLeadMutation.isPending} className="px-3 py-1.5 text-xs text-red-600 dark:text-red-400 hover:text-red-500 dark:hover:text-red-300 transition-colors disabled:opacity-50">Clear</button>
                     )}
                     <button onClick={handleScheduleFollowUp} disabled={updateLeadMutation.isPending} className="px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-md font-medium hover:bg-primary/90 disabled:opacity-50 transition-colors">
                       {updateLeadMutation.isPending ? "Saving..." : "Save"}

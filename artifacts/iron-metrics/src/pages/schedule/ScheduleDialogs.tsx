@@ -499,8 +499,8 @@ export function ScheduleDialogs(props: ScheduleDialogsProps) {
                   <button onClick={() => openEditDialog(classDetail)} className="flex items-center gap-2 px-4 py-2 hover:bg-secondary rounded-lg text-sm font-medium transition-colors w-full justify-center border border-border">
                     <Pencil className="h-4 w-4" /> Edit Class
                   </button>
-                  <button onClick={() => handleDuplicateClass(classDetail.id)} className="flex items-center gap-2 px-4 py-2 hover:bg-secondary rounded-lg text-sm font-medium transition-colors w-full justify-center border border-border text-muted-foreground">
-                    <Copy className="h-4 w-4" /> Duplicate Class
+                  <button onClick={() => handleDuplicateClass(classDetail.id)} disabled={createClassPending} className="flex items-center gap-2 px-4 py-2 hover:bg-secondary rounded-lg text-sm font-medium transition-colors w-full justify-center border border-border text-muted-foreground disabled:opacity-50">
+                    {createClassPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Copy className="h-4 w-4" />} Duplicate Class
                   </button>
                   <button onClick={() => setDeleteClassId(classDetail.id)} className="flex items-center gap-2 px-4 py-2 text-destructive hover:bg-destructive/10 rounded-lg text-sm font-medium transition-colors w-full justify-center">
                     <Trash2 className="h-4 w-4" /> Delete Class
@@ -520,7 +520,7 @@ export function ScheduleDialogs(props: ScheduleDialogsProps) {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDeleteClass} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+            <AlertDialogAction onClick={handleDeleteClass} disabled={deleteClassPending} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
               {deleteClassPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Delete"}
             </AlertDialogAction>
           </AlertDialogFooter>
@@ -853,7 +853,7 @@ export function ScheduleDialogs(props: ScheduleDialogsProps) {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDeleteTemplate} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+            <AlertDialogAction onClick={handleDeleteTemplate} disabled={deleteTemplatePending} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
               {deleteTemplatePending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Delete"}
             </AlertDialogAction>
           </AlertDialogFooter>

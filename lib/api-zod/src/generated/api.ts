@@ -54,18 +54,6 @@ export const HealthCheckResponse = zod.object({
 });
 
 /**
- * @summary Get current authenticated user
- */
-export const GetCurrentUserResponse = zod.object({
-  id: zod.string(),
-  email: zod.string().nullish(),
-  firstName: zod.string().nullish(),
-  lastName: zod.string().nullish(),
-  profileImageUrl: zod.string().nullish(),
-  isAuthenticated: zod.boolean(),
-});
-
-/**
  * @summary List all gyms accessible to current user
  */
 export const ListGymsResponseItem = zod.object({
@@ -2528,6 +2516,7 @@ export const ListProgrammingDaysQueryParams = zod.object({
   startDate: zod.date().optional(),
   endDate: zod.date().optional(),
   status: zod.enum(["draft", "published", "archived"]).optional(),
+  track: zod.coerce.string().optional(),
 });
 
 export const ListProgrammingDaysResponseItem = zod
@@ -2626,6 +2615,18 @@ export const CreateProgrammingDayBody = zod.object({
     )
     .optional(),
 });
+
+/**
+ * @summary List distinct programming tracks for a gym
+ */
+export const ListProgrammingTracksParams = zod.object({
+  gymId: zod.coerce.number(),
+});
+
+export const ListProgrammingTracksResponseItem = zod.string();
+export const ListProgrammingTracksResponse = zod.array(
+  ListProgrammingTracksResponseItem,
+);
 
 /**
  * @summary Get a programming day with all sections
@@ -3481,6 +3482,29 @@ export const GetMorningBriefingResponse = zod.object({
     todayClasses: zod.number().optional(),
     classFillRate: zod.number().optional(),
   }),
+  growthNudges: zod
+    .array(
+      zod.object({
+        id: zod.string(),
+        icon: zod.string(),
+        title: zod.string(),
+        message: zod.string(),
+        actionLabel: zod.string(),
+        actionLink: zod.string(),
+        source: zod.string().nullish(),
+      }),
+    )
+    .optional(),
+  celebrations: zod
+    .array(
+      zod.object({
+        type: zod.string(),
+        memberName: zod.string(),
+        detail: zod.string(),
+        memberId: zod.number(),
+      }),
+    )
+    .optional(),
 });
 
 /**

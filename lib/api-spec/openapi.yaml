@@ -144,22 +144,6 @@ paths:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
 
-  # AUTH
-  /auth/user:
-    get:
-      operationId: getCurrentUser
-      tags: [auth]
-      summary: Get current authenticated user
-      responses:
-        "200":
-          description: Current user
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AuthUser"
-        "401":
-          description: Not authenticated
-
   # GYMS
   /gyms:
     get:
@@ -2578,6 +2562,10 @@ paths:
           schema:
             type: string
             enum: [draft, published, archived]
+        - name: track
+          in: query
+          schema:
+            type: string
       responses:
         "200":
           description: List of programming days with sections
@@ -2610,6 +2598,27 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ProgrammingDayWithSections"
+
+  /gyms/{gymId}/programming-tracks:
+    get:
+      operationId: listProgrammingTracks
+      tags: [programming]
+      summary: List distinct programming tracks for a gym
+      parameters:
+        - name: gymId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of track names
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string
 
   /gyms/{gymId}/programming/{dayId}:
     get:
@@ -4686,25 +4695,6 @@ components:
           type: string
       required:
         - status
-
-    AuthUser:
-      type: object
-      properties:
-        id:
-          type: string
-        email:
-          type: ["string", "null"]
-        firstName:
-          type: ["string", "null"]
-        lastName:
-          type: ["string", "null"]
-        profileImageUrl:
-          type: ["string", "null"]
-        isAuthenticated:
-          type: boolean
-      required:
-        - id
-        - isAuthenticated
 
     Gym:
       type: object
@@ -7017,6 +7007,38 @@ components:
         classFillRate:
           type: number
 
+    GrowthNudge:
+      type: object
+      properties:
+        id:
+          type: string
+        icon:
+          type: string
+        title:
+          type: string
+        message:
+          type: string
+        actionLabel:
+          type: string
+        actionLink:
+          type: string
+        source:
+          type: ["string", "null"]
+      required: [id, icon, title, message, actionLabel, actionLink]
+
+    MorningBriefingCelebration:
+      type: object
+      properties:
+        type:
+          type: string
+        memberName:
+          type: string
+        detail:
+          type: string
+        memberId:
+          type: integer
+      required: [type, memberName, detail, memberId]
+
     MorningBriefing:
       type: object
       properties:
@@ -7030,6 +7052,14 @@ components:
             $ref: "#/components/schemas/MorningBriefingItem"
         snapshot:
           $ref: "#/components/schemas/MorningBriefingSnapshot"
+        growthNudges:
+          type: array
+          items:
+            $ref: "#/components/schemas/GrowthNudge"
+        celebrations:
+          type: array
+          items:
+            $ref: "#/components/schemas/MorningBriefingCelebration"
       required: [date, summary, items, snapshot]
 
     LeadCaptureBody:

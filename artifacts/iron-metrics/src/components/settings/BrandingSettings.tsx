@@ -1,4 +1,5 @@
 import React, { useRef, useState, useCallback } from "react";
+import { authFetch } from "@/lib/authFetch";
 import { useGetGym, getGetGymQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
@@ -45,7 +46,7 @@ export function BrandingSettings({ gymId }: Props) {
     setIsUploading(true);
 
     try {
-      const urlRes = await fetch(`/api/gyms/${gymId}/logo`, {
+      const urlRes = await authFetch(`/api/gyms/${gymId}/logo`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ contentType: file.type, size: file.size }),
@@ -68,7 +69,7 @@ export function BrandingSettings({ gymId }: Props) {
         throw new Error("Failed to upload file to storage");
       }
 
-      const saveRes = await fetch(`/api/gyms/${gymId}/logo`, {
+      const saveRes = await authFetch(`/api/gyms/${gymId}/logo`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ objectPath }),
@@ -92,7 +93,7 @@ export function BrandingSettings({ gymId }: Props) {
     setIsRemoving(true);
 
     try {
-      const res = await fetch(`/api/gyms/${gymId}/logo`, {
+      const res = await authFetch(`/api/gyms/${gymId}/logo`, {
         method: "DELETE",
       });
 
