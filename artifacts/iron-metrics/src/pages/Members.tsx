@@ -717,34 +717,34 @@ export function Members() {
             <table className="w-full text-sm text-left">
               <thead className="text-xs text-muted-foreground uppercase bg-muted/30 border-b border-border sticky top-0 z-10 backdrop-blur-md">
                 <tr>
-                  <th className="pl-4 pr-2 py-4 w-10">
+                  <th className="pl-4 pr-2 py-2.5 w-10">
                     <Checkbox
                       checked={displayMembers.length > 0 && selectedIds.size === displayMembers.length}
                       onCheckedChange={toggleSelectAll}
                       aria-label="Select all members"
                     />
                   </th>
-                  <th className="px-6 py-4 font-semibold">Member</th>
-                  <th className="px-6 py-4 font-semibold">Status</th>
+                  <th className="px-4 py-2.5 font-semibold">Member</th>
+                  <th className="px-4 py-2.5 font-semibold">Status</th>
                   {idsFilter ? (
                     <>
-                      <th className="px-6 py-4 font-semibold">Cancelled</th>
-                      <th className="px-6 py-4 font-semibold">Plan</th>
-                      <th className="px-6 py-4 font-semibold">Revenue Lost</th>
+                      <th className="px-4 py-2.5 font-semibold">Cancelled</th>
+                      <th className="px-4 py-2.5 font-semibold">Plan</th>
+                      <th className="px-4 py-2.5 font-semibold">Revenue Lost</th>
                     </>
                   ) : riskViewActive ? (
                     <>
-                      <th className="px-6 py-4 font-semibold">Risk</th>
-                      <th className="px-6 py-4 font-semibold">Last Visit</th>
-                      <th className="px-6 py-4 font-semibold">Revenue</th>
+                      <th className="px-4 py-2.5 font-semibold">Risk</th>
+                      <th className="px-4 py-2.5 font-semibold">Last Visit</th>
+                      <th className="px-4 py-2.5 font-semibold">Revenue</th>
                     </>
                   ) : (
                     <>
-                      <th className="px-6 py-4 font-semibold">Membership</th>
-                      <th className="px-6 py-4 font-semibold">Risk Tier</th>
+                      <th className="px-4 py-2.5 font-semibold">Membership</th>
+                      <th className="px-4 py-2.5 font-semibold">Risk Tier</th>
                     </>
                   )}
-                  <th className="px-6 py-4 font-semibold text-right">Actions</th>
+                  <th className="px-4 py-2.5 font-semibold text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
@@ -757,20 +757,20 @@ export function Members() {
                     className="hover:bg-secondary transition-colors group cursor-pointer"
                     onClick={() => navigate(`/members/${member.id}`)}
                   >
-                    <td className="pl-4 pr-2 py-4 w-10" onClick={e => e.stopPropagation()}>
+                    <td className="pl-4 pr-2 py-2 w-10" onClick={e => e.stopPropagation()}>
                       <Checkbox
                         checked={selectedIds.has(member.id)}
                         onCheckedChange={() => toggleSelectMember(member.id)}
                         aria-label={`Select ${member.firstName} ${member.lastName}`}
                       />
                     </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-3">
-                        <div className="h-10 w-10 bg-muted rounded-full overflow-hidden flex items-center justify-center">
+                    <td className="px-4 py-2">
+                      <div className="flex items-center gap-2.5">
+                        <div className="h-8 w-8 bg-muted rounded-full overflow-hidden flex items-center justify-center shrink-0">
                           {member.profileImageUrl ? (
                             <img src={member.profileImageUrl} alt={member.firstName} className="w-full h-full object-cover" />
                           ) : (
-                            <UserCircle className="h-6 w-6 text-muted-foreground" />
+                            <UserCircle className="h-5 w-5 text-muted-foreground" />
                           )}
                         </div>
                         <div>
@@ -779,14 +779,14 @@ export function Members() {
                         </div>
                       </div>
                     </td>
-                    <td className="px-6 py-4">
-                      <span className={`px-2.5 py-1 rounded-full text-xs font-medium border ${statusBadge(member.status)}`}>
+                    <td className="px-4 py-2">
+                      <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium border ${statusBadge(member.status)}`}>
                         {member.status.charAt(0).toUpperCase() + member.status.slice(1)}
                       </span>
                     </td>
                     {idsFilter ? (
                       <>
-                        <td className="px-6 py-4">
+                        <td className="px-4 py-2">
                           {member.updatedAt ? (
                             <span className="text-xs text-foreground">
                               {new Date(member.updatedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
@@ -797,10 +797,10 @@ export function Members() {
                             </span>
                           ) : <span className="text-muted-foreground">-</span>}
                         </td>
-                        <td className="px-6 py-4 text-muted-foreground">
+                        <td className="px-4 py-2 text-muted-foreground">
                           {member.membershipType || "—"}
                         </td>
-                        <td className="px-6 py-4">
+                        <td className="px-4 py-2">
                           {member.monthlyRevenue ? (
                             <span className="text-xs font-semibold text-destructive">${parseFloat(String(member.monthlyRevenue)).toFixed(0)}/mo</span>
                           ) : <span className="text-muted-foreground">-</span>}
@@ -808,7 +808,7 @@ export function Members() {
                       </>
                     ) : riskViewActive ? (
                       <>
-                        <td className="px-6 py-4">
+                        <td className="px-4 py-2">
                           {member.riskTier && member.status === "active" ? (
                             <div className="flex items-center gap-2">
                               <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold uppercase ${
@@ -825,7 +825,7 @@ export function Members() {
                             </div>
                           ) : <span className="text-muted-foreground">-</span>}
                         </td>
-                        <td className="px-6 py-4">
+                        <td className="px-4 py-2">
                           {(() => {
                             const days = daysSince(member.lastVisitDate);
                             if (days === null) return <span className="text-muted-foreground">No visits</span>;
@@ -836,7 +836,7 @@ export function Members() {
                             );
                           })()}
                         </td>
-                        <td className="px-6 py-4">
+                        <td className="px-4 py-2">
                           {member.monthlyRevenue ? (
                             <span className="text-xs font-semibold text-foreground">${parseFloat(String(member.monthlyRevenue)).toFixed(0)}/mo</span>
                           ) : <span className="text-muted-foreground">-</span>}
@@ -844,10 +844,10 @@ export function Members() {
                       </>
                     ) : (
                       <>
-                        <td className="px-6 py-4 text-muted-foreground">
+                        <td className="px-4 py-2 text-muted-foreground">
                           {member.membershipType || "None"}
                         </td>
-                        <td className="px-6 py-4">
+                        <td className="px-4 py-2">
                           {member.riskTier && member.status === "active" ? (
                             <span className={`flex items-center gap-1.5 text-xs font-semibold ${riskColor(member.riskTier)}`}>
                               <div className="h-2 w-2 rounded-full bg-current" />
@@ -857,7 +857,7 @@ export function Members() {
                         </td>
                       </>
                     )}
-                    <td className="px-6 py-4 text-right">
+                    <td className="px-4 py-2 text-right">
                       <div className="opacity-0 group-hover:opacity-100">
                         <RowActions member={member} />
                       </div>
